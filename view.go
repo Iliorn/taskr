@@ -3,6 +3,7 @@ package main
 import (
     "fmt"
     "math"
+    "sort"
     "strings"
     "time"
 
@@ -14,6 +15,10 @@ import (
 
 func (m model) View() string {
     w := m.termWidth - 4
+
+    if m.mode == modeHelp {
+        return m.renderHelpFullscreen()
+    }
 
     // ── HEADER ───────────────────────────────────────────────────────────
     var headerLines []string
@@ -28,6 +33,9 @@ func (m model) View() string {
     if m.err != "" {
         headerLines = append(headerLines, confirmStyle.Render(m.err))
     }
+    if m.focusFilter {
+        headerLines = append(headerLines, confirmStyle.Render("⚡ FOCUS: today + overdue only (f to toggle)"))
+    }
     if m.searchQuery != "" {
         headerLines = append(headerLines, searchStyle.Render("/ "+m.searchQuery))
     }
@@ -39,89 +47,98 @@ func (m model) View() string {
     }
 
     // ── FOOTER ───────────────────────────────────────────────────────────
-    var footerLines []string
+    var footerRaw []string
     switch m.mode {
-    case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeAddLearning, modeEditLearning:
-        footerLines = append(footerLines, inputStyle.Width(w).Render(m.textInput.View()))
+    case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeAddLearning, modeEditLearning, modeAddSubtask:
+        footerRaw = append(footerRaw, inputStyle.Width(w).Render(m.textInput.View()))
     case modeSearch:
         if m.tab == tabLearnings {
-            footerLines = append(footerLines, searchStyle.Width(w).Render(m.learningSearchInput.View()))
+            footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.learningSearchInput.View()))
         } else {
-            footerLines = append(footerLines, searchStyle.Width(w).Render(m.searchInput.View()))
+            footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.searchInput.View()))
         }
     case modeSearchTagTab:
-        footerLines = append(footerLines, searchStyle.Width(w).Render(m.tagTabSearchInput.View()))
+        footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.tagTabSearchInput.View()))
     case modeSearchDep:
-        footerLines = append(footerLines, searchStyle.Width(w).Render(m.depSearchInput.View()))
+        footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.depSearchInput.View()))
         for i, r := range m.depSearchResults() {
             if i >= maxDepSearchResults {
                 break
             }
             if i == m.searchCursor {
-                footerLines = append(footerLines, selectedStyle.Render("  → "+r.Title))
+                footerRaw = append(footerRaw, selectedStyle.Render("  → "+r.Title))
             } else {
-                footerLines = append(footerLines, normalStyle.Render("    "+r.Title))
+                footerRaw = append(footerRaw, normalStyle.Render("    "+r.Title))
             }
         }
     case modeSearchTag:
-        footerLines = append(footerLines, searchStyle.Width(w).Render(m.tagSearchInput.View()))
+        footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.tagSearchInput.View()))
         results := m.tagSearchResults()
         for i, r := range results {
             if i >= maxTagSearchResults {
                 break
             }
             if i == m.searchCursor {
-                footerLines = append(footerLines, selectedStyle.Render("  → #"+r))
+                footerRaw = append(footerRaw, selectedStyle.Render("  → #"+r))
             } else {
-                footerLines = append(footerLines, normalStyle.Render("    #"+r))
+                footerRaw = append(footerRaw, normalStyle.Render("    #"+r))
             }
         }
         if len(results) == 0 && m.tagSearchQuery != "" {
-            footerLines = append(footerLines, dimStyle.Render("  → create new tag: ")+tagStyle.Render(m.tagSearchQuery))
+            footerRaw = append(footerRaw, dimStyle.Render("  → create new tag: ")+tagStyle.Render(m.tagSearchQuery))
         }
     case modeSearchProject:
-        footerLines = append(footerLines, searchStyle.Width(w).Render(m.projSearchInput.View()))
+        footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.projSearchInput.View()))
         results := m.projSearchResults()
         for i, r := range results {
             if i >= maxProjSearchResults {
                 break
             }
             if i == m.searchCursor {
-                footerLines = append(footerLines, selectedStyle.Render("  → "+r))
+                footerRaw = append(footerRaw, selectedStyle.Render("  → "+r))
             } else {
-                footerLines = append(footerLines, normalStyle.Render("    "+r))
+                footerRaw = append(footerRaw, normalStyle.Render("    "+r))
             }
         }
         if len(results) == 0 && m.projSearchQuery != "" {
-            footerLines = append(footerLines, dimStyle.Render("  → create new project: ")+selectedStyle.Render(m.projSearchQuery))
+            footerRaw = append(footerRaw, dimStyle.Render("  → create new project: ")+selectedStyle.Render(m.projSearchQuery))
         }
     case modeConfirmDelete, modeConfirmDeleteComment,
         modeConfirmDeleteDep, modeConfirmDeleteTag,
         modeConfirmDeleteTagGlobal, modeConfirmDeleteProject,
-        modeConfirmDeleteLearning:
-        footerLines = append(footerLines, confirmStyle.Render(m.confirmMsg))
-    case modeHelp:
-        footerLines = append(footerLines, helpStyle.Render("? or esc  close help"))
+        modeConfirmDeleteLearning, modeConfirmDeleteSubtask:
+        footerRaw = append(footerRaw, confirmStyle.Render(m.confirmMsg))
     default:
-        footerLines = append(footerLines, "")
+        footerRaw = append(footerRaw, "")
+    }
+
+    var footerLines []string
+    for _, fl := range footerRaw {
+        footerLines = append(footerLines, strings.Split(fl, "\n")...)
     }
 
     // ── DETAIL ───────────────────────────────────────────────────────────
-    detailContent := m.buildDetailLines()
-    maxDetailContent := m.termHeight * detailMaxHeightPct / 100
-    if len(detailContent) > maxDetailContent {
-        detailContent = detailContent[:maxDetailContent]
-    }
-    detailRendered := strings.Split(
-        detailPanelStyle.Width(w).Render(strings.Join(detailContent, "\n")),
-        "\n",
-    )
-    for len(detailRendered) > 0 && strings.TrimSpace(detailRendered[len(detailRendered)-1]) == "" {
-        detailRendered = detailRendered[:len(detailRendered)-1]
+    var detailRendered []string
+    showDetail := m.mode == modeNormal
+    if showDetail {
+        detailContent := m.buildDetailLines()
+        if len(detailContent) > 0 {
+            maxDetailContent := m.termHeight * detailMaxHeightPct / 100
+            if len(detailContent) > maxDetailContent {
+                detailContent = detailContent[:maxDetailContent]
+            }
+            detailRendered = strings.Split(
+                detailPanelStyle.Width(w).Render(strings.Join(detailContent, "\n")),
+                "\n",
+            )
+            for len(detailRendered) > 0 && strings.TrimSpace(detailRendered[len(detailRendered)-1]) == "" {
+                detailRendered = detailRendered[:len(detailRendered)-1]
+            }
+        }
     }
 
     // ── LIST ─────────────────────────────────────────────────────────────
-    listH := m.termHeight - len(headerLines) - footerHeight - len(detailRendered)
+    listH := m.termHeight - len(headerLines) - len(footerLines) - len(detailRendered)
     if listH < minListHeight {
         listH = minListHeight
     }
@@ -190,9 +207,6 @@ func (m model) View() string {
         }
     } else {
         rawList := m.buildListLines()
-        if m.listOffset > 0 && m.listOffset < len(rawList) {
-            rawList = rawList[m.listOffset:]
-        }
         for len(rawList) < listH {
             rawList = append(rawList, "")
         }
@@ -208,17 +222,12 @@ func (m model) View() string {
         listRendered = listRendered[:len(listRendered)-1]
     }
 
-    // ── HELP OVERLAY ──────────────────────────────────────────────────────
-    if m.mode == modeHelp {
-        listRendered = m.renderHelpOverlay(listRendered)
-    }
-
     // ── ASSEMBLE ─────────────────────────────────────────────────────────
     all := make([]string, 0, m.termHeight)
     all = append(all, headerLines...)
     all = append(all, listRendered...)
     all = append(all, detailRendered...)
-    all = append(all, footerLines[:footerHeight]...)
+    all = append(all, footerLines...)
 
     target := m.termHeight - 1
     diff := len(all) - target
@@ -269,9 +278,9 @@ func (m model) View() string {
     return strings.Join(all, "\n")
 }
 
-// ── Help overlay ──────────────────────────────────────────────────────────────
+// ── Help fullscreen ───────────────────────────────────────────────────────────
 
-func (m model) renderHelpOverlay(listLines []string) []string {
+func (m model) renderHelpFullscreen() string {
     sections := []struct {
         title string
         keys  [][2]string
@@ -280,23 +289,28 @@ func (m model) renderHelpOverlay(listLines []string) []string {
             {"↑/↓  or  j/k", "navigate list"},
             {"enter", "open details"},
             {"esc", "go back"},
-            {"tab  or  1-4", "switch tabs"},
+            {"tab  or  1-5", "switch tabs"},
             {"?", "close help"},
         }},
         {"Tasks", [][2]string{
-            {"a", "add task"},
+            {"a", "add task (quick-add: #tag due:date p:high @proj)"},
             {"r", "rename task"},
             {"d", "toggle done"},
             {"x", "delete"},
+            {"n", "edit notes (opens $EDITOR)"},
+            {"f", "focus: today + overdue only"},
             {"h", "toggle history"},
             {"s", "cycle sort order"},
+            {"←/→", "expand/collapse subtasks"},
             {"/", "search"},
         }},
         {"Detail view", [][2]string{
             {"←/→", "switch pages"},
-            {"enter", "edit field"},
-            {"a", "add tag / dep / comment"},
-            {"x", "remove field"},
+            {"enter", "edit field / toggle subtask"},
+            {"n", "edit notes (opens $EDITOR)"},
+            {"a", "add tag / dep / comment / learning / subtask"},
+            {"d", "toggle subtask done"},
+            {"x", "remove field / delete subtask"},
         }},
         {"Tags & Projects", [][2]string{
             {"r", "rename globally"},
@@ -309,11 +323,25 @@ func (m model) renderHelpOverlay(listLines []string) []string {
             {"x", "delete learning"},
             {"s", "sort date/alpha"},
         }},
+        {"Stats (tab 5)", [][2]string{
+            {"5 or tab", "switch to stats view"},
+        }},
+        {"Date input", [][2]string{
+            {"dd-mm-yy", "exact date (e.g. 15-06-25)"},
+            {"today", "today's date"},
+            {"tomorrow", "tomorrow"},
+            {"next week", "7 days from now"},
+            {"next month", "1 month from now"},
+            {"monday..sunday", "next occurrence of weekday"},
+            {"+3d / +2w / +1m", "relative days/weeks/months"},
+        }},
     }
 
     var lines []string
+    lines = append(lines, "")
     lines = append(lines, titleStyle.Render("  Keyboard shortcuts"))
     lines = append(lines, "")
+
     for _, section := range sections {
         lines = append(lines, detailLabelStyle.Render("  "+section.title))
         for _, kv := range section.keys {
@@ -326,42 +354,18 @@ func (m model) renderHelpOverlay(listLines []string) []string {
         lines = append(lines, "")
     }
 
-    overlayW := m.termWidth * overlayWidthPct / 100
-    if overlayW < minOverlayWidth {
-        overlayW = minOverlayWidth
+    lines = append(lines, "")
+    lines = append(lines, helpStyle.Render("  Press ? or esc to close"))
+
+    target := m.termHeight - 1
+    for len(lines) < target {
+        lines = append(lines, "")
     }
-    if overlayW > m.termWidth-8 {
-        overlayW = m.termWidth - 8
+    if len(lines) > target {
+        lines = lines[:target]
     }
 
-    rendered := strings.Split(
-        inputStyle.Width(overlayW).Render(strings.Join(lines, "\n")),
-        "\n",
-    )
-
-    if len(listLines) == 0 {
-        return rendered
-    }
-    startRow := (len(listLines) - len(rendered)) / 2
-    if startRow < 0 {
-        startRow = 0
-    }
-    startCol := (m.termWidth - overlayW) / 2
-    if startCol < 0 {
-        startCol = 0
-    }
-    prefix := strings.Repeat(" ", startCol)
-
-    result := make([]string, len(listLines))
-    copy(result, listLines)
-    for i, overlayLine := range rendered {
-        row := startRow + i
-        if row >= len(result) {
-            break
-        }
-        result[row] = prefix + overlayLine
-    }
-    return result
+    return strings.Join(lines, "\n")
 }
 
 // ── Build helpers ─────────────────────────────────────────────────────────────
@@ -376,6 +380,8 @@ func (m model) buildDetailLines() []string {
         return m.buildTagDetailLines()
     case m.tab == tabLearnings:
         return m.buildLearningDetailLines()
+    case m.tab == tabStats:
+        return []string{}
     case m.currentTodo() != nil:
         t := m.currentTodo()
         var content string
@@ -397,7 +403,8 @@ func (m model) buildLearningDetailLines() []string {
     }
 
     l := learnings[m.learningCursor]
-    var b strings.Builder
+    b := getBuilder()
+    defer putBuilder(b)
     availW := m.termWidth - 8
 
     b.WriteString(learningSelectedStyle.Render("  "+truncate(l.Text, availW)) + "\n\n")
@@ -442,7 +449,8 @@ func (m model) buildTagDetailLines() []string {
     }
 
     tag := tags[m.tagTabCursor]
-    var b strings.Builder
+    b := getBuilder()
+    defer putBuilder(b)
 
     title := fmt.Sprintf("  #%s", tag)
     count := m.countTasksWithTag(tag)
@@ -464,12 +472,13 @@ func (m model) buildTagDetailLines() []string {
     )
 
     hasAny := false
-    for _, t := range m.todos {
-        for _, tt := range t.Tags {
+    for i := range m.todos {
+        for _, tt := range m.todos[i].Tags {
             if tt != tag {
                 continue
             }
             hasAny = true
+            t := &m.todos[i]
             status := "[ ]"
             if t.Status == todo.Done {
                 status = "[✓]"
@@ -506,14 +515,15 @@ func (m model) buildTagDetailLines() []string {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
 func (m model) renderTabs() string {
-    activeStyles := [4]lipgloss.Style{
+    activeStyles := [5]lipgloss.Style{
         tabTasksActiveStyle,
         tabProjectsActiveStyle,
         tabTagsActiveStyle,
         tabLearningsActiveStyle,
+        tabStatsActiveStyle,
     }
-    names := [4]string{"1:Tasks", "2:Projects", "3:Tags", "4:Learnings"}
-    var parts [4]string
+    names := [5]string{"1:Tasks", "2:Projects", "3:Tags", "4:Learnings", "5:Stats"}
+    var parts [5]string
     for i := range names {
         if tab(i) == m.tab {
             parts[i] = activeStyles[i].Render(names[i])
@@ -521,7 +531,7 @@ func (m model) renderTabs() string {
             parts[i] = tabInactiveStyle.Render(names[i])
         }
     }
-    return parts[0] + " " + parts[1] + " " + parts[2] + " " + parts[3]
+    return parts[0] + " " + parts[1] + " " + parts[2] + " " + parts[3] + " " + parts[4]
 }
 
 func (m model) renderListContent() string {
@@ -537,14 +547,130 @@ func (m model) renderListContent() string {
         return m.renderTagList()
     case tabLearnings:
         return m.renderLearningList()
+    case tabStats:
+        return m.renderStatsList()
     }
     return ""
 }
 
-// ── Learnings list ────────────────────────────────────────────────────────────
+// ── Tags list (lazy + pooled) ─────────────────────────────────────────────────
+
+func (m model) renderTagList() string {
+    tags := m.getFilteredTagsForTab()
+
+    if len(tags) == 0 {
+        if m.tagTabSearchQuery != "" {
+            return normalStyle.Render("  No tags match your filter.")
+        }
+        return normalStyle.Render("  No tags yet. Add tags to tasks in the detail view.")
+    }
+
+    b := getBuilder()
+    defer putBuilder(b)
+
+    barW := m.termWidth / ganttBarWidthDivisor
+    if barW < minTagBarWidth {
+        barW = minTagBarWidth
+    }
+    if barW > maxTagBarWidth {
+        barW = maxTagBarWidth
+    }
+
+    gradLen := len(tagProgressGradient)
+    stats := m.cachedTags
+    if stats == nil {
+        stats = computeTagStats(m.todos)
+    }
+
+    availW := m.termWidth - 8
+
+    counter := fmt.Sprintf("%d/%d", m.tagTabCursor+1, len(tags))
+    headerLeft := padRight("  Tag", tagLabelColWidth) + "Progress"
+    padW := m.termWidth - 6 - len([]rune(headerLeft)) - len([]rune(counter)) - barW
+    if padW < 1 {
+        padW = 1
+    }
+    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW+barW)) + counter + "\n")
+
+    sortLabel := "alpha"
+    if m.tagSort == tagSortCount {
+        sortLabel = "count"
+    }
+    b.WriteString(renderSortDivider(availW, sortLabel))
+
+    maxVisible := m.estimateListHeight()
+    startIdx := m.listOffset
+    endIdx := startIdx + maxVisible
+    if endIdx > len(tags) {
+        endIdx = len(tags)
+    }
+    if startIdx > len(tags) {
+        startIdx = 0
+    }
+
+    var barStr strings.Builder
+    barStr.Grow(barW * 4)
+
+    for i := startIdx; i < endIdx; i++ {
+        tag := tags[i]
+        s := stats[tag]
+        total := s.total
+        done := s.done
+
+        pct := 0.0
+        if total > 0 {
+            pct = float64(done) / float64(total)
+        }
+        filled := int(math.Round(pct * float64(barW)))
+        cur := "  "
+        if i == m.tagTabCursor {
+            cur = "▶ "
+        }
+        tagLabel := padRight(truncate("#"+tag, tagLabelColWidth-4), tagLabelColWidth-2)
+
+        barStr.Reset()
+        for j := 0; j < barW; j++ {
+            if j < filled {
+                pos := 0.0
+                if filled > 1 {
+                    pos = float64(j) / float64(filled-1)
+                }
+                gradIdx := int(pos * float64(gradLen-1))
+                if gradIdx >= gradLen {
+                    gradIdx = gradLen - 1
+                }
+                barStr.WriteString(tagProgressGradient[gradIdx].Render("█"))
+            } else {
+                barStr.WriteString(dimStyle.Render("░"))
+            }
+        }
+
+        if m.mode == modeEditTag && m.editingTagName == tag {
+            b.WriteString(tagSelectedStyle.Render(cur+tagLabel) + m.textInput.View() + "\n")
+            continue
+        }
+
+        pctStr := fmt.Sprintf(" %3d%% (%d done / %d total)", int(pct*100), done, total)
+        if i == m.tagTabCursor {
+            b.WriteString(
+                tagSelectedStyle.Render(cur+tagLabel)+
+                    barStr.String()+
+                    selectedStyle.Render(pctStr)+"\n",
+            )
+        } else {
+            b.WriteString(
+                tagStyle.Render(cur+tagLabel)+
+                    barStr.String()+
+                    normalStyle.Render(pctStr)+"\n",
+            )
+        }
+    }
+    return b.String()
+}
+
+// ── Learnings list (lazy + pooled) ────────────────────────────────────────────
 
 func (m model) renderLearningList() string {
-    var b strings.Builder
     learnings := m.allLearnings()
     if len(learnings) == 0 {
         if m.learningSearchQuery != "" {
@@ -552,6 +678,9 @@ func (m model) renderLearningList() string {
         }
         return normalStyle.Render("  No learnings yet. Add learnings from a task's detail view.")
     }
+
+    b := getBuilder()
+    defer putBuilder(b)
 
     availW := m.termWidth - 8
     dateW := 8
@@ -564,23 +693,33 @@ func (m model) renderLearningList() string {
     }
     textW := availW - dateW - tagsW - 6
 
-    sortLabel := "date"
-    if m.learningSort == learningSortAlpha {
-        sortLabel = "alpha"
-    }
-    counter := fmt.Sprintf("%d/%d  sort:%s", m.learningCursor+1, len(learnings), sortLabel)
-    headerLeft := "      " + padRight("Learning", textW) + padRight("Tags", tagsW) + "Date"
+    counter := fmt.Sprintf("%d/%d", m.learningCursor+1, len(learnings))
+    const prefix = "      "
+    headerLeft := prefix + padRight("Learning", textW) + padRight("Tags", tagsW) + "Date"
     padW := m.termWidth - 6 - len([]rune(headerLeft)) - len([]rune(counter))
     if padW < 1 {
         padW = 1
     }
-    b.WriteString(
-        headerStyle.Render(headerLeft+strings.Repeat(" ", padW))+
-            learningSortIndicatorStyle.Render(counter)+"\n",
-    )
-    b.WriteString(dimStyle.Render("  "+strings.Repeat("─", availW)) + "\n")
+    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + counter + "\n")
 
-    for i, l := range learnings {
+    sortLabel := "date"
+    if m.learningSort == learningSortAlpha {
+        sortLabel = "alpha"
+    }
+    b.WriteString(renderSortDivider(availW, sortLabel))
+
+    maxVisible := m.estimateListHeight()
+    startIdx := m.listOffset
+    endIdx := startIdx + maxVisible
+    if endIdx > len(learnings) {
+        endIdx = len(learnings)
+    }
+    if startIdx > len(learnings) {
+        startIdx = 0
+    }
+
+    for i := startIdx; i < endIdx; i++ {
+        l := learnings[i]
         cur := "  "
         if i == m.learningCursor {
             cur = "▶ "
@@ -609,7 +748,359 @@ func (m model) renderLearningList() string {
     }
     return b.String()
 }
-// ── Projects ──────────────────────────────────────────────────────────────────
+
+// ── Stats (pooled) ────────────────────────────────────────────────────────────
+
+func (m model) renderStatsList() string {
+    b := getBuilder()
+    defer putBuilder(b)
+
+    now := time.Now()
+    today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+    weekAgo := today.AddDate(0, 0, -7)
+    monthAgo := today.AddDate(0, -1, 0)
+
+    var totalTasks, activeTasks, doneTasks, overdueTasks int
+    var doneToday, doneThisWeek, doneThisMonth int
+    var highPri, medPri, lowPri int
+    var withNotes, withLearnings int
+    projectCounts := make(map[string]int)
+
+    for i := range m.todos {
+        t := &m.todos[i]
+        if t.ParentID != "" {
+            continue
+        }
+        totalTasks++
+        if t.Status == todo.Done {
+            doneTasks++
+            if !t.CompletedAt.IsZero() {
+                if !t.CompletedAt.Before(today) {
+                    doneToday++
+                }
+                if !t.CompletedAt.Before(weekAgo) {
+                    doneThisWeek++
+                }
+                if !t.CompletedAt.Before(monthAgo) {
+                    doneThisMonth++
+                }
+            }
+        } else {
+            activeTasks++
+            if t.IsOverdue() {
+                overdueTasks++
+            }
+            switch t.Priority {
+            case todo.PriorityHigh:
+                highPri++
+            case todo.PriorityMedium:
+                medPri++
+            default:
+                lowPri++
+            }
+        }
+        if t.Notes != "" {
+            withNotes++
+        }
+        if len(t.Learnings) > 0 {
+            withLearnings++
+        }
+        if t.Project != "" {
+            projectCounts[t.Project]++
+        }
+    }
+
+    availW := m.termWidth - 8
+    gradLen := len(statsGradient)
+
+    b.WriteString(statsHeaderStyle.Render("  📊 Productivity Stats") + "\n")
+    b.WriteString(renderPlainDivider(availW))
+
+    b.WriteString(statsHeaderStyle.Render("  Overview") + "\n")
+
+    renderStat := func(label string, value int, total int, showBar bool) {
+        labelStr := padRight("  "+label, statsLabelWidth)
+        valStr := fmt.Sprintf("%d", value)
+        if showBar && total > 0 {
+            pct := float64(value) / float64(total)
+            barW := statsBarWidth
+            filled := int(pct * float64(barW))
+            if filled > barW {
+                filled = barW
+            }
+            var bar strings.Builder
+            for j := 0; j < barW; j++ {
+                if j < filled {
+                    pos := 0.0
+                    if filled > 1 {
+                        pos = float64(j) / float64(filled-1)
+                    }
+                    gradIdx := int(pos * float64(gradLen-1))
+                    if gradIdx >= gradLen {
+                        gradIdx = gradLen - 1
+                    }
+                    bar.WriteString(statsGradient[gradIdx].Render("█"))
+                } else {
+                    bar.WriteString(dimStyle.Render("░"))
+                }
+            }
+            pctStr := fmt.Sprintf(" %3d%%", int(pct*100))
+            b.WriteString(detailLabelStyle.Render(labelStr) + normalStyle.Render(padRight(valStr, statsValueWidth)) + bar.String() + dimStyle.Render(pctStr) + "\n")
+        } else {
+            b.WriteString(detailLabelStyle.Render(labelStr) + normalStyle.Render(valStr) + "\n")
+        }
+    }
+
+    renderStat("Total tasks", totalTasks, 0, false)
+    renderStat("Active", activeTasks, totalTasks, true)
+    renderStat("Completed", doneTasks, totalTasks, true)
+    if overdueTasks > 0 {
+        labelStr := padRight("  Overdue", statsLabelWidth)
+        b.WriteString(detailLabelStyle.Render(labelStr) + overdueCountStyle.Render(fmt.Sprintf("%d", overdueTasks)) + "\n")
+    } else {
+        renderStat("Overdue", 0, 0, false)
+    }
+    b.WriteString("\n")
+
+    b.WriteString(statsHeaderStyle.Render("  Completion velocity") + "\n")
+    renderStat("Today", doneToday, 0, false)
+    renderStat("This week", doneThisWeek, 0, false)
+    renderStat("This month", doneThisMonth, 0, false)
+    if doneThisWeek > 0 {
+        avg := fmt.Sprintf("%.1f tasks/day", float64(doneThisWeek)/7.0)
+        b.WriteString(detailLabelStyle.Render(padRight("  Avg (7d)", statsLabelWidth)) + normalStyle.Render(avg) + "\n")
+    }
+    b.WriteString("\n")
+
+    if activeTasks > 0 {
+        b.WriteString(statsHeaderStyle.Render("  Active by priority") + "\n")
+        renderStat("↑ High", highPri, activeTasks, true)
+        renderStat("→ Medium", medPri, activeTasks, true)
+        renderStat("↓ Low", lowPri, activeTasks, true)
+        b.WriteString("\n")
+    }
+
+    if len(projectCounts) > 0 {
+        b.WriteString(statsHeaderStyle.Render("  Projects") + "\n")
+        type projEntry struct {
+            name  string
+            count int
+        }
+        entries := make([]projEntry, 0, len(projectCounts))
+        for name, count := range projectCounts {
+            entries = append(entries, projEntry{name, count})
+        }
+        sort.Slice(entries, func(i, j int) bool {
+            return entries[i].count > entries[j].count
+        })
+        maxShow := 8
+        if len(entries) < maxShow {
+            maxShow = len(entries)
+        }
+        for _, e := range entries[:maxShow] {
+            labelStr := padRight("  "+truncate(e.name, statsLabelWidth-4), statsLabelWidth)
+            b.WriteString(normalStyle.Render(labelStr) + activeCountStyle.Render(fmt.Sprintf("%d tasks", e.count)) + "\n")
+        }
+        if len(entries) > maxShow {
+            b.WriteString(dimStyle.Render(fmt.Sprintf("  ... and %d more projects", len(entries)-maxShow)) + "\n")
+        }
+        b.WriteString("\n")
+    }
+
+    b.WriteString(statsHeaderStyle.Render("  Content") + "\n")
+    renderStat("With notes", withNotes, totalTasks, false)
+    renderStat("With learnings", withLearnings, totalTasks, false)
+    renderStat("Total learnings", len(m.allLearnings()), 0, false)
+    renderStat("Tags in use", len(m.getAllTagsSorted()), 0, false)
+
+    return b.String()
+}
+
+// ── Task lists (lazy + pooled) ────────────────────────────────────────────────
+
+func (m model) renderTaskList() string {
+    active := m.activeTodos()
+    if len(active) == 0 {
+        if m.searchQuery != "" {
+            return normalStyle.Render("  No tasks match your search.")
+        }
+        if m.focusFilter {
+            return normalStyle.Render("  No tasks due today or overdue. Nice!")
+        }
+        return normalStyle.Render("  No tasks yet. Press 'a' to add one.")
+    }
+
+    b := getBuilder()
+    defer putBuilder(b)
+
+    renderListHeader(b, m.termWidth, m.cursor, len(active), false, m.taskSort)
+
+    overdueSet := m.overdueSet
+
+    maxVisible := m.estimateListHeight()
+    startIdx := m.listOffset
+    endIdx := startIdx + maxVisible
+    if endIdx > len(active) {
+        endIdx = len(active)
+    }
+    if startIdx > len(active) {
+        startIdx = 0
+    }
+
+    for i := startIdx; i < endIdx; i++ {
+        t := active[i]
+        b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, m.pane == paneList, overdueSet))
+        if len(t.SubtaskIDs) > 0 && m.expandedTasks[t.ID] {
+            for j, subID := range t.SubtaskIDs {
+                sub := m.findTodoByID(subID)
+                if sub == nil {
+                    continue
+                }
+                b.WriteString(m.renderSubtaskLine(sub, j, len(t.SubtaskIDs)))
+            }
+        }
+    }
+    return b.String()
+}
+
+func (m model) renderHistoryList() string {
+    completed := m.completedTodos()
+    if len(completed) == 0 {
+        if m.searchQuery != "" {
+            return normalStyle.Render("  No completed tasks match your search.")
+        }
+        return normalStyle.Render("  No completed tasks yet.")
+    }
+
+    b := getBuilder()
+    defer putBuilder(b)
+
+    renderListHeader(b, m.termWidth, m.cursor, len(completed), true, m.taskSort)
+
+    maxVisible := m.estimateListHeight()
+    startIdx := m.listOffset
+    endIdx := startIdx + maxVisible
+    if endIdx > len(completed) {
+        endIdx = len(completed)
+    }
+    if startIdx > len(completed) {
+        startIdx = 0
+    }
+
+    for i := startIdx; i < endIdx; i++ {
+        b.WriteString(m.renderHistoryLine(completed[i], i, m.cursor, m.pane == paneList))
+    }
+    return b.String()
+}
+
+func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) string {
+    titleW := titleColWidth(m.termWidth)
+    cursorStr := "  "
+    if index == cursor && active {
+        cursorStr = "▶ "
+    }
+    startVal := ""
+    if !t.StartDate.IsZero() {
+        startVal = t.StartDate.Format("02-01-06")
+    }
+    dueVal := ""
+    if !t.DueDate.IsZero() {
+        dueVal = t.DueDate.Format("02-01-06")
+    }
+    completedVal := ""
+    if !t.CompletedAt.IsZero() {
+        completedVal = t.CompletedAt.Format("02-01-06")
+    }
+    titleCol := padRight(truncate(t.Title, titleW), titleW)
+    startCol := padRight(startVal, 10)
+    dueCol := padRight(dueVal, 10)
+    completedCol := padRight(completedVal, 10)
+    tagsPart := renderTagsPart(t.Tags)
+
+    if index == cursor && active {
+        return selectedStyle.Render(cursorStr+"[") +
+            checkDoneStyle.Render("✓") +
+            selectedStyle.Render("] "+titleCol+startCol+dueCol+completedCol) +
+            " " + tagsPart + "\n"
+    }
+    return normalStyle.Render(cursorStr+"[") +
+        checkDoneStyle.Render("✓") +
+        normalStyle.Render("] "+titleCol+startCol+dueCol+completedCol) +
+        " " + tagsPart + "\n"
+}
+
+func (m model) renderSubtaskLine(sub *todo.Todo, index, total int) string {
+    connector := "├"
+    if index == total-1 {
+        connector = "└"
+    }
+    titleW := titleColWidth(m.termWidth) - 4
+    if titleW < 10 {
+        titleW = 10
+    }
+    if sub.Status == todo.Done {
+        return dimStyle.Render("     "+connector+" [") + checkDoneStyle.Render("✓") + dimStyle.Render("] "+truncate(sub.Title, titleW)) + "\n"
+    }
+    return dimStyle.Render("     "+connector+" [ ] "+truncate(sub.Title, titleW)) + "\n"
+}
+
+func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool, overdueSet map[string]bool) string {
+    titleW := titleColWidth(m.termWidth)
+    cursorStr := "  "
+    if index == cursor && active {
+        cursorStr = "▶ "
+    }
+    checkbox := "[ ]"
+    if t.Status == todo.Done {
+        checkbox = "[✓]"
+    }
+    foldIcon := " "
+    if len(t.SubtaskIDs) > 0 {
+        if m.expandedTasks[t.ID] {
+            foldIcon = "▾"
+        } else {
+            foldIcon = "▸"
+        }
+    }
+    title := t.Title
+    hasOverdueDep := t.HasOverdueDependencyFast(overdueSet)
+    if hasOverdueDep {
+        title += " !"
+    }
+    if t.Notes != "" {
+        title += " 📝"
+    }
+    startVal := ""
+    if !t.StartDate.IsZero() {
+        startVal = t.StartDate.Format("02-01-06")
+    }
+    dueVal := ""
+    if !t.DueDate.IsZero() {
+        dueVal = t.DueDate.Format("02-01-06")
+    }
+    titleCol := padRight(truncate(title, titleW-1), titleW-1)
+    startCol := padRight(startVal, 10)
+    dueCol := padRight(dueVal, 10)
+    prioCol := padRight(t.Priority.Icon()+" "+t.Priority.String(), 10)
+    tagsPart := renderTagsPart(t.Tags)
+    line := cursorStr + checkbox + foldIcon + titleCol + startCol + dueCol + prioCol
+    switch {
+    case t.IsOverdue():
+        return overdueStyle.Render(line) + " " + tagsPart + "\n"
+    case hasOverdueDep:
+        return depOverdueStyle.Render(line) + " " + tagsPart + "\n"
+    case index == cursor && active:
+        return selectedStyle.Render(line) + " " + tagsPart + "\n"
+    default:
+        return normalStyle.Render(line) + " " + tagsPart + "\n"
+    }
+}
+
+func (m model) renderTaskLine(t todo.Todo, index, cursor int, active bool) string {
+    return m.renderTaskLineWithSet(t, index, cursor, active, m.overdueSet)
+}
+
+// ── Projects (pooled) ─────────────────────────────────────────────────────────
 
 func (m model) renderProjectListContent(projects []string) string {
     if len(projects) == 0 {
@@ -619,7 +1110,9 @@ func (m model) renderProjectListContent(projects []string) string {
         return normalStyle.Render("  No projects yet. Add a project to a task first.")
     }
 
-    var b strings.Builder
+    b := getBuilder()
+    defer putBuilder(b)
+
     w := m.termWidth - 8
     counter := fmt.Sprintf("%d/%d", m.projectCursor+1, len(projects))
 
@@ -639,8 +1132,8 @@ func (m model) renderProjectListContent(projects []string) string {
     if padW < 1 {
         padW = 1
     }
-    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)+counter) + "\n")
-    b.WriteString(dimStyle.Render("  "+strings.Repeat("─", w-4)) + "\n")
+    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + counter + "\n")
+    b.WriteString(renderPlainDivider(w))
 
     for i, p := range projects {
         tasks := getTasksForProject(m.todos, p)
@@ -695,401 +1188,12 @@ func (m model) renderProjectListContent(projects []string) string {
     return b.String()
 }
 
-// ── Gantt ─────────────────────────────────────────────────────────────────────
-
-func (m model) renderGantt(tasks []todo.Todo) string {
-    if len(tasks) == 0 {
-        return dimStyle.Render("  No tasks in this project.")
-    }
-    today := time.Now()
-    var minDate, maxDate time.Time
-    for _, t := range tasks {
-        if !t.StartDate.IsZero() && (minDate.IsZero() || t.StartDate.Before(minDate)) {
-            minDate = t.StartDate
-        }
-        if !t.DueDate.IsZero() && (maxDate.IsZero() || t.DueDate.After(maxDate)) {
-            maxDate = t.DueDate
-        }
-    }
-    if minDate.IsZero() {
-        minDate = today.AddDate(0, 0, -7)
-    }
-    if maxDate.IsZero() {
-        maxDate = today.AddDate(0, 1, 0)
-    }
-    if !maxDate.After(minDate) {
-        maxDate = minDate.AddDate(0, 0, 14)
-    }
-
-    labelW := m.termWidth / ganttLabelWidthDivisor
-    if labelW < minGanttLabelWidth {
-        labelW = minGanttLabelWidth
-    }
-    if labelW > maxGanttLabelWidth {
-        labelW = maxGanttLabelWidth
-    }
-
-    chartW := m.termWidth - labelW - ganttSuffixWidth - ganttChartPadding
-    if chartW < minChartWidth {
-        chartW = minChartWidth
-    }
-
-    totalDays := maxDate.Sub(minDate).Hours() / 24
-    if totalDays < 1 {
-        totalDays = 1
-    }
-    todayPos := int(math.Round(today.Sub(minDate).Hours() / 24 * float64(chartW) / totalDays))
-    if todayPos < 0 || todayPos >= chartW {
-        todayPos = -1
-    }
-
-    var b strings.Builder
-
-    leftDate := minDate.Format("02-01")
-    rightDate := maxDate.Format("02-01")
-    innerSpaces := chartW - len(leftDate) - len(rightDate)
-    if innerSpaces < 1 {
-        innerSpaces = 1
-    }
-    timelineHeader := leftDate + strings.Repeat(" ", innerSpaces) + rightDate
-    headerLabel := padRight("  Task", labelW)
-    b.WriteString(headerStyle.Render(headerLabel+timelineHeader) + "\n")
-
-    todayLabel := "today:" + today.Format("02-01")
-    divider := make([]rune, chartW)
-    for i := range divider {
-        divider[i] = '─'
-    }
-    if todayPos >= 0 {
-        insertPos := todayPos - len([]rune(todayLabel))/2
-        if insertPos < 0 {
-            insertPos = 0
-        }
-        if insertPos+len([]rune(todayLabel)) > chartW {
-            insertPos = chartW - len([]rune(todayLabel))
-        }
-        for i, ch := range []rune(todayLabel) {
-            divider[insertPos+i] = ch
-        }
-    }
-    b.WriteString(dimStyle.Render("  "+strings.Repeat("─", labelW-2)) +
-        ganttTodayStyle.Render(string(divider)) + "\n")
-
-    gradLen := len(ganttGradient)
-    ovrdLen := len(ganttOverdueGradient)
-    barRunes := make([]rune, chartW)
-    barColors := make([]int, chartW)
-
-    for i, t := range tasks {
-        isSelected := i == m.cursor && m.pane == paneList && m.projectTaskMode
-        checkbox := "[ ]"
-        if t.Status == todo.Done {
-            checkbox = "[✓]"
-        }
-        titleTrunc := labelW - 6
-        if titleTrunc < 5 {
-            titleTrunc = 5
-        }
-        label := checkbox + " " + padRight(truncate(t.Title, titleTrunc), titleTrunc) + " |"
-        for j := range barRunes {
-            barRunes[j] = ' '
-            barColors[j] = -1
-        }
-        hasDates := !t.StartDate.IsZero() && !t.DueDate.IsZero()
-        if hasDates {
-            startPos := int(math.Round(t.StartDate.Sub(minDate).Hours() / 24 * float64(chartW) / totalDays))
-            endPos := int(math.Round(t.DueDate.Sub(minDate).Hours() / 24 * float64(chartW) / totalDays))
-            if startPos < 0 {
-                startPos = 0
-            }
-            if endPos > chartW {
-                endPos = chartW
-            }
-            barLen := endPos - startPos
-            if barLen < 1 {
-                barLen = 1
-            }
-            isOverdue := t.IsOverdue()
-            isDone := t.Status == todo.Done
-            for j := startPos; j < endPos && j < chartW; j++ {
-                barRunes[j] = '█'
-                var pos float64
-                if barLen > 1 {
-                    pos = float64(j-startPos) / float64(barLen-1)
-                }
-                gradIdx := int(pos * float64(gradLen-1))
-                if gradIdx >= gradLen {
-                    gradIdx = gradLen - 1
-                }
-                switch {
-                case isDone:
-                    barColors[j] = 99
-                case isOverdue:
-                    idx := int(pos * float64(ovrdLen-1))
-                    if idx >= ovrdLen {
-                        idx = ovrdLen - 1
-                    }
-                    barColors[j] = 200 + idx
-                default:
-                    barColors[j] = gradIdx
-                }
-            }
-        }
-        if todayPos >= 0 && todayPos < chartW {
-            barRunes[todayPos] = '│'
-            barColors[todayPos] = -2
-        }
-        datesSuffix := "|"
-        if hasDates {
-            datesSuffix = fmt.Sprintf("| %s→%s", t.StartDate.Format("02-01"), t.DueDate.Format("02-01"))
-        }
-        renderBar := func() {
-            j := 0
-            for j < chartW {
-                colorIdx := barColors[j]
-                start := j
-                for j < chartW && barColors[j] == colorIdx {
-                    j++
-                }
-                group := string(barRunes[start:j])
-                switch {
-                case colorIdx == -1:
-                    b.WriteString(group)
-                case colorIdx == -2:
-                    b.WriteString(ganttTodayStyle.Render(group))
-                case colorIdx == 99:
-                    b.WriteString(ganttDoneStyle.Render(group))
-                case colorIdx >= 200:
-                    b.WriteString(ganttOverdueGradient[colorIdx-200].Render(group))
-                default:
-                    b.WriteString(ganttGradient[colorIdx].Render(group))
-                }
-            }
-        }
-        if isSelected {
-            b.WriteString(selectedStyle.Render(label))
-            renderBar()
-            b.WriteString(selectedStyle.Render(datesSuffix) + "\n")
-        } else {
-            b.WriteString(label)
-            renderBar()
-            b.WriteString(datesSuffix + "\n")
-        }
-    }
-    return b.String()
-}
-
-// ── Tags list ─────────────────────────────────────────────────────────────────
-
-func (m model) renderTagList() string {
-    var b strings.Builder
-    tags := m.getFilteredTagsForTab()
-
-    if len(tags) == 0 {
-        if m.tagTabSearchQuery != "" {
-            return normalStyle.Render("  No tags match your filter.")
-        }
-        return normalStyle.Render("  No tags yet. Add tags to tasks in the detail view.")
-    }
-
-    barW := m.termWidth / ganttBarWidthDivisor
-    if barW < minTagBarWidth {
-        barW = minTagBarWidth
-    }
-    if barW > maxTagBarWidth {
-        barW = maxTagBarWidth
-    }
-
-    gradLen := len(tagProgressGradient)
-    stats := computeTagStats(m.todos)
-
-    sortLabel := "alpha"
-    if m.tagSort == tagSortCount {
-        sortLabel = "count"
-    }
-    counter := fmt.Sprintf("%d/%d  sort:%s", m.tagTabCursor+1, len(tags), sortLabel)
-    headerLeft := padRight("  Tag", tagLabelColWidth) + "Progress"
-    padW := m.termWidth - 6 - len([]rune(headerLeft)) - len([]rune(counter)) - barW
-    if padW < 1 {
-        padW = 1
-    }
-    b.WriteString(
-        headerStyle.Render(headerLeft+strings.Repeat(" ", padW+barW))+
-            tagSortIndicatorStyle.Render(counter)+"\n",
-    )
-    b.WriteString(dimStyle.Render("  "+strings.Repeat("─", tagLabelColWidth+barW+18)) + "\n")
-
-    for i, tag := range tags {
-        s := stats[tag]
-        total := s.total
-        done := s.done
-
-        pct := 0.0
-        if total > 0 {
-            pct = float64(done) / float64(total)
-        }
-        filled := int(math.Round(pct * float64(barW)))
-        cur := "  "
-        if i == m.tagTabCursor {
-            cur = "▶ "
-        }
-        tagLabel := padRight(truncate("#"+tag, tagLabelColWidth-4), tagLabelColWidth-2)
-
-        var barStr strings.Builder
-        barStr.Grow(barW * 4)
-        for j := 0; j < barW; j++ {
-            if j < filled {
-                pos := 0.0
-                if filled > 1 {
-                    pos = float64(j) / float64(filled-1)
-                }
-                gradIdx := int(pos * float64(gradLen-1))
-                if gradIdx >= gradLen {
-                    gradIdx = gradLen - 1
-                }
-                barStr.WriteString(tagProgressGradient[gradIdx].Render("█"))
-            } else {
-                barStr.WriteString(dimStyle.Render("░"))
-            }
-        }
-
-        if m.mode == modeEditTag && m.editingTagName == tag {
-            b.WriteString(tagSelectedStyle.Render(cur+tagLabel) + m.textInput.View() + "\n")
-            continue
-        }
-
-        pctStr := fmt.Sprintf(" %3d%% (%d done / %d total)", int(pct*100), done, total)
-        if i == m.tagTabCursor {
-            b.WriteString(
-                tagSelectedStyle.Render(cur+tagLabel)+
-                    barStr.String()+
-                    selectedStyle.Render(pctStr)+"\n",
-            )
-        } else {
-            b.WriteString(
-                tagStyle.Render(cur+tagLabel)+
-                    barStr.String()+
-                    normalStyle.Render(pctStr)+"\n",
-            )
-        }
-    }
-    return b.String()
-}
-
-// ── Task lists ────────────────────────────────────────────────────────────────
-
-func (m model) renderTaskList() string {
-    var b strings.Builder
-    active := m.activeTodos()
-    if len(active) == 0 {
-        if m.searchQuery != "" {
-            return normalStyle.Render("  No tasks match your search.")
-        }
-        return normalStyle.Render("  No tasks yet. Press 'a' to add one.")
-    }
-    renderListHeader(&b, m.termWidth, m.cursor, len(active), false, m.taskSort)
-    for i, t := range active {
-        b.WriteString(m.renderTaskLine(t, i, m.cursor, m.pane == paneList))
-    }
-    return b.String()
-}
-
-func (m model) renderHistoryList() string {
-    var b strings.Builder
-    completed := m.completedTodos()
-    if len(completed) == 0 {
-        if m.searchQuery != "" {
-            return normalStyle.Render("  No completed tasks match your search.")
-        }
-        return normalStyle.Render("  No completed tasks yet.")
-    }
-    renderListHeader(&b, m.termWidth, m.cursor, len(completed), true, m.taskSort)
-    for i, t := range completed {
-        b.WriteString(m.renderHistoryLine(t, i, m.cursor, m.pane == paneList))
-    }
-    return b.String()
-}
-
-func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) string {
-    titleW := titleColWidth(m.termWidth)
-    cursorStr := "  "
-    if index == cursor && active {
-        cursorStr = "▶ "
-    }
-    startVal := ""
-    if !t.StartDate.IsZero() {
-        startVal = t.StartDate.Format("02-01-06")
-    }
-    dueVal := ""
-    if !t.DueDate.IsZero() {
-        dueVal = t.DueDate.Format("02-01-06")
-    }
-    completedVal := ""
-    if !t.CompletedAt.IsZero() {
-        completedVal = t.CompletedAt.Format("02-01-06")
-    }
-    titleCol := padRight(truncate(t.Title, titleW), titleW)
-    startCol := padRight(startVal, 10)
-    dueCol := padRight(dueVal, 10)
-    completedCol := padRight(completedVal, 10)
-    tagsPart := renderTagsPart(t.Tags)
-
-    if index == cursor && active {
-        return selectedStyle.Render(cursorStr+"[") +
-            checkDoneStyle.Render("✓") +
-            selectedStyle.Render("] "+titleCol+startCol+dueCol+completedCol) +
-            " " + tagsPart + "\n"
-    }
-    return normalStyle.Render(cursorStr+"[") +
-        checkDoneStyle.Render("✓") +
-        normalStyle.Render("] "+titleCol+startCol+dueCol+completedCol) +
-        " " + tagsPart + "\n"
-}
-
-func (m model) renderTaskLine(t todo.Todo, index, cursor int, active bool) string {
-    titleW := titleColWidth(m.termWidth)
-    cursorStr := "  "
-    if index == cursor && active {
-        cursorStr = "▶ "
-    }
-    checkbox := "[ ]"
-    if t.Status == todo.Done {
-        checkbox = "[✓]"
-    }
-    title := t.Title
-    if t.HasOverdueDependency(m.todos) {
-        title += " !"
-    }
-    startVal := ""
-    if !t.StartDate.IsZero() {
-        startVal = t.StartDate.Format("02-01-06")
-    }
-    dueVal := ""
-    if !t.DueDate.IsZero() {
-        dueVal = t.DueDate.Format("02-01-06")
-    }
-    titleCol := padRight(truncate(title, titleW), titleW)
-    startCol := padRight(startVal, 10)
-    dueCol := padRight(dueVal, 10)
-    prioCol := padRight(t.Priority.Icon()+" "+t.Priority.String(), 10)
-    tagsPart := renderTagsPart(t.Tags)
-    line := cursorStr + checkbox + " " + titleCol + startCol + dueCol + prioCol
-    switch {
-    case t.IsOverdue():
-        return overdueStyle.Render(line) + " " + tagsPart + "\n"
-    case t.HasOverdueDependency(m.todos):
-        return depOverdueStyle.Render(line) + " " + tagsPart + "\n"
-    case index == cursor && active:
-        return selectedStyle.Render(line) + " " + tagsPart + "\n"
-    default:
-        return normalStyle.Render(line) + " " + tagsPart + "\n"
-    }
-}
-
-// ── Detail pages ──────────────────────────────────────────────────────────────
+// ── Detail pages (pooled) ─────────────────────────────────────────────────────
 
 func (m model) renderDetailPage1(t *todo.Todo) string {
-    var b strings.Builder
+    b := getBuilder()
+    defer putBuilder(b)
+
     availableW := m.termWidth - 8
     isDetailFocused := m.pane == paneDetail && m.detailPage == 0
 
@@ -1140,6 +1244,17 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
         projectVal = t.Project
     }
     b.WriteString(renderField("Project", projectVal, fieldProject) + "\n")
+
+    notesVal := "none (press enter or 'n' to edit)"
+    if t.Notes != "" {
+        lines := strings.SplitN(t.Notes, "\n", 2)
+        preview := truncate(lines[0], availableW-detailLabelColWidth-6)
+        if len(lines) > 1 {
+            preview += " …"
+        }
+        notesVal = preview
+    }
+    b.WriteString(renderField("Notes", notesVal, fieldNotes) + "\n")
 
     b.WriteString("  " + detailLabelStyle.Render(padRight("Created:", detailLabelColWidth)) +
         detailValueStyle.Render(t.CreatedAt.Format("02-01-06 15:04")) + "\n")
@@ -1234,12 +1349,51 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
             }
         }
     }
+    b.WriteString("\n")
+
+    subtaskCur := "  "
+    if isDetailFocused && m.detailField == fieldSubtasks {
+        subtaskCur = "▶ "
+    }
+    b.WriteString(subtaskCur + detailLabelStyle.Render("Subtasks:") + "\n")
+    if len(t.SubtaskIDs) == 0 {
+        b.WriteString("  " + detailValueStyle.Render("No subtasks. Press 'a' to add one.") + "\n")
+    } else {
+        for i, subID := range t.SubtaskIDs {
+            sub := m.findTodoByID(subID)
+            pfx := "  "
+            isSubSelected := isDetailFocused && m.detailField == fieldSubtasks && i == m.subtaskCursor
+            if isSubSelected {
+                pfx = "▶ "
+            }
+            if sub == nil {
+                b.WriteString(dimStyle.Render(fmt.Sprintf("%s[?] unknown subtask", pfx)) + "\n")
+                continue
+            }
+            if sub.Status == todo.Done {
+                if isSubSelected {
+                    b.WriteString(detailSelectedStyle.Render(pfx+"[") + checkDoneStyle.Render("✓") + detailSelectedStyle.Render("] "+truncate(sub.Title, availableW-8)) + "\n")
+                } else {
+                    b.WriteString(dimStyle.Render(pfx+"[") + checkDoneStyle.Render("✓") + dimStyle.Render("] "+truncate(sub.Title, availableW-8)) + "\n")
+                }
+            } else {
+                line := fmt.Sprintf("%s[ ] %s", pfx, truncate(sub.Title, availableW-8))
+                if isSubSelected {
+                    b.WriteString(detailSelectedStyle.Render(line) + "\n")
+                } else {
+                    b.WriteString(detailValueStyle.Render(line) + "\n")
+                }
+            }
+        }
+    }
 
     return b.String()
 }
 
 func (m model) renderDetailPage2(t *todo.Todo) string {
-    var b strings.Builder
+    b := getBuilder()
+    defer putBuilder(b)
+
     availableW := m.termWidth - 8
     innerW := m.termWidth - 10
     if innerW < minInnerWidth {
@@ -1289,6 +1443,195 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
                     b.WriteString(detailValueStyle.Render(fullLine) + "\n")
                 }
             }
+        }
+    }
+    return b.String()
+}
+
+// ── Gantt (pooled) ────────────────────────────────────────────────────────────
+
+func (m model) renderGantt(tasks []todo.Todo) string {
+    if len(tasks) == 0 {
+        return dimStyle.Render("  No tasks in this project.")
+    }
+    today := time.Now()
+    var minDate, maxDate time.Time
+    for _, t := range tasks {
+        if !t.StartDate.IsZero() && (minDate.IsZero() || t.StartDate.Before(minDate)) {
+            minDate = t.StartDate
+        }
+        if !t.DueDate.IsZero() && (maxDate.IsZero() || t.DueDate.After(maxDate)) {
+            maxDate = t.DueDate
+        }
+    }
+    if minDate.IsZero() {
+        minDate = today.AddDate(0, 0, -7)
+    }
+    if maxDate.IsZero() {
+        maxDate = today.AddDate(0, 1, 0)
+    }
+    if !maxDate.After(minDate) {
+        maxDate = minDate.AddDate(0, 0, 14)
+    }
+
+    labelW := m.termWidth / ganttLabelWidthDivisor
+    if labelW < minGanttLabelWidth {
+        labelW = minGanttLabelWidth
+    }
+    if labelW > maxGanttLabelWidth {
+        labelW = maxGanttLabelWidth
+    }
+
+    chartW := m.termWidth - labelW - ganttSuffixWidth - ganttChartPadding
+    if chartW < minChartWidth {
+        chartW = minChartWidth
+    }
+
+    totalDays := maxDate.Sub(minDate).Hours() / 24
+    if totalDays < 1 {
+        totalDays = 1
+    }
+    todayPos := int(math.Round(today.Sub(minDate).Hours() / 24 * float64(chartW) / totalDays))
+    if todayPos < 0 || todayPos >= chartW {
+        todayPos = -1
+    }
+
+    b := getBuilder()
+    defer putBuilder(b)
+
+    leftDate := minDate.Format("02-01")
+    rightDate := maxDate.Format("02-01")
+    innerSpaces := chartW - len(leftDate) - len(rightDate)
+    if innerSpaces < 1 {
+        innerSpaces = 1
+    }
+    timelineHeader := leftDate + strings.Repeat(" ", innerSpaces) + rightDate
+    headerLabel := padRight("  Task", labelW)
+    b.WriteString(headerStyle.Render(headerLabel+timelineHeader) + "\n")
+
+    todayLabel := "today:" + today.Format("02-01")
+    divider := make([]rune, chartW)
+    for i := range divider {
+        divider[i] = '─'
+    }
+    if todayPos >= 0 {
+        insertPos := todayPos - len([]rune(todayLabel))/2
+        if insertPos < 0 {
+            insertPos = 0
+        }
+        if insertPos+len([]rune(todayLabel)) > chartW {
+            insertPos = chartW - len([]rune(todayLabel))
+        }
+        for i, ch := range []rune(todayLabel) {
+            divider[insertPos+i] = ch
+        }
+    }
+    b.WriteString(dimStyle.Render("  "+strings.Repeat("─", labelW-2)) +
+        ganttTodayStyle.Render(string(divider)) + "\n")
+
+    gradLen := len(ganttGradient)
+    ovrdLen := len(ganttOverdueGradient)
+
+    barRunes := make([]rune, chartW)
+    barColors := make([]int, chartW)
+
+    for i, t := range tasks {
+        isSelected := i == m.cursor && m.pane == paneList && m.projectTaskMode
+        checkbox := "[ ]"
+        if t.Status == todo.Done {
+            checkbox = "[✓]"
+        }
+        titleTrunc := labelW - 6
+        if titleTrunc < 5 {
+            titleTrunc = 5
+        }
+        label := checkbox + " " + padRight(truncate(t.Title, titleTrunc), titleTrunc) + " |"
+
+        for j := range barRunes {
+            barRunes[j] = ' '
+            barColors[j] = -1
+        }
+
+        hasDates := !t.StartDate.IsZero() && !t.DueDate.IsZero()
+        if hasDates {
+            startPos := int(math.Round(t.StartDate.Sub(minDate).Hours() / 24 * float64(chartW) / totalDays))
+            endPos := int(math.Round(t.DueDate.Sub(minDate).Hours() / 24 * float64(chartW) / totalDays))
+            if startPos < 0 {
+                startPos = 0
+            }
+            if endPos > chartW {
+                endPos = chartW
+            }
+            barLen := endPos - startPos
+            if barLen < 1 {
+                barLen = 1
+            }
+            isOverdue := t.IsOverdue()
+            isDone := t.Status == todo.Done
+            for j := startPos; j < endPos && j < chartW; j++ {
+                barRunes[j] = '█'
+                var pos float64
+                if barLen > 1 {
+                    pos = float64(j-startPos) / float64(barLen-1)
+                }
+                gradIdx := int(pos * float64(gradLen-1))
+                if gradIdx >= gradLen {
+                    gradIdx = gradLen - 1
+                }
+                switch {
+                case isDone:
+                    barColors[j] = 99
+                case isOverdue:
+                    idx := int(pos * float64(ovrdLen-1))
+                    if idx >= ovrdLen {
+                        idx = ovrdLen - 1
+                    }
+                    barColors[j] = 200 + idx
+                default:
+                    barColors[j] = gradIdx
+                }
+            }
+        }
+        if todayPos >= 0 && todayPos < chartW {
+            barRunes[todayPos] = '│'
+            barColors[todayPos] = -2
+        }
+        datesSuffix := "|"
+        if hasDates {
+            datesSuffix = fmt.Sprintf("| %s→%s", t.StartDate.Format("02-01"), t.DueDate.Format("02-01"))
+        }
+
+        renderBar := func() {
+            j := 0
+            for j < chartW {
+                colorIdx := barColors[j]
+                start := j
+                for j < chartW && barColors[j] == colorIdx {
+                    j++
+                }
+                group := string(barRunes[start:j])
+                switch {
+                case colorIdx == -1:
+                    b.WriteString(group)
+                case colorIdx == -2:
+                    b.WriteString(ganttTodayStyle.Render(group))
+                case colorIdx == 99:
+                    b.WriteString(ganttDoneStyle.Render(group))
+                case colorIdx >= 200:
+                    b.WriteString(ganttOverdueGradient[colorIdx-200].Render(group))
+                default:
+                    b.WriteString(ganttGradient[colorIdx].Render(group))
+                }
+            }
+        }
+        if isSelected {
+            b.WriteString(selectedStyle.Render(label))
+            renderBar()
+            b.WriteString(selectedStyle.Render(datesSuffix) + "\n")
+        } else {
+            b.WriteString(label)
+            renderBar()
+            b.WriteString(datesSuffix + "\n")
         }
     }
     return b.String()

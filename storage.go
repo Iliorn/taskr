@@ -6,8 +6,10 @@ import (
     "os"
     "path/filepath"
     "sort"
+    "strings"
     "time"
 
+    tea "github.com/charmbracelet/bubbletea"
     "taskr/todo"
 )
 
@@ -22,35 +24,53 @@ func ensureStorageDir() error {
     return os.MkdirAll(dir, 0755)
 }
 
-func saveTodos(todos []todo.Todo) error {
+// writeTodosData writes pre-marshalled JSON data to disk atomically.
+func writeTodosData(data []byte) error {
     if err := ensureStorageDir(); err != nil {
         return err
     }
 
-    data, err := json.MarshalIndent(todos, "", "  ")
-    if err != nil {
-        return err
-    }
-
     storagePath := getStoragePath()
-    tmpPath    := storagePath + ".tmp"
+    tmpPath := storagePath + ".tmp"
     backupPath := storagePath + ".bak"
 
-    // Write new data to a temp file first
     if err := os.WriteFile(tmpPath, data, 0644); err != nil {
         return err
     }
 
-    // Best-effort: rotate the current save file into the backup slot.
-    // If tasks.json does not exist yet this will fail silently, which is fine.
     _ = os.Rename(storagePath, backupPath)
-
-    // Atomically promote the temp file to the live save file
     return os.Rename(tmpPath, storagePath)
 }
 
+// saveTodos marshals and writes synchronously (used for initial load path).
+func saveTodos(todos []todo.Todo) error {
+    data, err := json.MarshalIndent(todos, "", "  ")
+    if err != nil {
+        return err
+    }
+    return writeTodosData(data)
+}
+
+// saveDataCmd returns a tea.Cmd that writes pre-marshalled data to disk asynchronously.
+func saveDataCmd(data []byte) tea.Cmd {
+    return func() tea.Msg {
+        if err := writeTodosData(data); err != nil {
+            return saveErrMsg{err}
+        }
+        return saveDoneMsg{}
+    }
+}
+
+// prepareSave marshals todos to JSON (fast, CPU-bound) and returns a Cmd for async disk write.
+func prepareSave(todos []todo.Todo) (tea.Cmd, error) {
+    data, err := json.MarshalIndent(todos, "", "  ")
+    if err != nil {
+        return nil, err
+    }
+    return saveDataCmd(data), nil
+}
+
 // loadBackup attempts to load the most recent backup file.
-// It is called automatically by loadTodos() when the primary file is corrupt.
 func loadBackup() ([]todo.Todo, error) {
     backupPath := getStoragePath() + ".bak"
     data, err := os.ReadFile(backupPath)
@@ -79,7 +99,6 @@ func loadTodos() ([]todo.Todo, error) {
 
     var todos []todo.Todo
     if err := json.Unmarshal(data, &todos); err != nil {
-        // Primary file is corrupt — attempt transparent recovery from backup
         fmt.Fprintf(os.Stderr, "warning: tasks.json is corrupt (%v), attempting backup...\n", err)
         return loadBackup()
     }
@@ -90,6 +109,9 @@ func loadTodos() ([]todo.Todo, error) {
 
 // sortTodosByMode sorts todos according to the given sort mode.
 func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
+    if len(todos) <= 1 {
+        return
+    }
     switch mode {
     case taskSortPriority:
         sort.SliceStable(todos, func(i, j int) bool {
@@ -133,12 +155,10 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
     }
 }
 
-// sortTodos sorts using the default due date mode.
 func sortTodos(todos []todo.Todo) {
     sortTodosByMode(todos, taskSortDueDate)
 }
 
-// sortTodosByStartDate sorts by start date for the Gantt waterfall view.
 func sortTodosByStartDate(todos []todo.Todo) []todo.Todo {
     result := make([]todo.Todo, len(todos))
     copy(result, todos)
@@ -159,38 +179,144 @@ func sortTodosByStartDate(todos []todo.Todo) []todo.Todo {
     return result
 }
 
-// getProjects returns a sorted list of unique project names.
 func getProjects(todos []todo.Todo) []string {
-    seen := make(map[string]bool)
-    var projects []string
-    for _, t := range todos {
-        if t.Project != "" && !seen[t.Project] {
-            seen[t.Project] = true
-            projects = append(projects, t.Project)
+    seen := make(map[string]bool, len(todos)/4)
+    projects := make([]string, 0, 8)
+    for i := range todos {
+        if p := todos[i].Project; p != "" && !seen[p] {
+            seen[p] = true
+            projects = append(projects, p)
         }
     }
     sort.Strings(projects)
     return projects
 }
 
-// getTasksForProject returns all tasks for a given project sorted by start date.
 func getTasksForProject(todos []todo.Todo, project string) []todo.Todo {
     var result []todo.Todo
-    for _, t := range todos {
-        if t.Project == project {
-            result = append(result, t)
+    for i := range todos {
+        if todos[i].Project == project {
+            result = append(result, todos[i])
         }
     }
     return sortTodosByStartDate(result)
 }
 
-// parseDueDate accepts both dd-mm-yy (2-digit year) and dd-mm-yyyy (4-digit year).
+// parseDueDate accepts dd-mm-yy, dd-mm-yyyy, and natural language shortcuts.
+// Supported natural language:
+//   - "today"       → today's date
+//   - "tomorrow"    → tomorrow
+//   - "yesterday"   → yesterday
+//   - "next week"   → 7 days from now
+//   - "next month"  → 1 month from now
+//   - "next monday" / "next tuesday" / etc. → next occurrence of that weekday
+//   - "+Nd"         → N days from now (e.g., "+3d", "+14d")
+//   - "+Nw"         → N weeks from now (e.g., "+2w")
+//   - "+Nm"         → N months from now (e.g., "+1m")
 func parseDueDate(s string) (time.Time, error) {
+    lower := strings.ToLower(strings.TrimSpace(s))
+    now := time.Now()
+    today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+    // Named shortcuts
+    switch lower {
+    case "today":
+        return today, nil
+    case "tomorrow":
+        return today.AddDate(0, 0, 1), nil
+    case "yesterday":
+        return today.AddDate(0, 0, -1), nil
+    case "next week":
+        return today.AddDate(0, 0, 7), nil
+    case "next month":
+        return today.AddDate(0, 1, 0), nil
+    }
+
+    // "next monday", "next tuesday", etc.
+    if strings.HasPrefix(lower, "next ") {
+        dayName := strings.TrimPrefix(lower, "next ")
+        if weekday, ok := parseWeekday(dayName); ok {
+            return nextWeekday(today, weekday), nil
+        }
+    }
+
+    // "monday", "tuesday", etc. (next occurrence)
+    if weekday, ok := parseWeekday(lower); ok {
+        return nextWeekday(today, weekday), nil
+    }
+
+    // Relative "+N" format: +3d, +2w, +1m
+    if strings.HasPrefix(lower, "+") && len(lower) > 2 {
+        unit := lower[len(lower)-1]
+        numStr := lower[1 : len(lower)-1]
+        if n, ok := parsePositiveInt(numStr); ok && n > 0 {
+            switch unit {
+            case 'd':
+                return today.AddDate(0, 0, n), nil
+            case 'w':
+                return today.AddDate(0, 0, n*7), nil
+            case 'm':
+                return today.AddDate(0, n, 0), nil
+            }
+        }
+    }
+
+    // Standard date formats
     if t, err := time.Parse("02-01-06", s); err == nil {
         return t, nil
     }
     if t, err := time.Parse("02-01-2006", s); err == nil {
         return t, nil
     }
-    return time.Time{}, fmt.Errorf("invalid date format, use dd-mm-yy")
+    return time.Time{}, fmt.Errorf("invalid date: use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+Nd/+Nw/+Nm'")
+}
+
+// parseWeekday maps a day name to time.Weekday.
+func parseWeekday(s string) (time.Weekday, bool) {
+    days := map[string]time.Weekday{
+        "monday":    time.Monday,
+        "tuesday":   time.Tuesday,
+        "wednesday": time.Wednesday,
+        "thursday":  time.Thursday,
+        "friday":    time.Friday,
+        "saturday":  time.Saturday,
+        "sunday":    time.Sunday,
+        "mon":       time.Monday,
+        "tue":       time.Tuesday,
+        "wed":       time.Wednesday,
+        "thu":       time.Thursday,
+        "fri":       time.Friday,
+        "sat":       time.Saturday,
+        "sun":       time.Sunday,
+    }
+    if wd, ok := days[s]; ok {
+        return wd, true
+    }
+    return 0, false
+}
+
+// nextWeekday returns the next occurrence of the given weekday after today.
+// If today is that weekday, it returns next week's occurrence.
+func nextWeekday(today time.Time, target time.Weekday) time.Time {
+    current := today.Weekday()
+    daysAhead := int(target) - int(current)
+    if daysAhead <= 0 {
+        daysAhead += 7
+    }
+    return today.AddDate(0, 0, daysAhead)
+}
+
+// parsePositiveInt parses a string as a positive integer without importing strconv.
+func parsePositiveInt(s string) (int, bool) {
+    if len(s) == 0 {
+        return 0, false
+    }
+    n := 0
+    for _, ch := range s {
+        if ch < '0' || ch > '9' {
+            return 0, false
+        }
+        n = n*10 + int(ch-'0')
+    }
+    return n, true
 }

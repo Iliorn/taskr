@@ -1,33 +1,14 @@
-
 package main
 
 // ── Layout & rendering constants ──────────────────────────────────────────────
-//
-// Centralising all magic numbers here makes it easy to tune the UI without
-// hunting through render functions.
 
 const (
-    // ── Ratio / percentage-based widths ──────────────────────────────────
-
-    // ganttBarWidthDivisor: termWidth / ganttBarWidthDivisor = Gantt bar width
-    ganttBarWidthDivisor = 3
-
-    // ganttLabelWidthDivisor: termWidth / ganttLabelWidthDivisor = label column width (≈20%)
+    ganttBarWidthDivisor   = 3
     ganttLabelWidthDivisor = 5
-
-    // detailMaxHeightPct: maximum percentage of terminal height the detail panel may occupy
-    detailMaxHeightPct = 55
-
-    // projectColWidthPct: percentage of terminal width used for the project name column
-    projectColWidthPct = 30
-
-    // overlayWidthPct: percentage of terminal width used for the help overlay
-    overlayWidthPct = 60
-
-    // titleColMaxWidthPct: maximum percentage of terminal width the title column may use
-    titleColMaxWidthPct = 40
-
-    // ── Minimum / maximum column widths (characters) ─────────────────────
+    detailMaxHeightPct     = 55
+    projectColWidthPct     = 30
+    overlayWidthPct        = 60
+    titleColMaxWidthPct    = 40
 
     minGanttBarWidth   = 10
     maxGanttBarWidth   = 60
@@ -42,24 +23,18 @@ const (
     maxTagBarWidth     = 60
     minInnerWidth      = 20
 
-    // ── Fixed column widths (characters) ─────────────────────────────────
-
-    ganttSuffixWidth   = 16
-    ganttChartPadding  = 8  // border + padding offset subtracted from chartW
-    tagLabelColWidth   = 24
-    projCountColWidth  = 10
-    projDoneColWidth   = 10
-    commentPrefixLen   = 22
+    ganttSuffixWidth    = 16
+    ganttChartPadding   = 8
+    tagLabelColWidth    = 24
+    projCountColWidth   = 10
+    projDoneColWidth    = 10
+    commentPrefixLen    = 22
     detailLabelColWidth = 14
-    titleColFixedCols  = 42
-
-    // ── Search result list limits ─────────────────────────────────────────
+    titleColFixedCols   = 42
 
     maxDepSearchResults  = 5
     maxTagSearchResults  = 5
     maxProjSearchResults = 5
-
-    // ── Layout line counts ────────────────────────────────────────────────
 
     footerHeight      = 1
     minHeaderLines    = 2
@@ -67,4 +42,8 @@ const (
     minListPanelLines = 3
     minDetailHeight   = 3
     minListHeight     = 1
+
+    statsBarWidth    = 30
+    statsLabelWidth  = 22
+    statsValueWidth  = 12
 )

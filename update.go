@@ -2,6 +2,7 @@ package main
 
 import (
     "fmt"
+    "os/exec"
     "strings"
     "time"
 
@@ -18,9 +19,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         m.termHeight = sz.Height
     }
 
-    if _, ok := msg.(clearErrMsg); ok {
+    switch msg := msg.(type) {
+    case clearErrMsg:
         m.err = ""
         return m, nil
+    case saveDoneMsg:
+        return m, nil
+    case saveErrMsg:
+        m.err = fmt.Sprintf("Error saving tasks: %v", msg.err)
+        return m, clearErrAfter()
+    case editorFinishedMsg:
+        return m.handleEditorFinished(msg.taskID)
     }
 
     switch m.mode {
@@ -40,6 +49,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         return m.updateConfirmDeleteProject(msg)
     case modeConfirmDeleteLearning:
         return m.updateConfirmDeleteLearning(msg)
+    case modeConfirmDeleteSubtask:
+        return m.updateConfirmDeleteSubtask(msg)
     case modeInput:
         return m.updateInput(msg)
     case modeEditComment:
@@ -54,6 +65,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         return m.updateEditLearning(msg)
     case modeAddLearning:
         return m.updateAddLearning(msg)
+    case modeAddSubtask:
+        return m.updateAddSubtask(msg)
     case modeSearch:
         return m.updateSearch(msg)
     case modeSearchDep:
@@ -76,11 +89,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
     if nm, ok := newModel.(model); ok {
         if nm.dirty {
-            if err := saveTodos(nm.todos); err != nil {
-                nm.err = fmt.Sprintf("Error saving tasks: %v", err)
+            nm.dirty = false
+            saveCmd, err := prepareSave(nm.todos)
+            if err != nil {
+                nm.err = fmt.Sprintf("Error marshalling tasks: %v", err)
                 return nm, clearErrAfter()
             }
-            nm.dirty = false
+            if cmd != nil {
+                return nm, tea.Batch(cmd, saveCmd)
+            }
+            return nm, saveCmd
         }
         return nm, cmd
     }
@@ -89,6 +107,82 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) setErr(msg string) tea.Cmd {
     m.err = msg
+    return clearErrAfter()
+}
+
+// ── Editor handling ───────────────────────────────────────────────────────────
+
+func (m *model) openEditorForNotes() tea.Cmd {
+    idx := m.currentTodoIndex()
+    if idx < 0 {
+        return nil
+    }
+    t := &m.todos[idx]
+    taskID := t.ID
+
+    if err := writeNotesFile(taskID, t.Notes); err != nil {
+        m.err = fmt.Sprintf("Error writing notes file: %v", err)
+        return clearErrAfter()
+    }
+
+    m.editorTaskID = taskID
+    editorCmd := getEditorCmd()
+    filePath := notesFilePath(taskID)
+
+    c := exec.Command(editorCmd, filePath)
+    return tea.ExecProcess(c, func(err error) tea.Msg {
+        return editorFinishedMsg{taskID: taskID}
+    })
+}
+
+func (m model) handleEditorFinished(taskID string) (tea.Model, tea.Cmd) {
+    content, err := readNotesFile(taskID)
+    if err != nil {
+        m.err = fmt.Sprintf("Error reading notes: %v", err)
+        return m, clearErrAfter()
+    }
+
+    for i := range m.todos {
+        if m.todos[i].ID == taskID {
+            oldNotes := m.todos[i].Notes
+            newNotes := strings.TrimRight(content, "\n\r ")
+            if newNotes != oldNotes {
+                m.pushUndo("edit notes")
+                m.todos[i].SetNotes(newNotes)
+                m.dirty = true
+                m.cacheDirty = true
+                m.refreshCaches()
+            }
+            break
+        }
+    }
+
+    cleanupNotesFile(taskID)
+    m.editorTaskID = ""
+
+    if m.dirty {
+        m.dirty = false
+        saveCmd, saveErr := prepareSave(m.todos)
+        if saveErr != nil {
+            m.err = fmt.Sprintf("Error saving: %v", saveErr)
+            return m, clearErrAfter()
+        }
+        return m, saveCmd
+    }
+    return m, nil
+}
+
+// ── Undo action ───────────────────────────────────────────────────────────────
+
+func (m *model) performUndo() tea.Cmd {
+    entry, ok := m.popUndo()
+    if !ok {
+        m.err = "Nothing to undo"
+        return clearErrAfter()
+    }
+    m.todos = entry.todos
+    m.markModifiedNoUndo()
+    m.err = fmt.Sprintf("Undid: %s", entry.desc)
     return clearErrAfter()
 }
 
@@ -116,7 +210,15 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
             m.mode = modeHelp
             return m, nil
 
-        // ── Direct tab switching by number ────────────────────────────────
+        case "u":
+            cmd := m.performUndo()
+            return m, cmd
+
+        case "n":
+            if m.tab == tabTasks && !m.showHistory && m.currentTodo() != nil {
+                return m, m.openEditorForNotes()
+            }
+
         case "1":
             m.tab = tabTasks
             m.cursor = 0
@@ -125,6 +227,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
             m.searchQuery = ""
             m.projectTaskMode = false
             m.showHistory = false
+            m.markCacheDirty()
         case "2":
             m.tab = tabProjects
             m.cursor = 0
@@ -133,6 +236,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
             m.pane = paneList
             m.searchQuery = ""
             m.projectTaskMode = false
+            m.markCacheDirty()
         case "3":
             m.tab = tabTags
             m.cursor = 0
@@ -146,9 +250,13 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
             m.listOffset = 0
             m.pane = paneList
             m.learningSearchQuery = ""
+        case "5":
+            m.tab = tabStats
+            m.pane = paneList
+            m.listOffset = 0
 
         case "tab":
-            m.tab = (m.tab + 1) % 4
+            m.tab = (m.tab + 1) % 5
             m.cursor = 0
             m.projectCursor = 0
             m.tagTabCursor = 0
@@ -160,12 +268,37 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
             m.learningSearchQuery = ""
             m.projectTaskMode = false
             m.showHistory = false
+            m.markCacheDirty()
 
         case "h":
             if m.tab == tabTasks {
                 m.showHistory = !m.showHistory
                 m.cursor = 0
                 m.listOffset = 0
+            }
+
+        case "f":
+            if m.tab == tabTasks && !m.showHistory {
+                m.focusFilter = !m.focusFilter
+                m.cursor = 0
+                m.listOffset = 0
+                m.markCacheDirty()
+            }
+
+        case "right":
+            if m.tab == tabTasks && !m.showHistory && m.pane == paneList {
+                if t := m.currentTodo(); t != nil && len(t.SubtaskIDs) > 0 {
+                    m.expandedTasks[t.ID] = true
+                }
+            }
+
+        case "left":
+            if m.tab == tabTasks && !m.showHistory && m.pane == paneList {
+                if t := m.currentTodo(); t != nil {
+                    if m.expandedTasks[t.ID] {
+                        delete(m.expandedTasks, t.ID)
+                    }
+                }
             }
 
         case "/":
@@ -185,10 +318,12 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
                 m.learningSearchInput.Focus()
                 return m, textinput.Blink
             }
-            m.mode = modeSearch
-            m.searchInput.SetValue("")
-            m.searchInput.Focus()
-            return m, textinput.Blink
+            if m.tab == tabTasks || m.tab == tabProjects {
+                m.mode = modeSearch
+                m.searchInput.SetValue("")
+                m.searchInput.Focus()
+                return m, textinput.Blink
+            }
 
         case "s":
             switch m.tab {
@@ -210,6 +345,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
                 }
                 m.cursor = 0
                 m.listOffset = 0
+                m.markCacheDirty()
             case tabLearnings:
                 if m.learningSort == learningSortDate {
                     m.learningSort = learningSortAlpha
@@ -220,7 +356,12 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
             }
 
         case "esc":
-            if m.tab == tabTags && m.tagTabSearchQuery != "" {
+            if m.tab == tabTasks && m.focusFilter {
+                m.focusFilter = false
+                m.cursor = 0
+                m.listOffset = 0
+                m.markCacheDirty()
+            } else if m.tab == tabTags && m.tagTabSearchQuery != "" {
                 m.tagTabSearchQuery = ""
                 m.tagTabCursor = 0
             } else if m.tab == tabLearnings && m.learningSearchQuery != "" {
@@ -255,10 +396,12 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
                     m.cursor = 0
                     m.listOffset = 0
                 }
-            default:
+            case tabTasks:
                 if m.cursor > 0 {
                     m.cursor--
                 }
+            case tabStats:
+                // stats is read-only, no cursor
             }
 
         case "down", "j":
@@ -297,12 +440,14 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
                         m.cursor++
                     }
                 }
+            case tabStats:
+                // stats is read-only
             }
 
         case "enter":
             switch m.tab {
             case tabTags:
-                // Renaming is done via "r"
+                // Renaming via "r"
             case tabLearnings:
                 learnings := m.allLearnings()
                 if m.learningCursor < len(learnings) {
@@ -322,8 +467,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
                     m.commentCursor = 0
                     m.depCursor = 0
                     m.tagCursor = 0
+                    m.subtaskCursor = 0
                 }
-            default:
+            case tabTasks:
                 if m.currentTodo() != nil {
                     m.pane = paneDetail
                     m.detailField = fieldStartDate
@@ -331,7 +477,10 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
                     m.commentCursor = 0
                     m.depCursor = 0
                     m.tagCursor = 0
+                    m.subtaskCursor = 0
                 }
+            case tabStats:
+                // read-only
             }
 
         case "r":
@@ -410,19 +559,19 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
             if m.tab == tabTasks && !m.showHistory {
                 m.mode = modeInput
                 m.textInput.SetValue("")
-                m.textInput.Placeholder = "New task title..."
+                m.textInput.Placeholder = "New task (use #tag due:date p:high @project)..."
                 m.textInput.Focus()
                 return m, textinput.Blink
             }
 
         case "d":
-            // ✅ Using currentTodoIndex() for safe mutation
-            if idx := m.currentTodoIndex(); idx >= 0 {
-                m.todos[idx].Toggle()
-                sortTodosByMode(m.todos, m.taskSort)
-                m.dirty = true
-                if m.cursor > 0 {
-                    m.cursor--
+            if m.tab == tabTasks {
+                if idx := m.currentTodoIndex(); idx >= 0 {
+                    m.todos[idx].Toggle()
+                    m.markModified()
+                    if m.cursor > 0 {
+                        m.cursor--
+                    }
                 }
             }
         }
@@ -457,6 +606,16 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
         m.mode = modeHelp
         return m, nil
 
+    case "u":
+        cmd := m.performUndo()
+        return m, cmd
+
+    case "n":
+        if m.currentTodo() != nil {
+            return m, m.openEditorForNotes()
+        }
+        return m, nil
+
     case "esc":
         m.pane = paneList
         m.detailField = fieldStartDate
@@ -483,11 +642,13 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
                 m.detailField = fieldDueDate
             case fieldProject:
                 m.detailField = fieldPriority
+            case fieldNotes:
+                m.detailField = fieldProject
             case fieldTags:
                 if m.tagCursor > 0 {
                     m.tagCursor--
                 } else {
-                    m.detailField = fieldProject
+                    m.detailField = fieldNotes
                 }
             case fieldDependencies:
                 if m.depCursor > 0 {
@@ -500,6 +661,12 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
                     m.learningDetailCursor--
                 } else {
                     m.detailField = fieldDependencies
+                }
+            case fieldSubtasks:
+                if m.subtaskCursor > 0 {
+                    m.subtaskCursor--
+                } else {
+                    m.detailField = fieldLearnings
                 }
             }
         } else if m.commentCursor > 0 {
@@ -516,6 +683,8 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
             case fieldPriority:
                 m.detailField = fieldProject
             case fieldProject:
+                m.detailField = fieldNotes
+            case fieldNotes:
                 m.detailField = fieldTags
                 m.tagCursor = 0
             case fieldTags:
@@ -535,6 +704,13 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
             case fieldLearnings:
                 if t := m.currentTodo(); t != nil && m.learningDetailCursor < len(t.Learnings)-1 {
                     m.learningDetailCursor++
+                } else {
+                    m.detailField = fieldSubtasks
+                    m.subtaskCursor = 0
+                }
+            case fieldSubtasks:
+                if t := m.currentTodo(); t != nil && m.subtaskCursor < len(t.SubtaskIDs)-1 {
+                    m.subtaskCursor++
                 }
             }
         } else if t := m.currentTodo(); t != nil && m.commentCursor < len(t.Comments)-1 {
@@ -543,6 +719,16 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 
     case "enter":
         return m.startEditing()
+
+    case "d":
+        if m.detailPage == 0 && m.detailField == fieldSubtasks {
+            if idx := m.currentTodoIndex(); idx >= 0 {
+                if m.subtaskCursor < len(m.todos[idx].SubtaskIDs) {
+                    m.toggleSubtask(idx, m.subtaskCursor)
+                    m.markModified()
+                }
+            }
+        }
 
     case "a":
         if m.detailPage == 1 {
@@ -580,6 +766,12 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
             m.textInput.Placeholder = "Add learning..."
             m.textInput.Focus()
             return m, textinput.Blink
+        case fieldSubtasks:
+            m.mode = modeAddSubtask
+            m.textInput.SetValue("")
+            m.textInput.Placeholder = "Add subtask..."
+            m.textInput.Focus()
+            return m, textinput.Blink
         }
 
     case "x", "delete":
@@ -601,6 +793,12 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
                 m.mode = modeConfirmDeleteProject
                 m.confirmMsg = fmt.Sprintf("Remove project '%s' from this task? (y/n)", m.todos[idx].Project)
             }
+        case fieldNotes:
+            if m.todos[idx].Notes != "" {
+                m.pushUndo("clear notes")
+                m.todos[idx].SetNotes("")
+                m.markModifiedNoUndo()
+            }
         case fieldTags:
             if len(m.todos[idx].Tags) > 0 {
                 m.mode = modeConfirmDeleteTag
@@ -619,6 +817,17 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
                 m.pendingLearning = m.learningDetailCursor
                 m.confirmMsg = fmt.Sprintf("Delete learning '%s'? (y/n)", truncate(m.todos[idx].Learnings[m.learningDetailCursor].Text, 40))
             }
+        case fieldSubtasks:
+            if len(m.todos[idx].SubtaskIDs) > 0 && m.subtaskCursor < len(m.todos[idx].SubtaskIDs) {
+                subID := m.todos[idx].SubtaskIDs[m.subtaskCursor]
+                subTitle := subID
+                if sub := m.findTodoByID(subID); sub != nil {
+                    subTitle = sub.Title
+                }
+                m.mode = modeConfirmDeleteSubtask
+                m.pendingSubtask = m.subtaskCursor
+                m.confirmMsg = fmt.Sprintf("Delete subtask '%s'? (y/n)", truncate(subTitle, 40))
+            }
         }
     }
     return m, nil
@@ -633,6 +842,9 @@ func (m model) updateLearningsDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
     case "?":
         m.mode = modeHelp
         return m, nil
+    case "u":
+        cmd := m.performUndo()
+        return m, cmd
     case "esc":
         m.pane = paneList
     case "x", "delete":
@@ -681,7 +893,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
         } else {
             m.textInput.SetValue("")
         }
-        m.textInput.Placeholder = "Start date (dd-mm-yy)..."
+        m.textInput.Placeholder = "Start date (dd-mm-yy, 'today', 'next week', '+3d')..."
         m.textInput.Focus()
     case fieldDueDate:
         m.mode = modeInput
@@ -690,7 +902,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
         } else {
             m.textInput.SetValue("")
         }
-        m.textInput.Placeholder = "Due date (dd-mm-yy)..."
+        m.textInput.Placeholder = "Due date (dd-mm-yy, 'today', 'next week', '+3d')..."
         m.textInput.Focus()
     case fieldPriority:
         switch t.Priority {
@@ -701,7 +913,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
         default:
             m.todos[idx].SetPriority(todo.PriorityLow)
         }
-        m.dirty = true
+        m.markModified()
         return m, nil
     case fieldProject:
         m.mode = modeSearchProject
@@ -710,6 +922,8 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
         m.searchCursor = 0
         m.projSearchInput.Focus()
         return m, textinput.Blink
+    case fieldNotes:
+        return m, m.openEditorForNotes()
     case fieldTags:
         m.mode = modeSearchTag
         m.tagSearchInput.SetValue("")
@@ -738,11 +952,18 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
             m.textInput.Focus()
             return m, textinput.Blink
         }
+    case fieldSubtasks:
+        if len(t.SubtaskIDs) > 0 && m.subtaskCursor < len(t.SubtaskIDs) {
+            m.toggleSubtask(idx, m.subtaskCursor)
+            m.markModified()
+            return m, nil
+        }
     }
     return m, textinput.Blink
 }
 
-// ── Input handlers ────────────────────────────────────────────────────────────
+// ── Input handlers (unchanged from previous) ─────────────────────────────────
+// [All input/search/confirm handlers remain identical to previous layer]
 
 func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
     var cmd tea.Cmd
@@ -753,9 +974,20 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
             m.mode = modeNormal
             if m.pane == paneList {
                 if val != "" {
-                    m.todos = append(m.todos, todo.New(val))
-                    sortTodosByMode(m.todos, m.taskSort)
-                    m.dirty = true
+                    parsed := parseQuickAdd(val)
+                    t := todo.New(parsed.title)
+                    t.Priority = parsed.priority
+                    if !parsed.dueDate.IsZero() {
+                        t.DueDate = parsed.dueDate
+                    }
+                    if parsed.project != "" {
+                        t.Project = parsed.project
+                    }
+                    for _, tag := range parsed.tags {
+                        t.Tags = append(t.Tags, tag)
+                    }
+                    m.todos = append(m.todos, t)
+                    m.markModified()
                 }
             } else {
                 if idx := m.currentTodoIndex(); idx >= 0 {
@@ -763,7 +995,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
                         if val != "" {
                             m.todos[idx].AddComment(val)
                             m.commentCursor = len(m.todos[idx].Comments) - 1
-                            m.dirty = true
+                            m.markModified()
                         }
                     } else {
                         switch m.detailField {
@@ -773,22 +1005,44 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
                             } else if d, err := parseDueDate(val); err == nil {
                                 m.todos[idx].SetStartDate(d)
                             } else {
-                                return m, m.setErr("Invalid date format - use dd-mm-yy")
+                                return m, m.setErr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'")
                             }
                         case fieldDueDate:
                             if val == "" {
                                 m.todos[idx].DueDate = time.Time{}
                             } else if d, err := parseDueDate(val); err == nil {
                                 m.todos[idx].SetDueDate(d)
-                                sortTodosByMode(m.todos, m.taskSort)
                             } else {
-                                return m, m.setErr("Invalid date format - use dd-mm-yy")
+                                return m, m.setErr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'")
                             }
                         }
-                        m.dirty = true
+                        m.markModified()
                     }
                 }
             }
+            return m, nil
+        case "esc":
+            m.mode = modeNormal
+            return m, nil
+        }
+    }
+    m.textInput, cmd = m.textInput.Update(msg)
+    return m, cmd
+}
+
+func (m model) updateAddSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
+    var cmd tea.Cmd
+    if key, ok := msg.(tea.KeyMsg); ok {
+        switch key.String() {
+        case "enter":
+            if val := strings.TrimSpace(m.textInput.Value()); val != "" {
+                if idx := m.currentTodoIndex(); idx >= 0 {
+                    m.addSubtask(idx, val)
+                    m.subtaskCursor = len(m.todos[idx].SubtaskIDs) - 1
+                    m.markModified()
+                }
+            }
+            m.mode = modeNormal
             return m, nil
         case "esc":
             m.mode = modeNormal
@@ -808,7 +1062,7 @@ func (m model) updateAddLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
                 if idx := m.currentTodoIndex(); idx >= 0 {
                     m.todos[idx].AddLearning(val)
                     m.learningDetailCursor = len(m.todos[idx].Learnings) - 1
-                    m.dirty = true
+                    m.markModified()
                 }
             }
             m.mode = modeNormal
@@ -832,12 +1086,12 @@ func (m model) updateEditLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
                     learnings := m.allLearnings()
                     if m.learningCursor < len(learnings) {
                         m.updateLearningByID(learnings[m.learningCursor].ID, newText)
-                        m.dirty = true
+                        m.markModified()
                     }
                 } else {
                     if idx := m.currentTodoIndex(); idx >= 0 && m.learningDetailCursor < len(m.todos[idx].Learnings) {
                         m.todos[idx].UpdateLearning(m.learningDetailCursor, newText)
-                        m.dirty = true
+                        m.markModified()
                     }
                 }
             }
@@ -861,7 +1115,7 @@ func (m model) updateEditTitle(msg tea.Msg) (tea.Model, tea.Cmd) {
                 if idx := m.currentTodoIndex(); idx >= 0 {
                     m.todos[idx].Title = newTitle
                     m.todos[idx].ModifiedAt = time.Now()
-                    m.dirty = true
+                    m.markModified()
                 }
             }
             m.mode = modeNormal
@@ -883,7 +1137,7 @@ func (m model) updateEditComment(msg tea.Msg) (tea.Model, tea.Cmd) {
             if idx := m.currentTodoIndex(); idx >= 0 {
                 if val := m.textInput.Value(); val != "" {
                     m.todos[idx].UpdateComment(m.pendingComment, val)
-                    m.dirty = true
+                    m.markModified()
                 }
             }
             m.mode = modeNormal
@@ -904,7 +1158,7 @@ func (m model) updateEditTag(msg tea.Msg) (tea.Model, tea.Cmd) {
         case "enter":
             if newName := strings.TrimSpace(m.textInput.Value()); newName != "" && newName != m.editingTagName {
                 m.renameTagGlobally(m.editingTagName, newName)
-                m.dirty = true
+                m.markModified()
             }
             m.mode = modeNormal
             m.editingTagName = ""
@@ -926,7 +1180,7 @@ func (m model) updateEditProjectInline(msg tea.Msg) (tea.Model, tea.Cmd) {
         case "enter":
             if newName := strings.TrimSpace(m.textInput.Value()); newName != "" && newName != m.editingProjectName {
                 m.renameProjectGlobally(m.editingProjectName, newName)
-                m.dirty = true
+                m.markModified()
             }
             m.mode = modeNormal
             m.editingProjectName = ""
@@ -955,6 +1209,7 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
                 m.cursor = 0
                 m.projectCursor = 0
                 m.listOffset = 0
+                m.markCacheDirty()
             }
             return m, nil
         }
@@ -969,6 +1224,7 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
         m.cursor = 0
         m.projectCursor = 0
         m.listOffset = 0
+        m.markCacheDirty()
     }
     return m, cmd
 }
@@ -998,7 +1254,7 @@ func (m model) updateSearchDep(msg tea.Msg) (tea.Model, tea.Cmd) {
             if m.searchCursor < len(results) {
                 if idx := m.currentTodoIndex(); idx >= 0 {
                     m.todos[idx].AddDependency(results[m.searchCursor].ID)
-                    m.dirty = true
+                    m.markModified()
                 }
             }
             m.mode = modeNormal
@@ -1046,7 +1302,7 @@ func (m model) updateSearchTag(msg tea.Msg) (tea.Model, tea.Cmd) {
                 }
                 if tagToAdd != "" {
                     m.todos[idx].AddTag(tagToAdd)
-                    m.dirty = true
+                    m.markModified()
                 }
             }
             m.mode = modeNormal
@@ -1094,7 +1350,7 @@ func (m model) updateSearchProject(msg tea.Msg) (tea.Model, tea.Cmd) {
                 }
                 if projToSet != "" {
                     m.todos[idx].SetProject(projToSet)
-                    m.dirty = true
+                    m.markModified()
                 }
             }
             m.mode = modeNormal
@@ -1141,6 +1397,7 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
             }
             if m.pendingDelete < len(visibleList) {
                 id := visibleList[m.pendingDelete].ID
+                m.pushUndo("delete task")
                 for i, t := range m.todos {
                     if t.ID == id {
                         m.todos = append(m.todos[:i], m.todos[i+1:]...)
@@ -1148,6 +1405,7 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
                     }
                 }
             }
+            m.markModifiedNoUndo()
             var newLen int
             if m.showHistory {
                 newLen = len(m.completedTodos())
@@ -1157,7 +1415,6 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
             if m.cursor >= newLen && m.cursor > 0 {
                 m.cursor--
             }
-            m.dirty = true
             m.mode = modeNormal
         case "n", "esc":
             m.mode = modeNormal
@@ -1171,11 +1428,12 @@ func (m model) updateConfirmDeleteComment(msg tea.Msg) (tea.Model, tea.Cmd) {
         switch key.String() {
         case "y":
             if idx := m.currentTodoIndex(); idx >= 0 {
+                m.pushUndo("delete comment")
                 m.todos[idx].DeleteComment(m.pendingComment)
                 if m.commentCursor >= len(m.todos[idx].Comments) && m.commentCursor > 0 {
                     m.commentCursor--
                 }
-                m.dirty = true
+                m.markModifiedNoUndo()
             }
             m.mode = modeNormal
         case "n", "esc":
@@ -1190,11 +1448,12 @@ func (m model) updateConfirmDeleteDep(msg tea.Msg) (tea.Model, tea.Cmd) {
         switch key.String() {
         case "y":
             if idx := m.currentTodoIndex(); idx >= 0 && m.pendingDep < len(m.todos[idx].Dependencies) {
+                m.pushUndo("remove dependency")
                 m.todos[idx].RemoveDependency(m.todos[idx].Dependencies[m.pendingDep])
                 if m.depCursor >= len(m.todos[idx].Dependencies) && m.depCursor > 0 {
                     m.depCursor--
                 }
-                m.dirty = true
+                m.markModifiedNoUndo()
             }
             m.mode = modeNormal
         case "n", "esc":
@@ -1209,11 +1468,12 @@ func (m model) updateConfirmDeleteTag(msg tea.Msg) (tea.Model, tea.Cmd) {
         switch key.String() {
         case "y":
             if idx := m.currentTodoIndex(); idx >= 0 && m.pendingTag < len(m.todos[idx].Tags) {
+                m.pushUndo("remove tag")
                 m.todos[idx].RemoveTag(m.todos[idx].Tags[m.pendingTag])
                 if m.tagCursor >= len(m.todos[idx].Tags) && m.tagCursor > 0 {
                     m.tagCursor--
                 }
-                m.dirty = true
+                m.markModifiedNoUndo()
             }
             m.mode = modeNormal
         case "n", "esc":
@@ -1229,12 +1489,13 @@ func (m model) updateConfirmDeleteTagGlobal(msg tea.Msg) (tea.Model, tea.Cmd) {
         case "y":
             tags := m.getFilteredTagsForTab()
             if m.tagTabCursor < len(tags) {
+                m.pushUndo("delete tag globally")
                 m.deleteTagGlobally(tags[m.tagTabCursor])
+                m.markModifiedNoUndo()
                 remaining := m.getFilteredTagsForTab()
                 if m.tagTabCursor >= len(remaining) && m.tagTabCursor > 0 {
                     m.tagTabCursor--
                 }
-                m.dirty = true
             }
             m.mode = modeNormal
         case "n", "esc":
@@ -1249,8 +1510,9 @@ func (m model) updateConfirmDeleteProject(msg tea.Msg) (tea.Model, tea.Cmd) {
         switch key.String() {
         case "y":
             if idx := m.currentTodoIndex(); idx >= 0 {
+                m.pushUndo("remove project")
                 m.todos[idx].SetProject("")
-                m.dirty = true
+                m.markModifiedNoUndo()
             }
             m.mode = modeNormal
         case "n", "esc":
@@ -1267,21 +1529,43 @@ func (m model) updateConfirmDeleteLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
             if m.tab == tabLearnings {
                 learnings := m.allLearnings()
                 if m.learningCursor < len(learnings) {
+                    m.pushUndo("delete learning")
                     m.deleteLearningByID(learnings[m.learningCursor].ID)
+                    m.markModifiedNoUndo()
                     remaining := m.allLearnings()
                     if m.learningCursor >= len(remaining) && m.learningCursor > 0 {
                         m.learningCursor--
                     }
-                    m.dirty = true
                 }
             } else {
                 if idx := m.currentTodoIndex(); idx >= 0 && m.learningDetailCursor < len(m.todos[idx].Learnings) {
+                    m.pushUndo("delete learning")
                     m.todos[idx].DeleteLearning(m.learningDetailCursor)
                     if m.learningDetailCursor >= len(m.todos[idx].Learnings) && m.learningDetailCursor > 0 {
                         m.learningDetailCursor--
                     }
-                    m.dirty = true
+                    m.markModifiedNoUndo()
                 }
+            }
+            m.mode = modeNormal
+        case "n", "esc":
+            m.mode = modeNormal
+        }
+    }
+    return m, nil
+}
+
+func (m model) updateConfirmDeleteSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
+    if key, ok := msg.(tea.KeyMsg); ok {
+        switch key.String() {
+        case "y":
+            if idx := m.currentTodoIndex(); idx >= 0 && m.pendingSubtask < len(m.todos[idx].SubtaskIDs) {
+                m.pushUndo("delete subtask")
+                m.deleteSubtask(idx, m.pendingSubtask)
+                if m.subtaskCursor >= len(m.todos[idx].SubtaskIDs) && m.subtaskCursor > 0 {
+                    m.subtaskCursor--
+                }
+                m.markModifiedNoUndo()
             }
             m.mode = modeNormal
         case "n", "esc":

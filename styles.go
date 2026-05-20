@@ -4,157 +4,170 @@ import "github.com/charmbracelet/lipgloss"
 
 var (
     titleStyle = lipgloss.NewStyle().
-            Bold(true).
-            Foreground(lipgloss.Color("#FF6E9C"))
+        Bold(true).
+        Foreground(lipgloss.Color("#FF6E9C"))
 
     tabTasksActiveStyle = lipgloss.NewStyle().
-                Bold(true).
-                Foreground(lipgloss.Color("#1a1a1a")).
-                Background(lipgloss.Color("#A8FF78")).
-                Padding(0, 1)
+        Bold(true).
+        Foreground(lipgloss.Color("#1a1a1a")).
+        Background(lipgloss.Color("#A8FF78")).
+        Padding(0, 1)
 
     tabProjectsActiveStyle = lipgloss.NewStyle().
-                Bold(true).
-                Foreground(lipgloss.Color("#1a1a1a")).
-                Background(lipgloss.Color("#FF9E64")).
-                Padding(0, 1)
+        Bold(true).
+        Foreground(lipgloss.Color("#1a1a1a")).
+        Background(lipgloss.Color("#FF9E64")).
+        Padding(0, 1)
 
     tabTagsActiveStyle = lipgloss.NewStyle().
-                Bold(true).
-                Foreground(lipgloss.Color("#1a1a1a")).
-                Background(lipgloss.Color("#d480f0")).
-                Padding(0, 1)
+        Bold(true).
+        Foreground(lipgloss.Color("#1a1a1a")).
+        Background(lipgloss.Color("#d480f0")).
+        Padding(0, 1)
 
     tabLearningsActiveStyle = lipgloss.NewStyle().
-                Bold(true).
-                Foreground(lipgloss.Color("#1a1a1a")).
-                Background(lipgloss.Color("#FFE66D")).
-                Padding(0, 1)
+        Bold(true).
+        Foreground(lipgloss.Color("#1a1a1a")).
+        Background(lipgloss.Color("#FFE66D")).
+        Padding(0, 1)
+
+    tabStatsActiveStyle = lipgloss.NewStyle().
+        Bold(true).
+        Foreground(lipgloss.Color("#1a1a1a")).
+        Background(lipgloss.Color("#78D4FF")).
+        Padding(0, 1)
 
     tabInactiveStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#ffffff")).
-                Background(lipgloss.Color("#333333")).
-                Padding(0, 1)
+        Foreground(lipgloss.Color("#ffffff")).
+        Background(lipgloss.Color("#333333")).
+        Padding(0, 1)
 
     selectedStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#A8FF78")).
-            Bold(true)
+        Foreground(lipgloss.Color("#A8FF78")).
+        Bold(true)
 
     normalStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#FFFFFF"))
+        Foreground(lipgloss.Color("#FFFFFF"))
 
     overdueStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#FF0000")).
-            Bold(true)
+        Foreground(lipgloss.Color("#FF0000")).
+        Bold(true)
 
     depOverdueStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#FF9E64")).
-            Bold(true)
+        Foreground(lipgloss.Color("#FF9E64")).
+        Bold(true)
 
     helpStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#888888"))
+        Foreground(lipgloss.Color("#888888"))
 
     detailTitleStyle = lipgloss.NewStyle().
-                Bold(true).
-                Foreground(lipgloss.Color("#FFFFFF"))
+        Bold(true).
+        Foreground(lipgloss.Color("#FFFFFF"))
 
     detailLabelStyle = lipgloss.NewStyle().
-                Bold(true).
-                Foreground(lipgloss.Color("#FF6E9C"))
+        Bold(true).
+        Foreground(lipgloss.Color("#FF6E9C"))
 
     detailValueStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#FFFFFF"))
+        Foreground(lipgloss.Color("#FFFFFF"))
 
     detailSelectedStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#A8FF78")).
-                Bold(true)
+        Foreground(lipgloss.Color("#A8FF78")).
+        Bold(true)
 
     inputStyle = lipgloss.NewStyle().
-            Border(lipgloss.RoundedBorder()).
-            BorderForeground(lipgloss.Color("#FF6E9C")).
-            Padding(0, 1)
+        Border(lipgloss.RoundedBorder()).
+        BorderForeground(lipgloss.Color("#FF6E9C")).
+        Padding(0, 1)
 
     confirmStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#FF0000")).
-            Bold(true)
+        Foreground(lipgloss.Color("#FF0000")).
+        Bold(true)
 
     searchStyle = lipgloss.NewStyle().
-            Border(lipgloss.RoundedBorder()).
-            BorderForeground(lipgloss.Color("#A8FF78")).
-            Padding(0, 1)
+        Border(lipgloss.RoundedBorder()).
+        BorderForeground(lipgloss.Color("#A8FF78")).
+        Padding(0, 1)
 
     dimStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#555555"))
+        Foreground(lipgloss.Color("#555555"))
 
     listPanelStyle = lipgloss.NewStyle().
-            Border(lipgloss.RoundedBorder()).
-            BorderForeground(lipgloss.Color("#333333")).
-            Padding(0, 1)
+        Border(lipgloss.RoundedBorder()).
+        BorderForeground(lipgloss.Color("#333333")).
+        Padding(0, 1)
 
     detailPanelStyle = lipgloss.NewStyle().
-                Border(lipgloss.RoundedBorder()).
-                BorderForeground(lipgloss.Color("#FF6E9C")).
-                Padding(0, 1)
+        Border(lipgloss.RoundedBorder()).
+        BorderForeground(lipgloss.Color("#FF6E9C")).
+        Padding(0, 1)
 
     projectListPanelStyle = lipgloss.NewStyle().
-                Border(lipgloss.RoundedBorder()).
-                BorderForeground(lipgloss.Color("#333333")).
-                Padding(0, 1)
+        Border(lipgloss.RoundedBorder()).
+        BorderForeground(lipgloss.Color("#333333")).
+        Padding(0, 1)
 
     ganttTodayStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#FF9E64")).
-                Bold(true)
+        Foreground(lipgloss.Color("#FF9E64")).
+        Bold(true)
 
     ganttDoneStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#555555"))
+        Foreground(lipgloss.Color("#555555"))
 
     checkDoneStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#A8FF78")).
-            Bold(true)
+        Foreground(lipgloss.Color("#A8FF78")).
+        Bold(true)
 
     headerStyle = lipgloss.NewStyle().
-            Bold(true).
-            Foreground(lipgloss.Color("#FF6E9C"))
+        Bold(true).
+        Foreground(lipgloss.Color("#FF6E9C"))
 
     tagStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#d480f0")).
-            Bold(true)
+        Foreground(lipgloss.Color("#d480f0")).
+        Bold(true)
 
     tagSelectedStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#e8a0ff")).
-                Bold(true)
+        Foreground(lipgloss.Color("#e8a0ff")).
+        Bold(true)
 
     overdueCountStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#FF0000")).
-                Bold(true)
+        Foreground(lipgloss.Color("#FF0000")).
+        Bold(true)
 
     activeCountStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#A8FF78")).
-                Bold(true)
+        Foreground(lipgloss.Color("#A8FF78")).
+        Bold(true)
 
     doneCountStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#555555"))
+        Foreground(lipgloss.Color("#555555"))
 
     pageIndicatorStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#FF9E64")).
-                Bold(true)
+        Foreground(lipgloss.Color("#FF9E64")).
+        Bold(true)
 
     tagSortIndicatorStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#d480f0")).
-                Bold(true)
+        Foreground(lipgloss.Color("#d480f0")).
+        Bold(true)
 
-    // Learnings styles
     learningStyle = lipgloss.NewStyle().
-            Foreground(lipgloss.Color("#FFE66D")).
-            Bold(true)
+        Foreground(lipgloss.Color("#FFE66D")).
+        Bold(true)
 
     learningSelectedStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#FFF5A0")).
-                Bold(true)
+        Foreground(lipgloss.Color("#FFF5A0")).
+        Bold(true)
 
     learningSortIndicatorStyle = lipgloss.NewStyle().
-                Foreground(lipgloss.Color("#FFE66D")).
-                Bold(true)
+        Foreground(lipgloss.Color("#FFE66D")).
+        Bold(true)
+
+    statsStyle = lipgloss.NewStyle().
+        Foreground(lipgloss.Color("#78D4FF")).
+        Bold(true)
+
+    statsHeaderStyle = lipgloss.NewStyle().
+        Foreground(lipgloss.Color("#78D4FF")).
+        Bold(true)
 )
 
 var ganttGradient = []lipgloss.Style{
@@ -202,4 +215,14 @@ var tagProgressGradient = []lipgloss.Style{
     lipgloss.NewStyle().Foreground(lipgloss.Color("#b865e0")),
     lipgloss.NewStyle().Foreground(lipgloss.Color("#d480f0")),
     lipgloss.NewStyle().Foreground(lipgloss.Color("#e8a0ff")),
+}
+
+var statsGradient = []lipgloss.Style{
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#1a3a5c")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#2a5a8c")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#3a7aac")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#4a9acc")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#5abadc")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#6ad4ec")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#78d4ff")),
 }

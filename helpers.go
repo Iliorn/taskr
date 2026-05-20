@@ -2,15 +2,19 @@ package main
 
 import (
     "fmt"
+    "os"
+    "os/exec"
+    "path/filepath"
     "sort"
     "strings"
+    "sync"
+    "time"
 
     "taskr/todo"
 )
 
 // ── Pure utilities ────────────────────────────────────────────────────────────
 
-// clamp returns val clamped between min and max.
 func clamp(val, min, max int) int {
     if val < min {
         return min
@@ -25,6 +29,9 @@ func truncate(s string, max int) string {
     r := []rune(s)
     if len(r) <= max {
         return s
+    }
+    if max <= 3 {
+        return string(r[:max])
     }
     return string(r[:max-3]) + "..."
 }
@@ -42,14 +49,18 @@ func wrapText(s string, width int) []string {
         width = 1
     }
     runes := []rune(s)
-    var lines []string
+    lines := make([]string, 0, (len(runes)/width)+1)
     for len(runes) > 0 {
         if len(runes) <= width {
             lines = append(lines, string(runes))
             break
         }
         cutAt := width
-        for i := width; i > 0; i-- {
+        minCut := width / 2
+        if minCut < 1 {
+            minCut = 1
+        }
+        for i := width; i > minCut; i-- {
             if runes[i] == ' ' {
                 cutAt = i
                 break
@@ -80,13 +91,13 @@ func renderTagsPart(tags []string) string {
         return ""
     }
     var sb strings.Builder
+    sb.Grow(len(tags) * 12)
     for _, tag := range tags {
         sb.WriteString(tagStyle.Render("⟨#"+tag+"⟩") + " ")
     }
     return sb.String()
 }
 
-// titleColWidth computes a dynamic title column width based on terminal width.
 func titleColWidth(termWidth int) int {
     max := termWidth * titleColMaxWidthPct / 100
     w := termWidth - titleColFixedCols
@@ -99,20 +110,22 @@ func titleColWidth(termWidth int) int {
     return w
 }
 
-// renderListHeader renders the column header row for the task and history lists.
+func renderSortDivider(availW int, sortLabel string) string {
+    prefix := "  ↕ sort:" + sortLabel + " "
+    remainW := availW - len([]rune(prefix))
+    if remainW < 4 {
+        remainW = 4
+    }
+    return dimStyle.Render(prefix+strings.Repeat("─", remainW)) + "\n"
+}
+
+func renderPlainDivider(availW int) string {
+    return dimStyle.Render("  "+strings.Repeat("─", availW)) + "\n"
+}
+
 func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistory bool, sortMode taskSortMode) {
     titleW := titleColWidth(termWidth)
     counter := fmt.Sprintf("%d/%d", cursor+1, total)
-
-    var sortLabel string
-    switch sortMode {
-    case taskSortPriority:
-        sortLabel = "  sort:priority"
-    case taskSortCreated:
-        sortLabel = "  sort:created"
-    default:
-        sortLabel = "  sort:due"
-    }
 
     const prefix = "      "
     var headerLeft string
@@ -123,35 +136,249 @@ func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistor
         headerLeft = prefix + padRight("Task", titleW) + padRight("Start", 10) +
             padRight("Due", 10) + padRight("Priority", 10) + "Tags"
     }
-    counterFull := counter + dimStyle.Render(sortLabel)
-    padW := termWidth - 6 - len([]rune(headerLeft)) - len([]rune(counter)) - len([]rune(sortLabel))
+    padW := termWidth - 6 - len([]rune(headerLeft)) - len([]rune(counter))
     if padW < 1 {
         padW = 1
     }
-    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + counterFull + "\n")
-    b.WriteString(dimStyle.Render("  "+strings.Repeat("─", termWidth-6)) + "\n")
+    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + counter + "\n")
+
+    var sortLabel string
+    switch sortMode {
+    case taskSortPriority:
+        sortLabel = "priority"
+    case taskSortCreated:
+        sortLabel = "created"
+    default:
+        sortLabel = "due"
+    }
+    availW := termWidth - 8
+    b.WriteString(renderSortDivider(availW, sortLabel))
 }
 
-// tagStats holds precomputed done/total counts for a single tag.
+// ── Editor support ────────────────────────────────────────────────────────────
+
+func getEditorCmd() string {
+    if editor := os.Getenv("EDITOR"); editor != "" {
+        return editor
+    }
+    if _, err := exec.LookPath("hx"); err == nil {
+        return "hx"
+    }
+    return "notepad"
+}
+
+func notesFilePath(taskID string) string {
+    home, _ := os.UserHomeDir()
+    dir := filepath.Join(home, ".taskr", "notes")
+    _ = os.MkdirAll(dir, 0755)
+    return filepath.Join(dir, taskID+".md")
+}
+
+func writeNotesFile(taskID, content string) error {
+    path := notesFilePath(taskID)
+    return os.WriteFile(path, []byte(content), 0644)
+}
+
+func readNotesFile(taskID string) (string, error) {
+    path := notesFilePath(taskID)
+    data, err := os.ReadFile(path)
+    if err != nil {
+        if os.IsNotExist(err) {
+            return "", nil
+        }
+        return "", err
+    }
+    return string(data), nil
+}
+
+func cleanupNotesFile(taskID string) {
+    path := notesFilePath(taskID)
+    _ = os.Remove(path)
+}
+
+// ── tagStats ──────────────────────────────────────────────────────────────────
+
 type tagStats struct {
     total int
     done  int
 }
 
-// computeTagStats returns a map of tag name → tagStats for all todos.
 func computeTagStats(todos []todo.Todo) map[string]tagStats {
     stats := make(map[string]tagStats, 16)
-    for _, t := range todos {
-        for _, tag := range t.Tags {
+    for i := range todos {
+        for _, tag := range todos[i].Tags {
             s := stats[tag]
             s.total++
-            if t.Status == todo.Done {
+            if todos[i].Status == todo.Done {
                 s.done++
             }
             stats[tag] = s
         }
     }
     return stats
+}
+
+// ── Cache management ──────────────────────────────────────────────────────────
+
+func (m *model) refreshCaches() {
+    if m.todoIndex == nil {
+        m.todoIndex = make(map[string]int, len(m.todos))
+    } else {
+        for k := range m.todoIndex {
+            delete(m.todoIndex, k)
+        }
+    }
+    for i := range m.todos {
+        m.todoIndex[m.todos[i].ID] = i
+    }
+
+    if m.overdueSet == nil {
+        m.overdueSet = make(map[string]bool, len(m.todos)/4)
+    } else {
+        for k := range m.overdueSet {
+            delete(m.overdueSet, k)
+        }
+    }
+    for i := range m.todos {
+        if m.todos[i].IsOverdue() {
+            m.overdueSet[m.todos[i].ID] = true
+        }
+    }
+
+    if m.cachedActive == nil {
+        m.cachedActive = make([]todo.Todo, 0, len(m.todos))
+    } else {
+        m.cachedActive = m.cachedActive[:0]
+    }
+    if m.cachedDone == nil {
+        m.cachedDone = make([]todo.Todo, 0, len(m.todos))
+    } else {
+        m.cachedDone = m.cachedDone[:0]
+    }
+    for _, t := range m.todos {
+        if t.ParentID != "" {
+            continue
+        }
+        if t.Status == todo.Pending && m.matchesSearch(t) && m.matchesFocusFilter(t) {
+            m.cachedActive = append(m.cachedActive, t)
+        } else if t.Status == todo.Done && m.matchesSearch(t) {
+            m.cachedDone = append(m.cachedDone, t)
+        }
+    }
+    sortTodosByMode(m.cachedActive, m.taskSort)
+    sortTodosByMode(m.cachedDone, m.taskSort)
+
+    m.cachedTags = computeTagStats(m.todos)
+    m.cacheDirty = false
+}
+
+func (m *model) currentTaskID() string {
+    if m.pane != paneDetail || m.tab != tabTasks {
+        return ""
+    }
+    idx := m.currentTodoIndex()
+    if idx < 0 {
+        return ""
+    }
+    return m.todos[idx].ID
+}
+
+func (m *model) followTask(taskID string) {
+    if taskID == "" {
+        return
+    }
+    var list []todo.Todo
+    if m.showHistory {
+        list = m.cachedDone
+    } else {
+        list = m.cachedActive
+    }
+    for i, t := range list {
+        if t.ID == taskID {
+            m.cursor = i
+            return
+        }
+    }
+}
+
+func (m *model) markModified() {
+    taskID := m.currentTaskID()
+    m.pushUndo("modify")
+    m.dirty = true
+    m.cacheDirty = true
+    m.refreshCaches()
+    m.followTask(taskID)
+}
+
+func (m *model) markModifiedNoUndo() {
+    taskID := m.currentTaskID()
+    m.dirty = true
+    m.cacheDirty = true
+    m.refreshCaches()
+    m.followTask(taskID)
+}
+
+func (m *model) markCacheDirty() {
+    m.cacheDirty = true
+    m.refreshCaches()
+}
+
+func (m *model) ensureCache() {
+    if m.cacheDirty {
+        m.refreshCaches()
+    }
+}
+
+// ── Cached accessors ──────────────────────────────────────────────────────────
+
+func (m *model) getActiveTodos() []todo.Todo {
+    m.ensureCache()
+    return m.cachedActive
+}
+
+func (m *model) getCompletedTodos() []todo.Todo {
+    m.ensureCache()
+    return m.cachedDone
+}
+
+func (m *model) getTagStats() map[string]tagStats {
+    m.ensureCache()
+    return m.cachedTags
+}
+
+// ── Visible height for lazy rendering ─────────────────────────────────────────
+
+func (m model) estimateListHeight() int {
+    // Conservative estimate of available lines for the list panel content.
+    // Header: 2 lines min + err + focus + search
+    // Footer: 1 line
+    // Detail panel: estimate based on tab
+    headerH := minHeaderLines
+    if m.err != "" {
+        headerH++
+    }
+    if m.focusFilter {
+        headerH++
+    }
+    if m.searchQuery != "" {
+        headerH++
+    }
+
+    // Detail panel overhead (border + content estimate)
+    detailH := 0
+    if m.mode == modeNormal && m.tab != tabStats {
+        detailH = 12 // rough estimate for detail panel
+    }
+
+    footerH := footerHeight
+    // list panel border adds 2 lines
+    borderH := 2
+
+    available := m.termHeight - headerH - footerH - detailH - borderH
+    if available < minListHeight {
+        return minListHeight
+    }
+    return available
 }
 
 // ── Model helper methods ──────────────────────────────────────────────────────
@@ -169,7 +396,7 @@ func (m model) detailPage1ContentHeight() int {
     if t == nil {
         return 1
     }
-    lines := 9
+    lines := 10
     lines++
     if len(t.Tags) == 0 {
         lines++
@@ -243,6 +470,9 @@ func (m model) listVisible() int {
     if m.searchQuery != "" {
         fixedLines++
     }
+    if m.focusFilter {
+        fixedLines++
+    }
     fixedLines += m.extraOverheadLines()
     if available := m.termHeight - fixedLines - detailTotal; available >= minListHeight {
         return available
@@ -251,25 +481,37 @@ func (m model) listVisible() int {
 }
 
 func (m model) activeTodos() []todo.Todo {
-    result := make([]todo.Todo, 0, len(m.todos))
-    for _, t := range m.todos {
-        if t.Status == todo.Pending && m.matchesSearch(t) {
-            result = append(result, t)
+    if m.cacheDirty {
+        result := make([]todo.Todo, 0, len(m.todos))
+        for _, t := range m.todos {
+            if t.ParentID != "" {
+                continue
+            }
+            if t.Status == todo.Pending && m.matchesSearch(t) && m.matchesFocusFilter(t) {
+                result = append(result, t)
+            }
         }
+        sortTodosByMode(result, m.taskSort)
+        return result
     }
-    sortTodosByMode(result, m.taskSort)
-    return result
+    return m.cachedActive
 }
 
 func (m model) completedTodos() []todo.Todo {
-    result := make([]todo.Todo, 0, len(m.todos))
-    for _, t := range m.todos {
-        if t.Status == todo.Done && m.matchesSearch(t) {
-            result = append(result, t)
+    if m.cacheDirty {
+        result := make([]todo.Todo, 0, len(m.todos))
+        for _, t := range m.todos {
+            if t.ParentID != "" {
+                continue
+            }
+            if t.Status == todo.Done && m.matchesSearch(t) {
+                result = append(result, t)
+            }
         }
+        sortTodosByMode(result, m.taskSort)
+        return result
     }
-    sortTodosByMode(result, m.taskSort)
-    return result
+    return m.cachedDone
 }
 
 func (m model) matchesSearch(t todo.Todo) bool {
@@ -288,6 +530,13 @@ func (m model) matchesSearch(t todo.Todo) bool {
     return strings.Contains(strings.ToLower(t.Title), strings.ToLower(m.searchQuery))
 }
 
+func (m model) matchesFocusFilter(t todo.Todo) bool {
+    if !m.focusFilter {
+        return true
+    }
+    return t.IsOverdue() || t.IsDueToday()
+}
+
 func (m model) allProjectsForList() []string {
     projects := getProjects(m.todos)
     if m.searchQuery == "" {
@@ -303,10 +552,14 @@ func (m model) allProjectsForList() []string {
     return result
 }
 
-// currentTodoIndex returns the index into m.todos of the currently selected
-// todo, or -1 if nothing is selected.
 func (m model) currentTodoIndex() int {
     findIndexByID := func(id string) int {
+        if m.todoIndex != nil {
+            if idx, ok := m.todoIndex[id]; ok {
+                return idx
+            }
+            return -1
+        }
         for i := range m.todos {
             if m.todos[i].ID == id {
                 return i
@@ -341,7 +594,6 @@ func (m model) currentTodoIndex() int {
     return -1
 }
 
-// currentTodo returns a pointer to the currently selected todo for READ-ONLY use.
 func (m model) currentTodo() *todo.Todo {
     idx := m.currentTodoIndex()
     if idx < 0 {
@@ -351,6 +603,12 @@ func (m model) currentTodo() *todo.Todo {
 }
 
 func (m model) findTodoByID(id string) *todo.Todo {
+    if m.todoIndex != nil {
+        if idx, ok := m.todoIndex[id]; ok {
+            return &m.todos[idx]
+        }
+        return nil
+    }
     for i := range m.todos {
         if m.todos[i].ID == id {
             return &m.todos[i]
@@ -397,8 +655,8 @@ func (m model) depSearchResults() []todo.Todo {
 func (m model) getAllTagsSorted() []string {
     seen := make(map[string]struct{}, len(m.todos))
     tags := make([]string, 0, 16)
-    for _, t := range m.todos {
-        for _, tag := range t.Tags {
+    for i := range m.todos {
+        for _, tag := range m.todos[i].Tags {
             if _, ok := seen[tag]; !ok {
                 seen[tag] = struct{}{}
                 tags = append(tags, tag)
@@ -407,15 +665,15 @@ func (m model) getAllTagsSorted() []string {
     }
     switch m.tagSort {
     case tagSortCount:
-        counts := make(map[string]int, len(tags))
-        for _, t := range m.todos {
-            for _, tag := range t.Tags {
-                counts[tag]++
-            }
+        stats := m.cachedTags
+        if stats == nil {
+            stats = computeTagStats(m.todos)
         }
         sort.Slice(tags, func(i, j int) bool {
-            if counts[tags[i]] != counts[tags[j]] {
-                return counts[tags[i]] > counts[tags[j]]
+            ci := stats[tags[i]].total
+            cj := stats[tags[j]].total
+            if ci != cj {
+                return ci > cj
             }
             return tags[i] < tags[j]
         })
@@ -505,6 +763,9 @@ func (m *model) renameProjectGlobally(oldName, newName string) {
 }
 
 func (m model) countTasksWithTag(tag string) int {
+    if m.cachedTags != nil {
+        return m.cachedTags[tag].total
+    }
     n := 0
     for _, t := range m.todos {
         for _, tt := range t.Tags {
@@ -517,4 +778,149 @@ func (m model) countTasksWithTag(tag string) int {
     return n
 }
 
-// zeroTime was removed — use time.Time{} directly instead.
+// ── Undo support ──────────────────────────────────────────────────────────────
+
+const maxUndoStack = 20
+
+type undoEntry struct {
+    todos []todo.Todo
+    desc  string
+}
+
+func deepCopyTodo(t todo.Todo) todo.Todo {
+    cp := t
+    if len(t.Tags) > 0 {
+        cp.Tags = make([]string, len(t.Tags))
+        copy(cp.Tags, t.Tags)
+    }
+    if len(t.Dependencies) > 0 {
+        cp.Dependencies = make([]string, len(t.Dependencies))
+        copy(cp.Dependencies, t.Dependencies)
+    }
+    if len(t.Comments) > 0 {
+        cp.Comments = make([]todo.Comment, len(t.Comments))
+        copy(cp.Comments, t.Comments)
+    }
+    if len(t.Learnings) > 0 {
+        cp.Learnings = make([]todo.Learning, len(t.Learnings))
+        for i, l := range t.Learnings {
+            cp.Learnings[i] = l
+            if len(l.Tags) > 0 {
+                cp.Learnings[i].Tags = make([]string, len(l.Tags))
+                copy(cp.Learnings[i].Tags, l.Tags)
+            }
+        }
+    }
+    if len(t.TimeEntries) > 0 {
+        cp.TimeEntries = make([]todo.TimeEntry, len(t.TimeEntries))
+        copy(cp.TimeEntries, t.TimeEntries)
+    }
+    if len(t.SubtaskIDs) > 0 {
+        cp.SubtaskIDs = make([]string, len(t.SubtaskIDs))
+        copy(cp.SubtaskIDs, t.SubtaskIDs)
+    }
+    return cp
+}
+
+func deepCopyTodos(todos []todo.Todo) []todo.Todo {
+    cp := make([]todo.Todo, len(todos))
+    for i, t := range todos {
+        cp[i] = deepCopyTodo(t)
+    }
+    return cp
+}
+
+// ── Quick-add parsing ─────────────────────────────────────────────────────────
+
+type parsedTask struct {
+    title    string
+    tags     []string
+    project  string
+    dueDate  time.Time
+    priority todo.Priority
+}
+
+func parseQuickAdd(input string) parsedTask {
+    result := parsedTask{priority: todo.PriorityLow}
+    words := strings.Fields(input)
+    var titleWords []string
+
+    for _, word := range words {
+        lower := strings.ToLower(word)
+        switch {
+        case strings.HasPrefix(word, "#"):
+            tag := strings.TrimPrefix(word, "#")
+            if tag != "" {
+                result.tags = append(result.tags, tag)
+            }
+        case strings.HasPrefix(lower, "due:"):
+            dateStr := strings.TrimPrefix(lower, "due:")
+            if d, err := parseDueDate(dateStr); err == nil {
+                result.dueDate = d
+            } else {
+                titleWords = append(titleWords, word)
+            }
+        case strings.HasPrefix(word, "@"):
+            proj := strings.TrimPrefix(word, "@")
+            if proj != "" {
+                result.project = proj
+            }
+        case strings.HasPrefix(lower, "p:"):
+            pStr := strings.TrimPrefix(lower, "p:")
+            switch pStr {
+            case "high", "h":
+                result.priority = todo.PriorityHigh
+            case "medium", "med", "m":
+                result.priority = todo.PriorityMedium
+            case "low", "l":
+                result.priority = todo.PriorityLow
+            default:
+                titleWords = append(titleWords, word)
+            }
+        default:
+            titleWords = append(titleWords, word)
+        }
+    }
+
+    result.title = strings.Join(titleWords, " ")
+    return result
+}
+
+// ── Time formatting ───────────────────────────────────────────────────────────
+
+func formatDuration(d time.Duration) string {
+    if d < time.Minute {
+        return fmt.Sprintf("%ds", int(d.Seconds()))
+    }
+    if d < time.Hour {
+        return fmt.Sprintf("%dm", int(d.Minutes()))
+    }
+    hours := int(d.Hours())
+    mins := int(d.Minutes()) % 60
+    if hours < 24 {
+        return fmt.Sprintf("%dh %dm", hours, mins)
+    }
+    days := hours / 24
+    hours = hours % 24
+    return fmt.Sprintf("%dd %dh", days, hours)
+}
+
+// ── Builder pool ──────────────────────────────────────────────────────────────
+
+var builderPool = sync.Pool{
+    New: func() interface{} {
+        b := &strings.Builder{}
+        b.Grow(1024)
+        return b
+    },
+}
+
+func getBuilder() *strings.Builder {
+    b := builderPool.Get().(*strings.Builder)
+    b.Reset()
+    return b
+}
+
+func putBuilder(b *strings.Builder) {
+    builderPool.Put(b)
+}

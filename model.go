@@ -20,6 +20,7 @@ const (
     tabProjects
     tabTags
     tabLearnings
+    tabStats
 )
 
 type pane int
@@ -36,9 +37,11 @@ const (
     fieldDueDate
     fieldPriority
     fieldProject
+    fieldNotes
     fieldTags
     fieldDependencies
     fieldLearnings
+    fieldSubtasks
 )
 
 type appMode int
@@ -59,15 +62,16 @@ const (
     modeConfirmDeleteTagGlobal
     modeConfirmDeleteProject
     modeConfirmDeleteLearning
+    modeConfirmDeleteSubtask
     modeEditComment
     modeEditTag
     modeEditProjectInline
     modeEditTitle
     modeEditLearning
     modeAddLearning
+    modeAddSubtask
 )
 
-// tagSortMode controls how the tag list is ordered.
 type tagSortMode int
 
 const (
@@ -75,7 +79,6 @@ const (
     tagSortCount
 )
 
-// taskSortMode controls how the task list is ordered.
 type taskSortMode int
 
 const (
@@ -84,7 +87,6 @@ const (
     taskSortCreated
 )
 
-// learningSortMode controls how the learnings list is ordered.
 type learningSortMode int
 
 const (
@@ -92,8 +94,12 @@ const (
     learningSortAlpha
 )
 
-// clearErrMsg is sent after a 3-second delay to clear the error banner.
+// ── Messages ──────────────────────────────────────────────────────────────────
+
 type clearErrMsg struct{}
+type saveDoneMsg struct{}
+type saveErrMsg struct{ err error }
+type editorFinishedMsg struct{ taskID string }
 
 // ── Model ─────────────────────────────────────────────────────────────────────
 
@@ -111,7 +117,9 @@ type model struct {
     searchCursor         int
     learningCursor       int
     learningDetailCursor int
+    subtaskCursor        int
     pendingLearning      int
+    pendingSubtask       int
     mode                 appMode
     textInput            textinput.Model
     searchInput          textinput.Model
@@ -138,12 +146,26 @@ type model struct {
     learningSearchQuery  string
     projectTaskMode      bool
     showHistory          bool
+    focusFilter          bool
+    expandedTasks        map[string]bool
     editingTagName       string
     editingProjectName   string
     tagSort              tagSortMode
     taskSort             taskSortMode
     learningSort         learningSortMode
     dirty                bool
+    editorTaskID         string
+
+    // ── Undo stack ─────────────────────────────────────────────────────────
+    undoStack []undoEntry
+
+    // ── Caches (rebuilt via refreshCaches) ─────────────────────────────────
+    cacheDirty   bool
+    todoIndex    map[string]int
+    overdueSet   map[string]bool
+    cachedActive []todo.Todo
+    cachedDone   []todo.Todo
+    cachedTags   map[string]tagStats
 }
 
 func initialModel() model {
@@ -180,7 +202,7 @@ func initialModel() model {
         errMsg = fmt.Sprintf("Error loading tasks: %v", err)
     }
 
-    return model{
+    m := model{
         todos:               todos,
         textInput:           ti,
         searchInput:         si,
@@ -198,7 +220,11 @@ func initialModel() model {
         tagSort:             tagSortAlpha,
         taskSort:            taskSortDueDate,
         learningSort:        learningSortDate,
+        expandedTasks:       make(map[string]bool),
+        cacheDirty:          true,
     }
+    m.refreshCaches()
+    return m
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -215,15 +241,34 @@ func clearErrAfter() tea.Cmd {
     })
 }
 
+// ── Undo ──────────────────────────────────────────────────────────────────────
+
+func (m *model) pushUndo(desc string) {
+    snapshot := deepCopyTodos(m.todos)
+    m.undoStack = append(m.undoStack, undoEntry{todos: snapshot, desc: desc})
+    if len(m.undoStack) > maxUndoStack {
+        m.undoStack = m.undoStack[1:]
+    }
+}
+
+func (m *model) popUndo() (undoEntry, bool) {
+    if len(m.undoStack) == 0 {
+        return undoEntry{}, false
+    }
+    entry := m.undoStack[len(m.undoStack)-1]
+    m.undoStack = m.undoStack[:len(m.undoStack)-1]
+    return entry, true
+}
+
 // ── Learnings helpers ─────────────────────────────────────────────────────────
 
 func (m model) allLearnings() []todo.Learning {
     var result []todo.Learning
-    for _, t := range m.todos {
-        result = append(result, t.Learnings...)
+    for i := range m.todos {
+        result = append(result, m.todos[i].Learnings...)
     }
     if m.learningSearchQuery != "" {
-        var filtered []todo.Learning
+        filtered := result[:0]
         q := strings.ToLower(m.learningSearchQuery)
         isTagSearch := strings.HasPrefix(q, "#")
         tagQuery := strings.TrimPrefix(q, "#")
@@ -285,6 +330,54 @@ func (m *model) updateLearningByID(learningID, newText string) {
                 m.todos[i].UpdateLearning(j, newText)
                 return
             }
+        }
+    }
+}
+
+// ── Subtask helpers ───────────────────────────────────────────────────────────
+
+func (m model) getSubtasks(t *todo.Todo) []*todo.Todo {
+    if t == nil || len(t.SubtaskIDs) == 0 {
+        return nil
+    }
+    result := make([]*todo.Todo, 0, len(t.SubtaskIDs))
+    for _, id := range t.SubtaskIDs {
+        if sub := m.findTodoByID(id); sub != nil {
+            result = append(result, sub)
+        }
+    }
+    return result
+}
+
+func (m *model) addSubtask(parentIdx int, title string) {
+    sub := todo.NewSubtask(title, m.todos[parentIdx].ID)
+    m.todos = append(m.todos, sub)
+    m.todos[parentIdx].AddSubtaskID(sub.ID)
+}
+
+func (m *model) deleteSubtask(parentIdx int, subtaskCursor int) {
+    if subtaskCursor >= len(m.todos[parentIdx].SubtaskIDs) {
+        return
+    }
+    subID := m.todos[parentIdx].SubtaskIDs[subtaskCursor]
+    m.todos[parentIdx].RemoveSubtaskID(subID)
+    for i, t := range m.todos {
+        if t.ID == subID {
+            m.todos = append(m.todos[:i], m.todos[i+1:]...)
+            break
+        }
+    }
+}
+
+func (m *model) toggleSubtask(parentIdx int, subtaskCursor int) {
+    if subtaskCursor >= len(m.todos[parentIdx].SubtaskIDs) {
+        return
+    }
+    subID := m.todos[parentIdx].SubtaskIDs[subtaskCursor]
+    for i := range m.todos {
+        if m.todos[i].ID == subID {
+            m.todos[i].Toggle()
+            return
         }
     }
 }
