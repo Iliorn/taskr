@@ -14,14 +14,14 @@ import (
 // ── Top-level View ────────────────────────────────────────────────────────────
 
 func (m model) View() string {
-    w := m.termWidth - 4
-
     if m.mode == modeHelp {
         return m.renderHelpFullscreen()
     }
 
     out := getBuilder()
     defer putBuilder(out)
+
+    w := m.termWidth - 6
 
     // ── HEADER ───────────────────────────────────────────────────────────
     shortcutHint := helpStyle.Render("? shortcuts")
@@ -32,27 +32,21 @@ func (m model) View() string {
     }
     out.WriteString(tabsStr + strings.Repeat(" ", padW) + shortcutHint + "\n")
     out.WriteString("\n")
-    headerLines := 2
 
     if m.err != "" {
         out.WriteString(confirmStyle.Render(m.err) + "\n")
-        headerLines++
     }
     if m.focusFilter {
         out.WriteString(confirmStyle.Render("⚡ FOCUS: today + overdue only (f to toggle)") + "\n")
-        headerLines++
     }
     if m.searchQuery != "" {
         out.WriteString(searchStyle.Render("/ "+m.searchQuery) + "\n")
-        headerLines++
     }
     if m.tab == tabTags && m.tagTabSearchQuery != "" {
         out.WriteString(searchStyle.Render("/ "+m.tagTabSearchQuery) + "\n")
-        headerLines++
     }
     if m.tab == tabLearnings && m.learningSearchQuery != "" {
         out.WriteString(searchStyle.Render("/ "+m.learningSearchQuery) + "\n")
-        headerLines++
     }
 
     // ── FOOTER ───────────────────────────────────────────────────────────
@@ -64,12 +58,21 @@ func (m model) View() string {
         footerLines = 1
     }
 
-    // ── DETAIL ───────────────────────────────────────────────────────────
+    // ── DETAIL (with caching) ────────────────────────────────────────────
     var detailContent string
     detailLineCount := 0
     showDetail := m.mode == modeNormal
+
     if showDetail {
-        detailContent = m.buildDetailContent()
+        switch {
+        case m.tab == tabTags || m.tab == tabLearnings:
+            detailContent = m.buildDetailContent()
+        case m.tab == tabStats:
+            // no detail for stats
+        default:
+            detailContent = m.getCachedDetailContent()
+        }
+
         if detailContent != "" {
             maxDetailContent := m.termHeight * detailMaxHeightPct / 100
             detailLines := strings.Split(detailContent, "\n")
@@ -87,53 +90,49 @@ func (m model) View() string {
         }
     }
 
-    // ── LIST ─────────────────────────────────────────────────────────────
-    listH := m.termHeight - headerLines - footerLines - detailLineCount
-    if listH < minListHeight {
-        listH = minListHeight
-    }
+    // ── LAYOUT ───────────────────────────────────────────────────────────
+    li := computeLayout(layoutInput{
+        termW:             m.termWidth,
+        termH:             m.termHeight,
+        hasErr:            m.err != "",
+        hasSearch:         m.searchQuery != "",
+        hasFocus:          m.focusFilter,
+        hasTagSearch:      m.tab == tabTags && m.tagTabSearchQuery != "",
+        hasLearningSearch: m.tab == tabLearnings && m.learningSearchQuery != "",
+        mode:              m.mode,
+        tab:               m.tab,
+        detailLines:       detailLineCount,
+    })
 
+    // ── LIST ─────────────────────────────────────────────────────────────
+    listH := li.listH
     listContent := m.buildListContent(w, listH)
     listSplit := strings.Split(listContent, "\n")
     for len(listSplit) > 0 && strings.TrimSpace(listSplit[len(listSplit)-1]) == "" {
         listSplit = listSplit[:len(listSplit)-1]
     }
 
-    // ── ASSEMBLE ─────────────────────────────────────────────────────────
+// ── ASSEMBLE ─────────────────────────────────────────────────────────
     target := m.termHeight - 1
-
-    // Calculate how much space list actually gets
-    availableForList := target - headerLines - detailLineCount - footerLines
+    availableForList := target - li.headerH - detailLineCount - footerLines
     if availableForList < minListHeight {
         availableForList = minListHeight
     }
-
-    // Trim or pad list to fit
     for len(listSplit) > availableForList {
         listSplit = listSplit[:len(listSplit)-1]
     }
     for len(listSplit) < availableForList {
         listSplit = append(listSplit, "")
     }
-
-    // Write list
     for _, line := range listSplit {
         out.WriteString(line + "\n")
     }
-
-    // Write detail
     if detailContent != "" {
         out.WriteString(detailContent + "\n")
     }
-
-    // Write footer
     if footerContent != "" {
         out.WriteString(footerContent)
-    } else {
-        out.WriteString("")
     }
-
-    // Final trim/pad to exact terminal height
     result := out.String()
     resultLines := strings.Split(result, "\n")
     for len(resultLines) < target {
@@ -143,10 +142,13 @@ func (m model) View() string {
         resultLines = resultLines[:target]
     }
 
-    return strings.Join(resultLines, "\n")
+    for i, line := range resultLines {
+        resultLines[i] = " " + line
     }
+    return strings.Join(resultLines, "\n")
 
-// ── Footer builder ────────────────────────────────────────────────────────────
+}// ── Footer builder ────────────────────────────────────────────────────────────
+
 
 func (m model) buildFooterContent(w int) string {
     switch m.mode {
@@ -926,7 +928,6 @@ func (m model) renderStatsList() string {
         b.WriteString("\n")
     }
 
-
     if len(projectCounts) > 0 {
         b.WriteString(statsHeaderStyle.Render("  Projects") + "\n")
         type projEntry struct {
@@ -1582,16 +1583,11 @@ func (m model) renderGantt(tasks []todo.Todo) string {
     gradLen := len(ganttGradient)
     ovrdLen := len(ganttOverdueGradient)
 
-    // Reuse buffers
-    barRunes := m.ganttBarBuf
-    barColors := m.ganttColorBuf
-    if len(barRunes) < chartW {
-        barRunes = make([]rune, chartW)
-        barColors = make([]int, chartW)
-    } else {
-        barRunes = barRunes[:chartW]
-        barColors = barColors[:chartW]
-    }
+    // Use pooled buffers
+    bufs := getGanttBuffers(chartW)
+    defer putGanttBuffers(bufs)
+    barRunes := bufs.bar[:chartW]
+    barColors := bufs.color[:chartW]
 
     for i, t := range tasks {
         isSelected := i == m.cursor && m.pane == paneList && m.projectTaskMode

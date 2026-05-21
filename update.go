@@ -19,6 +19,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     if sz, ok := msg.(tea.WindowSizeMsg); ok {
         m.termWidth = sz.Width
         m.termHeight = sz.Height
+        m.invalidateDetailCache()
     }
 
     switch msg := msg.(type) {
@@ -158,6 +159,7 @@ func (m model) handleEditorFinished(taskID string) (tea.Model, tea.Cmd) {
                 m.todos[i].SetNotes(newNotes)
                 m.dirty = true
                 m.cache.dirty = true
+                m.invalidateDetailCache()
                 m.refreshCaches()
             }
             break
@@ -339,6 +341,7 @@ func (m *model) switchTab(t tab) {
     m.learningSearchQuery = ""
     m.projectTaskMode = false
     m.showHistory = false
+    m.invalidateDetailCache()
     m.markCacheDirty()
 }
 
@@ -500,11 +503,13 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
         } else if m.currentTodo() != nil {
             m.pane = paneDetail
             m.detail = detailState{field: fieldStartDate}
+            m.invalidateDetailCache()
         }
     case tabTasks:
         if m.currentTodo() != nil {
             m.pane = paneDetail
             m.detail = detailState{field: fieldStartDate}
+            m.invalidateDetailCache()
         }
     }
     return m, nil
@@ -603,16 +608,19 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
     case "esc":
         m.pane = paneList
         m.detail = detailState{field: fieldStartDate}
+        m.invalidateDetailCache()
 
     case "left":
         if m.detail.page > 0 {
             m.detail.page--
             m.detail.field = fieldStartDate
+            m.invalidateDetailCache()
         }
     case "right", "l":
         if m.detail.page < 1 {
             m.detail.page++
             m.detail.commentCursor = 0
+            m.invalidateDetailCache()
         }
 
     case "up", "k":
@@ -643,6 +651,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) detailCursorUp() {
+    m.invalidateDetailCache()
     if m.detail.page == 0 {
         switch m.detail.field {
         case fieldDueDate:
@@ -684,6 +693,7 @@ func (m *model) detailCursorUp() {
 }
 
 func (m *model) detailCursorDown() {
+    m.invalidateDetailCache()
     if m.detail.page == 0 {
         t := m.currentTodo()
         switch m.detail.field {
@@ -930,6 +940,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
                     m.pane = paneList
                     m.cursor = i
                     m.tab = tabTasks
+                    m.invalidateDetailCache()
                     return m, nil
                 }
             }

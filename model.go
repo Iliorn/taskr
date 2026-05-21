@@ -150,6 +150,12 @@ type model struct {
     pane   pane
     mode   appMode
 
+    // View metrics cache
+    metrics viewMetrics
+
+    // detail render cache
+    detailRC detailRenderCache
+
     // Detail pane state
     detail detailState
 
@@ -600,6 +606,7 @@ func (m *model) markModified() {
     m.pushUndo("modify")
     m.dirty = true
     m.cache.dirty = true
+    m.invalidateDetailCache()
     m.refreshCaches()
     m.followTask(taskID)
 }
@@ -608,12 +615,14 @@ func (m *model) markModifiedNoUndo() {
     taskID := m.currentTaskID()
     m.dirty = true
     m.cache.dirty = true
+    m.invalidateDetailCache()
     m.refreshCaches()
     m.followTask(taskID)
 }
 
 func (m *model) markCacheDirty() {
     m.cache.dirty = true
+    m.invalidateDetailCache()
     m.refreshCaches()
 }
 
