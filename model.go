@@ -101,6 +101,9 @@ type saveDoneMsg struct{}
 type saveErrMsg struct{ err error }
 type editorFinishedMsg struct{ taskID string }
 
+// OPTIMIZATION: debounce save — this message fires after a short delay
+type saveTickMsg struct{}
+
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 type model struct {
@@ -166,6 +169,41 @@ type model struct {
     cachedActive []todo.Todo
     cachedDone   []todo.Todo
     cachedTags   map[string]tagStats
+
+    // OPTIMIZATION: cached learnings — avoid recomputing every frame
+    cachedLearnings      []todo.Learning
+    learningsCacheDirty  bool
+    lastLearningSearch   string
+    lastLearningSort     learningSortMode
+
+    // OPTIMIZATION: cached projects list
+    cachedProjects      []string
+    projectsCacheDirty  bool
+    lastProjectSearch   string
+
+    // OPTIMIZATION: project → task indices for O(1) lookup
+    projectTaskIndex map[string][]int
+
+    // OPTIMIZATION: reusable Gantt buffers — avoid allocation per frame
+    ganttBarBuf   []rune
+    ganttColorBuf []int
+
+    // OPTIMIZATION: cache editor command (only look up PATH once)
+    editorCmd string
+
+    // OPTIMIZATION: frame timestamp — call time.Now() once per Update cycle
+    frameTime time.Time
+
+    // OPTIMIZATION: debounced save — don't write to disk on every keystroke
+    savePending  bool
+    saveScheduled bool
+
+    // OPTIMIZATION: cache the last rendered detail to skip re-render if unchanged
+    lastDetailTaskID string
+    lastDetailPage   int
+    lastDetailField  detailField
+    lastDetailRender string
+    detailCacheDirty bool
 }
 
 func initialModel() model {
@@ -222,6 +260,13 @@ func initialModel() model {
         learningSort:        learningSortDate,
         expandedTasks:       make(map[string]bool),
         cacheDirty:          true,
+        learningsCacheDirty: true,
+        projectsCacheDirty:  true,
+        detailCacheDirty:    true,
+        editorCmd:           resolveEditorCmd(), // OPTIMIZATION: resolve once
+        frameTime:           time.Now(),
+        ganttBarBuf:         make([]rune, 256),
+        ganttColorBuf:       make([]int, 256),
     }
     m.refreshCaches()
     return m
@@ -238,6 +283,15 @@ func (m model) Init() tea.Cmd {
 func clearErrAfter() tea.Cmd {
     return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
         return clearErrMsg{}
+    })
+}
+
+// OPTIMIZATION: debounced save — schedule a write 300ms after the last change
+const saveDebounceDuration = 300 * time.Millisecond
+
+func scheduleSave() tea.Cmd {
+    return tea.Tick(saveDebounceDuration, func(t time.Time) tea.Msg {
+        return saveTickMsg{}
     })
 }
 
@@ -260,9 +314,73 @@ func (m *model) popUndo() (undoEntry, bool) {
     return entry, true
 }
 
-// ── Learnings helpers ─────────────────────────────────────────────────────────
+// ── Learnings helpers (OPTIMIZED: cached) ─────────────────────────────────────
+
+func (m *model) refreshLearningsCache() {
+    if !m.learningsCacheDirty &&
+        m.lastLearningSearch == m.learningSearchQuery &&
+        m.lastLearningSort == m.learningSort {
+        return
+    }
+
+    // Collect all learnings
+    var result []todo.Learning
+    for i := range m.todos {
+        if len(m.todos[i].Learnings) > 0 {
+            result = append(result, m.todos[i].Learnings...)
+        }
+    }
+
+    // Filter
+    if m.learningSearchQuery != "" {
+        filtered := result[:0]
+        q := strings.ToLower(m.learningSearchQuery)
+        isTagSearch := strings.HasPrefix(q, "#")
+        tagQuery := strings.TrimPrefix(q, "#")
+        for _, l := range result {
+            if isTagSearch {
+                for _, tag := range l.Tags {
+                    if strings.Contains(strings.ToLower(tag), tagQuery) {
+                        filtered = append(filtered, l)
+                        break
+                    }
+                }
+            } else {
+                if strings.Contains(strings.ToLower(l.Text), q) {
+                    filtered = append(filtered, l)
+                }
+            }
+        }
+        result = filtered
+    }
+
+    // Sort
+    switch m.learningSort {
+    case learningSortAlpha:
+        sort.SliceStable(result, func(i, j int) bool {
+            return strings.ToLower(result[i].Text) < strings.ToLower(result[j].Text)
+        })
+    default:
+        sort.SliceStable(result, func(i, j int) bool {
+            return result[i].CreatedAt.After(result[j].CreatedAt)
+        })
+    }
+
+    m.cachedLearnings = result
+    m.learningsCacheDirty = false
+    m.lastLearningSearch = m.learningSearchQuery
+    m.lastLearningSort = m.learningSort
+}
 
 func (m model) allLearnings() []todo.Learning {
+    // NOTE: callers should ensure refreshLearningsCache was called.
+    // For backward compatibility, we check and return cached version.
+    if !m.learningsCacheDirty &&
+        m.lastLearningSearch == m.learningSearchQuery &&
+        m.lastLearningSort == m.learningSort {
+        return m.cachedLearnings
+    }
+    // Fallback: recompute (shouldn't happen in optimized path)
     var result []todo.Learning
     for i := range m.todos {
         result = append(result, m.todos[i].Learnings...)

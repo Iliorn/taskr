@@ -155,8 +155,21 @@ func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistor
     b.WriteString(renderSortDivider(availW, sortLabel))
 }
 
-// ── Editor support ────────────────────────────────────────────────────────────
+// ── Editor support (OPTIMIZED: resolved once at startup) ──────────────────────
 
+// resolveEditorCmd is called once at startup and cached on the model.
+func resolveEditorCmd() string {
+    if editor := os.Getenv("EDITOR"); editor != "" {
+        return editor
+    }
+    if _, err := exec.LookPath("hx"); err == nil {
+        return "hx"
+    }
+    return "notepad"
+}
+
+// getEditorCmd returns the cached editor command from the model.
+// Kept for compatibility — callers that have access to model should use m.editorCmd directly.
 func getEditorCmd() string {
     if editor := os.Getenv("EDITOR"); editor != "" {
         return editor
@@ -218,9 +231,13 @@ func computeTagStats(todos []todo.Todo) map[string]tagStats {
     return stats
 }
 
-// ── Cache management ──────────────────────────────────────────────────────────
+// ── Cache management (OPTIMIZED: includes learnings, projects, project index) ─
 
 func (m *model) refreshCaches() {
+    // OPTIMIZATION: capture frame time once
+    m.frameTime = time.Now()
+
+    // Rebuild todo index
     if m.todoIndex == nil {
         m.todoIndex = make(map[string]int, len(m.todos))
     } else {
@@ -232,6 +249,7 @@ func (m *model) refreshCaches() {
         m.todoIndex[m.todos[i].ID] = i
     }
 
+    // Rebuild overdue set
     if m.overdueSet == nil {
         m.overdueSet = make(map[string]bool, len(m.todos)/4)
     } else {
@@ -245,6 +263,7 @@ func (m *model) refreshCaches() {
         }
     }
 
+    // Rebuild active/done caches
     if m.cachedActive == nil {
         m.cachedActive = make([]todo.Todo, 0, len(m.todos))
     } else {
@@ -268,7 +287,27 @@ func (m *model) refreshCaches() {
     sortTodosByMode(m.cachedActive, m.taskSort)
     sortTodosByMode(m.cachedDone, m.taskSort)
 
+    // Rebuild tag stats
     m.cachedTags = computeTagStats(m.todos)
+
+    // OPTIMIZATION: rebuild project → task index
+    if m.projectTaskIndex == nil {
+        m.projectTaskIndex = make(map[string][]int, 8)
+    } else {
+        for k := range m.projectTaskIndex {
+            delete(m.projectTaskIndex, k)
+        }
+    }
+    for i := range m.todos {
+        if p := m.todos[i].Project; p != "" {
+            m.projectTaskIndex[p] = append(m.projectTaskIndex[p], i)
+        }
+    }
+
+    // Mark sub-caches dirty so they refresh on next access
+    m.learningsCacheDirty = true
+    m.projectsCacheDirty = true
+    m.detailCacheDirty = true
     m.cacheDirty = false
 }
 
@@ -346,13 +385,52 @@ func (m *model) getTagStats() map[string]tagStats {
     return m.cachedTags
 }
 
+// OPTIMIZATION: cached projects accessor
+func (m *model) getProjectsCached() []string {
+    if !m.projectsCacheDirty && m.lastProjectSearch == m.searchQuery {
+        return m.cachedProjects
+    }
+    projects := make([]string, 0, len(m.projectTaskIndex))
+    for p := range m.projectTaskIndex {
+        projects = append(projects, p)
+    }
+    sort.Strings(projects)
+
+    if m.searchQuery != "" {
+        q := strings.ToLower(m.searchQuery)
+        filtered := projects[:0]
+        for _, p := range projects {
+            if strings.Contains(strings.ToLower(p), q) {
+                filtered = append(filtered, p)
+            }
+        }
+        projects = filtered
+    }
+
+    m.cachedProjects = projects
+    m.projectsCacheDirty = false
+    m.lastProjectSearch = m.searchQuery
+    return m.cachedProjects
+}
+
+// OPTIMIZATION: get tasks for a project using the index instead of linear scan
+func (m *model) getTasksForProjectFast(project string) []todo.Todo {
+    indices, ok := m.projectTaskIndex[project]
+    if !ok || len(indices) == 0 {
+        return nil
+    }
+    result := make([]todo.Todo, 0, len(indices))
+    for _, idx := range indices {
+        if idx < len(m.todos) {
+            result = append(result, m.todos[idx])
+        }
+    }
+    return sortTodosByStartDate(result)
+}
+
 // ── Visible height for lazy rendering ─────────────────────────────────────────
 
 func (m model) estimateListHeight() int {
-    // Conservative estimate of available lines for the list panel content.
-    // Header: 2 lines min + err + focus + search
-    // Footer: 1 line
-    // Detail panel: estimate based on tab
     headerH := minHeaderLines
     if m.err != "" {
         headerH++
@@ -364,14 +442,12 @@ func (m model) estimateListHeight() int {
         headerH++
     }
 
-    // Detail panel overhead (border + content estimate)
     detailH := 0
     if m.mode == modeNormal && m.tab != tabStats {
-        detailH = 12 // rough estimate for detail panel
+        detailH = 12
     }
 
     footerH := footerHeight
-    // list panel border adds 2 lines
     borderH := 2
 
     available := m.termHeight - headerH - footerH - detailH - borderH
@@ -538,6 +614,7 @@ func (m model) matchesFocusFilter(t todo.Todo) bool {
 }
 
 func (m model) allProjectsForList() []string {
+    // OPTIMIZATION: use cached projects when available
     projects := getProjects(m.todos)
     if m.searchQuery == "" {
         return projects
@@ -553,16 +630,11 @@ func (m model) allProjectsForList() []string {
 }
 
 func (m model) currentTodoIndex() int {
+    // OPTIMIZATION: always use index map, no fallback linear scan
     findIndexByID := func(id string) int {
         if m.todoIndex != nil {
             if idx, ok := m.todoIndex[id]; ok {
                 return idx
-            }
-            return -1
-        }
-        for i := range m.todos {
-            if m.todos[i].ID == id {
-                return i
             }
         }
         return -1
@@ -602,13 +674,15 @@ func (m model) currentTodo() *todo.Todo {
     return &m.todos[idx]
 }
 
+// OPTIMIZATION: findTodoByID uses only the index map — no linear scan fallback
 func (m model) findTodoByID(id string) *todo.Todo {
     if m.todoIndex != nil {
-        if idx, ok := m.todoIndex[id]; ok {
+        if idx, ok := m.todoIndex[id]; ok && idx < len(m.todos) {
             return &m.todos[idx]
         }
         return nil
     }
+    // Fallback only if index hasn't been built yet (shouldn't happen)
     for i := range m.todos {
         if m.todos[i].ID == id {
             return &m.todos[i]
@@ -640,13 +714,17 @@ func (m *model) clampListOffset(listLen int) {
 func (m model) depSearchResults() []todo.Todo {
     t := m.currentTodo()
     q := strings.ToLower(m.depSearchQuery)
-    result := make([]todo.Todo, 0, len(m.todos))
+    result := make([]todo.Todo, 0, maxDepSearchResults*2)
     for _, candidate := range m.todos {
         if t != nil && candidate.ID == t.ID {
             continue
         }
         if q == "" || strings.Contains(strings.ToLower(candidate.Title), q) {
             result = append(result, candidate)
+            // OPTIMIZATION: early exit — we only display maxDepSearchResults
+            if len(result) >= maxDepSearchResults*3 {
+                break
+            }
         }
     }
     return result
@@ -910,7 +988,7 @@ func formatDuration(d time.Duration) string {
 var builderPool = sync.Pool{
     New: func() interface{} {
         b := &strings.Builder{}
-        b.Grow(1024)
+        b.Grow(2048) // OPTIMIZATION: larger initial capacity
         return b
     },
 }

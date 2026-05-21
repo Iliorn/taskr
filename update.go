@@ -14,6 +14,9 @@ import (
 // ── Top-level Update ──────────────────────────────────────────────────────────
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    // OPTIMIZATION: capture frame time once per update cycle
+    m.frameTime = time.Now()
+
     if sz, ok := msg.(tea.WindowSizeMsg); ok {
         m.termWidth = sz.Width
         m.termHeight = sz.Height
@@ -30,6 +33,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         return m, clearErrAfter()
     case editorFinishedMsg:
         return m.handleEditorFinished(msg.taskID)
+
+    // OPTIMIZATION: debounced save — when the timer fires, actually write to disk
+    case saveTickMsg:
+        m.saveScheduled = false
+        if m.savePending {
+            m.savePending = false
+            saveCmd, err := prepareSave(m.todos)
+            if err != nil {
+                m.err = fmt.Sprintf("Error marshalling tasks: %v", err)
+                return m, clearErrAfter()
+            }
+            return m, saveCmd
+        }
+        return m, nil
     }
 
     switch m.mode {
@@ -90,24 +107,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     if nm, ok := newModel.(model); ok {
         if nm.dirty {
             nm.dirty = false
-            saveCmd, err := prepareSave(nm.todos)
-            if err != nil {
-                nm.err = fmt.Sprintf("Error marshalling tasks: %v", err)
-                return nm, clearErrAfter()
+            // OPTIMIZATION: debounced save — mark pending, schedule timer if not already
+            nm.savePending = true
+            if !nm.saveScheduled {
+                nm.saveScheduled = true
+                saveCmd := scheduleSave()
+                if cmd != nil {
+                    return nm, tea.Batch(cmd, saveCmd)
+                }
+                return nm, saveCmd
             }
-            if cmd != nil {
-                return nm, tea.Batch(cmd, saveCmd)
-            }
-            return nm, saveCmd
+            return nm, cmd
         }
         return nm, cmd
     }
     return newModel, cmd
-}
-
-func (m *model) setErr(msg string) tea.Cmd {
-    m.err = msg
-    return clearErrAfter()
 }
 
 // ── Editor handling ───────────────────────────────────────────────────────────
@@ -126,7 +140,7 @@ func (m *model) openEditorForNotes() tea.Cmd {
     }
 
     m.editorTaskID = taskID
-    editorCmd := getEditorCmd()
+    editorCmd := m.editorCmd
     filePath := notesFilePath(taskID)
 
     c := exec.Command(editorCmd, filePath)
@@ -162,12 +176,11 @@ func (m model) handleEditorFinished(taskID string) (tea.Model, tea.Cmd) {
 
     if m.dirty {
         m.dirty = false
-        saveCmd, saveErr := prepareSave(m.todos)
-        if saveErr != nil {
-            m.err = fmt.Sprintf("Error saving: %v", saveErr)
-            return m, clearErrAfter()
+        m.savePending = true
+        if !m.saveScheduled {
+            m.saveScheduled = true
+            return m, scheduleSave()
         }
-        return m, saveCmd
     }
     return m, nil
 }
@@ -962,8 +975,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
     return m, textinput.Blink
 }
 
-// ── Input handlers (unchanged from previous) ─────────────────────────────────
-// [All input/search/confirm handlers remain identical to previous layer]
+// ── Input handlers ────────────────────────────────────────────────────────────
 
 func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
     var cmd tea.Cmd
@@ -1005,7 +1017,8 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
                             } else if d, err := parseDueDate(val); err == nil {
                                 m.todos[idx].SetStartDate(d)
                             } else {
-                                return m, m.setErr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'")
+                                m.err = "Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'"
+                                return m, clearErrAfter()
                             }
                         case fieldDueDate:
                             if val == "" {
@@ -1013,7 +1026,8 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
                             } else if d, err := parseDueDate(val); err == nil {
                                 m.todos[idx].SetDueDate(d)
                             } else {
-                                return m, m.setErr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'")
+                                m.err = "Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'"
+                                return m, clearErrAfter()
                             }
                         }
                         m.markModified()
@@ -1204,6 +1218,7 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
             if m.tab == tabLearnings {
                 m.learningSearchQuery = m.learningSearchInput.Value()
                 m.learningCursor = 0
+                m.learningsCacheDirty = true
             } else {
                 m.searchQuery = m.searchInput.Value()
                 m.cursor = 0
@@ -1218,6 +1233,7 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
         m.learningSearchInput, cmd = m.learningSearchInput.Update(msg)
         m.learningSearchQuery = m.learningSearchInput.Value()
         m.learningCursor = 0
+        m.learningsCacheDirty = true
     } else {
         m.searchInput, cmd = m.searchInput.Update(msg)
         m.searchQuery = m.searchInput.Value()
