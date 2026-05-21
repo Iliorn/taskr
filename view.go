@@ -20,265 +20,328 @@ func (m model) View() string {
         return m.renderHelpFullscreen()
     }
 
+    out := getBuilder()
+    defer putBuilder(out)
+
     // ── HEADER ───────────────────────────────────────────────────────────
-    var headerLines []string
     shortcutHint := helpStyle.Render("? shortcuts")
     tabsStr := titleStyle.Render("taskr") + "  " + m.renderTabs()
     padW := m.termWidth - len([]rune(tabsStr)) - len([]rune("? shortcuts")) - 4
     if padW < 1 {
         padW = 1
     }
-    headerLines = append(headerLines, tabsStr+strings.Repeat(" ", padW)+shortcutHint)
-    headerLines = append(headerLines, "")
+    out.WriteString(tabsStr + strings.Repeat(" ", padW) + shortcutHint + "\n")
+    out.WriteString("\n")
+    headerLines := 2
+
     if m.err != "" {
-        headerLines = append(headerLines, confirmStyle.Render(m.err))
+        out.WriteString(confirmStyle.Render(m.err) + "\n")
+        headerLines++
     }
     if m.focusFilter {
-        headerLines = append(headerLines, confirmStyle.Render("⚡ FOCUS: today + overdue only (f to toggle)"))
+        out.WriteString(confirmStyle.Render("⚡ FOCUS: today + overdue only (f to toggle)") + "\n")
+        headerLines++
     }
     if m.searchQuery != "" {
-        headerLines = append(headerLines, searchStyle.Render("/ "+m.searchQuery))
+        out.WriteString(searchStyle.Render("/ "+m.searchQuery) + "\n")
+        headerLines++
     }
     if m.tab == tabTags && m.tagTabSearchQuery != "" {
-        headerLines = append(headerLines, searchStyle.Render("/ "+m.tagTabSearchQuery))
+        out.WriteString(searchStyle.Render("/ "+m.tagTabSearchQuery) + "\n")
+        headerLines++
     }
     if m.tab == tabLearnings && m.learningSearchQuery != "" {
-        headerLines = append(headerLines, searchStyle.Render("/ "+m.learningSearchQuery))
+        out.WriteString(searchStyle.Render("/ "+m.learningSearchQuery) + "\n")
+        headerLines++
     }
 
     // ── FOOTER ───────────────────────────────────────────────────────────
-    var footerRaw []string
+    footerContent := m.buildFooterContent(w)
+    footerLines := 0
+    if footerContent != "" {
+        footerLines = strings.Count(footerContent, "\n") + 1
+    } else {
+        footerLines = 1
+    }
+
+    // ── DETAIL ───────────────────────────────────────────────────────────
+    var detailContent string
+    detailLineCount := 0
+    showDetail := m.mode == modeNormal
+    if showDetail {
+        detailContent = m.buildDetailContent()
+        if detailContent != "" {
+            maxDetailContent := m.termHeight * detailMaxHeightPct / 100
+            detailLines := strings.Split(detailContent, "\n")
+            if len(detailLines) > maxDetailContent {
+                detailLines = detailLines[:maxDetailContent]
+                detailContent = strings.Join(detailLines, "\n")
+            }
+            detailContent = detailPanelStyle.Width(w).Render(detailContent)
+            detailSplit := strings.Split(detailContent, "\n")
+            for len(detailSplit) > 0 && strings.TrimSpace(detailSplit[len(detailSplit)-1]) == "" {
+                detailSplit = detailSplit[:len(detailSplit)-1]
+            }
+            detailContent = strings.Join(detailSplit, "\n")
+            detailLineCount = len(detailSplit)
+        }
+    }
+
+    // ── LIST ─────────────────────────────────────────────────────────────
+    listH := m.termHeight - headerLines - footerLines - detailLineCount
+    if listH < minListHeight {
+        listH = minListHeight
+    }
+
+    listContent := m.buildListContent(w, listH)
+    listSplit := strings.Split(listContent, "\n")
+    for len(listSplit) > 0 && strings.TrimSpace(listSplit[len(listSplit)-1]) == "" {
+        listSplit = listSplit[:len(listSplit)-1]
+    }
+
+    // ── ASSEMBLE ─────────────────────────────────────────────────────────
+    target := m.termHeight - 1
+
+    // Calculate how much space list actually gets
+    availableForList := target - headerLines - detailLineCount - footerLines
+    if availableForList < minListHeight {
+        availableForList = minListHeight
+    }
+
+    // Trim or pad list to fit
+    for len(listSplit) > availableForList {
+        listSplit = listSplit[:len(listSplit)-1]
+    }
+    for len(listSplit) < availableForList {
+        listSplit = append(listSplit, "")
+    }
+
+    // Write list
+    for _, line := range listSplit {
+        out.WriteString(line + "\n")
+    }
+
+    // Write detail
+    if detailContent != "" {
+        out.WriteString(detailContent + "\n")
+    }
+
+    // Write footer
+    if footerContent != "" {
+        out.WriteString(footerContent)
+    } else {
+        out.WriteString("")
+    }
+
+    // Final trim/pad to exact terminal height
+    result := out.String()
+    resultLines := strings.Split(result, "\n")
+    for len(resultLines) < target {
+        resultLines = append(resultLines, "")
+    }
+    if len(resultLines) > target {
+        resultLines = resultLines[:target]
+    }
+
+    return strings.Join(resultLines, "\n")
+    }
+
+// ── Footer builder ────────────────────────────────────────────────────────────
+
+func (m model) buildFooterContent(w int) string {
     switch m.mode {
-    case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeAddLearning, modeEditLearning, modeAddSubtask:
-        footerRaw = append(footerRaw, inputStyle.Width(w).Render(m.textInput.View()))
+    case modeInput, modeEditComment, modeEditTag, modeEditTitle,
+        modeAddLearning, modeEditLearning, modeAddSubtask, modeEditProjectInline:
+        return inputStyle.Width(w).Render(m.textInput.View())
     case modeSearch:
         if m.tab == tabLearnings {
-            footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.learningSearchInput.View()))
-        } else {
-            footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.searchInput.View()))
+            return searchStyle.Width(w).Render(m.learningSearchInput.View())
         }
+        return searchStyle.Width(w).Render(m.searchInput.View())
     case modeSearchTagTab:
-        footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.tagTabSearchInput.View()))
+        return searchStyle.Width(w).Render(m.tagTabSearchInput.View())
     case modeSearchDep:
-        footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.depSearchInput.View()))
+        b := getBuilder()
+        defer putBuilder(b)
+        b.WriteString(searchStyle.Width(w).Render(m.depSearchInput.View()))
         for i, r := range m.depSearchResults() {
             if i >= maxDepSearchResults {
                 break
             }
-            if i == m.searchCursor {
-                footerRaw = append(footerRaw, selectedStyle.Render("  → "+r.Title))
+            if i == m.depSearch.cursor {
+                b.WriteString("\n" + selectedStyle.Render("  → "+r.Title))
             } else {
-                footerRaw = append(footerRaw, normalStyle.Render("    "+r.Title))
+                b.WriteString("\n" + normalStyle.Render("    "+r.Title))
             }
         }
+        return b.String()
     case modeSearchTag:
-        footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.tagSearchInput.View()))
+        b := getBuilder()
+        defer putBuilder(b)
+        b.WriteString(searchStyle.Width(w).Render(m.tagSearchInput.View()))
         results := m.tagSearchResults()
         for i, r := range results {
             if i >= maxTagSearchResults {
                 break
             }
-            if i == m.searchCursor {
-                footerRaw = append(footerRaw, selectedStyle.Render("  → #"+r))
+            if i == m.tagSearch.cursor {
+                b.WriteString("\n" + selectedStyle.Render("  → #"+r))
             } else {
-                footerRaw = append(footerRaw, normalStyle.Render("    #"+r))
+                b.WriteString("\n" + normalStyle.Render("    #"+r))
             }
         }
-        if len(results) == 0 && m.tagSearchQuery != "" {
-            footerRaw = append(footerRaw, dimStyle.Render("  → create new tag: ")+tagStyle.Render(m.tagSearchQuery))
+        if len(results) == 0 && m.tagSearch.query != "" {
+            b.WriteString("\n" + dimStyle.Render("  → create new tag: ") + tagStyle.Render(m.tagSearch.query))
         }
+        return b.String()
     case modeSearchProject:
-        footerRaw = append(footerRaw, searchStyle.Width(w).Render(m.projSearchInput.View()))
+        b := getBuilder()
+        defer putBuilder(b)
+        b.WriteString(searchStyle.Width(w).Render(m.projSearchInput.View()))
         results := m.projSearchResults()
         for i, r := range results {
             if i >= maxProjSearchResults {
                 break
             }
-            if i == m.searchCursor {
-                footerRaw = append(footerRaw, selectedStyle.Render("  → "+r))
+            if i == m.projSearch.cursor {
+                b.WriteString("\n" + selectedStyle.Render("  → "+r))
             } else {
-                footerRaw = append(footerRaw, normalStyle.Render("    "+r))
+                b.WriteString("\n" + normalStyle.Render("    "+r))
             }
         }
-        if len(results) == 0 && m.projSearchQuery != "" {
-            footerRaw = append(footerRaw, dimStyle.Render("  → create new project: ")+selectedStyle.Render(m.projSearchQuery))
+        if len(results) == 0 && m.projSearch.query != "" {
+            b.WriteString("\n" + dimStyle.Render("  → create new project: ") + selectedStyle.Render(m.projSearch.query))
         }
+        return b.String()
     case modeConfirmDelete, modeConfirmDeleteComment,
         modeConfirmDeleteDep, modeConfirmDeleteTag,
         modeConfirmDeleteTagGlobal, modeConfirmDeleteProject,
         modeConfirmDeleteLearning, modeConfirmDeleteSubtask:
-        footerRaw = append(footerRaw, confirmStyle.Render(m.confirmMsg))
-    default:
-        footerRaw = append(footerRaw, "")
+        return confirmStyle.Render(m.confirmMsg)
     }
-
-    var footerLines []string
-    for _, fl := range footerRaw {
-        footerLines = append(footerLines, strings.Split(fl, "\n")...)
-    }
-
-    // ── DETAIL ───────────────────────────────────────────────────────────
-    var detailRendered []string
-    showDetail := m.mode == modeNormal
-    if showDetail {
-        detailContent := m.buildDetailLines()
-        if len(detailContent) > 0 {
-            maxDetailContent := m.termHeight * detailMaxHeightPct / 100
-            if len(detailContent) > maxDetailContent {
-                detailContent = detailContent[:maxDetailContent]
-            }
-            detailRendered = strings.Split(
-                detailPanelStyle.Width(w).Render(strings.Join(detailContent, "\n")),
-                "\n",
-            )
-            for len(detailRendered) > 0 && strings.TrimSpace(detailRendered[len(detailRendered)-1]) == "" {
-                detailRendered = detailRendered[:len(detailRendered)-1]
-            }
-        }
-    }
-
-    // ── LIST ─────────────────────────────────────────────────────────────
-    listH := m.termHeight - len(headerLines) - len(footerLines) - len(detailRendered)
-    if listH < minListHeight {
-        listH = minListHeight
-    }
-
-    var listRendered []string
-    if m.tab == tabProjects {
-        projects := m.allProjectsForList()
-        if len(projects) == 0 {
-            empty := normalStyle.Render("  No projects yet. Add a project to a task first.")
-            if m.searchQuery != "" {
-                empty = normalStyle.Render("  No projects match your search.")
-            }
-            emptyLines := strings.Split(empty, "\n")
-            for len(emptyLines) < listH {
-                emptyLines = append(emptyLines, "")
-            }
-            if len(emptyLines) > listH {
-                emptyLines = emptyLines[:listH]
-            }
-            listRendered = strings.Split(
-                listPanelStyle.Width(w).Render(strings.Join(emptyLines, "\n")),
-                "\n",
-            )
-        } else {
-            projMaxH := listH / 3
-            if projMaxH < minListPanelLines {
-                projMaxH = minListPanelLines
-            }
-            projLines := strings.Split(m.renderProjectListContent(projects), "\n")
-            projEnd := len(projLines)
-            for projEnd > 0 && strings.TrimSpace(projLines[projEnd-1]) == "" {
-                projEnd--
-            }
-            projLines = projLines[:projEnd]
-            if len(projLines) > projMaxH {
-                projLines = projLines[:projMaxH]
-            }
-            for len(projLines) < projMaxH {
-                projLines = append(projLines, "")
-            }
-            projRendered := strings.Split(
-                listPanelStyle.Width(w).Render(strings.Join(projLines, "\n")),
-                "\n",
-            )
-            ganttH := listH - len(projRendered)
-            if ganttH < minListPanelLines {
-                ganttH = minListPanelLines
-            }
-            var ganttLines []string
-            if m.projectCursor < len(projects) {
-                tasks := getTasksForProject(m.todos, projects[m.projectCursor])
-                ganttLines = strings.Split(m.renderGantt(tasks), "\n")
-                ganttEnd := len(ganttLines)
-                for ganttEnd > 0 && strings.TrimSpace(ganttLines[ganttEnd-1]) == "" {
-                    ganttEnd--
-                }
-                ganttLines = ganttLines[:ganttEnd]
-            }
-            if len(ganttLines) > ganttH {
-                ganttLines = ganttLines[:ganttH]
-            }
-            for len(ganttLines) < ganttH {
-                ganttLines = append(ganttLines, "")
-            }
-            listRendered = append(projRendered, ganttLines...)
-        }
-    } else {
-        rawList := m.buildListLines()
-        for len(rawList) < listH {
-            rawList = append(rawList, "")
-        }
-        if len(rawList) > listH {
-            rawList = rawList[:listH]
-        }
-        listRendered = strings.Split(
-            listPanelStyle.Width(w).Render(strings.Join(rawList, "\n")),
-            "\n",
-        )
-    }
-    for len(listRendered) > 0 && strings.TrimSpace(listRendered[len(listRendered)-1]) == "" {
-        listRendered = listRendered[:len(listRendered)-1]
-    }
-
-    // ── ASSEMBLE ─────────────────────────────────────────────────────────
-    all := make([]string, 0, m.termHeight)
-    all = append(all, headerLines...)
-    all = append(all, listRendered...)
-    all = append(all, detailRendered...)
-    all = append(all, footerLines...)
-
-    target := m.termHeight - 1
-    diff := len(all) - target
-
-    if diff > 0 {
-        listStart := len(headerLines)
-        listEnd := listStart + len(listRendered)
-        canRemove := listEnd - listStart - 1
-        remove := diff
-        if remove > canRemove {
-            remove = canRemove
-        }
-        if remove > 0 {
-            newListEnd := listEnd - remove
-            all = append(all[:newListEnd], all[listEnd:]...)
-        }
-    } else if diff < 0 {
-        listEnd := len(headerLines) + len(listRendered)
-        abs := -diff
-        padding := make([]string, abs)
-        newAll := make([]string, 0, target+1)
-        newAll = append(newAll, all[:listEnd]...)
-        newAll = append(newAll, padding...)
-        newAll = append(newAll, all[listEnd:]...)
-        all = newAll
-    }
-
-    for len(all) > target {
-        listStart := len(headerLines)
-        listEnd := listStart + len(listRendered)
-        if listEnd > listStart {
-            all = append(all[:listEnd-1], all[listEnd:]...)
-            listRendered = listRendered[:len(listRendered)-1]
-        } else {
-            break
-        }
-    }
-    for len(all) < target {
-        listEnd := len(headerLines) + len(listRendered)
-        newAll := make([]string, 0, target+1)
-        newAll = append(newAll, all[:listEnd]...)
-        newAll = append(newAll, "")
-        newAll = append(newAll, all[listEnd:]...)
-        all = newAll
-        listRendered = append(listRendered, "")
-    }
-
-    return strings.Join(all, "\n")
+    return ""
 }
 
-// ── Help fullscreen ───────────────────────────────────────────────────────────
+// ── Detail content ────────────────────────────────────────────────────────────
+
+func (m model) buildDetailContent() string {
+    switch {
+    case m.tab == tabTags:
+        lines := m.buildTagDetailLines()
+        if len(lines) == 0 {
+            return ""
+        }
+        return strings.Join(lines, "\n")
+    case m.tab == tabLearnings:
+        lines := m.buildLearningDetailLines()
+        if len(lines) == 0 {
+            return ""
+        }
+        return strings.Join(lines, "\n")
+    case m.tab == tabStats:
+        return ""
+    default:
+        t := m.currentTodo()
+        if t == nil {
+            return dimStyle.Render("  No task selected.")
+        }
+        if m.detail.page == 0 {
+            return m.renderDetailPage1(t)
+        }
+        return m.renderDetailPage2(t)
+    }
+}
+
+// ── List content builder ──────────────────────────────────────────────────────
+
+func (m model) buildListContent(w, listH int) string {
+    if m.tab == tabProjects {
+        return m.buildProjectListContent(w, listH)
+    }
+
+    rawList := m.buildListLines()
+    for len(rawList) < listH {
+        rawList = append(rawList, "")
+    }
+    if len(rawList) > listH {
+        rawList = rawList[:listH]
+    }
+    return listPanelStyle.Width(w).Render(strings.Join(rawList, "\n"))
+}
+
+func (m model) buildProjectListContent(w, listH int) string {
+    projects := m.allProjectsForList()
+    if len(projects) == 0 {
+        empty := normalStyle.Render("  No projects yet. Add a project to a task first.")
+        if m.searchQuery != "" {
+            empty = normalStyle.Render("  No projects match your search.")
+        }
+        emptyLines := strings.Split(empty, "\n")
+        for len(emptyLines) < listH {
+            emptyLines = append(emptyLines, "")
+        }
+        if len(emptyLines) > listH {
+            emptyLines = emptyLines[:listH]
+        }
+        return listPanelStyle.Width(w).Render(strings.Join(emptyLines, "\n"))
+    }
+
+    projMaxH := listH / 3
+    if projMaxH < minListPanelLines {
+        projMaxH = minListPanelLines
+    }
+    projLines := strings.Split(m.renderProjectListContent(projects), "\n")
+    projEnd := len(projLines)
+    for projEnd > 0 && strings.TrimSpace(projLines[projEnd-1]) == "" {
+        projEnd--
+    }
+    projLines = projLines[:projEnd]
+    if len(projLines) > projMaxH {
+        projLines = projLines[:projMaxH]
+    }
+    for len(projLines) < projMaxH {
+        projLines = append(projLines, "")
+    }
+    projRendered := listPanelStyle.Width(w).Render(strings.Join(projLines, "\n"))
+
+    projRenderedLines := strings.Split(projRendered, "\n")
+    ganttH := listH - len(projRenderedLines)
+    if ganttH < minListPanelLines {
+        ganttH = minListPanelLines
+    }
+
+    var ganttLines []string
+    if m.projectCursor < len(projects) {
+        tasks := m.getProjectTasks(projects[m.projectCursor])
+        ganttContent := m.renderGantt(tasks)
+        ganttLines = strings.Split(ganttContent, "\n")
+        ganttEnd := len(ganttLines)
+        for ganttEnd > 0 && strings.TrimSpace(ganttLines[ganttEnd-1]) == "" {
+            ganttEnd--
+        }
+        ganttLines = ganttLines[:ganttEnd]
+    }
+    if len(ganttLines) > ganttH {
+        ganttLines = ganttLines[:ganttH]
+    }
+    for len(ganttLines) < ganttH {
+        ganttLines = append(ganttLines, "")
+    }
+
+    b := getBuilder()
+    defer putBuilder(b)
+    b.WriteString(projRendered)
+    b.WriteString("\n")
+    for i, line := range ganttLines {
+        b.WriteString(line)
+        if i < len(ganttLines)-1 {
+            b.WriteString("\n")
+        }
+    }
+    return b.String()
+}
+
+// ── Help ──────────────────────────────────────────────────────────────────────
 
 func (m model) renderHelpFullscreen() string {
     sections := []struct {
@@ -337,26 +400,29 @@ func (m model) renderHelpFullscreen() string {
         }},
     }
 
-    var lines []string
-    lines = append(lines, "")
-    lines = append(lines, titleStyle.Render("  Keyboard shortcuts"))
-    lines = append(lines, "")
+    b := getBuilder()
+    defer putBuilder(b)
+
+    b.WriteString("\n")
+    b.WriteString(titleStyle.Render("  Keyboard shortcuts") + "\n")
+    b.WriteString("\n")
 
     for _, section := range sections {
-        lines = append(lines, detailLabelStyle.Render("  "+section.title))
+        b.WriteString(detailLabelStyle.Render("  "+section.title) + "\n")
         for _, kv := range section.keys {
             key := padRight(kv[0], 24)
-            lines = append(lines,
-                helpStyle.Render("  ")+
-                    selectedStyle.Render(key)+
-                    normalStyle.Render(kv[1]))
+            b.WriteString(
+                helpStyle.Render("  ") +
+                    selectedStyle.Render(key) +
+                    normalStyle.Render(kv[1]) + "\n")
         }
-        lines = append(lines, "")
+        b.WriteString("\n")
     }
 
-    lines = append(lines, "")
-    lines = append(lines, helpStyle.Render("  Press ? or esc to close"))
+    b.WriteString("\n")
+    b.WriteString(helpStyle.Render("  Press ? or esc to close") + "\n")
 
+    lines := strings.Split(b.String(), "\n")
     target := m.termHeight - 1
     for len(lines) < target {
         lines = append(lines, "")
@@ -372,28 +438,6 @@ func (m model) renderHelpFullscreen() string {
 
 func (m model) buildListLines() []string {
     return strings.Split(m.renderListContent(), "\n")
-}
-
-func (m model) buildDetailLines() []string {
-    switch {
-    case m.tab == tabTags:
-        return m.buildTagDetailLines()
-    case m.tab == tabLearnings:
-        return m.buildLearningDetailLines()
-    case m.tab == tabStats:
-        return []string{}
-    case m.currentTodo() != nil:
-        t := m.currentTodo()
-        var content string
-        if m.detailPage == 0 {
-            content = m.renderDetailPage1(t)
-        } else {
-            content = m.renderDetailPage2(t)
-        }
-        return strings.Split(content, "\n")
-    default:
-        return strings.Split(dimStyle.Render("  No task selected."), "\n")
-    }
 }
 
 func (m model) buildLearningDetailLines() []string {
@@ -436,7 +480,7 @@ func (m model) buildLearningDetailLines() []string {
     if len(l.Tags) == 0 {
         b.WriteString(dimStyle.Render("none") + "\n")
     } else {
-        b.WriteString(renderTagsPart(l.Tags) + "\n")
+        b.WriteString(m.getRenderedTags(l.Tags) + "\n")
     }
 
     return strings.Split(b.String(), "\n")
@@ -553,7 +597,7 @@ func (m model) renderListContent() string {
     return ""
 }
 
-// ── Tags list (lazy + pooled) ─────────────────────────────────────────────────
+// ── Tags list ─────────────────────────────────────────────────────────────────
 
 func (m model) renderTagList() string {
     tags := m.getFilteredTagsForTab()
@@ -577,7 +621,7 @@ func (m model) renderTagList() string {
     }
 
     gradLen := len(tagProgressGradient)
-    stats := m.cachedTags
+    stats := m.cache.tags
     if stats == nil {
         stats = computeTagStats(m.todos)
     }
@@ -668,10 +712,11 @@ func (m model) renderTagList() string {
     return b.String()
 }
 
-// ── Learnings list (lazy + pooled) ────────────────────────────────────────────
+// ── Learnings list ────────────────────────────────────────────────────────────
 
 func (m model) renderLearningList() string {
     learnings := m.allLearnings()
+
     if len(learnings) == 0 {
         if m.learningSearchQuery != "" {
             return normalStyle.Render("  No learnings match your search.")
@@ -749,13 +794,13 @@ func (m model) renderLearningList() string {
     return b.String()
 }
 
-// ── Stats (pooled) ────────────────────────────────────────────────────────────
+// ── Stats ─────────────────────────────────────────────────────────────────────
 
 func (m model) renderStatsList() string {
     b := getBuilder()
     defer putBuilder(b)
 
-    now := time.Now()
+    now := m.frameTime
     today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
     weekAgo := today.AddDate(0, 0, -7)
     monthAgo := today.AddDate(0, -1, 0)
@@ -829,6 +874,7 @@ func (m model) renderStatsList() string {
                 filled = barW
             }
             var bar strings.Builder
+            bar.Grow(barW * 4)
             for j := 0; j < barW; j++ {
                 if j < filled {
                     pos := 0.0
@@ -880,6 +926,7 @@ func (m model) renderStatsList() string {
         b.WriteString("\n")
     }
 
+
     if len(projectCounts) > 0 {
         b.WriteString(statsHeaderStyle.Render("  Projects") + "\n")
         type projEntry struct {
@@ -891,7 +938,10 @@ func (m model) renderStatsList() string {
             entries = append(entries, projEntry{name, count})
         }
         sort.Slice(entries, func(i, j int) bool {
-            return entries[i].count > entries[j].count
+            if entries[i].count != entries[j].count {
+                return entries[i].count > entries[j].count
+            }
+            return entries[i].name < entries[j].name
         })
         maxShow := 8
         if len(entries) < maxShow {
@@ -916,7 +966,7 @@ func (m model) renderStatsList() string {
     return b.String()
 }
 
-// ── Task lists (lazy + pooled) ────────────────────────────────────────────────
+// ── Task lists ────────────────────────────────────────────────────────────────
 
 func (m model) renderTaskList() string {
     active := m.activeTodos()
@@ -935,7 +985,7 @@ func (m model) renderTaskList() string {
 
     renderListHeader(b, m.termWidth, m.cursor, len(active), false, m.taskSort)
 
-    overdueSet := m.overdueSet
+    overdueSet := m.cache.overdueSet
 
     maxVisible := m.estimateListHeight()
     startIdx := m.listOffset
@@ -1015,7 +1065,7 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) st
     startCol := padRight(startVal, 10)
     dueCol := padRight(dueVal, 10)
     completedCol := padRight(completedVal, 10)
-    tagsPart := renderTagsPart(t.Tags)
+    tagsPart := m.getRenderedTags(t.Tags)
 
     if index == cursor && active {
         return selectedStyle.Render(cursorStr+"[") +
@@ -1082,7 +1132,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
     startCol := padRight(startVal, 10)
     dueCol := padRight(dueVal, 10)
     prioCol := padRight(t.Priority.Icon()+" "+t.Priority.String(), 10)
-    tagsPart := renderTagsPart(t.Tags)
+    tagsPart := m.getRenderedTags(t.Tags)
     line := cursorStr + checkbox + foldIcon + titleCol + startCol + dueCol + prioCol
     switch {
     case t.IsOverdue():
@@ -1097,10 +1147,10 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 }
 
 func (m model) renderTaskLine(t todo.Todo, index, cursor int, active bool) string {
-    return m.renderTaskLineWithSet(t, index, cursor, active, m.overdueSet)
+    return m.renderTaskLineWithSet(t, index, cursor, active, m.cache.overdueSet)
 }
 
-// ── Projects (pooled) ─────────────────────────────────────────────────────────
+// ── Projects ──────────────────────────────────────────────────────────────────
 
 func (m model) renderProjectListContent(projects []string) string {
     if len(projects) == 0 {
@@ -1136,7 +1186,7 @@ func (m model) renderProjectListContent(projects []string) string {
     b.WriteString(renderPlainDivider(w))
 
     for i, p := range projects {
-        tasks := getTasksForProject(m.todos, p)
+        tasks := m.getProjectTasks(p)
         var activeCnt, doneCnt, overdueCnt int
         for _, t := range tasks {
             if t.Status == todo.Done {
@@ -1188,18 +1238,18 @@ func (m model) renderProjectListContent(projects []string) string {
     return b.String()
 }
 
-// ── Detail pages (pooled) ─────────────────────────────────────────────────────
+// ── Detail pages ──────────────────────────────────────────────────────────────
 
 func (m model) renderDetailPage1(t *todo.Todo) string {
     b := getBuilder()
     defer putBuilder(b)
 
     availableW := m.termWidth - 8
-    isDetailFocused := m.pane == paneDetail && m.detailPage == 0
+    isDetailFocused := m.pane == paneDetail && m.detail.page == 0
 
     renderField := func(label, value string, field detailField) string {
         cur := "  "
-        isCurrent := isDetailFocused && m.detailField == field
+        isCurrent := isDetailFocused && m.detail.field == field
         if isCurrent {
             cur = "▶ "
         }
@@ -1268,7 +1318,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
     b.WriteString("\n")
 
     tagCur := "  "
-    if isDetailFocused && m.detailField == fieldTags {
+    if isDetailFocused && m.detail.field == fieldTags {
         tagCur = "▶ "
     }
     b.WriteString(tagCur + detailLabelStyle.Render("Tags:") + "\n")
@@ -1277,7 +1327,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
     } else {
         for i, tag := range t.Tags {
             pfx := "  "
-            if isDetailFocused && m.detailField == fieldTags && i == m.tagCursor {
+            if isDetailFocused && m.detail.field == fieldTags && i == m.detail.tagCursor {
                 pfx = "▶ "
                 b.WriteString(detailSelectedStyle.Render(pfx) + tagStyle.Render("⟨#"+tag+"⟩") + "\n")
             } else {
@@ -1288,7 +1338,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
     b.WriteString("\n")
 
     depCur := "  "
-    if isDetailFocused && m.detailField == fieldDependencies {
+    if isDetailFocused && m.detail.field == fieldDependencies {
         depCur = "▶ "
     }
     b.WriteString(depCur + detailLabelStyle.Render("Dependencies:") + "\n")
@@ -1298,7 +1348,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
         for i, depID := range t.Dependencies {
             dep := m.findTodoByID(depID)
             pfx := "  "
-            isDepSelected := isDetailFocused && m.detailField == fieldDependencies && i == m.depCursor
+            isDepSelected := isDetailFocused && m.detail.field == fieldDependencies && i == m.detail.depCursor
             if isDepSelected {
                 pfx = "▶ "
             }
@@ -1328,7 +1378,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
     b.WriteString("\n")
 
     learningCur := "  "
-    if isDetailFocused && m.detailField == fieldLearnings {
+    if isDetailFocused && m.detail.field == fieldLearnings {
         learningCur = "▶ "
     }
     b.WriteString(learningCur + detailLabelStyle.Render("Learnings:") + "\n")
@@ -1337,7 +1387,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
     } else {
         for i, l := range t.Learnings {
             pfx := "  "
-            isLearningSelected := isDetailFocused && m.detailField == fieldLearnings && i == m.learningDetailCursor
+            isLearningSelected := isDetailFocused && m.detail.field == fieldLearnings && i == m.detail.learningCursor
             if isLearningSelected {
                 pfx = "▶ "
             }
@@ -1352,7 +1402,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
     b.WriteString("\n")
 
     subtaskCur := "  "
-    if isDetailFocused && m.detailField == fieldSubtasks {
+    if isDetailFocused && m.detail.field == fieldSubtasks {
         subtaskCur = "▶ "
     }
     b.WriteString(subtaskCur + detailLabelStyle.Render("Subtasks:") + "\n")
@@ -1362,7 +1412,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
         for i, subID := range t.SubtaskIDs {
             sub := m.findTodoByID(subID)
             pfx := "  "
-            isSubSelected := isDetailFocused && m.detailField == fieldSubtasks && i == m.subtaskCursor
+            isSubSelected := isDetailFocused && m.detail.field == fieldSubtasks && i == m.detail.subtaskCursor
             if isSubSelected {
                 pfx = "▶ "
             }
@@ -1408,7 +1458,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
     b.WriteString(detailTitleStyle.Render(titleText) +
         strings.Repeat(" ", padW) +
         pageIndicatorStyle.Render(indicator) + "\n\n")
-    isDetailFocused := m.pane == paneDetail && m.detailPage == 1
+    isDetailFocused := m.pane == paneDetail && m.detail.page == 1
     commentCur := "  "
     if isDetailFocused {
         commentCur = "▶ "
@@ -1422,7 +1472,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
             available = 10
         }
         for i, c := range t.Comments {
-            isSelected := isDetailFocused && i == m.commentCursor
+            isSelected := isDetailFocused && i == m.detail.commentCursor
             pfx := "  "
             if isSelected {
                 pfx = "▶ "
@@ -1448,13 +1498,13 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
     return b.String()
 }
 
-// ── Gantt (pooled) ────────────────────────────────────────────────────────────
+// ── Gantt ─────────────────────────────────────────────────────────────────────
 
 func (m model) renderGantt(tasks []todo.Todo) string {
     if len(tasks) == 0 {
         return dimStyle.Render("  No tasks in this project.")
     }
-    today := time.Now()
+    today := m.frameTime
     var minDate, maxDate time.Time
     for _, t := range tasks {
         if !t.StartDate.IsZero() && (minDate.IsZero() || t.StartDate.Before(minDate)) {
@@ -1532,8 +1582,16 @@ func (m model) renderGantt(tasks []todo.Todo) string {
     gradLen := len(ganttGradient)
     ovrdLen := len(ganttOverdueGradient)
 
-    barRunes := make([]rune, chartW)
-    barColors := make([]int, chartW)
+    // Reuse buffers
+    barRunes := m.ganttBarBuf
+    barColors := m.ganttColorBuf
+    if len(barRunes) < chartW {
+        barRunes = make([]rune, chartW)
+        barColors = make([]int, chartW)
+    } else {
+        barRunes = barRunes[:chartW]
+        barColors = barColors[:chartW]
+    }
 
     for i, t := range tasks {
         isSelected := i == m.cursor && m.pane == paneList && m.projectTaskMode
