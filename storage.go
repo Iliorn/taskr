@@ -146,6 +146,21 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
             }
             return todos[i].DueDate.Before(todos[j].DueDate)
         })
+    case taskSortStartDate:
+        sort.SliceStable(todos, func(i, j int) bool {
+            iZero := todos[i].StartDate.IsZero()
+            jZero := todos[j].StartDate.IsZero()
+            if iZero && jZero {
+                return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+            }
+            if iZero {
+                return false
+            }
+            if jZero {
+                return true
+            }
+            return todos[i].StartDate.Before(todos[j].StartDate)
+        })
     case taskSortCreated:
         sort.SliceStable(todos, func(i, j int) bool {
             return todos[i].CreatedAt.Before(todos[j].CreatedAt)

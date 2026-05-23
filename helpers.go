@@ -126,33 +126,34 @@ func renderPlainDivider(availW int) string {
 
 func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistory bool, sortMode taskSortMode) {
     titleW := titleColWidth(termWidth)
-    counter := fmt.Sprintf("%d/%d", cursor+1, total)
+
+    startLabel := padRight("Start", 12)
+    dueLabel := padRight("Due", 12)
+    prioLabel := padRight("Priority", 12)
+    if !isHistory {
+        switch sortMode {
+        case taskSortDueDate:
+            dueLabel = padRight(">Due<", 12)
+        case taskSortStartDate:
+            startLabel = padRight(">Start<", 12)
+        case taskSortPriority:
+            prioLabel = padRight(">Priority<", 12)
+        }
+    }
 
     const prefix = "      "
     var headerLeft string
     if isHistory {
-        headerLeft = prefix + padRight("Completed tasks", titleW) + padRight("Start", 10) +
-            padRight("Due", 10) + padRight("Completed", 10) + "Tags"
+        headerLeft = prefix + padRight("Completed tasks", titleW) + padRight("Start", 12) +
+            padRight("Due", 12) + padRight("Completed", 12) + "Tags"
     } else {
-        headerLeft = prefix + padRight("Task", titleW) + padRight("Start", 10) +
-            padRight("Due", 10) + padRight("Priority", 10) + "Tags"
+        headerLeft = prefix + padRight("Task", titleW) + startLabel + dueLabel + prioLabel + "Tags"
     }
-    padW := termWidth - 6 - len([]rune(headerLeft)) - len([]rune(counter))
+    padW := termWidth - 6 - len([]rune(headerLeft))
     if padW < 1 {
         padW = 1
     }
-    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + counter + "\n")
-
-    var sortLabel string
-    switch sortMode {
-    case taskSortPriority:
-        sortLabel = "priority"
-    case taskSortCreated:
-        sortLabel = "created"
-    default:
-        sortLabel = "due"
-    }
-    b.WriteString(renderSortDivider(termWidth-8, sortLabel))
+    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
 }
 
 // ── Editor support ────────────────────────────────────────────────────────────

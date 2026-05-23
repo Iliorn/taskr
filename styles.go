@@ -94,7 +94,7 @@ var (
 
 listPanelStyle = lipgloss.NewStyle().
     Border(lipgloss.RoundedBorder()).
-    BorderForeground(lipgloss.Color("#333333")).
+    BorderForeground(lipgloss.Color("#FFFFFF")).
     Padding(0, 1).
     MarginLeft(2)
 

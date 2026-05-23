@@ -49,7 +49,7 @@ func computeLayout(in layoutInput) layout {
 
     l.footerH = footerHeight
 
-    if in.mode == modeNormal && in.tab != tabStats {
+    if in.mode == modeNormal {
         l.detailH = in.detailLines
         maxDetail := in.termH * detailMaxHeightPct / 100
         if l.detailH > maxDetail {

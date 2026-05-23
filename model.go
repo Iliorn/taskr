@@ -84,6 +84,7 @@ type taskSortMode int
 const (
     taskSortDueDate taskSortMode = iota
     taskSortPriority
+    taskSortStartDate
     taskSortCreated
 )
 

@@ -411,7 +411,7 @@ func (m *model) cycleSortMode() {
         case taskSortDueDate:
             m.taskSort = taskSortPriority
         case taskSortPriority:
-            m.taskSort = taskSortCreated
+            m.taskSort = taskSortStartDate
         default:
             m.taskSort = taskSortDueDate
         }

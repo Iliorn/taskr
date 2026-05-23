@@ -63,10 +63,8 @@ func (m model) View() string {
 
     if showDetail {
         switch {
-        case m.tab == tabTags || m.tab == tabLearnings:
+        case m.tab == tabTags || m.tab == tabLearnings || m.tab == tabStats:
             detailContent = m.buildDetailContent()
-        case m.tab == tabStats:
-            // no detail for stats
         default:
             detailContent = m.getCachedDetailContent()
         }
@@ -97,19 +95,18 @@ func (m model) View() string {
     })
 
     // ── LIST ─────────────────────────────────────────────────────────────
-    listH := li.listH
-    listContent := m.buildListContent(w, listH)
-    listSplit := strings.Split(listContent, "\n")
-    for len(listSplit) > 0 && strings.TrimSpace(listSplit[len(listSplit)-1]) == "" {
-        listSplit = listSplit[:len(listSplit)-1]
-    }
-
-// ── ASSEMBLE ─────────────────────────────────────────────────────────
     target := m.termHeight
     availableForList := target - li.headerH - detailLineCount - footerLines
     if availableForList < minListHeight {
         availableForList = minListHeight
     }
+    listContent := m.buildListContent(w, availableForList)
+    listSplit := strings.Split(listContent, "\n")
+    for len(listSplit) > 0 && strings.TrimSpace(listSplit[len(listSplit)-1]) == "" {
+        listSplit = listSplit[:len(listSplit)-1]
+    }
+
+    // ── ASSEMBLE ─────────────────────────────────────────────────────────
     for len(listSplit) > availableForList {
         listSplit = listSplit[:len(listSplit)-1]
     }
@@ -281,7 +278,7 @@ func (m model) buildDetailContent() string {
         }
         return strings.Join(lines, "\n")
     case m.tab == tabStats:
-        return ""
+        return m.renderStatsDetail()
     default:
         t := m.currentTodo()
         if t == nil {
@@ -299,17 +296,21 @@ func (m model) buildDetailContent() string {
 
 // ── List content builder ──────────────────────────────────────────────────────
 
-func (m model) buildListContent(w, listH int) string {
+func (m model) buildListContent(w, outerH int) string {
     if m.tab == tabProjects {
-        return m.buildProjectListContent(w, listH)
+        return m.buildProjectListContent(w, outerH)
     }
 
+    innerH := outerH - 2 // subtract top and bottom border lines
+    if innerH < 1 {
+        innerH = 1
+    }
     rawList := m.buildListLines()
-    for len(rawList) < listH {
+    for len(rawList) < innerH {
         rawList = append(rawList, "")
     }
-    if len(rawList) > listH {
-        rawList = rawList[:listH]
+    if len(rawList) > innerH {
+        rawList = rawList[:innerH]
     }
     return listPanelStyle.Width(w).Render(strings.Join(rawList, "\n"))
 }
@@ -321,12 +322,16 @@ func (m model) buildProjectListContent(w, listH int) string {
         if m.searchQuery != "" {
             empty = normalStyle.Render("  No projects match your search.")
         }
+        innerH := listH - 2
+        if innerH < 1 {
+            innerH = 1
+        }
         emptyLines := strings.Split(empty, "\n")
-        for len(emptyLines) < listH {
+        for len(emptyLines) < innerH {
             emptyLines = append(emptyLines, "")
         }
-        if len(emptyLines) > listH {
-            emptyLines = emptyLines[:listH]
+        if len(emptyLines) > innerH {
+            emptyLines = emptyLines[:innerH]
         }
         return listPanelStyle.Width(w).Render(strings.Join(emptyLines, "\n"))
     }
@@ -350,9 +355,13 @@ func (m model) buildProjectListContent(w, listH int) string {
     projRendered := listPanelStyle.Width(w).Render(strings.Join(projLines, "\n"))
 
     projRenderedLines := strings.Split(projRendered, "\n")
-    ganttH := listH - len(projRenderedLines)
-    if ganttH < minListPanelLines {
-        ganttH = minListPanelLines
+    ganttOuterH := listH - len(projRenderedLines)
+    if ganttOuterH < minListPanelLines+2 {
+        ganttOuterH = minListPanelLines + 2
+    }
+    ganttInnerH := ganttOuterH - 2
+    if ganttInnerH < 1 {
+        ganttInnerH = 1
     }
 
     var ganttLines []string
@@ -366,23 +375,19 @@ func (m model) buildProjectListContent(w, listH int) string {
         }
         ganttLines = ganttLines[:ganttEnd]
     }
-    if len(ganttLines) > ganttH {
-        ganttLines = ganttLines[:ganttH]
+    if len(ganttLines) > ganttInnerH {
+        ganttLines = ganttLines[:ganttInnerH]
     }
-    for len(ganttLines) < ganttH {
+    for len(ganttLines) < ganttInnerH {
         ganttLines = append(ganttLines, "")
     }
+    ganttRendered := listPanelStyle.Width(w).Render(strings.Join(ganttLines, "\n"))
 
     b := getBuilder()
     defer putBuilder(b)
     b.WriteString(projRendered)
     b.WriteString("\n")
-    for i, line := range ganttLines {
-        b.WriteString(line)
-        if i < len(ganttLines)-1 {
-            b.WriteString("\n")
-        }
-    }
+    b.WriteString(ganttRendered)
     return b.String()
 }
 
@@ -480,6 +485,83 @@ func (m model) renderHelpFullscreen() string {
     }
 
     return strings.Join(lines, "\n")
+}
+
+// ── Stats detail (activity heatmap) ──────────────────────────────────────────
+
+func (m model) renderStatsDetail() string {
+    b := getBuilder()
+    defer putBuilder(b)
+
+    now := m.frameTime
+    today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+    counts := make([]int, 30)
+    maxCount := 0
+    total := 0
+    for i := range m.todos {
+        t := &m.todos[i]
+        if t.Status != todo.Done || t.CompletedAt.IsZero() || t.ParentID != "" {
+            continue
+        }
+        d := time.Date(t.CompletedAt.Year(), t.CompletedAt.Month(), t.CompletedAt.Day(), 0, 0, 0, 0, t.CompletedAt.Location())
+        daysAgo := int(today.Sub(d).Hours() / 24)
+        if daysAgo >= 0 && daysAgo < 30 {
+            idx := 29 - daysAgo
+            counts[idx]++
+            total++
+            if counts[idx] > maxCount {
+                maxCount = counts[idx]
+            }
+        }
+    }
+
+    gradLen := len(statsGradient)
+    availW := m.termWidth - 10
+    headerLabel := "  Activity — last 30 days"
+    totalStr := fmt.Sprintf("%d completed", total)
+    padW := availW - len([]rune(headerLabel)) - len([]rune(totalStr))
+    if padW < 1 {
+        padW = 1
+    }
+    b.WriteString(statsHeaderStyle.Render(headerLabel) + strings.Repeat(" ", padW) + dimStyle.Render(totalStr) + "\n\n")
+
+    b.WriteString("  ")
+    for i := 0; i < 30; i++ {
+        count := counts[i]
+        if count == 0 {
+            b.WriteString(dimStyle.Render("░░"))
+        } else {
+            gradIdx := gradLen - 1
+            if maxCount > 1 {
+                gradIdx = int(float64(count-1) / float64(maxCount-1) * float64(gradLen-1))
+                if gradIdx >= gradLen {
+                    gradIdx = gradLen - 1
+                }
+            }
+            b.WriteString(statsGradient[gradIdx].Render("██"))
+        }
+        if i < 29 {
+            b.WriteString(" ")
+        }
+    }
+    b.WriteString("\n")
+
+    b.WriteString("  ")
+    for i := 0; i < 30; i++ {
+        day := today.AddDate(0, 0, -(29 - i))
+        if i%5 == 0 || i == 29 {
+            b.WriteString(dimStyle.Render(day.Format("02")))
+        } else {
+            b.WriteString("  ")
+        }
+        if i < 29 {
+            b.WriteString(" ")
+        }
+    }
+    b.WriteString("\n")
+
+    return b.String()
 }
 
 // ── Build helpers ─────────────────────────────────────────────────────────────
@@ -674,21 +756,12 @@ func (m model) renderTagList() string {
         stats = computeTagStats(m.todos)
     }
 
-    availW := m.termWidth - 8
-
-    counter := fmt.Sprintf("%d/%d", m.tagTabCursor+1, len(tags))
     headerLeft := padRight("  Tag", tagLabelColWidth) + "Progress"
-    padW := m.termWidth - 6 - len([]rune(headerLeft)) - len([]rune(counter)) - barW
+    padW := m.termWidth - 6 - len([]rune(headerLeft)) - barW
     if padW < 1 {
         padW = 1
     }
-    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW+barW)) + counter + "\n")
-
-    sortLabel := "alpha"
-    if m.tagSort == tagSortCount {
-        sortLabel = "count"
-    }
-    b.WriteString(renderSortDivider(availW, sortLabel))
+    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW+barW)) + "\n")
 
     maxVisible := m.estimateListHeight()
     startIdx := m.listOffset
@@ -786,20 +859,13 @@ func (m model) renderLearningList() string {
     }
     textW := availW - dateW - tagsW - 6
 
-    counter := fmt.Sprintf("%d/%d", m.learningCursor+1, len(learnings))
     const prefix = "      "
     headerLeft := prefix + padRight("Learning", textW) + padRight("Tags", tagsW) + "Date"
-    padW := m.termWidth - 6 - len([]rune(headerLeft)) - len([]rune(counter))
+    padW := m.termWidth - 6 - len([]rune(headerLeft))
     if padW < 1 {
         padW = 1
     }
-    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + counter + "\n")
-
-    sortLabel := "date"
-    if m.learningSort == learningSortAlpha {
-        sortLabel = "alpha"
-    }
-    b.WriteString(renderSortDivider(availW, sortLabel))
+    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
 
     maxVisible := m.estimateListHeight()
     startIdx := m.listOffset
@@ -1109,9 +1175,9 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) st
         completedVal = t.CompletedAt.Format("02-01-06")
     }
     titleCol := padRight(truncate(t.Title, titleW), titleW)
-    startCol := padRight(startVal, 10)
-    dueCol := padRight(dueVal, 10)
-    completedCol := padRight(completedVal, 10)
+    startCol := padRight(startVal, 12)
+    dueCol := padRight(dueVal, 12)
+    completedCol := padRight(completedVal, 12)
     tagsPart := m.getRenderedTags(t.Tags)
 
     if index == cursor && active {
@@ -1176,9 +1242,9 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
         dueVal = t.DueDate.Format("02-01-06")
     }
     titleCol := padRight(truncate(title, titleW-1), titleW-1)
-    startCol := padRight(startVal, 10)
-    dueCol := padRight(dueVal, 10)
-    prioCol := padRight(t.Priority.Icon()+" "+t.Priority.String(), 10)
+    startCol := padRight(startVal, 12)
+    dueCol := padRight(dueVal, 12)
+    prioCol := padRight(t.Priority.Icon()+" "+t.Priority.String(), 12)
     tagsPart := m.getRenderedTags(t.Tags)
     line := cursorStr + checkbox + foldIcon + titleCol + startCol + dueCol + prioCol
     switch {
@@ -1211,8 +1277,6 @@ func (m model) renderProjectListContent(projects []string) string {
     defer putBuilder(b)
 
     w := m.termWidth - 8
-    counter := fmt.Sprintf("%d/%d", m.projectCursor+1, len(projects))
-
     projW := m.termWidth * projectColWidthPct / 100
     if projW < minProjColWidth {
         projW = minProjColWidth
@@ -1225,11 +1289,11 @@ func (m model) renderProjectListContent(projects []string) string {
     headerLeft := prefix + padRight("Project", projW) +
         padRight("Active", projCountColWidth) +
         padRight("Done", projDoneColWidth) + "Overdue"
-    padW := w - len([]rune(headerLeft)) - len([]rune(counter))
+    padW := w - len([]rune(headerLeft))
     if padW < 1 {
         padW = 1
     }
-    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + counter + "\n")
+    b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
     b.WriteString(renderPlainDivider(w))
 
     for i, p := range projects {
@@ -1622,7 +1686,7 @@ func (m model) renderGantt(tasks []todo.Todo) string {
         innerSpaces = 1
     }
     timelineHeader := leftDate + strings.Repeat(" ", innerSpaces) + rightDate
-    headerLabel := padRight("  Task", labelW)
+    headerLabel := padRight("  Timeline", labelW)
     b.WriteString(headerStyle.Render(headerLabel+timelineHeader) + "\n")
 
     todayLabel := "today:" + today.Format("02-01")
