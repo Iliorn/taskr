@@ -54,8 +54,6 @@ func (m model) View() string {
     footerLines := 0
     if footerContent != "" {
         footerLines = strings.Count(footerContent, "\n") + 1
-    } else {
-        footerLines = 1
     }
 
     // ── DETAIL (with caching) ────────────────────────────────────────────
@@ -80,7 +78,7 @@ func (m model) View() string {
                 detailLines = detailLines[:maxDetailContent]
                 detailContent = strings.Join(detailLines, "\n")
             }
-            detailContent = detailPanelStyle.Width(w).Render(detailContent)
+            detailContent = detailPanelStyle.Width(w).Render(strings.TrimRight(detailContent, "\n"))
             detailSplit := strings.Split(detailContent, "\n")
             for len(detailSplit) > 0 && strings.TrimSpace(detailSplit[len(detailSplit)-1]) == "" {
                 detailSplit = detailSplit[:len(detailSplit)-1]
@@ -113,7 +111,7 @@ func (m model) View() string {
     }
 
 // ── ASSEMBLE ─────────────────────────────────────────────────────────
-    target := m.termHeight - 1
+    target := m.termHeight
     availableForList := target - li.headerH - detailLineCount - footerLines
     if availableForList < minListHeight {
         availableForList = minListHeight
