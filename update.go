@@ -2,6 +2,7 @@ package main
 
 import (
     "fmt"
+    "os"
     "os/exec"
     "strings"
     "time"
@@ -26,13 +27,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     case clearErrMsg:
         m.err = ""
         return m, nil
+    case updateDoneMsg:
+        if msg.err != nil {
+            m.err = fmt.Sprintf("Update failed: %v", msg.err)
+        } else {
+            m.err = "Updated! Restart taskr to apply."
+        }
+        return m, clearErrAfter()
     case saveDoneMsg:
         return m, nil
     case saveErrMsg:
         m.err = fmt.Sprintf("Error saving tasks: %v", msg.err)
         return m, clearErrAfter()
     case editorFinishedMsg:
-        return m.handleEditorFinished(msg.taskID)
+        return m.handleEditorFinished(msg)
     case saveTickMsg:
         m.saveScheduled = false
         if m.savePending {
@@ -136,15 +144,29 @@ func (m *model) openEditorForNotes() tea.Cmd {
         return clearErrAfter()
     }
 
+    editorCmd := resolveEditorCmd()
+    if editorCmd == "" {
+        m.err = "No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"
+        return clearErrAfter()
+    }
+
     m.editorTaskID = taskID
     filePath := notesFilePath(taskID)
-    c := exec.Command(m.editorCmd, filePath)
+    c := exec.Command(editorCmd, filePath)
+    c.Stdin = os.Stdin
+    c.Stdout = os.Stdout
+    c.Stderr = os.Stderr
     return tea.ExecProcess(c, func(err error) tea.Msg {
-        return editorFinishedMsg{taskID: taskID}
+        return editorFinishedMsg{taskID: taskID, err: err}
     })
 }
 
-func (m model) handleEditorFinished(taskID string) (tea.Model, tea.Cmd) {
+func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
+    if msg.err != nil {
+        m.err = fmt.Sprintf("Editor exited with error: %v", msg.err)
+        return m, clearErrAfter()
+    }
+    taskID := msg.taskID
     content, err := readNotesFile(taskID)
     if err != nil {
         m.err = fmt.Sprintf("Error reading notes: %v", err)
@@ -218,6 +240,11 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
             return m, nil
         case "u":
             return m, m.performUndo()
+        case "U":
+            m.err = "Updating..."
+            return m, func() tea.Msg {
+                return updateDoneMsg{err: selfUpdate()}
+            }
 
         case "n":
             if m.tab == tabTasks && !m.showHistory && m.currentTodo() != nil {
@@ -613,13 +640,22 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
     case "left":
         if m.detail.page > 0 {
             m.detail.page--
-            m.detail.field = fieldStartDate
+            if m.detail.page == 0 {
+                m.detail.field = fieldStartDate
+            } else {
+                m.detail.field = fieldSubtasks
+            }
             m.invalidateDetailCache()
         }
     case "right", "l":
-        if m.detail.page < 1 {
+        if m.detail.page < 2 {
             m.detail.page++
-            m.detail.commentCursor = 0
+            if m.detail.page == 1 {
+                m.detail.field = fieldSubtasks
+                m.detail.subtaskCursor = 0
+            } else {
+                m.detail.commentCursor = 0
+            }
             m.invalidateDetailCache()
         }
 
@@ -632,7 +668,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
         return m.startEditing()
 
     case "d":
-        if m.detail.page == 0 && m.detail.field == fieldSubtasks {
+        if m.detail.page == 1 && m.detail.field == fieldSubtasks {
             if idx := m.currentTodoIndex(); idx >= 0 {
                 if m.detail.subtaskCursor < len(m.todos[idx].SubtaskIDs) {
                     m.toggleSubtask(idx, m.detail.subtaskCursor)
@@ -668,23 +704,31 @@ func (m *model) detailCursorUp() {
             } else {
                 m.detail.field = fieldNotes
             }
+        }
+    } else if m.detail.page == 1 {
+        t := m.currentTodo()
+        switch m.detail.field {
+        case fieldSubtasks:
+            if m.detail.subtaskCursor > 0 {
+                m.detail.subtaskCursor--
+            }
         case fieldDependencies:
             if m.detail.depCursor > 0 {
                 m.detail.depCursor--
             } else {
-                m.detail.field = fieldTags
+                m.detail.field = fieldSubtasks
+                if t != nil && len(t.SubtaskIDs) > 0 {
+                    m.detail.subtaskCursor = len(t.SubtaskIDs) - 1
+                }
             }
         case fieldLearnings:
             if m.detail.learningCursor > 0 {
                 m.detail.learningCursor--
             } else {
                 m.detail.field = fieldDependencies
-            }
-        case fieldSubtasks:
-            if m.detail.subtaskCursor > 0 {
-                m.detail.subtaskCursor--
-            } else {
-                m.detail.field = fieldLearnings
+                if t != nil && len(t.Dependencies) > 0 {
+                    m.detail.depCursor = len(t.Dependencies) - 1
+                }
             }
         }
     } else if m.detail.commentCursor > 0 {
@@ -711,6 +755,14 @@ func (m *model) detailCursorDown() {
         case fieldTags:
             if t != nil && m.detail.tagCursor < len(t.Tags)-1 {
                 m.detail.tagCursor++
+            }
+        }
+    } else if m.detail.page == 1 {
+        t := m.currentTodo()
+        switch m.detail.field {
+        case fieldSubtasks:
+            if t != nil && m.detail.subtaskCursor < len(t.SubtaskIDs)-1 {
+                m.detail.subtaskCursor++
             } else {
                 m.detail.field = fieldDependencies
                 m.detail.depCursor = 0
@@ -725,13 +777,6 @@ func (m *model) detailCursorDown() {
         case fieldLearnings:
             if t != nil && m.detail.learningCursor < len(t.Learnings)-1 {
                 m.detail.learningCursor++
-            } else {
-                m.detail.field = fieldSubtasks
-                m.detail.subtaskCursor = 0
-            }
-        case fieldSubtasks:
-            if t != nil && m.detail.subtaskCursor < len(t.SubtaskIDs)-1 {
-                m.detail.subtaskCursor++
             }
         }
     } else if t := m.currentTodo(); t != nil && m.detail.commentCursor < len(t.Comments)-1 {
@@ -740,7 +785,7 @@ func (m *model) detailCursorDown() {
 }
 
 func (m model) detailAdd() (tea.Model, tea.Cmd) {
-    if m.detail.page == 1 {
+    if m.detail.page == 2 {
         m.mode = modeInput
         m.textInput.SetValue("")
         m.textInput.Placeholder = "Add comment..."
@@ -787,7 +832,7 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
     if idx < 0 {
         return m, nil
     }
-    if m.detail.page == 1 {
+    if m.detail.page == 2 {
         if len(m.todos[idx].Comments) > 0 {
             m.mode = modeConfirmDeleteComment
             m.pendingComment = m.detail.commentCursor
@@ -877,7 +922,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
     }
     t := &m.todos[idx]
 
-    if m.detail.page == 1 {
+    if m.detail.page == 2 {
         if len(t.Comments) > 0 {
             m.mode = modeEditComment
             m.pendingComment = m.detail.commentCursor
@@ -989,7 +1034,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
                     m.markModified()
                 }
             } else if idx := m.currentTodoIndex(); idx >= 0 {
-                if m.detail.page == 1 {
+                if m.detail.page == 2 {
                     if val != "" {
                         m.todos[idx].AddComment(val)
                         m.detail.commentCursor = len(m.todos[idx].Comments) - 1

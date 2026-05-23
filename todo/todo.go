@@ -111,7 +111,7 @@ func New(title string) Todo {
         ID:         uuid.New().String(),
         Title:      title,
         Status:     Pending,
-        Priority:   PriorityLow,
+        Priority:   PriorityMedium,
         CreatedAt:  now,
         ModifiedAt: now,
     }

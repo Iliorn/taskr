@@ -72,13 +72,7 @@ func (m model) View() string {
         }
 
         if detailContent != "" {
-            maxDetailContent := m.termHeight * detailMaxHeightPct / 100
-            detailLines := strings.Split(detailContent, "\n")
-            if len(detailLines) > maxDetailContent {
-                detailLines = detailLines[:maxDetailContent]
-                detailContent = strings.Join(detailLines, "\n")
-            }
-            detailContent = detailPanelStyle.Width(w).Render(strings.TrimRight(detailContent, "\n"))
+            detailContent = detailPanelStyle.Width(w).Render(m.applyDetailScroll(detailContent))
             detailSplit := strings.Split(detailContent, "\n")
             for len(detailSplit) > 0 && strings.TrimSpace(detailSplit[len(detailSplit)-1]) == "" {
                 detailSplit = detailSplit[:len(detailSplit)-1]
@@ -145,7 +139,55 @@ func (m model) View() string {
     }
     return strings.Join(resultLines, "\n")
 
-}// ── Footer builder ────────────────────────────────────────────────────────────
+}// ── Detail scroll ────────────────────────────────────────────────────────────
+
+func (m model) applyDetailScroll(content string) string {
+    maxVisible := m.termHeight*detailMaxHeightPct/100 - 2
+    if maxVisible < 3 {
+        maxVisible = 3
+    }
+    lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+    if len(lines) <= maxVisible {
+        return strings.Join(lines, "\n")
+    }
+
+    cursorLine := m.estimateDetailCursorLine()
+    if cursorLine >= len(lines) {
+        cursorLine = len(lines) - 1
+    }
+
+    scrollStart := cursorLine - 2
+    if scrollStart < 0 {
+        scrollStart = 0
+    }
+    if scrollStart+maxVisible > len(lines) {
+        scrollStart = len(lines) - maxVisible
+    }
+    if scrollStart < 0 {
+        scrollStart = 0
+    }
+    if scrollStart <= 2 {
+        scrollStart = 0
+    }
+    end := scrollStart + maxVisible
+    if end > len(lines) {
+        end = len(lines)
+    }
+
+    visible := make([]string, end-scrollStart)
+    copy(visible, lines[scrollStart:end])
+
+    if scrollStart > 0 {
+        visible[0] = dimStyle.Render(fmt.Sprintf("  ↑ %d more above", scrollStart))
+    }
+    if end < len(lines) {
+        visible[len(visible)-1] = dimStyle.Render(fmt.Sprintf("  ↓ %d more below", len(lines)-end))
+    }
+
+    return strings.Join(visible, "\n")
+}
+
+// ── Footer builder ────────────────────────────────────────────────────────────
 
 
 func (m model) buildFooterContent(w int) string {
@@ -248,7 +290,10 @@ func (m model) buildDetailContent() string {
         if m.detail.page == 0 {
             return m.renderDetailPage1(t)
         }
-        return m.renderDetailPage2(t)
+        if m.detail.page == 1 {
+            return m.renderDetailPage2(t)
+        }
+        return m.renderDetailPage3(t)
     }
 }
 
@@ -388,6 +433,9 @@ func (m model) renderHelpFullscreen() string {
         }},
         {"Stats (tab 5)", [][2]string{
             {"5 or tab", "switch to stats view"},
+        }},
+        {"App", [][2]string{
+            {"U", "self-update to latest release"},
         }},
         {"Date input", [][2]string{
             {"dd-mm-yy", "exact date (e.g. 15-06-25)"},
@@ -858,7 +906,7 @@ func (m model) renderStatsList() string {
     availW := m.termWidth - 8
     gradLen := len(statsGradient)
 
-    b.WriteString(statsHeaderStyle.Render("  📊 Productivity Stats") + "\n")
+    b.WriteString(statsHeaderStyle.Render("  Productivity Stats") + "\n")
     b.WriteString(renderPlainDivider(availW))
 
     b.WriteString(statsHeaderStyle.Render("  Overview") + "\n")
@@ -1117,7 +1165,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
         title += " !"
     }
     if t.Notes != "" {
-        title += " 📝"
+        title += " ¶"
     }
     startVal := ""
     if !t.StartDate.IsZero() {
@@ -1262,7 +1310,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
         return cur + paddedLabel + v
     }
 
-    indicator := "[1/2]"
+    indicator := "[1/3]"
     titleText := truncate(t.Title, availableW-len(indicator)-2)
     padW := availableW - len([]rune(titleText)) - len([]rune(indicator))
     if padW < 1 {
@@ -1334,6 +1382,62 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
             }
         }
     }
+
+    return b.String()
+}
+
+func (m model) renderDetailPage2(t *todo.Todo) string {
+    b := getBuilder()
+    defer putBuilder(b)
+
+    availableW := m.termWidth - 8
+    isDetailFocused := m.pane == paneDetail && m.detail.page == 1
+
+    indicator := "[2/3]"
+    titleText := truncate(t.Title, availableW-len(indicator)-2)
+    padW := availableW - len([]rune(titleText)) - len([]rune(indicator))
+    if padW < 1 {
+        padW = 1
+    }
+    b.WriteString(detailTitleStyle.Render(titleText) +
+        strings.Repeat(" ", padW) +
+        pageIndicatorStyle.Render(indicator) + "\n\n")
+
+    subtaskCur := "  "
+    if isDetailFocused && m.detail.field == fieldSubtasks {
+        subtaskCur = "▶ "
+    }
+    b.WriteString(subtaskCur + detailLabelStyle.Render("Subtasks:") + "\n")
+    if len(t.SubtaskIDs) == 0 {
+        b.WriteString("  " + detailValueStyle.Render("No subtasks. Press 'a' to add one.") + "\n")
+    } else {
+        for i, subID := range t.SubtaskIDs {
+            sub := m.findTodoByID(subID)
+            pfx := "  "
+            isSubSelected := isDetailFocused && m.detail.field == fieldSubtasks && i == m.detail.subtaskCursor
+            if isSubSelected {
+                pfx = "▶ "
+            }
+            if sub == nil {
+                b.WriteString(dimStyle.Render(fmt.Sprintf("%s[?] unknown subtask", pfx)) + "\n")
+                continue
+            }
+            if sub.Status == todo.Done {
+                if isSubSelected {
+                    b.WriteString(detailSelectedStyle.Render(pfx+"[") + checkDoneStyle.Render("✓") + detailSelectedStyle.Render("] "+truncate(sub.Title, availableW-8)) + "\n")
+                } else {
+                    b.WriteString(dimStyle.Render(pfx+"[") + checkDoneStyle.Render("✓") + dimStyle.Render("] "+truncate(sub.Title, availableW-8)) + "\n")
+                }
+            } else {
+                line := fmt.Sprintf("%s[ ] %s", pfx, truncate(sub.Title, availableW-8))
+                if isSubSelected {
+                    b.WriteString(detailSelectedStyle.Render(line) + "\n")
+                } else {
+                    b.WriteString(detailValueStyle.Render(line) + "\n")
+                }
+            }
+        }
+    }
     b.WriteString("\n")
 
     depCur := "  "
@@ -1398,48 +1502,11 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
             }
         }
     }
-    b.WriteString("\n")
-
-    subtaskCur := "  "
-    if isDetailFocused && m.detail.field == fieldSubtasks {
-        subtaskCur = "▶ "
-    }
-    b.WriteString(subtaskCur + detailLabelStyle.Render("Subtasks:") + "\n")
-    if len(t.SubtaskIDs) == 0 {
-        b.WriteString("  " + detailValueStyle.Render("No subtasks. Press 'a' to add one.") + "\n")
-    } else {
-        for i, subID := range t.SubtaskIDs {
-            sub := m.findTodoByID(subID)
-            pfx := "  "
-            isSubSelected := isDetailFocused && m.detail.field == fieldSubtasks && i == m.detail.subtaskCursor
-            if isSubSelected {
-                pfx = "▶ "
-            }
-            if sub == nil {
-                b.WriteString(dimStyle.Render(fmt.Sprintf("%s[?] unknown subtask", pfx)) + "\n")
-                continue
-            }
-            if sub.Status == todo.Done {
-                if isSubSelected {
-                    b.WriteString(detailSelectedStyle.Render(pfx+"[") + checkDoneStyle.Render("✓") + detailSelectedStyle.Render("] "+truncate(sub.Title, availableW-8)) + "\n")
-                } else {
-                    b.WriteString(dimStyle.Render(pfx+"[") + checkDoneStyle.Render("✓") + dimStyle.Render("] "+truncate(sub.Title, availableW-8)) + "\n")
-                }
-            } else {
-                line := fmt.Sprintf("%s[ ] %s", pfx, truncate(sub.Title, availableW-8))
-                if isSubSelected {
-                    b.WriteString(detailSelectedStyle.Render(line) + "\n")
-                } else {
-                    b.WriteString(detailValueStyle.Render(line) + "\n")
-                }
-            }
-        }
-    }
 
     return b.String()
 }
 
-func (m model) renderDetailPage2(t *todo.Todo) string {
+func (m model) renderDetailPage3(t *todo.Todo) string {
     b := getBuilder()
     defer putBuilder(b)
 
@@ -1448,7 +1515,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
     if innerW < minInnerWidth {
         innerW = minInnerWidth
     }
-    indicator := "[2/2]"
+    indicator := "[3/3]"
     titleText := truncate(t.Title, availableW-len(indicator)-2)
     padW := availableW - len([]rune(titleText)) - len([]rune(indicator))
     if padW < 1 {
@@ -1457,7 +1524,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
     b.WriteString(detailTitleStyle.Render(titleText) +
         strings.Repeat(" ", padW) +
         pageIndicatorStyle.Render(indicator) + "\n\n")
-    isDetailFocused := m.pane == paneDetail && m.detail.page == 1
+    isDetailFocused := m.pane == paneDetail && m.detail.page == 2
     commentCur := "  "
     if isDetailFocused {
         commentCur = "▶ "

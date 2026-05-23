@@ -2,9 +2,11 @@ package main
 
 import (
     "fmt"
+    "io"
     "os"
     "os/exec"
     "path/filepath"
+    "runtime"
     "strings"
     "sync"
     "time"
@@ -157,12 +159,16 @@ func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistor
 
 func resolveEditorCmd() string {
     if editor := os.Getenv("EDITOR"); editor != "" {
-        return editor
+        if path, err := exec.LookPath(editor); err == nil {
+            return path
+        }
     }
-    if _, err := exec.LookPath("hx"); err == nil {
-        return "hx"
+    for _, candidate := range []string{"hx", "helix", "nvim", "vim", "nano"} {
+        if path, err := exec.LookPath(candidate); err == nil {
+            return path
+        }
     }
-    return "notepad"
+    return ""
 }
 
 func getEditorCmd() string {
@@ -306,4 +312,52 @@ func getBuilder() *strings.Builder {
 
 func putBuilder(b *strings.Builder) {
     builderPool.Put(b)
+}
+
+// ── Self-update ───────────────────────────────────────────────────────────────
+
+func selfUpdate() error {
+    execPath, err := os.Executable()
+    if err != nil {
+        return fmt.Errorf("could not determine executable path: %w", err)
+    }
+    execPath, err = filepath.EvalSymlinks(execPath)
+    if err != nil {
+        return fmt.Errorf("could not resolve executable path: %w", err)
+    }
+
+    tmpFile := execPath + ".new"
+    defer os.Remove(tmpFile)
+
+    var downloadArgs []string
+    if runtime.GOOS == "windows" {
+        downloadArgs = []string{"release", "download", "--repo", "luciphere/taskr", "--pattern", "taskr.exe", "-D", filepath.Dir(tmpFile), "--clobber"}
+        tmpFile = filepath.Join(filepath.Dir(execPath), "taskr.exe.new")
+    } else {
+        downloadArgs = []string{"release", "download", "--repo", "luciphere/taskr", "--pattern", "taskr", "-D", os.TempDir(), "--clobber"}
+        tmpFile = filepath.Join(os.TempDir(), "taskr")
+    }
+
+    cmd := exec.Command("gh", downloadArgs...)
+    if out, err := cmd.CombinedOutput(); err != nil {
+        return fmt.Errorf("download failed: %s", strings.TrimSpace(string(out)))
+    }
+
+    src, err := os.Open(tmpFile)
+    if err != nil {
+        return fmt.Errorf("could not open downloaded file: %w", err)
+    }
+    defer src.Close()
+
+    dst, err := os.OpenFile(execPath, os.O_WRONLY|os.O_TRUNC, 0755)
+    if err != nil {
+        return fmt.Errorf("could not write to %s (try sudo): %w", execPath, err)
+    }
+    defer dst.Close()
+
+    if _, err := io.Copy(dst, src); err != nil {
+        return fmt.Errorf("could not replace binary: %w", err)
+    }
+
+    return nil
 }

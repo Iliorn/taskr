@@ -99,8 +99,12 @@ const (
 type clearErrMsg struct{}
 type saveDoneMsg struct{}
 type saveErrMsg struct{ err error }
-type editorFinishedMsg struct{ taskID string }
+type editorFinishedMsg struct {
+    taskID string
+    err    error
+}
 type saveTickMsg struct{}
+type updateDoneMsg struct{ err error }
 
 // ── Sub-state structs ─────────────────────────────────────────────────────────
 
@@ -930,6 +934,69 @@ func (m *model) renameProjectGlobally(oldName, newName string) {
     }
 }
 
+// ── Detail scroll estimation ──────────────────────────────────────────────────
+
+func (m model) estimateDetailCursorLine() int {
+    t := m.currentTodo()
+    if t == nil {
+        return 0
+    }
+    switch m.detail.page {
+    case 0:
+        line := 2 // title + blank
+        switch m.detail.field {
+        case fieldStartDate:
+            return line
+        case fieldDueDate:
+            return line + 1
+        case fieldPriority:
+            return line + 2
+        case fieldProject:
+            return line + 3
+        case fieldNotes:
+            return line + 4
+        default: // fieldTags
+            line += 7 // start, due, priority, project, notes, created, modified
+            if t.Status == todo.Done && !t.CompletedAt.IsZero() {
+                line++
+            }
+            line += 2 // blank + tags label
+            return line + m.detail.tagCursor
+        }
+    case 1:
+        line := 3 // title + blank + subtasks label
+        switch m.detail.field {
+        case fieldSubtasks:
+            return line + m.detail.subtaskCursor
+        case fieldDependencies:
+            if len(t.SubtaskIDs) == 0 {
+                line++
+            } else {
+                line += len(t.SubtaskIDs)
+            }
+            line += 2 // blank + deps label
+            return line + m.detail.depCursor
+        default: // fieldLearnings
+            if len(t.SubtaskIDs) == 0 {
+                line++
+            } else {
+                line += len(t.SubtaskIDs)
+            }
+            line++
+            if len(t.Dependencies) == 0 {
+                line++
+            } else {
+                line += len(t.Dependencies)
+            }
+            line += 2 // blank + learnings label
+            return line + m.detail.learningCursor
+        }
+    case 2:
+        return 3 + m.detail.commentCursor // title + blank + comments label
+    }
+    return 0
+}
+
 // ── List offset clamping ──────────────────────────────────────────────────────
 
 func (m *model) clampListOffset(listLen int) {
@@ -953,9 +1020,14 @@ func (m *model) clampListOffset(listLen int) {
 }
 
 func (m model) listVisible() int {
-    contentH := m.detailPage1ContentHeight()
-    if m.detail.page != 0 {
+    var contentH int
+    switch m.detail.page {
+    case 1:
         contentH = m.detailPage2ContentHeight()
+    case 2:
+        contentH = m.detailPage3ContentHeight()
+    default:
+        contentH = m.detailPage1ContentHeight()
     }
     if maxH := m.maxDetailHeight(); contentH > maxH {
         contentH = maxH
@@ -1019,11 +1091,6 @@ func (m model) detailPage1ContentHeight() int {
     } else {
         lines += 1 + len(t.Tags)
     }
-    if len(t.Dependencies) == 0 {
-        lines += 2
-    } else {
-        lines += 1 + len(t.Dependencies)
-    }
     if t.Status == todo.Done && !t.CompletedAt.IsZero() {
         lines++
     }
@@ -1031,6 +1098,32 @@ func (m model) detailPage1ContentHeight() int {
 }
 
 func (m model) detailPage2ContentHeight() int {
+    t := m.currentTodo()
+    if t == nil {
+        return 1
+    }
+    lines := 3 // title + blank + subtasks label
+    if len(t.SubtaskIDs) == 0 {
+        lines += 2
+    } else {
+        lines += 1 + len(t.SubtaskIDs)
+    }
+    lines++ // blank
+    if len(t.Dependencies) == 0 {
+        lines += 2
+    } else {
+        lines += 1 + len(t.Dependencies)
+    }
+    lines++ // blank
+    if len(t.Learnings) == 0 {
+        lines += 2
+    } else {
+        lines += 1 + len(t.Learnings)
+    }
+    return lines
+}
+
+func (m model) detailPage3ContentHeight() int {
     t := m.currentTodo()
     if t == nil {
         return 1
