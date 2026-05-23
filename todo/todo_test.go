@@ -16,8 +16,8 @@ func TestNew(t *testing.T) {
     if task.Status != Pending {
         t.Errorf("Status = %v, want Pending", task.Status)
     }
-    if task.Priority != PriorityLow {
-        t.Errorf("Priority = %v, want PriorityLow", task.Priority)
+    if task.Priority != PriorityMedium {
+        t.Errorf("Priority = %v, want PriorityMedium", task.Priority)
     }
     if task.ID == "" {
         t.Error("ID should not be empty")
