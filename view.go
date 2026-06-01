@@ -495,69 +495,101 @@ func (m model) renderStatsDetail() string {
     now := m.frameTime
     today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
-    counts := make([]int, 30)
-    maxCount := 0
+    // One bar per day, always filling the full inner panel width.
+    innerW := m.termWidth - 8
+    numDays := innerW
+    if numDays < 14 {
+        numDays = 14
+    }
+
+    // Daily counts: index 0 = oldest, index numDays-1 = today.
+    dayCounts := make([]int, numDays)
     total := 0
+    maxCount := 0
     for i := range m.todos {
         t := &m.todos[i]
         if t.Status != todo.Done || t.CompletedAt.IsZero() || t.ParentID != "" {
             continue
         }
-        d := time.Date(t.CompletedAt.Year(), t.CompletedAt.Month(), t.CompletedAt.Day(), 0, 0, 0, 0, t.CompletedAt.Location())
+        d := time.Date(t.CompletedAt.Year(), t.CompletedAt.Month(), t.CompletedAt.Day(),
+            0, 0, 0, 0, t.CompletedAt.Location())
         daysAgo := int(today.Sub(d).Hours() / 24)
-        if daysAgo >= 0 && daysAgo < 30 {
-            idx := 29 - daysAgo
-            counts[idx]++
+        if daysAgo >= 0 && daysAgo < numDays {
+            idx := numDays - 1 - daysAgo
+            dayCounts[idx]++
             total++
-            if counts[idx] > maxCount {
-                maxCount = counts[idx]
+            if dayCounts[idx] > maxCount {
+                maxCount = dayCounts[idx]
             }
         }
     }
 
-    gradLen := len(statsGradient)
-    availW := m.termWidth - 10
-    headerLabel := "  Activity — last 30 days"
-    totalStr := fmt.Sprintf("%d completed", total)
-    padW := availW - len([]rune(headerLabel)) - len([]rune(totalStr))
-    if padW < 1 {
-        padW = 1
+    // Header.
+    headerText := fmt.Sprintf("Activity — %d days", numDays)
+    totalText := fmt.Sprintf("%d completed", total)
+    spacer := innerW - len([]rune(headerText)) - len([]rune(totalText))
+    if spacer < 1 {
+        spacer = 1
     }
-    b.WriteString(statsHeaderStyle.Render(headerLabel) + strings.Repeat(" ", padW) + dimStyle.Render(totalStr) + "\n\n")
+    b.WriteString(statsHeaderStyle.Render(headerText) + strings.Repeat(" ", spacer) + dimStyle.Render(totalText) + "\n")
 
-    b.WriteString("  ")
-    for i := 0; i < 30; i++ {
-        count := counts[i]
-        if count == 0 {
-            b.WriteString(dimStyle.Render("░░"))
-        } else {
-            gradIdx := gradLen - 1
-            if maxCount > 1 {
-                gradIdx = int(float64(count-1) / float64(maxCount-1) * float64(gradLen-1))
-                if gradIdx >= gradLen {
-                    gradIdx = gradLen - 1
+    // Bar chart: 6 rows tall, 1 char wide per day, no gaps.
+    // Vertical gradient — darker at base, brighter at peak.
+    const barH = 6
+    gradLen := len(statsGradient)
+    topBlocks := [9]string{" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
+
+    for row := barH; row >= 1; row-- {
+        colorIdx := (row - 1) * (gradLen - 1) / (barH - 1)
+        style := statsGradient[colorIdx]
+        for d := 0; d < numDays; d++ {
+            count := dayCounts[d]
+            if count == 0 {
+                if row == 1 {
+                    b.WriteString(dimStyle.Render("▁"))
+                } else {
+                    b.WriteString(" ")
+                }
+                continue
+            }
+            barHeight := float64(count) / float64(maxCount) * float64(barH)
+            fRow := float64(row)
+            if fRow-1 >= barHeight {
+                b.WriteString(" ")
+            } else if fRow <= barHeight {
+                b.WriteString(style.Render("█"))
+            } else {
+                // Partial top block.
+                frac := barHeight - (fRow - 1)
+                blockIdx := int(frac * 8)
+                if blockIdx < 1 {
+                    blockIdx = 1
+                }
+                b.WriteString(style.Render(topBlocks[blockIdx]))
+            }
+        }
+        b.WriteString("\n")
+    }
+
+    // Divider + month labels.
+    b.WriteString(dimStyle.Render(strings.Repeat("─", numDays)) + "\n")
+    labelRunes := make([]rune, numDays)
+    for i := range labelRunes {
+        labelRunes[i] = ' '
+    }
+    prevMonth := time.Month(0)
+    for d := 0; d < numDays; d++ {
+        day := today.AddDate(0, 0, -(numDays-1-d))
+        if day.Month() != prevMonth {
+            for j, ch := range []rune(day.Format("Jan")) {
+                if d+j < numDays {
+                    labelRunes[d+j] = ch
                 }
             }
-            b.WriteString(statsGradient[gradIdx].Render("██"))
-        }
-        if i < 29 {
-            b.WriteString(" ")
+            prevMonth = day.Month()
         }
     }
-    b.WriteString("\n")
-
-    b.WriteString("  ")
-    for i := 0; i < 30; i++ {
-        day := today.AddDate(0, 0, -(29 - i))
-        if i%5 == 0 || i == 29 {
-            b.WriteString(dimStyle.Render(day.Format("02")))
-        } else {
-            b.WriteString("  ")
-        }
-        if i < 29 {
-            b.WriteString(" ")
-        }
-    }
+    b.WriteString(dimStyle.Render(string(labelRunes)) + "\n")
     b.WriteString("\n")
 
     return b.String()

@@ -240,6 +240,8 @@ func initialModel() model {
         errMsg = fmt.Sprintf("Error loading tasks: %v", err)
     }
 
+    settings := loadSettings()
+
     m := model{
         todos:               todos,
         textInput:           ti,
@@ -255,9 +257,9 @@ func initialModel() model {
         termWidth:           80,
         termHeight:          24,
         err:                 errMsg,
-        tagSort:             tagSortAlpha,
-        taskSort:            taskSortDueDate,
-        learningSort:        learningSortDate,
+        tagSort:             settings.TagSort,
+        taskSort:            settings.TaskSort,
+        learningSort:        settings.LearningSort,
         expandedTasks:       make(map[string]bool),
         editorCmd:           resolveEditorCmd(),
         frameTime:           time.Now(),

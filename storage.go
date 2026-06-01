@@ -16,6 +16,39 @@ func getStoragePath() string {
     return filepath.Join(home, ".taskr", "tasks.json")
 }
 
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+type appSettings struct {
+    TaskSort     taskSortMode     `json:"task_sort"`
+    TagSort      tagSortMode      `json:"tag_sort"`
+    LearningSort learningSortMode `json:"learning_sort"`
+}
+
+func settingsPath() string {
+    home, _ := os.UserHomeDir()
+    return filepath.Join(home, ".taskr", "settings.json")
+}
+
+func loadSettings() appSettings {
+    data, err := os.ReadFile(settingsPath())
+    if err != nil {
+        return appSettings{}
+    }
+    var s appSettings
+    if err := json.Unmarshal(data, &s); err != nil {
+        return appSettings{}
+    }
+    return s
+}
+
+func saveSettings(s appSettings) {
+    data, err := json.Marshal(s)
+    if err != nil {
+        return
+    }
+    _ = os.WriteFile(settingsPath(), data, 0644)
+}
+
 func ensureStorageDir() error {
     path := getStoragePath()
     dir := filepath.Dir(path)

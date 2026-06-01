@@ -426,6 +426,11 @@ func (m *model) cycleSortMode() {
         }
         m.learningCursor = 0
     }
+    saveSettings(appSettings{
+        TaskSort:     m.taskSort,
+        TagSort:      m.tagSort,
+        LearningSort: m.learningSort,
+    })
 }
 
 func (m *model) handleListEsc() {
