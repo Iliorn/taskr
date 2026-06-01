@@ -92,23 +92,18 @@ var (
     dimStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("#555555"))
 
-listPanelStyle = lipgloss.NewStyle().
-    Border(lipgloss.RoundedBorder()).
-    BorderForeground(lipgloss.Color("#FFFFFF")).
-    Padding(0, 1).
-    MarginLeft(2)
+    listPanelStyle = lipgloss.NewStyle().
+        Border(lipgloss.RoundedBorder()).
+        BorderForeground(lipgloss.Color("#FFFFFF")).
+        Padding(0, 1).
+        MarginLeft(2)
 
-detailPanelStyle = lipgloss.NewStyle().
-    Border(lipgloss.RoundedBorder()).
-    BorderForeground(lipgloss.Color("#FFFFFF")).
-    Padding(0, 1).
-    MarginLeft(2)
+    detailPanelStyle = lipgloss.NewStyle().
+        Border(lipgloss.RoundedBorder()).
+        BorderForeground(lipgloss.Color("#FFFFFF")).
+        Padding(0, 1).
+        MarginLeft(2)
 
-projectListPanelStyle = lipgloss.NewStyle().
-    Border(lipgloss.RoundedBorder()).
-    BorderForeground(lipgloss.Color("#333333")).
-    Padding(0, 1).
-    MarginLeft(2)
 
     ganttTodayStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("#FF9E64")).
@@ -148,9 +143,6 @@ projectListPanelStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("#FF9E64")).
         Bold(true)
 
-    tagSortIndicatorStyle = lipgloss.NewStyle().
-        Foreground(lipgloss.Color("#d480f0")).
-        Bold(true)
 
     learningStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("#FFE66D")).
@@ -160,13 +152,7 @@ projectListPanelStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("#FFF5A0")).
         Bold(true)
 
-    learningSortIndicatorStyle = lipgloss.NewStyle().
-        Foreground(lipgloss.Color("#FFE66D")).
-        Bold(true)
 
-    statsStyle = lipgloss.NewStyle().
-        Foreground(lipgloss.Color("#78D4FF")).
-        Bold(true)
 
     statsHeaderStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("#78D4FF")).

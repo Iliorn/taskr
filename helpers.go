@@ -172,9 +172,6 @@ func resolveEditorCmd() string {
     return ""
 }
 
-func getEditorCmd() string {
-    return resolveEditorCmd()
-}
 
 func notesFilePath(taskID string) string {
     home, _ := os.UserHomeDir()
@@ -361,4 +358,106 @@ func selfUpdate() error {
     }
 
     return nil
+}
+
+// ── Date parsing ─────────────────────────────────────────────────────────────
+
+// parseDueDate accepts dd-mm-yy, dd-mm-yyyy, and natural language shortcuts.
+func parseDueDate(s string) (time.Time, error) {
+    lower := strings.ToLower(strings.TrimSpace(s))
+    now := time.Now()
+    today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+    switch lower {
+    case "today":
+        return today, nil
+    case "tomorrow":
+        return today.AddDate(0, 0, 1), nil
+    case "yesterday":
+        return today.AddDate(0, 0, -1), nil
+    case "next week":
+        return today.AddDate(0, 0, 7), nil
+    case "next month":
+        return today.AddDate(0, 1, 0), nil
+    }
+
+    if strings.HasPrefix(lower, "next ") {
+        dayName := strings.TrimPrefix(lower, "next ")
+        if weekday, ok := parseWeekday(dayName); ok {
+            return nextWeekday(today, weekday), nil
+        }
+    }
+
+    if weekday, ok := parseWeekday(lower); ok {
+        return nextWeekday(today, weekday), nil
+    }
+
+    if strings.HasPrefix(lower, "+") && len(lower) > 2 {
+        unit := lower[len(lower)-1]
+        numStr := lower[1 : len(lower)-1]
+        if n, ok := parsePositiveInt(numStr); ok && n > 0 {
+            switch unit {
+            case 'd':
+                return today.AddDate(0, 0, n), nil
+            case 'w':
+                return today.AddDate(0, 0, n*7), nil
+            case 'm':
+                return today.AddDate(0, n, 0), nil
+            }
+        }
+    }
+
+    if t, err := time.Parse("02-01-06", s); err == nil {
+        return t, nil
+    }
+    if t, err := time.Parse("02-01-2006", s); err == nil {
+        return t, nil
+    }
+    return time.Time{}, fmt.Errorf("invalid date: use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+Nd/+Nw/+Nm'")
+}
+
+func parseWeekday(s string) (time.Weekday, bool) {
+    days := map[string]time.Weekday{
+        "monday":    time.Monday,
+        "tuesday":   time.Tuesday,
+        "wednesday": time.Wednesday,
+        "thursday":  time.Thursday,
+        "friday":    time.Friday,
+        "saturday":  time.Saturday,
+        "sunday":    time.Sunday,
+        "mon":       time.Monday,
+        "tue":       time.Tuesday,
+        "wed":       time.Wednesday,
+        "thu":       time.Thursday,
+        "fri":       time.Friday,
+        "sat":       time.Saturday,
+        "sun":       time.Sunday,
+    }
+    if wd, ok := days[s]; ok {
+        return wd, true
+    }
+    return 0, false
+}
+
+func nextWeekday(today time.Time, target time.Weekday) time.Time {
+    current := today.Weekday()
+    daysAhead := int(target) - int(current)
+    if daysAhead <= 0 {
+        daysAhead += 7
+    }
+    return today.AddDate(0, 0, daysAhead)
+}
+
+func parsePositiveInt(s string) (int, bool) {
+    if len(s) == 0 {
+        return 0, false
+    }
+    n := 0
+    for _, ch := range s {
+        if ch < '0' || ch > '9' {
+            return 0, false
+        }
+        n = n*10 + int(ch-'0')
+    }
+    return n, true
 }
