@@ -145,13 +145,17 @@ func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistor
     var headerLeft string
     if isHistory {
         headerLeft = prefix + padRight("Completed tasks", titleW) + padRight("Start", 12) +
-            padRight("Due", 12) + padRight("Completed", 12) + "Tags"
+            padRight("Due", 12) + padRight("Completed", 12)
     } else {
-        headerLeft = prefix + padRight("Task", titleW) + startLabel + dueLabel + prioLabel + "Tags"
+        headerLeft = prefix + padRight("Task", titleW) + startLabel + dueLabel + prioLabel
     }
-    padW := termWidth - 6 - len([]rune(headerLeft))
-    if padW < 1 {
-        padW = 1
+    padW := termWidth - 8 - len([]rune(headerLeft))
+    if padW >= 4 {
+        headerLeft += "Tags"
+        padW -= 4
+    }
+    if padW < 0 {
+        padW = 0
     }
     b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
 }

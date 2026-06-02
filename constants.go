@@ -30,7 +30,7 @@ const (
     projDoneColWidth    = 10
     commentPrefixLen    = 22
     detailLabelColWidth = 14
-    titleColFixedCols   = 48
+    titleColFixedCols   = 50
 
     maxDepSearchResults  = 5
     maxTagSearchResults  = 5

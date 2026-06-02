@@ -105,8 +105,10 @@ func (m model) View() string {
     }
 
     // ── ASSEMBLE ─────────────────────────────────────────────────────────
+    // Remove from second-to-last so the bottom border is always preserved.
     for len(listSplit) > availableForList {
-        listSplit = listSplit[:len(listSplit)-1]
+        n := len(listSplit)
+        listSplit = append(listSplit[:n-2], listSplit[n-1:]...)
     }
     for len(listSplit) < availableForList {
         listSplit = append(listSplit, "")
@@ -174,10 +176,10 @@ func (m model) applyDetailScroll(content string) string {
     copy(visible, lines[scrollStart:end])
 
     if scrollStart > 0 {
-        visible[0] = dimStyle.Render(fmt.Sprintf("  ↑ %d more above", scrollStart))
+        visible[0] = dimStyle.Render("  (...)")
     }
     if end < len(lines) {
-        visible[len(visible)-1] = dimStyle.Render(fmt.Sprintf("  ↓ %d more below", len(lines)-end))
+        visible[len(visible)-1] = dimStyle.Render("  (...)")
     }
 
     return strings.Join(visible, "\n")
@@ -495,15 +497,20 @@ func (m model) renderStatsDetail() string {
     now := m.frameTime
     today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
-    // One bar per day, always filling the full inner panel width.
+    // Each column = 1 cell (▄) + 1 space gap = 2 chars, last column = 1 char.
+    // 2 chars reserved for day labels on the left.
     innerW := m.termWidth - 8
-    numDays := innerW
-    if numDays < 14 {
-        numDays = 14
+    numWeeks := (innerW - 2 + 1) / 2
+    if numWeeks < 6 {
+        numWeeks = 6
     }
 
-    // Daily counts: index 0 = oldest, index numDays-1 = today.
-    dayCounts := make([]int, numDays)
+    // Start on the Monday of the week numWeeks-1 weeks ago.
+    // (weekday+6)%7 converts Go's Sun=0..Sat=6 to Mon=0..Sun=6.
+    startMonday := today.AddDate(0, 0, -((int(today.Weekday())+6)%7 + (numWeeks-1)*7))
+
+    // Count completions per calendar day.
+    counts := make(map[string]int)
     total := 0
     maxCount := 0
     for i := range m.todos {
@@ -513,19 +520,20 @@ func (m model) renderStatsDetail() string {
         }
         d := time.Date(t.CompletedAt.Year(), t.CompletedAt.Month(), t.CompletedAt.Day(),
             0, 0, 0, 0, t.CompletedAt.Location())
-        daysAgo := int(today.Sub(d).Hours() / 24)
-        if daysAgo >= 0 && daysAgo < numDays {
-            idx := numDays - 1 - daysAgo
-            dayCounts[idx]++
+        if !d.Before(startMonday) && !d.After(today) {
+            key := d.Format("2006-01-02")
+            counts[key]++
             total++
-            if dayCounts[idx] > maxCount {
-                maxCount = dayCounts[idx]
+            if counts[key] > maxCount {
+                maxCount = counts[key]
             }
         }
     }
 
+    gradLen := len(statsGradient)
+
     // Header.
-    headerText := fmt.Sprintf("Activity — %d days", numDays)
+    headerText := fmt.Sprintf("Activity — %d weeks", numWeeks)
     totalText := fmt.Sprintf("%d completed", total)
     spacer := innerW - len([]rune(headerText)) - len([]rune(totalText))
     if spacer < 1 {
@@ -533,63 +541,63 @@ func (m model) renderStatsDetail() string {
     }
     b.WriteString(statsHeaderStyle.Render(headerText) + strings.Repeat(" ", spacer) + dimStyle.Render(totalText) + "\n")
 
-    // Bar chart: 6 rows tall, 1 char wide per day, no gaps.
-    // Vertical gradient — darker at base, brighter at peak.
-    const barH = 6
-    gradLen := len(statsGradient)
-    topBlocks := [9]string{" ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
-
-    for row := barH; row >= 1; row-- {
-        colorIdx := (row - 1) * (gradLen - 1) / (barH - 1)
-        style := statsGradient[colorIdx]
-        for d := 0; d < numDays; d++ {
-            count := dayCounts[d]
-            if count == 0 {
-                if row == 1 {
-                    b.WriteString(dimStyle.Render("▁"))
-                } else {
-                    b.WriteString(" ")
-                }
-                continue
-            }
-            barHeight := float64(count) / float64(maxCount) * float64(barH)
-            fRow := float64(row)
-            if fRow-1 >= barHeight {
-                b.WriteString(" ")
-            } else if fRow <= barHeight {
-                b.WriteString(style.Render("█"))
-            } else {
-                // Partial top block.
-                frac := barHeight - (fRow - 1)
-                blockIdx := int(frac * 8)
-                if blockIdx < 1 {
-                    blockIdx = 1
-                }
-                b.WriteString(style.Render(topBlocks[blockIdx]))
-            }
-        }
-        b.WriteString("\n")
-    }
-
-    // Divider + month labels.
-    b.WriteString(dimStyle.Render(strings.Repeat("─", numDays)) + "\n")
-    labelRunes := make([]rune, numDays)
+    // Month labels: placed at the column where each new month begins.
+    // Grid width = numWeeks*2 - 1; each column starts at w*2.
+    gridW := numWeeks*2 - 1
+    labelRunes := make([]rune, gridW)
     for i := range labelRunes {
         labelRunes[i] = ' '
     }
     prevMonth := time.Month(0)
-    for d := 0; d < numDays; d++ {
-        day := today.AddDate(0, 0, -(numDays-1-d))
-        if day.Month() != prevMonth {
-            for j, ch := range []rune(day.Format("Jan")) {
-                if d+j < numDays {
-                    labelRunes[d+j] = ch
+    for w := 0; w < numWeeks; w++ {
+        weekMon := startMonday.AddDate(0, 0, w*7)
+        if weekMon.Month() != prevMonth {
+            pos := w * 2
+            if pos+3 > gridW {
+                pos = gridW - 3
+            }
+            if pos >= 0 {
+                for j, ch := range []rune(weekMon.Format("Jan")) {
+                    labelRunes[pos+j] = ch
                 }
             }
-            prevMonth = day.Month()
+            prevMonth = weekMon.Month()
         }
     }
-    b.WriteString(dimStyle.Render(string(labelRunes)) + "\n")
+    b.WriteString("  " + dimStyle.Render(string(labelRunes)) + "\n")
+
+    // 7 day rows (Sunday first). ▄ = lower-half block: the empty upper half
+    // of each character acts as a natural row separator, giving a grid look.
+    // dow 1=Mon, 3=Wed, 5=Fri get a single-char label; others get a space.
+    // dow 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+    dayLabels := [7]string{"m", " ", "w", " ", "f", " ", " "}
+    for dow := 0; dow < 7; dow++ {
+        b.WriteString(dimStyle.Render(dayLabels[dow]) + " ")
+        for w := 0; w < numWeeks; w++ {
+            day := startMonday.AddDate(0, 0, w*7+dow)
+            if day.After(today) {
+                b.WriteString(" ")
+            } else {
+                count := counts[day.Format("2006-01-02")]
+                if count == 0 {
+                    b.WriteString(dimStyle.Render("▄"))
+                } else {
+                    gradIdx := gradLen - 1
+                    if maxCount > 1 {
+                        gradIdx = int(float64(count-1) / float64(maxCount-1) * float64(gradLen-1))
+                        if gradIdx >= gradLen {
+                            gradIdx = gradLen - 1
+                        }
+                    }
+                    b.WriteString(statsGradient[gradIdx].Render("▄"))
+                }
+            }
+            if w < numWeeks-1 {
+                b.WriteString(" ")
+            }
+        }
+        b.WriteString("\n")
+    }
     b.WriteString("\n")
 
     return b.String()

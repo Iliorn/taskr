@@ -260,12 +260,19 @@ func (m model) renderStatsList() string {
 
 	b.WriteString(statsHeaderStyle.Render("  Overview") + "\n")
 
+	barW := availW - statsLabelWidth - statsValueWidth - 5
+	if barW < 0 {
+		barW = 0
+	}
+	if barW > statsBarWidth {
+		barW = statsBarWidth
+	}
+
 	renderStat := func(label string, value int, total int, showBar bool) {
 		labelStr := padRight("  "+label, statsLabelWidth)
 		valStr := fmt.Sprintf("%d", value)
 		if showBar && total > 0 {
 			pct := float64(value) / float64(total)
-			barW := statsBarWidth
 			filled := int(pct * float64(barW))
 			if filled > barW {
 				filled = barW
@@ -462,17 +469,30 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) st
 	dueCol := padRight(dueVal, 12)
 	completedCol := padRight(completedVal, 12)
 	tagsPart := m.getRenderedTags(t.Tags)
+	mainW := len([]rune(cursorStr)) + 4 + len([]rune(titleCol)) + len([]rune(startCol)) + len([]rune(dueCol)) + len([]rune(completedCol))
+	tagsStr := ""
+	if tagsPart != "" {
+		tagsW := 0
+		for _, tag := range t.Tags {
+			tagsW += 4 + len([]rune(tag))
+		}
+		if mainW+1+tagsW <= m.termWidth-8 {
+			tagsStr = " " + tagsPart
+		} else {
+			tagsStr = " " + dimStyle.Render("(...)")
+		}
+	}
 
 	if index == cursor && active {
 		return selectedStyle.Render(cursorStr+"[") +
 			checkDoneStyle.Render("✓") +
 			selectedStyle.Render("] "+titleCol+startCol+dueCol+completedCol) +
-			" " + tagsPart + "\n"
+			tagsStr + "\n"
 	}
 	return normalStyle.Render(cursorStr+"[") +
 		checkDoneStyle.Render("✓") +
 		normalStyle.Render("] "+titleCol+startCol+dueCol+completedCol) +
-		" " + tagsPart + "\n"
+		tagsStr + "\n"
 }
 
 func (m model) renderSubtaskLine(sub *todo.Todo, index, total int) string {
@@ -530,15 +550,30 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	prioCol := padRight(t.Priority.Icon()+" "+t.Priority.String(), 12)
 	tagsPart := m.getRenderedTags(t.Tags)
 	line := cursorStr + checkbox + foldIcon + titleCol + startCol + dueCol + prioCol
+
+	// Only append tags if they fit within the inner panel content width.
+	tagsStr := ""
+	if tagsPart != "" {
+		tagsW := 0
+		for _, tag := range t.Tags {
+			tagsW += 4 + len([]rune(tag))
+		}
+		if len([]rune(line))+1+tagsW <= m.termWidth-8 {
+			tagsStr = " " + tagsPart
+		} else {
+			tagsStr = " " + dimStyle.Render("(...)")
+		}
+	}
+
 	switch {
 	case t.IsOverdue():
-		return overdueStyle.Render(line) + " " + tagsPart + "\n"
+		return overdueStyle.Render(line) + tagsStr + "\n"
 	case hasOverdueDep:
-		return depOverdueStyle.Render(line) + " " + tagsPart + "\n"
+		return depOverdueStyle.Render(line) + tagsStr + "\n"
 	case index == cursor && active:
-		return selectedStyle.Render(line) + " " + tagsPart + "\n"
+		return selectedStyle.Render(line) + tagsStr + "\n"
 	default:
-		return normalStyle.Render(line) + " " + tagsPart + "\n"
+		return normalStyle.Render(line) + tagsStr + "\n"
 	}
 }
 
