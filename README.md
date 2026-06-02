@@ -1,22 +1,82 @@
 # taskr
 
-A terminal task manager built with Go and Bubbletea.
+A fast, keyboard-driven task manager for the terminal — built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+
+![Go](https://img.shields.io/badge/Go-1.24-00ADD8?style=flat&logo=go)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=flat)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat)
+
+---
+
+## Features
+
+- **Tasks** — add, complete, delete, rename, set priority, due dates, start dates
+- **Projects** — group tasks, Gantt timeline view
+- **Tags** — tag tasks, filter by tag, rename/delete globally
+- **Learnings** — attach notes and learnings to tasks, browse them in a dedicated tab
+- **Stats** — productivity overview with an activity heatmap
+- **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`)
+- **Search** — live filter across tasks, projects, tags and learnings
+- **Undo** — multi-level undo for all mutations
+- **Self-update** — press `U` to pull the latest release in-place
 
 ## Installation
 
-```
+**From source:**
+
+```sh
 git clone https://github.com/luciphere/taskr
 cd taskr
 go mod tidy
 go build -o taskr .
+mv taskr ~/.local/bin/   # or anywhere on your PATH
 ```
 
-Move the binary somewhere on your PATH:
+**Pre-built binary** (Linux / macOS / Windows):
+
+Download the latest release from the [Releases](https://github.com/luciphere/taskr/releases) page.
+
+## Usage
+
+```sh
+taskr
+```
+
+### Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| `a` | Add task |
+| `d` | Toggle done |
+| `r` | Rename |
+| `x` / `del` | Delete |
+| `n` | Edit notes in `$EDITOR` |
+| `f` | Focus mode (today + overdue) |
+| `h` | Toggle history |
+| `s` | Cycle sort order |
+| `/` | Search / filter |
+| `enter` | Open detail view |
+| `u` | Undo |
+| `U` | Self-update |
+| `tab` / `1–5` | Switch tabs |
+| `?` | Show all shortcuts |
+
+### Quick-add syntax
 
 ```
-mv taskr ~/.local/bin/
+Buy groceries #shopping due:friday p:high @personal
 ```
 
-## Self-update
+Supports `#tag`, `due:date`, `p:high/medium/low`, `@project` inline when adding a task.
 
-Press `U` inside the app to update to the latest release.
+### Date formats
+
+`today` · `tomorrow` · `next week` · `monday` · `15-06-25` · `+3d` · `+2w` · `+1m`
+
+## Data
+
+Tasks are stored in `~/.taskr/tasks.json`. A backup is kept at `~/.taskr/tasks.json.bak`.
+
+## License
+
+MIT
