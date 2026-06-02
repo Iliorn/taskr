@@ -479,7 +479,11 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) st
 		if mainW+1+tagsW <= m.termWidth-8 {
 			tagsStr = " " + tagsPart
 		} else {
-			tagsStr = " " + dimStyle.Render("(...)")
+			// Trim last 5 chars of titleCol to make room for (...).
+			r := []rune(titleCol)
+			if len(r) > 5 {
+				titleCol = string(r[:len(r)-5]) + dimStyle.Render("(...)")
+			}
 		}
 	}
 
@@ -561,7 +565,11 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 		if len([]rune(line))+1+tagsW <= m.termWidth-8 {
 			tagsStr = " " + tagsPart
 		} else {
-			tagsStr = " " + dimStyle.Render("(...)")
+			// Overwrite the last 5 chars of the line with (...) so it always fits.
+			runes := []rune(line)
+			if len(runes) > 5 {
+				line = string(runes[:len(runes)-5]) + dimStyle.Render("(...)")
+			}
 		}
 	}
 
