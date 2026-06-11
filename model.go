@@ -101,8 +101,9 @@ type clearErrMsg struct{}
 type saveDoneMsg struct{}
 type saveErrMsg struct{ err error }
 type editorFinishedMsg struct {
-    taskID string
-    err    error
+    taskID   string
+    err      error
+    fallback bool // true when this run already used the notepad fallback
 }
 type saveTickMsg struct{}
 type updateDoneMsg struct{ err error }

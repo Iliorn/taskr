@@ -168,7 +168,11 @@ func resolveEditorCmd() string {
             return path
         }
     }
-    for _, candidate := range []string{"hx", "helix", "nvim", "vim", "nano"} {
+    candidates := []string{"hx", "helix", "nvim", "vim", "nano"}
+    if runtime.GOOS == "windows" {
+        candidates = append(candidates, "notepad")
+    }
+    for _, candidate := range candidates {
         if path, err := exec.LookPath(candidate); err == nil {
             return path
         }
@@ -328,40 +332,55 @@ func selfUpdate() error {
         return fmt.Errorf("could not resolve executable path: %w", err)
     }
 
-    tmpFile := execPath + ".new"
+    assetName := "taskr"
+    if runtime.GOOS == "windows" {
+        assetName = "taskr.exe"
+    }
+    tmpFile := filepath.Join(os.TempDir(), assetName)
     defer os.Remove(tmpFile)
 
-    var downloadArgs []string
-    if runtime.GOOS == "windows" {
-        downloadArgs = []string{"release", "download", "--repo", "luciphere/taskr", "--pattern", "taskr.exe", "-D", filepath.Dir(tmpFile), "--clobber"}
-        tmpFile = filepath.Join(filepath.Dir(execPath), "taskr.exe.new")
-    } else {
-        downloadArgs = []string{"release", "download", "--repo", "luciphere/taskr", "--pattern", "taskr", "-D", os.TempDir(), "--clobber"}
-        tmpFile = filepath.Join(os.TempDir(), "taskr")
-    }
-
-    cmd := exec.Command("gh", downloadArgs...)
+    cmd := exec.Command("gh", "release", "download", "--repo", "luciphere/taskr",
+        "--pattern", assetName, "-D", os.TempDir(), "--clobber")
     if out, err := cmd.CombinedOutput(); err != nil {
         return fmt.Errorf("download failed: %s", strings.TrimSpace(string(out)))
     }
 
-    src, err := os.Open(tmpFile)
+    if runtime.GOOS == "windows" {
+        // Windows forbids overwriting a running executable, but allows
+        // renaming it. Move it aside, then copy the new binary into place.
+        oldPath := execPath + ".old"
+        _ = os.Remove(oldPath)
+        if err := os.Rename(execPath, oldPath); err != nil {
+            return fmt.Errorf("could not move old binary aside: %w", err)
+        }
+        if err := copyFile(tmpFile, execPath); err != nil {
+            _ = os.Rename(oldPath, execPath) // restore on failure
+            return fmt.Errorf("could not install new binary: %w", err)
+        }
+        return nil
+    }
+
+    if err := copyFile(tmpFile, execPath); err != nil {
+        return fmt.Errorf("could not replace binary (try sudo): %w", err)
+    }
+    return nil
+}
+
+func copyFile(srcPath, dstPath string) error {
+    src, err := os.Open(srcPath)
     if err != nil {
-        return fmt.Errorf("could not open downloaded file: %w", err)
+        return err
     }
     defer src.Close()
 
-    dst, err := os.OpenFile(execPath, os.O_WRONLY|os.O_TRUNC, 0755)
+    dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
     if err != nil {
-        return fmt.Errorf("could not write to %s (try sudo): %w", execPath, err)
+        return err
     }
     defer dst.Close()
 
-    if _, err := io.Copy(dst, src); err != nil {
-        return fmt.Errorf("could not replace binary: %w", err)
-    }
-
-    return nil
+    _, err = io.Copy(dst, src)
+    return err
 }
 
 // ── Date parsing ─────────────────────────────────────────────────────────────

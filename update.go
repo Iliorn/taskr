@@ -4,6 +4,7 @@ import (
     "fmt"
     "os"
     "os/exec"
+    "runtime"
     "strings"
     "time"
 
@@ -146,23 +147,37 @@ func (m *model) openEditorForNotes() tea.Cmd {
 
     editorCmd := resolveEditorCmd()
     if editorCmd == "" {
-        m.err = "No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"
+        if runtime.GOOS == "windows" {
+            m.err = "No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"
+        } else {
+            m.err = "No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"
+        }
         return clearErrAfter()
     }
 
     m.editorTaskID = taskID
-    filePath := notesFilePath(taskID)
-    c := exec.Command(editorCmd, filePath)
+    return execEditor(editorCmd, taskID, false)
+}
+
+func execEditor(editorCmd, taskID string, isFallback bool) tea.Cmd {
+    c := exec.Command(editorCmd, notesFilePath(taskID))
     c.Stdin = os.Stdin
     c.Stdout = os.Stdout
     c.Stderr = os.Stderr
     return tea.ExecProcess(c, func(err error) tea.Msg {
-        return editorFinishedMsg{taskID: taskID, err: err}
+        return editorFinishedMsg{taskID: taskID, err: err, fallback: isFallback}
     })
 }
 
 func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
     if msg.err != nil {
+        // On Windows, fall back to notepad once if the configured editor failed.
+        if runtime.GOOS == "windows" && !msg.fallback {
+            if notepad, lookErr := exec.LookPath("notepad"); lookErr == nil {
+                m.err = "Editor failed — falling back to notepad"
+                return m, tea.Batch(clearErrAfter(), execEditor(notepad, msg.taskID, true))
+            }
+        }
         m.err = fmt.Sprintf("Editor exited with error: %v", msg.err)
         return m, clearErrAfter()
     }

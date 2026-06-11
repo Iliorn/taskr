@@ -32,9 +32,11 @@ go build -o taskr .
 mv taskr ~/.local/bin/   # or anywhere on your PATH
 ```
 
-**Pre-built binary** (Linux / macOS / Windows):
+**Pre-built binary** (Linux / Windows):
 
-Download the latest release from the [Releases](https://github.com/luciphere/taskr/releases) page.
+Download the latest release from the [Releases](https://github.com/luciphere/taskr/releases) page — `taskr` for Linux, `taskr.exe` for Windows (x64).
+
+On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. Self-update (`U`) requires the [GitHub CLI](https://cli.github.com/) on all platforms.
 
 ## Usage
 
