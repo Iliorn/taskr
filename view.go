@@ -190,6 +190,8 @@ func (m model) applyDetailScroll(content string) string {
 
 func (m model) buildFooterContent(w int) string {
     switch m.mode {
+    case modeNormal:
+        return m.renderKeyHints(w)
     case modeInput, modeEditComment, modeEditTag, modeEditTitle,
         modeAddLearning, modeEditLearning, modeAddSubtask, modeEditProjectInline:
         return inputStyle.Width(w).Render(m.textInput.View())
@@ -260,6 +262,27 @@ func (m model) buildFooterContent(w int) string {
         return confirmStyle.Render(m.confirmMsg)
     }
     return ""
+}
+
+// ── Key hints ─────────────────────────────────────────────────────────────────
+
+func (m model) renderKeyHints(w int) string {
+    var hints string
+    switch {
+    case m.tab == tabTasks && m.pane == paneDetail:
+        hints = "←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back"
+    case m.tab == tabTasks:
+        hints = "enter detail · a add · d done · p prio · r rename · x del · n notes · f focus · s sort · h history · / search"
+    case m.tab == tabProjects:
+        hints = "j/k nav · r rename · x delete · / filter"
+    case m.tab == tabTags:
+        hints = "j/k nav · r rename · x delete · s sort · / filter"
+    case m.tab == tabLearnings:
+        hints = "j/k nav · r edit · x delete · s sort · / search"
+    case m.tab == tabStats:
+        hints = "tab or 1-5 · switch view"
+    }
+    return helpStyle.Render("  " + truncate(hints, w))
 }
 
 // ── Detail content ────────────────────────────────────────────────────────────
@@ -410,6 +433,7 @@ func (m model) renderHelpFullscreen() string {
             {"a", "add task (quick-add: #tag due:date p:high @proj)"},
             {"r", "rename task"},
             {"d", "toggle done"},
+            {"p", "cycle priority low/med/high"},
             {"x", "delete"},
             {"n", "edit notes (opens $EDITOR)"},
             {"f", "focus: today + overdue only"},
@@ -441,6 +465,8 @@ func (m model) renderHelpFullscreen() string {
             {"5 or tab", "switch to stats view"},
         }},
         {"App", [][2]string{
+            {"u", "undo last change"},
+            {"q", "quit"},
             {"U", "self-update to latest release"},
         }},
         {"Date input", [][2]string{

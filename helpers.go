@@ -236,7 +236,7 @@ type parsedTask struct {
 }
 
 func parseQuickAdd(input string) parsedTask {
-    result := parsedTask{priority: todo.PriorityLow}
+    result := parsedTask{priority: todo.PriorityMedium}
     words := strings.Fields(input)
     var titleWords []string
 

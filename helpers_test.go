@@ -191,14 +191,14 @@ func TestParseQuickAdd(t *testing.T) {
             name:      "plain title",
             input:     "Buy groceries",
             wantTitle: "Buy groceries",
-            wantPrio:  todo.PriorityLow,
+            wantPrio:  todo.PriorityMedium,
         },
         {
             name:      "with tags",
             input:     "Fix bug #backend #urgent",
             wantTitle: "Fix bug",
             wantTags:  []string{"backend", "urgent"},
-            wantPrio:  todo.PriorityLow,
+            wantPrio:  todo.PriorityMedium,
         },
         {
             name:      "priority high",
@@ -223,13 +223,14 @@ func TestParseQuickAdd(t *testing.T) {
             input:     "Write docs @taskr",
             wantTitle: "Write docs",
             wantProj:  "taskr",
+            wantPrio:  todo.PriorityMedium,
         },
         {
             name:      "with due date",
             input:     "Submit report due:tomorrow",
             wantTitle: "Submit report",
             wantDue:   true,
-            wantPrio:  todo.PriorityLow,
+            wantPrio:  todo.PriorityMedium,
         },
         {
             name:      "all together",
@@ -244,25 +245,25 @@ func TestParseQuickAdd(t *testing.T) {
             name:      "invalid due becomes title",
             input:     "Check due:gibberish",
             wantTitle: "Check due:gibberish",
-            wantPrio:  todo.PriorityLow,
+            wantPrio:  todo.PriorityMedium,
         },
         {
             name:      "invalid priority becomes title",
             input:     "Task p:extreme",
             wantTitle: "Task p:extreme",
-            wantPrio:  todo.PriorityLow,
+            wantPrio:  todo.PriorityMedium,
         },
         {
             name:      "empty tag ignored",
             input:     "Test # thing",
             wantTitle: "Test thing",
-            wantPrio:  todo.PriorityLow,
+            wantPrio:  todo.PriorityMedium,
         },
         {
             name:      "empty input",
             input:     "",
             wantTitle: "",
-            wantPrio:  todo.PriorityLow,
+            wantPrio:  todo.PriorityMedium,
         },
     }
 

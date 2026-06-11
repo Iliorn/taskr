@@ -337,6 +337,21 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
                     }
                 }
             }
+
+        case "p":
+            if m.tab == tabTasks && !m.showHistory {
+                if idx := m.currentTodoIndex(); idx >= 0 {
+                    switch m.todos[idx].Priority {
+                    case todo.PriorityLow:
+                        m.todos[idx].SetPriority(todo.PriorityMedium)
+                    case todo.PriorityMedium:
+                        m.todos[idx].SetPriority(todo.PriorityHigh)
+                    default:
+                        m.todos[idx].SetPriority(todo.PriorityLow)
+                    }
+                    m.markModified()
+                }
+            }
         }
     }
 
