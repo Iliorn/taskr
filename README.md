@@ -15,6 +15,8 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 - **Tags** — tag tasks, filter by tag, rename/delete globally
 - **Learnings** — attach notes and learnings to tasks, browse them in a dedicated tab
 - **Stats** — productivity overview with an activity heatmap
+- **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
+- **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
 - **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`)
 - **Search** — live filter across tasks, projects, tags and learnings
 - **Undo** — multi-level undo for all mutations
@@ -52,6 +54,7 @@ taskr
 |-----|--------|
 | `a` | Add task |
 | `d` | Toggle done |
+| `t` | Start/stop time tracking |
 | `r` | Rename |
 | `x` / `del` | Delete |
 | `n` | Edit notes in `$EDITOR` |
@@ -62,7 +65,7 @@ taskr
 | `enter` | Open detail view |
 | `u` | Undo |
 | `U` | Self-update |
-| `tab` / `1–5` | Switch tabs |
+| `tab` / `1–6` | Switch tabs |
 | `?` | Show all shortcuts |
 
 ### Quick-add syntax

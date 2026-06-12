@@ -82,6 +82,15 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	b.WriteString("  " + detailLabelStyle.Render(padRight("Modified:", detailLabelColWidth)) +
 		detailValueStyle.Render(t.ModifiedAt.Format("02-01-06 15:04")) + "\n")
 
+	if len(t.TimeEntries) > 0 {
+		timeVal := fmt.Sprintf("%s (%d entries)", formatDuration(t.TotalTimeSpent()), len(t.TimeEntries))
+		if t.IsTimerRunning() {
+			timeVal += " ◉ tracking"
+		}
+		b.WriteString("  " + detailLabelStyle.Render(padRight("Time spent:", detailLabelColWidth)) +
+			timerStyle.Render(timeVal) + "\n")
+	}
+
 	if t.Status == todo.Done && !t.CompletedAt.IsZero() {
 		b.WriteString("  " + detailLabelStyle.Render(padRight("Completed on:", detailLabelColWidth)) +
 			checkDoneStyle.Render(t.CompletedAt.Format("02-01-06 15:04")) + "\n")

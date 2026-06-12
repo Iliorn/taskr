@@ -37,6 +37,12 @@ var (
         Background(lipgloss.Color("#78D4FF")).
         Padding(0, 1)
 
+    tabCalendarActiveStyle = lipgloss.NewStyle().
+        Bold(true).
+        Foreground(lipgloss.Color("#1a1a1a")).
+        Background(lipgloss.Color("#5EEAD4")).
+        Padding(0, 1)
+
     tabInactiveStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("#ffffff")).
         Background(lipgloss.Color("#333333")).
@@ -157,6 +163,26 @@ var (
     statsHeaderStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("#78D4FF")).
         Bold(true)
+
+    timerStyle = lipgloss.NewStyle().
+        Foreground(lipgloss.Color("#5EEAD4")).
+        Bold(true)
+
+    calHeaderStyle = lipgloss.NewStyle().
+        Foreground(lipgloss.Color("#5EEAD4")).
+        Bold(true)
+
+    calSelectedDayStyle = lipgloss.NewStyle().
+        Foreground(lipgloss.Color("#1a1a1a")).
+        Background(lipgloss.Color("#5EEAD4")).
+        Bold(true)
+
+    calTodayStyle = lipgloss.NewStyle().
+        Foreground(lipgloss.Color("#FF9E64")).
+        Bold(true)
+
+    projLabelStyle = lipgloss.NewStyle().
+        Foreground(lipgloss.Color("#FF9E64"))
 )
 
 var ganttGradient = []lipgloss.Style{
@@ -204,6 +230,16 @@ var tagProgressGradient = []lipgloss.Style{
     lipgloss.NewStyle().Foreground(lipgloss.Color("#b865e0")),
     lipgloss.NewStyle().Foreground(lipgloss.Color("#d480f0")),
     lipgloss.NewStyle().Foreground(lipgloss.Color("#e8a0ff")),
+}
+
+var calGradient = []lipgloss.Style{
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#1f4a40")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#2a6356")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#357c6c")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#409682")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#4bb098")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#56caae")),
+    lipgloss.NewStyle().Foreground(lipgloss.Color("#5EEAD4")),
 }
 
 var statsGradient = []lipgloss.Style{

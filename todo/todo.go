@@ -276,6 +276,15 @@ func (t *Todo) IsTimerRunning() bool {
     return false
 }
 
+func (t *Todo) RunningEntry() *TimeEntry {
+    for i := range t.TimeEntries {
+        if t.TimeEntries[i].IsRunning() {
+            return &t.TimeEntries[i]
+        }
+    }
+    return nil
+}
+
 func (t *Todo) TotalTimeSpent() time.Duration {
     var total time.Duration
     for _, entry := range t.TimeEntries {

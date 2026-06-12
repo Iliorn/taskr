@@ -46,4 +46,6 @@ const (
     statsBarWidth    = 30
     statsLabelWidth  = 22
     statsValueWidth  = 12
+
+    calPanelWidth = 22
 )

@@ -343,6 +343,81 @@ func parseQuickAdd(input string) parsedTask {
 
 // ── Time formatting ───────────────────────────────────────────────────────────
 
+func startOfDay(t time.Time) time.Time {
+    return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+// formatDurationLive renders a running duration with seconds, for the
+// live timer indicator in the footer.
+func formatDurationLive(d time.Duration) string {
+    s := int(d.Seconds())
+    if s < 0 {
+        s = 0
+    }
+    if s < 3600 {
+        return fmt.Sprintf("%dm %02ds", s/60, s%60)
+    }
+    return fmt.Sprintf("%dh %02dm %02ds", s/3600, (s%3600)/60, s%60)
+}
+
+// formatDurationCompact renders without spaces for narrow columns: 48m, 1h39m, 12h.
+func formatDurationCompact(d time.Duration) string {
+    mins := int(d.Minutes())
+    if mins < 60 {
+        return fmt.Sprintf("%dm", mins)
+    }
+    if mins%60 == 0 {
+        return fmt.Sprintf("%dh", mins/60)
+    }
+    return fmt.Sprintf("%dh%02dm", mins/60, mins%60)
+}
+
+// parseEntryEdit parses a time-entry edit: "HH:MM-HH:MM", "HH:MM-now"
+// (keeps the entry running), or a bare duration ("45m", "1h30m", "2h").
+// Clock times are interpreted on the entry's original start day; an end
+// time before the start is taken to cross midnight.
+func parseEntryEdit(input string, oldStart time.Time, running bool) (time.Time, time.Time, error) {
+    s := strings.TrimSpace(strings.ToLower(input))
+    if s == "" {
+        return time.Time{}, time.Time{}, fmt.Errorf("empty input")
+    }
+    if strings.Contains(s, "-") {
+        parts := strings.SplitN(s, "-", 2)
+        start, err := parseClockOn(strings.TrimSpace(parts[0]), oldStart)
+        if err != nil {
+            return time.Time{}, time.Time{}, err
+        }
+        endStr := strings.TrimSpace(parts[1])
+        if endStr == "now" {
+            if !running {
+                return time.Time{}, time.Time{}, fmt.Errorf("'now' is only valid for a running entry")
+            }
+            return start, time.Time{}, nil
+        }
+        stop, err := parseClockOn(endStr, oldStart)
+        if err != nil {
+            return time.Time{}, time.Time{}, err
+        }
+        if !stop.After(start) {
+            stop = stop.AddDate(0, 0, 1) // crosses midnight
+        }
+        return start, stop, nil
+    }
+    d, err := time.ParseDuration(strings.ReplaceAll(s, " ", ""))
+    if err != nil || d <= 0 {
+        return time.Time{}, time.Time{}, fmt.Errorf("invalid input '%s' (use HH:MM-HH:MM or 45m, 1h30m)", input)
+    }
+    return oldStart, oldStart.Add(d), nil
+}
+
+func parseClockOn(s string, day time.Time) (time.Time, error) {
+    t, err := time.Parse("15:04", s)
+    if err != nil {
+        return time.Time{}, fmt.Errorf("invalid time '%s' (use HH:MM)", s)
+    }
+    return time.Date(day.Year(), day.Month(), day.Day(), t.Hour(), t.Minute(), 0, 0, day.Location()), nil
+}
+
 func formatDuration(d time.Duration) string {
     if d < time.Minute {
         return fmt.Sprintf("%ds", int(d.Seconds()))

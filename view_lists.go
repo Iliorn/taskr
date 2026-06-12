@@ -592,6 +592,9 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	if t.Notes != "" {
 		title += " ¶"
 	}
+	if t.IsTimerRunning() {
+		title += " ◉"
+	}
 	startVal := ""
 	if !t.StartDate.IsZero() {
 		startVal = t.StartDate.Format("02-01-06")
@@ -632,6 +635,8 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	}
 
 	switch {
+	case t.IsTimerRunning():
+		return timerStyle.Render(line) + tagsStr + "\n"
 	case t.IsOverdue():
 		return overdueStyle.Render(line) + tagsStr + "\n"
 	case hasOverdueDep:

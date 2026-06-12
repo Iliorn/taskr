@@ -200,10 +200,25 @@ func (m model) applyDetailScroll(content string) string {
 func (m model) buildFooterContent(w int) string {
     switch m.mode {
     case modeNormal:
-        return m.renderKeyHints(w)
+        hints := m.renderKeyHints(w)
+        if idx := m.runningTodoIndex(); idx >= 0 {
+            t := &m.todos[idx]
+            elapsed := ""
+            if e := t.RunningEntry(); e != nil {
+                elapsed = formatDurationLive(time.Since(e.StartedAt))
+            }
+            timerLine := timerStyle.Render("  ◉ "+truncate(t.Title, w/2)) +
+                normalStyle.Render(" · "+elapsed) +
+                helpStyle.Render(" · t to stop")
+            return ansi.Truncate(timerLine, w, "") + "\n" + hints
+        }
+        return hints
     case modeInput, modeEditComment, modeEditTag, modeEditTitle,
-        modeAddLearning, modeEditLearning, modeAddSubtask, modeEditProjectInline:
+        modeAddLearning, modeEditLearning, modeAddSubtask, modeEditProjectInline,
+        modeEditTimeEntry:
         return inputStyle.Width(w).Render(m.textInput.View())
+    case modeIdlePrompt:
+        return calTodayStyle.Render(m.confirmMsg)
     case modeSearch:
         if m.tab == tabLearnings {
             return searchStyle.Width(w).Render(m.learningSearchInput.View())
@@ -267,7 +282,8 @@ func (m model) buildFooterContent(w int) string {
     case modeConfirmDelete, modeConfirmDeleteComment,
         modeConfirmDeleteDep, modeConfirmDeleteTag,
         modeConfirmDeleteTagGlobal, modeConfirmDeleteProject,
-        modeConfirmDeleteLearning, modeConfirmDeleteSubtask:
+        modeConfirmDeleteLearning, modeConfirmDeleteSubtask,
+        modeConfirmDeleteTimeEntry:
         return confirmStyle.Render(m.confirmMsg)
     }
     return ""
@@ -281,7 +297,7 @@ func (m model) renderKeyHints(w int) string {
     case m.tab == tabTasks && m.pane == paneDetail:
         hints = "←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back"
     case m.tab == tabTasks:
-        hints = "enter detail · a add · d done · p prio · r rename · x del · n notes · f focus · s sort · h history · / search"
+        hints = "enter detail · a add · d done · t track · p prio · r rename · x del · n notes · f focus · s sort · h history · / search"
     case m.tab == tabProjects:
         hints = "j/k nav · r rename · x delete · / filter"
     case m.tab == tabTags:
@@ -289,7 +305,11 @@ func (m model) renderKeyHints(w int) string {
     case m.tab == tabLearnings:
         hints = "j/k nav · r edit · x delete · s sort · / search"
     case m.tab == tabStats:
-        hints = "tab or 1-5 · switch view"
+        hints = "tab or 1-6 · switch view"
+    case m.tab == tabCalendar && m.calendar.focusTimeline:
+        hints = "j/k select entry · r edit times · x delete · esc back"
+    case m.tab == tabCalendar:
+        hints = "←/→ day · ↑/↓ week · [ ] month · t today · enter entries"
     }
     return helpStyle.Render("  " + truncate(hints, w))
 }
@@ -332,6 +352,9 @@ func (m model) buildDetailContent() string {
 func (m model) buildListContent(w, outerH int) string {
     if m.tab == tabProjects {
         return m.buildProjectListContent(w, outerH)
+    }
+    if m.tab == tabCalendar {
+        return m.buildCalendarContent(w, outerH)
     }
 
     innerH := outerH - 2 // subtract top and bottom border lines
@@ -438,13 +461,14 @@ func (m model) renderHelpFullscreen() string {
             {"↑/↓  or  j/k", "navigate list"},
             {"enter", "open details"},
             {"esc", "go back"},
-            {"tab  or  1-5", "switch tabs"},
+            {"tab  or  1-6", "switch tabs"},
             {"?", "close help"},
         }},
         {"Tasks", [][2]string{
             {"a", "add task (quick-add: #tag due:date p:high @proj)"},
             {"r", "rename task"},
             {"d", "toggle done"},
+            {"t", "start/stop time tracking"},
             {"p", "cycle priority low/med/high"},
             {"x", "delete"},
             {"n", "edit notes (opens $EDITOR)"},
@@ -475,6 +499,14 @@ func (m model) renderHelpFullscreen() string {
         }},
         {"Stats (tab 5)", [][2]string{
             {"5 or tab", "switch to stats view"},
+        }},
+        {"Calendar (tab 6)", [][2]string{
+            {"←/→  ↑/↓", "move by day / week"},
+            {"[ / ]", "previous / next month"},
+            {"t", "jump to today"},
+            {"enter", "focus the day's entries"},
+            {"r", "edit entry times (09:12-10:00 or 45m)"},
+            {"x", "delete selected entry"},
         }},
         {"App", [][2]string{
             {"u", "undo last change"},
@@ -766,15 +798,16 @@ func (m model) buildTagDetailLines() []string {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
 func (m model) renderTabs() string {
-    activeStyles := [5]lipgloss.Style{
+    activeStyles := [numTabs]lipgloss.Style{
         tabTasksActiveStyle,
         tabProjectsActiveStyle,
         tabTagsActiveStyle,
         tabLearningsActiveStyle,
         tabStatsActiveStyle,
+        tabCalendarActiveStyle,
     }
-    names := [5]string{"1:Tasks", "2:Projects", "3:Tags", "4:Learnings", "5:Stats"}
-    var parts [5]string
+    names := [numTabs]string{"1:Tasks", "2:Projects", "3:Tags", "4:Learnings", "5:Stats", "6:Calendar"}
+    var parts [numTabs]string
     for i := range names {
         if tab(i) == m.tab {
             parts[i] = activeStyles[i].Render(names[i])
@@ -782,7 +815,7 @@ func (m model) renderTabs() string {
             parts[i] = tabInactiveStyle.Render(names[i])
         }
     }
-    return parts[0] + " " + parts[1] + " " + parts[2] + " " + parts[3] + " " + parts[4]
+    return strings.Join(parts[:], " ")
 }
 
 func (m model) renderListContent() string {

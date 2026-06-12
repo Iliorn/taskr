@@ -499,6 +499,103 @@ func (m model) updateConfirmDeleteDep(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) updateEditTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "enter":
+			t := m.findTodoByID(m.pendingEntryTaskID)
+			if t == nil {
+				m.mode = modeNormal
+				return m, nil
+			}
+			for i := range t.TimeEntries {
+				if t.TimeEntries[i].ID == m.pendingEntryID {
+					e := &t.TimeEntries[i]
+					start, stop, err := parseEntryEdit(m.textInput.Value(), e.StartedAt, e.IsRunning())
+					if err != nil {
+						m.err = err.Error()
+						return m, clearErrAfter()
+					}
+					m.pushUndo("edit time entry")
+					e.StartedAt = start
+					e.StoppedAt = stop
+					t.ModifiedAt = time.Now()
+					m.markModifiedNoUndo()
+					break
+				}
+			}
+			m.mode = modeNormal
+			return m, nil
+		case "esc":
+			m.mode = modeNormal
+			return m, nil
+		}
+	}
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
+func (m model) updateIdlePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "k", "esc", "enter":
+			m.mode = modeNormal
+		case "s":
+			if t := m.findTodoByID(m.pendingEntryTaskID); t != nil && t.IsTimerRunning() {
+				m.pushUndo("stop timer")
+				t.StopTimer()
+				m.markModifiedNoUndo()
+			}
+			m.mode = modeNormal
+		case "e":
+			return m, m.startEditTimeEntry(m.pendingEntryTaskID, m.pendingEntryID)
+		case "d":
+			if t := m.findTodoByID(m.pendingEntryTaskID); t != nil {
+				for i := range t.TimeEntries {
+					if t.TimeEntries[i].ID == m.pendingEntryID {
+						m.pushUndo("discard time entry")
+						t.DeleteTimeEntry(i)
+						m.markModifiedNoUndo()
+						break
+					}
+				}
+			}
+			m.mode = modeNormal
+		}
+	}
+	return m, nil
+}
+
+func (m model) updateConfirmDeleteTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "y":
+			if t := m.findTodoByID(m.pendingEntryTaskID); t != nil {
+				for i := range t.TimeEntries {
+					if t.TimeEntries[i].ID == m.pendingEntryID {
+						m.pushUndo("delete time entry")
+						t.DeleteTimeEntry(i)
+						m.markModifiedNoUndo()
+						break
+					}
+				}
+			}
+			acts := m.activitiesForDay(m.calendar.selected)
+			if len(acts) == 0 {
+				m.calendar.focusTimeline = false
+				m.calendar.entryCursor = 0
+			} else if m.calendar.entryCursor >= len(acts) {
+				m.calendar.entryCursor = len(acts) - 1
+			}
+			m.mode = modeNormal
+		case "n", "esc":
+			m.mode = modeNormal
+		}
+	}
+	return m, nil
+}
+
 func (m model) updateConfirmDeleteTag(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {

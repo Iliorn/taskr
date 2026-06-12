@@ -21,7 +21,10 @@ const (
     tabTags
     tabLearnings
     tabStats
+    tabCalendar
 )
+
+const numTabs = 6
 
 type pane int
 
@@ -63,6 +66,9 @@ const (
     modeConfirmDeleteProject
     modeConfirmDeleteLearning
     modeConfirmDeleteSubtask
+    modeConfirmDeleteTimeEntry
+    modeEditTimeEntry
+    modeIdlePrompt
     modeEditComment
     modeEditTag
     modeEditProjectInline
@@ -107,6 +113,7 @@ type editorFinishedMsg struct {
 }
 type saveTickMsg struct{}
 type updateDoneMsg struct{ err error }
+type timerTickMsg struct{}
 
 // ── Sub-state structs ─────────────────────────────────────────────────────────
 
@@ -123,6 +130,12 @@ type detailState struct {
     tagCursor      int
     learningCursor int
     subtaskCursor  int
+}
+
+type calendarState struct {
+    selected      time.Time // selected day, normalized to midnight
+    entryCursor   int
+    focusTimeline bool
 }
 
 // ── Model ─────────────────────────────────────────────────────────────────────
@@ -142,6 +155,10 @@ type model struct {
 
     // Detail pane state
     detail detailState
+
+    // Calendar tab state
+    calendar    calendarState
+    timerTickOn bool
 
     // Search state per context
     depSearch  searchState
@@ -165,6 +182,8 @@ type model struct {
     pendingTag         int
     pendingLearning    int
     pendingSubtask     int
+    pendingEntryTaskID string
+    pendingEntryID     string
     termWidth          int
     termHeight         int
     err                string
@@ -276,12 +295,22 @@ func initialModel() model {
         },
     }
     m.refreshCaches()
+    m.calendar.selected = startOfDay(time.Now())
+    m.timerTickOn = m.runningTodoIndex() >= 0
+    if idx := m.runningTodoIndex(); idx >= 0 {
+        if e := m.todos[idx].RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
+            m.openIdlePrompt(idx)
+        }
+    }
     return m
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 func (m model) Init() tea.Cmd {
+    if m.timerTickOn {
+        return timerTick()
+    }
     return nil
 }
 
@@ -290,6 +319,18 @@ func (m model) Init() tea.Cmd {
 func clearErrAfter() tea.Cmd {
     return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
         return clearErrMsg{}
+    })
+}
+
+// ── Timer tick ────────────────────────────────────────────────────────────────
+
+// A timer running longer than this is assumed forgotten and triggers the
+// idle prompt (on startup and when stopping it).
+const idleThreshold = 4 * time.Hour
+
+func timerTick() tea.Cmd {
+    return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+        return timerTickMsg{}
     })
 }
 
@@ -419,6 +460,51 @@ func (m *model) followTask(taskID string) {
             return
         }
     }
+}
+
+// ── Time tracking helpers ─────────────────────────────────────────────────────
+
+func (m model) runningTodoIndex() int {
+    for i := range m.todos {
+        if m.todos[i].IsTimerRunning() {
+            return i
+        }
+    }
+    return -1
+}
+
+func (m model) anyTimerRunning() bool {
+    return m.runningTodoIndex() >= 0
+}
+
+// openIdlePrompt switches to the runaway-timer prompt for the task's
+// running entry.
+func (m *model) openIdlePrompt(idx int) {
+    t := &m.todos[idx]
+    e := t.RunningEntry()
+    if e == nil {
+        return
+    }
+    m.pendingEntryTaskID = t.ID
+    m.pendingEntryID = e.ID
+    m.mode = modeIdlePrompt
+    m.confirmMsg = fmt.Sprintf("◉ '%s' tracking for %s — [k]eep · [s]top · [e]dit · [d]iscard",
+        truncate(t.Title, 30), formatDuration(time.Since(e.StartedAt)))
+}
+
+// toggleTimer stops the task's timer if running, otherwise stops any other
+// running timer (only one task is tracked at a time) and starts this one.
+func (m *model) toggleTimer(idx int) {
+    if m.todos[idx].IsTimerRunning() {
+        m.todos[idx].StopTimer()
+        return
+    }
+    for i := range m.todos {
+        if m.todos[i].IsTimerRunning() {
+            m.todos[i].StopTimer()
+        }
+    }
+    m.todos[idx].StartTimer()
 }
 
 // ── Lookup helpers ────────────────────────────────────────────────────────────
@@ -719,6 +805,9 @@ func (m model) estimateDetailCursorLine() int {
             return line + 4
         default: // fieldTags
             line += 7 // start, due, priority, project, notes, created, modified
+            if len(t.TimeEntries) > 0 {
+                line++
+            }
             if t.Status == todo.Done && !t.CompletedAt.IsZero() {
                 line++
             }
@@ -805,6 +894,9 @@ func (m model) listVisible() int {
     if m.focusFilter {
         fixedLines++
     }
+    if m.anyTimerRunning() {
+        fixedLines++ // live timer line above the key hints
+    }
     fixedLines += m.extraOverheadLines()
     if available := m.termHeight - fixedLines - detailTotal; available >= minListHeight {
         return available
@@ -822,6 +914,9 @@ func (m model) estimateListHeight() int {
     }
     if m.searchQuery != "" {
         headerH++
+    }
+    if m.anyTimerRunning() {
+        headerH++ // live timer line above the key hints
     }
     detailH := 0
     if m.mode == modeNormal && m.tab != tabStats {
@@ -852,6 +947,9 @@ func (m model) detailPage1ContentHeight() int {
         lines += 2
     } else {
         lines += 1 + len(t.Tags)
+    }
+    if len(t.TimeEntries) > 0 {
+        lines++
     }
     if t.Status == todo.Done && !t.CompletedAt.IsZero() {
         lines++
@@ -909,7 +1007,7 @@ func (m model) extraOverheadLines() int {
     switch m.mode {
     case modeInput, modeEditComment, modeEditTag, modeEditTitle,
         modeSearch, modeAddLearning, modeEditLearning, modeAddSubtask,
-        modeEditProjectInline:
+        modeEditProjectInline, modeEditTimeEntry:
         return 3
     case modeSearchDep, modeSearchTag, modeSearchProject:
         return 8
@@ -918,7 +1016,8 @@ func (m model) extraOverheadLines() int {
     case modeConfirmDelete, modeConfirmDeleteComment,
         modeConfirmDeleteDep, modeConfirmDeleteTag,
         modeConfirmDeleteTagGlobal, modeConfirmDeleteProject,
-        modeConfirmDeleteLearning, modeConfirmDeleteSubtask:
+        modeConfirmDeleteLearning, modeConfirmDeleteSubtask,
+        modeConfirmDeleteTimeEntry, modeIdlePrompt:
         return 1
     }
     return 0

@@ -28,6 +28,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     case clearErrMsg:
         m.err = ""
         return m, nil
+    case timerTickMsg:
+        if m.anyTimerRunning() {
+            return m, timerTick()
+        }
+        m.timerTickOn = false
+        return m, nil
     case updateDoneMsg:
         if msg.err != nil {
             m.err = fmt.Sprintf("Update failed: %v", msg.err)
@@ -75,6 +81,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         return m.updateConfirmDeleteLearning(msg)
     case modeConfirmDeleteSubtask:
         return m.updateConfirmDeleteSubtask(msg)
+    case modeConfirmDeleteTimeEntry:
+        return m.updateConfirmDeleteTimeEntry(msg)
+    case modeEditTimeEntry:
+        return m.updateEditTimeEntry(msg)
+    case modeIdlePrompt:
+        return m.updateIdlePrompt(msg)
     case modeInput:
         return m.updateInput(msg)
     case modeEditComment:
@@ -278,9 +290,11 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
             m.tab = tabStats
             m.pane = paneList
             m.listOffset = 0
+        case "6":
+            m.switchTab(tabCalendar)
 
         case "tab":
-            m.switchTab((m.tab + 1) % 5)
+            m.switchTab((m.tab + 1) % numTabs)
 
         case "h":
             if m.tab == tabTasks {
@@ -298,15 +312,50 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
             }
 
         case "right":
-            if m.tab == tabTasks && !m.showHistory {
+            if m.tab == tabCalendar {
+                m.moveCalendarDay(1)
+            } else if m.tab == tabTasks && !m.showHistory {
                 if t := m.currentTodo(); t != nil && len(t.SubtaskIDs) > 0 {
                     m.expandedTasks[t.ID] = true
                 }
             }
         case "left":
-            if m.tab == tabTasks && !m.showHistory {
+            if m.tab == tabCalendar {
+                m.moveCalendarDay(-1)
+            } else if m.tab == tabTasks && !m.showHistory {
                 if t := m.currentTodo(); t != nil {
                     delete(m.expandedTasks, t.ID)
+                }
+            }
+
+        case "[", "]":
+            if m.tab == tabCalendar {
+                months := 1
+                if key.String() == "[" {
+                    months = -1
+                }
+                m.calendar.selected = startOfDay(m.calendar.selected.AddDate(0, months, 0))
+                m.calendar.entryCursor = 0
+                m.calendar.focusTimeline = false
+            }
+
+        case "t":
+            if m.tab == tabCalendar {
+                m.calendar.selected = startOfDay(time.Now())
+                m.calendar.entryCursor = 0
+                m.calendar.focusTimeline = false
+            } else if m.tab == tabTasks && !m.showHistory {
+                if idx := m.currentTodoIndex(); idx >= 0 {
+                    if e := m.todos[idx].RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
+                        m.openIdlePrompt(idx)
+                        return m, nil
+                    }
+                    m.toggleTimer(idx)
+                    m.markModified()
+                    if !m.timerTickOn && m.anyTimerRunning() {
+                        m.timerTickOn = true
+                        return m, timerTick()
+                    }
                 }
             }
 
@@ -398,8 +447,47 @@ func (m *model) switchTab(t tab) {
     m.learningSearchQuery = ""
     m.projectTaskMode = false
     m.showHistory = false
+    if t == tabCalendar {
+        m.calendar.selected = startOfDay(time.Now())
+        m.calendar.entryCursor = 0
+        m.calendar.focusTimeline = false
+    }
     m.invalidateDetailCache()
     m.markCacheDirty()
+}
+
+// startEditTimeEntry opens the inline editor for an entry's times,
+// prefilled with the current range.
+func (m *model) startEditTimeEntry(taskID, entryID string) tea.Cmd {
+    t := m.findTodoByID(taskID)
+    if t == nil {
+        return nil
+    }
+    for i := range t.TimeEntries {
+        if t.TimeEntries[i].ID == entryID {
+            e := &t.TimeEntries[i]
+            val := e.StartedAt.Format("15:04") + "-"
+            if e.IsRunning() {
+                val += "now"
+            } else {
+                val += e.StoppedAt.Format("15:04")
+            }
+            m.pendingEntryTaskID = taskID
+            m.pendingEntryID = entryID
+            m.mode = modeEditTimeEntry
+            m.textInput.SetValue(val)
+            m.textInput.Placeholder = "HH:MM-HH:MM or duration (45m, 1h30m)..."
+            m.textInput.Focus()
+            return textinput.Blink
+        }
+    }
+    return nil
+}
+
+func (m *model) moveCalendarDay(days int) {
+    m.calendar.selected = m.calendar.selected.AddDate(0, 0, days)
+    m.calendar.entryCursor = 0
+    m.calendar.focusTimeline = false
 }
 
 func (m model) startSearch() (tea.Model, tea.Cmd) {
@@ -465,6 +553,8 @@ func (m *model) cycleSortMode() {
 
 func (m *model) handleListEsc() {
     switch {
+    case m.tab == tabCalendar && m.calendar.focusTimeline:
+        m.calendar.focusTimeline = false
     case m.tab == tabTasks && m.focusFilter:
         m.focusFilter = false
         m.cursor = 0
@@ -488,6 +578,14 @@ func (m *model) handleListEsc() {
 
 func (m *model) moveCursorUp() {
     switch m.tab {
+    case tabCalendar:
+        if m.calendar.focusTimeline {
+            if m.calendar.entryCursor > 0 {
+                m.calendar.entryCursor--
+            }
+        } else {
+            m.moveCalendarDay(-7)
+        }
     case tabTags:
         if m.tagTabCursor > 0 {
             m.tagTabCursor--
@@ -515,6 +613,14 @@ func (m *model) moveCursorUp() {
 
 func (m *model) moveCursorDown() {
     switch m.tab {
+    case tabCalendar:
+        if m.calendar.focusTimeline {
+            if acts := m.activitiesForDay(m.calendar.selected); m.calendar.entryCursor < len(acts)-1 {
+                m.calendar.entryCursor++
+            }
+        } else {
+            m.moveCalendarDay(7)
+        }
     case tabTags:
         if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags)-1 {
             m.tagTabCursor++
@@ -552,6 +658,11 @@ func (m *model) moveCursorDown() {
 
 func (m model) handleListEnter() (tea.Model, tea.Cmd) {
     switch m.tab {
+    case tabCalendar:
+        if len(m.activitiesForDay(m.calendar.selected)) > 0 {
+            m.calendar.focusTimeline = true
+            m.calendar.entryCursor = 0
+        }
     case tabLearnings:
         if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
             m.pane = paneDetail
@@ -579,6 +690,14 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 
 func (m model) handleListRename() (tea.Model, tea.Cmd) {
     switch m.tab {
+    case tabCalendar:
+        if m.calendar.focusTimeline {
+            acts := m.activitiesForDay(m.calendar.selected)
+            if m.calendar.entryCursor < len(acts) {
+                a := acts[m.calendar.entryCursor]
+                return m, m.startEditTimeEntry(a.taskID, a.entryID)
+            }
+        }
     case tabTags:
         if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
             m.editingTagName = tags[m.tagTabCursor]
@@ -623,6 +742,18 @@ func (m model) handleListRename() (tea.Model, tea.Cmd) {
 
 func (m model) handleListDelete() (tea.Model, tea.Cmd) {
     switch m.tab {
+    case tabCalendar:
+        if m.calendar.focusTimeline {
+            acts := m.activitiesForDay(m.calendar.selected)
+            if m.calendar.entryCursor < len(acts) {
+                a := acts[m.calendar.entryCursor]
+                m.mode = modeConfirmDeleteTimeEntry
+                m.pendingEntryTaskID = a.taskID
+                m.pendingEntryID = a.entryID
+                m.confirmMsg = fmt.Sprintf("Delete %s entry for '%s'? (y/n)",
+                    formatDuration(a.duration()), truncate(a.title, 30))
+            }
+        }
     case tabTags:
         if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
             m.mode = modeConfirmDeleteTagGlobal
