@@ -423,8 +423,16 @@ func selfUpdate() error {
         return nil
     }
 
-    if err := copyFile(tmpFile, execPath); err != nil {
-        return fmt.Errorf("could not replace binary (try sudo): %w", err)
+    // Unix refuses to write into a running executable (ETXTBSY). Copy the
+    // new binary next to the old one, then rename over it — rename is
+    // atomic and allowed while the process is running.
+    newPath := execPath + ".new"
+    if err := copyFile(tmpFile, newPath); err != nil {
+        return fmt.Errorf("could not stage new binary (check permissions): %w", err)
+    }
+    if err := os.Rename(newPath, execPath); err != nil {
+        _ = os.Remove(newPath)
+        return fmt.Errorf("could not replace binary: %w", err)
     }
     return nil
 }
