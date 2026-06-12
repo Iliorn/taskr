@@ -6,8 +6,17 @@ import (
     "time"
 
     "github.com/charmbracelet/lipgloss"
+    "github.com/charmbracelet/x/ansi"
     "taskr/todo"
 )
+
+// truncateLines ANSI-aware-truncates every line to maxW display cells so
+// over-long lines can never wrap inside a bordered panel.
+func truncateLines(lines []string, maxW int) {
+    for i, line := range lines {
+        lines[i] = ansi.Truncate(line, maxW, "")
+    }
+}
 
 // ── Top-level View ────────────────────────────────────────────────────────────
 
@@ -28,7 +37,7 @@ func (m model) View() string {
     if padW < 1 {
         padW = 1
     }
-    out.WriteString(tabsStr + strings.Repeat(" ", padW) + shortcutHint + "\n")
+    out.WriteString(ansi.Truncate(tabsStr+strings.Repeat(" ", padW)+shortcutHint, m.termWidth-2, "") + "\n")
     out.WriteString("\n")
 
     if m.err != "" {
@@ -336,6 +345,7 @@ func (m model) buildListContent(w, outerH int) string {
     if len(rawList) > innerH {
         rawList = rawList[:innerH]
     }
+    truncateLines(rawList, w-2)
     return listPanelStyle.Width(w).Render(strings.Join(rawList, "\n"))
 }
 
@@ -376,6 +386,7 @@ func (m model) buildProjectListContent(w, listH int) string {
     for len(projLines) < projMaxH {
         projLines = append(projLines, "")
     }
+    truncateLines(projLines, w-2)
     projRendered := listPanelStyle.Width(w).Render(strings.Join(projLines, "\n"))
 
     projRenderedLines := strings.Split(projRendered, "\n")
@@ -405,6 +416,7 @@ func (m model) buildProjectListContent(w, listH int) string {
     for len(ganttLines) < ganttInnerH {
         ganttLines = append(ganttLines, "")
     }
+    truncateLines(ganttLines, w-2)
     ganttRendered := listPanelStyle.Width(w).Render(strings.Join(ganttLines, "\n"))
 
     b := getBuilder()

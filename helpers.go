@@ -111,6 +111,57 @@ func titleColWidth(termWidth int) int {
     return w
 }
 
+// listCols decides which columns of the task/history list fit at the current
+// terminal width. Columns are dropped least-important-first as the window
+// narrows so list lines never wrap inside the panel.
+type listCols struct {
+    titleW    int
+    showStart bool
+    showDue   bool
+    showLast  bool // Priority (tasks) or Completed (history)
+}
+
+func taskListCols(termWidth int, isHistory bool) listCols {
+    inner := termWidth - 8 // panel content width (margin + border + padding)
+    const fixed = 6        // cursor + checkbox + fold icon
+    c := listCols{showStart: true, showDue: true, showLast: true}
+
+    colsW := func() int {
+        w := 0
+        if c.showStart {
+            w += 12
+        }
+        if c.showDue {
+            w += 12
+        }
+        if c.showLast {
+            w += 12
+        }
+        return w
+    }
+
+    drop := []*bool{&c.showStart, &c.showLast, &c.showDue}
+    if isHistory {
+        // History keeps the Completed column the longest.
+        drop = []*bool{&c.showStart, &c.showDue, &c.showLast}
+    }
+    for _, d := range drop {
+        if inner-fixed-colsW() >= minTitleColWidth {
+            break
+        }
+        *d = false
+    }
+
+    c.titleW = inner - fixed - colsW()
+    if c.titleW < minTitleColWidth {
+        c.titleW = minTitleColWidth
+    }
+    if max := termWidth * titleColMaxWidthPct / 100; c.titleW > max && max >= minTitleColWidth {
+        c.titleW = max
+    }
+    return c
+}
+
 func renderSortDivider(availW int, sortLabel string) string {
     prefix := "  ↕ sort:" + sortLabel + " "
     remainW := availW - len([]rune(prefix))
@@ -125,29 +176,38 @@ func renderPlainDivider(availW int) string {
 }
 
 func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistory bool, sortMode taskSortMode) {
-    titleW := titleColWidth(termWidth)
+    c := taskListCols(termWidth, isHistory)
 
     startLabel := padRight("Start", 12)
     dueLabel := padRight("Due", 12)
-    prioLabel := padRight("Priority", 12)
-    if !isHistory {
+    lastLabel := padRight("Priority", 12)
+    if isHistory {
+        lastLabel = padRight("Completed", 12)
+    } else {
         switch sortMode {
         case taskSortDueDate:
             dueLabel = padRight(">Due<", 12)
         case taskSortStartDate:
             startLabel = padRight(">Start<", 12)
         case taskSortPriority:
-            prioLabel = padRight(">Priority<", 12)
+            lastLabel = padRight(">Priority<", 12)
         }
     }
 
     const prefix = "      "
-    var headerLeft string
+    title := "Task"
     if isHistory {
-        headerLeft = prefix + padRight("Completed tasks", titleW) + padRight("Start", 12) +
-            padRight("Due", 12) + padRight("Completed", 12)
-    } else {
-        headerLeft = prefix + padRight("Task", titleW) + startLabel + dueLabel + prioLabel
+        title = "Completed tasks"
+    }
+    headerLeft := prefix + padRight(title, c.titleW)
+    if c.showStart {
+        headerLeft += startLabel
+    }
+    if c.showDue {
+        headerLeft += dueLabel
+    }
+    if c.showLast {
+        headerLeft += lastLabel
     }
     padW := termWidth - 8 - len([]rune(headerLeft))
     if padW >= 4 {
@@ -333,8 +393,11 @@ func selfUpdate() error {
     }
 
     assetName := "taskr"
-    if runtime.GOOS == "windows" {
+    switch runtime.GOOS {
+    case "windows":
         assetName = "taskr.exe"
+    case "darwin":
+        assetName = "taskr-macos-" + runtime.GOARCH
     }
     tmpFile := filepath.Join(os.TempDir(), assetName)
     defer os.Remove(tmpFile)

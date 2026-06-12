@@ -2,3 +2,4 @@ taskr
 taskr.exe
 *.tmp
 *.bak
+taskr-macos-*

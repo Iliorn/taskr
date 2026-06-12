@@ -447,7 +447,8 @@ func (m model) renderHistoryList() string {
 }
 
 func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) string {
-	titleW := titleColWidth(m.termWidth)
+	cols := taskListCols(m.termWidth, true)
+	titleW := cols.titleW
 	cursorStr := "  "
 	if index == cursor && active {
 		cursorStr = "▶ "
@@ -465,11 +466,18 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) st
 		completedVal = t.CompletedAt.Format("02-01-06")
 	}
 	titleCol := padRight(truncate(t.Title, titleW), titleW)
-	startCol := padRight(startVal, 12)
-	dueCol := padRight(dueVal, 12)
-	completedCol := padRight(completedVal, 12)
+	dateCols := ""
+	if cols.showStart {
+		dateCols += padRight(startVal, 12)
+	}
+	if cols.showDue {
+		dateCols += padRight(dueVal, 12)
+	}
+	if cols.showLast {
+		dateCols += padRight(completedVal, 12)
+	}
 	tagsPart := m.getRenderedTags(t.Tags)
-	mainW := len([]rune(cursorStr)) + 4 + len([]rune(titleCol)) + len([]rune(startCol)) + len([]rune(dueCol)) + len([]rune(completedCol))
+	mainW := len([]rune(cursorStr)) + 4 + len([]rune(titleCol)) + len([]rune(dateCols))
 	tagsStr := ""
 	if tagsPart != "" {
 		tagsW := 0
@@ -490,12 +498,12 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) st
 	if index == cursor && active {
 		return selectedStyle.Render(cursorStr+"[") +
 			checkDoneStyle.Render("✓") +
-			selectedStyle.Render("] "+titleCol+startCol+dueCol+completedCol) +
+			selectedStyle.Render("] "+titleCol+dateCols) +
 			tagsStr + "\n"
 	}
 	return normalStyle.Render(cursorStr+"[") +
 		checkDoneStyle.Render("✓") +
-		normalStyle.Render("] "+titleCol+startCol+dueCol+completedCol) +
+		normalStyle.Render("] "+titleCol+dateCols) +
 		tagsStr + "\n"
 }
 
@@ -504,7 +512,7 @@ func (m model) renderSubtaskLine(sub *todo.Todo, index, total int) string {
 	if index == total-1 {
 		connector = "└"
 	}
-	titleW := titleColWidth(m.termWidth) - 4
+	titleW := taskListCols(m.termWidth, false).titleW - 4
 	if titleW < 10 {
 		titleW = 10
 	}
@@ -515,7 +523,8 @@ func (m model) renderSubtaskLine(sub *todo.Todo, index, total int) string {
 }
 
 func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool, overdueSet map[string]bool) string {
-	titleW := titleColWidth(m.termWidth)
+	cols := taskListCols(m.termWidth, false)
+	titleW := cols.titleW
 	cursorStr := "  "
 	if index == cursor && active {
 		cursorStr = "▶ "
@@ -549,11 +558,17 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 		dueVal = t.DueDate.Format("02-01-06")
 	}
 	titleCol := padRight(truncate(title, titleW-1), titleW-1)
-	startCol := padRight(startVal, 12)
-	dueCol := padRight(dueVal, 12)
-	prioCol := padRight(t.Priority.Icon()+" "+t.Priority.String(), 12)
 	tagsPart := m.getRenderedTags(t.Tags)
-	line := cursorStr + checkbox + foldIcon + titleCol + startCol + dueCol + prioCol
+	line := cursorStr + checkbox + foldIcon + titleCol
+	if cols.showStart {
+		line += padRight(startVal, 12)
+	}
+	if cols.showDue {
+		line += padRight(dueVal, 12)
+	}
+	if cols.showLast {
+		line += padRight(t.Priority.Icon()+" "+t.Priority.String(), 12)
+	}
 
 	// Only append tags if they fit within the inner panel content width.
 	tagsStr := ""

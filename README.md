@@ -32,9 +32,11 @@ go build -o taskr .
 mv taskr ~/.local/bin/   # or anywhere on your PATH
 ```
 
-**Pre-built binary** (Linux / Windows):
+**Pre-built binary** (Linux / Windows / macOS):
 
-Download the latest release from the [Releases](https://github.com/luciphere/taskr/releases) page — `taskr` for Linux, `taskr.exe` for Windows (x64).
+Download the latest release from the [Releases](https://github.com/luciphere/taskr/releases) page — `taskr` for Linux, `taskr.exe` for Windows (x64), `taskr-macos-arm64` (Apple Silicon) or `taskr-macos-amd64` (Intel) for macOS.
+
+On macOS, run `chmod +x taskr-macos-*` after downloading; if Gatekeeper blocks it, clear the quarantine flag with `xattr -d com.apple.quarantine taskr-macos-*`.
 
 On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. Self-update (`U`) requires the [GitHub CLI](https://cli.github.com/) on all platforms.
 
