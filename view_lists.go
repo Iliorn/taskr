@@ -199,23 +199,30 @@ func (m model) renderStatsList() string {
 
 	now := m.frameTime
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	tomorrow := today.AddDate(0, 0, 1)
+	weekAhead := today.AddDate(0, 0, 7)
 	weekAgo := today.AddDate(0, 0, -7)
+	twoWeeksAgo := today.AddDate(0, 0, -14)
 	monthAgo := today.AddDate(0, -1, 0)
 
-	var totalTasks, activeTasks, doneTasks, overdueTasks int
-	var doneToday, doneThisWeek, doneThisMonth int
+	var activeTasks, overdueTasks, dueToday, dueThisWeek int
+	var doneToday, doneThisWeek, doneThisMonth, doneLastWeek int
+	var createdThisWeek int
 	var highPri, medPri, lowPri int
-	var withNotes, withLearnings int
-	projectCounts := make(map[string]int)
+	var timeToDone []time.Duration
+	var activeAges []time.Duration
+	var oldestAge time.Duration
+	oldestTitle := ""
 
 	for i := range m.todos {
 		t := &m.todos[i]
 		if t.ParentID != "" {
 			continue
 		}
-		totalTasks++
+		if !t.CreatedAt.Before(weekAgo) {
+			createdThisWeek++
+		}
 		if t.Status == todo.Done {
-			doneTasks++
 			if !t.CompletedAt.IsZero() {
 				if !t.CompletedAt.Before(today) {
 					doneToday++
@@ -223,14 +230,29 @@ func (m model) renderStatsList() string {
 				if !t.CompletedAt.Before(weekAgo) {
 					doneThisWeek++
 				}
+				if !t.CompletedAt.Before(twoWeeksAgo) && t.CompletedAt.Before(weekAgo) {
+					doneLastWeek++
+				}
 				if !t.CompletedAt.Before(monthAgo) {
 					doneThisMonth++
+					timeToDone = append(timeToDone, t.CompletedAt.Sub(t.CreatedAt))
 				}
 			}
 		} else {
 			activeTasks++
-			if t.IsOverdue() {
+			age := now.Sub(t.CreatedAt)
+			activeAges = append(activeAges, age)
+			if age > oldestAge {
+				oldestAge = age
+				oldestTitle = t.Title
+			}
+			switch {
+			case t.IsOverdue():
 				overdueTasks++
+			case !t.DueDate.IsZero() && t.DueDate.Before(tomorrow):
+				dueToday++
+			case !t.DueDate.IsZero() && t.DueDate.Before(weekAhead):
+				dueThisWeek++
 			}
 			switch t.Priority {
 			case todo.PriorityHigh:
@@ -241,15 +263,6 @@ func (m model) renderStatsList() string {
 				lowPri++
 			}
 		}
-		if t.Notes != "" {
-			withNotes++
-		}
-		if len(t.Learnings) > 0 {
-			withLearnings++
-		}
-		if t.Project != "" {
-			projectCounts[t.Project]++
-		}
 	}
 
 	availW := m.termWidth - 8
@@ -257,8 +270,6 @@ func (m model) renderStatsList() string {
 
 	b.WriteString(statsHeaderStyle.Render("  Productivity Stats") + "\n")
 	b.WriteString(renderPlainDivider(availW))
-
-	b.WriteString(statsHeaderStyle.Render("  Overview") + "\n")
 
 	barW := availW - statsLabelWidth - statsValueWidth - 5
 	if barW < 0 {
@@ -301,24 +312,61 @@ func (m model) renderStatsList() string {
 		}
 	}
 
-	renderStat("Total tasks", totalTasks, 0, false)
-	renderStat("Active", activeTasks, totalTasks, true)
-	renderStat("Completed", doneTasks, totalTasks, true)
+	// ── Workload: what demands attention right now ───────────────────────
+	b.WriteString(statsHeaderStyle.Render("  Workload") + "\n")
 	if overdueTasks > 0 {
 		labelStr := padRight("  Overdue", statsLabelWidth)
 		b.WriteString(detailLabelStyle.Render(labelStr) + overdueCountStyle.Render(fmt.Sprintf("%d", overdueTasks)) + "\n")
 	} else {
 		renderStat("Overdue", 0, 0, false)
 	}
+	renderStat("Due today", dueToday, 0, false)
+	renderStat("Due this week", dueThisWeek, 0, false)
+	renderStat("Active total", activeTasks, 0, false)
 	b.WriteString("\n")
 
-	b.WriteString(statsHeaderStyle.Render("  Completion velocity") + "\n")
-	renderStat("Today", doneToday, 0, false)
-	renderStat("This week", doneThisWeek, 0, false)
-	renderStat("This month", doneThisMonth, 0, false)
-	if doneThisWeek > 0 {
-		avg := fmt.Sprintf("%.1f tasks/day", float64(doneThisWeek)/7.0)
-		b.WriteString(detailLabelStyle.Render(padRight("  Avg (7d)", statsLabelWidth)) + normalStyle.Render(avg) + "\n")
+	// ── Flow: is the backlog growing or shrinking? ───────────────────────
+	b.WriteString(statsHeaderStyle.Render("  Flow (last 7 days)") + "\n")
+	renderStat("Created", createdThisWeek, 0, false)
+	renderStat("Completed", doneThisWeek, 0, false)
+	net := createdThisWeek - doneThisWeek
+	netLabel := detailLabelStyle.Render(padRight("  Net backlog", statsLabelWidth))
+	switch {
+	case net > 0:
+		b.WriteString(netLabel + overdueCountStyle.Render(fmt.Sprintf("+%d ▲ growing", net)) + "\n")
+	case net < 0:
+		b.WriteString(netLabel + activeCountStyle.Render(fmt.Sprintf("%d ▼ shrinking", net)) + "\n")
+	default:
+		b.WriteString(netLabel + dimStyle.Render("±0 → steady") + "\n")
+	}
+	trendArrow := "→"
+	if doneThisWeek > doneLastWeek {
+		trendArrow = "↑"
+	} else if doneThisWeek < doneLastWeek {
+		trendArrow = "↓"
+	}
+	b.WriteString(detailLabelStyle.Render(padRight("  vs last week", statsLabelWidth)) +
+		normalStyle.Render(fmt.Sprintf("%d done vs %d  %s", doneThisWeek, doneLastWeek, trendArrow)) + "\n")
+	b.WriteString("\n")
+
+	// ── Throughput: how long do tasks linger? ────────────────────────────
+	b.WriteString(statsHeaderStyle.Render("  Throughput") + "\n")
+	ttdLabel := detailLabelStyle.Render(padRight("  Time to done (30d)", statsLabelWidth))
+	if len(timeToDone) > 0 {
+		b.WriteString(ttdLabel + normalStyle.Render("median "+formatDays(medianDuration(timeToDone))) + "\n")
+	} else {
+		b.WriteString(ttdLabel + dimStyle.Render("no completions yet") + "\n")
+	}
+	if len(activeAges) > 0 {
+		b.WriteString(detailLabelStyle.Render(padRight("  Median active age", statsLabelWidth)) +
+			normalStyle.Render(formatDays(medianDuration(activeAges))) + "\n")
+		oldestW := availW - statsLabelWidth - 16
+		if oldestW < 10 {
+			oldestW = 10
+		}
+		b.WriteString(detailLabelStyle.Render(padRight("  Oldest active", statsLabelWidth)) +
+			normalStyle.Render(truncate(oldestTitle, oldestW)) +
+			dimStyle.Render("  ("+formatDays(oldestAge)+")") + "\n")
 	}
 	b.WriteString("\n")
 
@@ -330,43 +378,38 @@ func (m model) renderStatsList() string {
 		b.WriteString("\n")
 	}
 
-	if len(projectCounts) > 0 {
-		b.WriteString(statsHeaderStyle.Render("  Projects") + "\n")
-		type projEntry struct {
-			name  string
-			count int
-		}
-		entries := make([]projEntry, 0, len(projectCounts))
-		for name, count := range projectCounts {
-			entries = append(entries, projEntry{name, count})
-		}
-		sort.Slice(entries, func(i, j int) bool {
-			if entries[i].count != entries[j].count {
-				return entries[i].count > entries[j].count
-			}
-			return entries[i].name < entries[j].name
-		})
-		maxShow := 8
-		if len(entries) < maxShow {
-			maxShow = len(entries)
-		}
-		for _, e := range entries[:maxShow] {
-			labelStr := padRight("  "+truncate(e.name, statsLabelWidth-4), statsLabelWidth)
-			b.WriteString(normalStyle.Render(labelStr) + activeCountStyle.Render(fmt.Sprintf("%d tasks", e.count)) + "\n")
-		}
-		if len(entries) > maxShow {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("  ... and %d more projects", len(entries)-maxShow)) + "\n")
-		}
-		b.WriteString("\n")
+	b.WriteString(statsHeaderStyle.Render("  Completion velocity") + "\n")
+	renderStat("Today", doneToday, 0, false)
+	renderStat("This week", doneThisWeek, 0, false)
+	renderStat("This month", doneThisMonth, 0, false)
+	if doneThisWeek > 0 {
+		avg := fmt.Sprintf("%.1f tasks/day", float64(doneThisWeek)/7.0)
+		b.WriteString(detailLabelStyle.Render(padRight("  Avg (7d)", statsLabelWidth)) + normalStyle.Render(avg) + "\n")
 	}
 
-	b.WriteString(statsHeaderStyle.Render("  Content") + "\n")
-	renderStat("With notes", withNotes, totalTasks, false)
-	renderStat("With learnings", withLearnings, totalTasks, false)
-	renderStat("Total learnings", len(m.allLearnings()), 0, false)
-	renderStat("Tags in use", len(m.getAllTagsSorted()), 0, false)
-
 	return b.String()
+}
+
+// medianDuration returns the median of ds, sorting in place.
+func medianDuration(ds []time.Duration) time.Duration {
+	sort.Slice(ds, func(i, j int) bool { return ds[i] < ds[j] })
+	mid := len(ds) / 2
+	if len(ds)%2 == 0 {
+		return (ds[mid-1] + ds[mid]) / 2
+	}
+	return ds[mid]
+}
+
+func formatDays(d time.Duration) string {
+	days := d.Hours() / 24
+	switch {
+	case days < 1:
+		return "<1 day"
+	case days < 10:
+		return fmt.Sprintf("%.1f days", days)
+	default:
+		return fmt.Sprintf("%.0f days", days)
+	}
 }
 
 // ── Task lists ────────────────────────────────────────────────────────────────
