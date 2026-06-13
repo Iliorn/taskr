@@ -472,7 +472,12 @@ func selfUpdate() error {
     case "windows":
         assetName = "taskr.exe"
     case "darwin":
-        assetName = "taskr-macos-" + runtime.GOARCH
+        // Friendly asset names so Mac users don't need to know their CPU arch.
+        if runtime.GOARCH == "arm64" {
+            assetName = "taskr-macos-apple-silicon"
+        } else {
+            assetName = "taskr-macos-intel"
+        }
     }
     tmpFile := filepath.Join(os.TempDir(), assetName)
     defer os.Remove(tmpFile)

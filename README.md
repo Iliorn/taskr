@@ -36,7 +36,7 @@ mv taskr ~/.local/bin/   # or anywhere on your PATH
 
 **Pre-built binary** (Linux / Windows / macOS):
 
-Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page — `taskr` for Linux, `taskr.exe` for Windows (x64), `taskr-macos-arm64` (Apple Silicon) or `taskr-macos-amd64` (Intel) for macOS.
+Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page — `taskr` for Linux, `taskr.exe` for Windows (x64), and for macOS pick `taskr-macos-apple-silicon` (Apple Silicon — M1/M2/M3/M4, i.e. any Mac from 2020 onward) or `taskr-macos-intel` (older Intel-based Macs).
 
 On macOS, run `chmod +x taskr-macos-*` after downloading; if Gatekeeper blocks it, clear the quarantine flag with `xattr -d com.apple.quarantine taskr-macos-*`.
 
