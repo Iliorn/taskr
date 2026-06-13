@@ -477,7 +477,7 @@ func selfUpdate() error {
     tmpFile := filepath.Join(os.TempDir(), assetName)
     defer os.Remove(tmpFile)
 
-    cmd := exec.Command("gh", "release", "download", "--repo", "luciphere/taskr",
+    cmd := exec.Command("gh", "release", "download", "--repo", "iliorn/taskr",
         "--pattern", assetName, "-D", os.TempDir(), "--clobber")
     if out, err := cmd.CombinedOutput(); err != nil {
         return fmt.Errorf("download failed: %s", strings.TrimSpace(string(out)))

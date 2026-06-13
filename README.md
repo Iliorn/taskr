@@ -27,7 +27,7 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 **From source:**
 
 ```sh
-git clone https://github.com/luciphere/taskr
+git clone https://github.com/iliorn/taskr
 cd taskr
 go mod tidy
 go build -o taskr .
@@ -36,7 +36,7 @@ mv taskr ~/.local/bin/   # or anywhere on your PATH
 
 **Pre-built binary** (Linux / Windows / macOS):
 
-Download the latest release from the [Releases](https://github.com/luciphere/taskr/releases) page — `taskr` for Linux, `taskr.exe` for Windows (x64), `taskr-macos-arm64` (Apple Silicon) or `taskr-macos-amd64` (Intel) for macOS.
+Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page — `taskr` for Linux, `taskr.exe` for Windows (x64), `taskr-macos-arm64` (Apple Silicon) or `taskr-macos-amd64` (Intel) for macOS.
 
 On macOS, run `chmod +x taskr-macos-*` after downloading; if Gatekeeper blocks it, clear the quarantine flag with `xattr -d com.apple.quarantine taskr-macos-*`.
 
