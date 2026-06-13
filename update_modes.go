@@ -241,13 +241,29 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "enter", "esc":
+		case "enter":
 			m.mode = modeNormal
 			if m.tab == tabLearnings {
 				m.learningSearchQuery = m.learningSearchInput.Value()
 				m.learningCursor = 0
 			} else {
 				m.searchQuery = m.searchInput.Value()
+				m.cursor = 0
+				m.projectCursor = 0
+				m.listOffset = 0
+				m.markCacheDirty()
+			}
+			return m, nil
+		case "esc":
+			// Cancel: discard the query and restore the unfiltered list.
+			m.mode = modeNormal
+			if m.tab == tabLearnings {
+				m.learningSearchInput.SetValue("")
+				m.learningSearchQuery = ""
+				m.learningCursor = 0
+			} else {
+				m.searchInput.SetValue("")
+				m.searchQuery = ""
 				m.cursor = 0
 				m.projectCursor = 0
 				m.listOffset = 0
@@ -275,8 +291,15 @@ func (m model) updateSearchTagTab(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "enter", "esc":
+		case "enter":
 			m.mode = modeNormal
+			m.tagTabCursor = 0
+			return m, nil
+		case "esc":
+			// Cancel: discard the filter and restore the full tag list.
+			m.mode = modeNormal
+			m.tagTabSearchInput.SetValue("")
+			m.tagTabSearchQuery = ""
 			m.tagTabCursor = 0
 			return m, nil
 		}
