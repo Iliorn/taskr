@@ -70,6 +70,8 @@ func (m model) View() string {
 
 	if showDetail {
 		switch {
+		case m.tab == tabSettings:
+			detailContent = "" // settings tab has no detail pane
 		case m.tab == tabTags || m.tab == tabLearnings || m.tab == tabStats:
 			detailContent = m.buildDetailContent()
 		default:
@@ -305,11 +307,13 @@ func (m model) renderKeyHints(w int) string {
 	case m.tab == tabLearnings:
 		hints = "j/k nav · r edit · x delete · s sort · / search"
 	case m.tab == tabStats:
-		hints = "tab or 1-6 · switch view"
+		hints = "tab or 1-7 · switch view"
 	case m.tab == tabCalendar && m.calendar.focusTimeline:
 		hints = "j/k select entry · r edit times · x delete · esc back"
 	case m.tab == tabCalendar:
 		hints = "←/→ day · ↑/↓ week · [ ] month · t today · enter entries"
+	case m.tab == tabSettings:
+		hints = "↑/↓ select · ←/→ change theme · enter activate"
 	}
 	return helpStyle.Render("  " + truncate(hints, w))
 }
@@ -461,7 +465,7 @@ func (m model) renderHelpFullscreen() string {
 			{"↑/↓  or  j/k", "navigate list"},
 			{"enter", "open details"},
 			{"esc", "go back"},
-			{"tab  or  1-6", "switch tabs"},
+			{"tab  or  1-7", "switch tabs"},
 			{"?", "close help"},
 		}},
 		{"Tasks", [][2]string{
@@ -497,10 +501,7 @@ func (m model) renderHelpFullscreen() string {
 			{"x", "delete learning"},
 			{"s", "sort date/alpha"},
 		}},
-		{"Stats (tab 5)", [][2]string{
-			{"5 or tab", "switch to stats view"},
-		}},
-		{"Calendar (tab 6)", [][2]string{
+		{"Calendar (tab 2)", [][2]string{
 			{"←/→  ↑/↓", "move by day / week"},
 			{"[ / ]", "previous / next month"},
 			{"t", "jump to today"},
@@ -508,10 +509,17 @@ func (m model) renderHelpFullscreen() string {
 			{"r", "edit entry times (09:12-10:00 or 45m)"},
 			{"x", "delete selected entry"},
 		}},
+		{"Stats (tab 6)", [][2]string{
+			{"6 or tab", "switch to stats view"},
+		}},
+		{"Settings (tab 7)", [][2]string{
+			{"↑/↓", "select setting"},
+			{"←/→", "change theme"},
+			{"enter", "change / check updates / self-update"},
+		}},
 		{"App", [][2]string{
 			{"u", "undo last change"},
 			{"q", "quit"},
-			{"U", "self-update to latest release"},
 		}},
 		{"Date input", [][2]string{
 			{"dd-mm-yy", "exact date (e.g. 15-06-25)"},
@@ -800,13 +808,14 @@ func (m model) buildTagDetailLines() []string {
 func (m model) renderTabs() string {
 	activeStyles := [numTabs]lipgloss.Style{
 		tabTasksActiveStyle,
+		tabCalendarActiveStyle,
 		tabProjectsActiveStyle,
 		tabTagsActiveStyle,
 		tabLearningsActiveStyle,
 		tabStatsActiveStyle,
-		tabCalendarActiveStyle,
+		tabSettingsActiveStyle,
 	}
-	names := [numTabs]string{"1:Tasks", "2:Projects", "3:Tags", "4:Learnings", "5:Stats", "6:Calendar"}
+	names := [numTabs]string{"1:Tasks", "2:Calendar", "3:Projects", "4:Tags", "5:Learnings", "6:Stats", "7:Settings"}
 	var parts [numTabs]string
 	for i := range names {
 		if tab(i) == m.tab {
@@ -833,6 +842,8 @@ func (m model) renderListContent() string {
 		return m.renderLearningList()
 	case tabStats:
 		return m.renderStatsList()
+	case tabSettings:
+		return m.renderSettingsList()
 	}
 	return ""
 }

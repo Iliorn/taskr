@@ -11,16 +11,16 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 ## Features
 
 - **Tasks** — add, complete, delete, rename, set priority, due dates, start dates
+- **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
 - **Projects** — group tasks, Gantt timeline view
 - **Tags** — tag tasks, filter by tag, rename/delete globally
 - **Learnings** — attach notes and learnings to tasks, browse them in a dedicated tab
 - **Stats** — productivity overview with an activity heatmap
 - **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
-- **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
 - **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`)
 - **Search** — live filter across tasks, projects, tags and learnings
 - **Undo** — multi-level undo for all mutations
-- **Self-update** — press `U` to pull the latest release in-place
+- **Settings** — switch theme, view the version, check for and install updates (tab 7)
 
 ## Installation
 
@@ -30,7 +30,7 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 git clone https://github.com/iliorn/taskr
 cd taskr
 go mod tidy
-go build -o taskr .
+go build -ldflags "-X main.appVersion=$(git describe --tags --abbrev=0)" -o taskr .
 mv taskr ~/.local/bin/   # or anywhere on your PATH
 ```
 
@@ -40,7 +40,7 @@ Download the latest release from the [Releases](https://github.com/iliorn/taskr/
 
 On macOS, run `chmod +x taskr-macos-*` after downloading; if Gatekeeper blocks it, clear the quarantine flag with `xattr -d com.apple.quarantine taskr-macos-*`.
 
-On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. Self-update (`U`) requires the [GitHub CLI](https://cli.github.com/) on all platforms.
+On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. Self-update (Settings tab → "Update to latest release") requires the [GitHub CLI](https://cli.github.com/) on all platforms.
 
 ## Usage
 
@@ -64,8 +64,7 @@ taskr
 | `/` | Search / filter |
 | `enter` | Open detail view |
 | `u` | Undo |
-| `U` | Self-update |
-| `tab` / `1–6` | Switch tabs |
+| `tab` / `1–7` | Switch tabs (7 = Settings) |
 | `?` | Show all shortcuts |
 
 ### Quick-add syntax

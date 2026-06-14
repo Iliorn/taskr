@@ -2,184 +2,246 @@ package main
 
 import "github.com/charmbracelet/lipgloss"
 
+// ── Theme ───────────────────────────────────────────────────────────────────
+//
+// A theme is the semantic palette the app is built from. All the xxxStyle vars
+// below are (re)built by applyTheme, so switching theme is just a matter of
+// calling applyTheme with a different palette. The hand-tuned gradients further
+// down stay fixed (palette-only theming).
+
+type theme struct {
+	name string
+
+	accent   lipgloss.Color // primary accent — titles, labels, input border
+	green    lipgloss.Color
+	orange   lipgloss.Color
+	purple   lipgloss.Color
+	purpleLt lipgloss.Color
+	yellow   lipgloss.Color
+	yellowLt lipgloss.Color
+	blue     lipgloss.Color
+	teal     lipgloss.Color
+	red      lipgloss.Color
+
+	fg         lipgloss.Color // primary text
+	dim        lipgloss.Color // borders, completed/muted text
+	help       lipgloss.Color // hint text
+	bg         lipgloss.Color // dark base — used as fg on colored backgrounds
+	inactiveBg lipgloss.Color // inactive tab background
+}
+
+// themes holds the built-in palettes. The first entry is the default.
+var themes = []theme{
+	{
+		name:       "TokyoNight",
+		accent:     "#FF6E9C",
+		green:      "#A8FF78",
+		orange:     "#FF9E64",
+		purple:     "#d480f0",
+		purpleLt:   "#e8a0ff",
+		yellow:     "#FFE66D",
+		yellowLt:   "#FFF5A0",
+		blue:       "#78D4FF",
+		teal:       "#5EEAD4",
+		red:        "#FF0000",
+		fg:         "#FFFFFF",
+		dim:        "#555555",
+		help:       "#888888",
+		bg:         "#1a1a1a",
+		inactiveBg: "#333333",
+	},
+	{
+		name:       "Catppuccin",
+		accent:     "#cba6f7",
+		green:      "#a6e3a1",
+		orange:     "#fab387",
+		purple:     "#cba6f7",
+		purpleLt:   "#dec0f7",
+		yellow:     "#f9e2af",
+		yellowLt:   "#faf0c6",
+		blue:       "#89b4fa",
+		teal:       "#94e2d5",
+		red:        "#f38ba8",
+		fg:         "#cdd6f4",
+		dim:        "#585b70",
+		help:       "#6c7086",
+		bg:         "#1e1e2e",
+		inactiveBg: "#313244",
+	},
+	{
+		name:       "Gruvbox",
+		accent:     "#fabd2f",
+		green:      "#b8bb26",
+		orange:     "#fe8019",
+		purple:     "#d3869b",
+		purpleLt:   "#e0a0b4",
+		yellow:     "#fabd2f",
+		yellowLt:   "#ffe5a0",
+		blue:       "#83a598",
+		teal:       "#8ec07c",
+		red:        "#fb4934",
+		fg:         "#ebdbb2",
+		dim:        "#665c54",
+		help:       "#928374",
+		bg:         "#1d2021",
+		inactiveBg: "#3c3836",
+	},
+	{
+		name:       "Nord",
+		accent:     "#88c0d0",
+		green:      "#a3be8c",
+		orange:     "#d08770",
+		purple:     "#b48ead",
+		purpleLt:   "#c8a0c0",
+		yellow:     "#ebcb8b",
+		yellowLt:   "#f0dcad",
+		blue:       "#81a1c1",
+		teal:       "#8fbcbb",
+		red:        "#bf616a",
+		fg:         "#eceff4",
+		dim:        "#4c566a",
+		help:       "#616e88",
+		bg:         "#2e3440",
+		inactiveBg: "#3b4252",
+	},
+}
+
+func themeByName(name string) theme {
+	for _, t := range themes {
+		if t.name == name {
+			return t
+		}
+	}
+	return themes[0]
+}
+
+// ── Styles (assigned by applyTheme) ───────────────────────────────────────────
+
 var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FF6E9C"))
+	titleStyle lipgloss.Style
 
-	tabTasksActiveStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#1a1a1a")).
-				Background(lipgloss.Color("#A8FF78")).
-				Padding(0, 1)
+	tabTasksActiveStyle     lipgloss.Style
+	tabProjectsActiveStyle  lipgloss.Style
+	tabTagsActiveStyle      lipgloss.Style
+	tabLearningsActiveStyle lipgloss.Style
+	tabStatsActiveStyle     lipgloss.Style
+	tabCalendarActiveStyle  lipgloss.Style
+	tabSettingsActiveStyle  lipgloss.Style
+	tabInactiveStyle        lipgloss.Style
 
-	tabProjectsActiveStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#1a1a1a")).
-				Background(lipgloss.Color("#FF9E64")).
-				Padding(0, 1)
+	selectedStyle   lipgloss.Style
+	normalStyle     lipgloss.Style
+	overdueStyle    lipgloss.Style
+	depOverdueStyle lipgloss.Style
+	helpStyle       lipgloss.Style
 
-	tabTagsActiveStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#1a1a1a")).
-				Background(lipgloss.Color("#d480f0")).
-				Padding(0, 1)
+	detailTitleStyle    lipgloss.Style
+	detailLabelStyle    lipgloss.Style
+	detailValueStyle    lipgloss.Style
+	detailSelectedStyle lipgloss.Style
 
-	tabLearningsActiveStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#1a1a1a")).
-				Background(lipgloss.Color("#FFE66D")).
-				Padding(0, 1)
+	inputStyle   lipgloss.Style
+	confirmStyle lipgloss.Style
+	searchStyle  lipgloss.Style
+	dimStyle     lipgloss.Style
 
-	tabStatsActiveStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#1a1a1a")).
-				Background(lipgloss.Color("#78D4FF")).
-				Padding(0, 1)
+	listPanelStyle   lipgloss.Style
+	detailPanelStyle lipgloss.Style
 
-	tabCalendarActiveStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#1a1a1a")).
-				Background(lipgloss.Color("#5EEAD4")).
-				Padding(0, 1)
+	ganttTodayStyle lipgloss.Style
+	ganttDoneStyle  lipgloss.Style
+	checkDoneStyle  lipgloss.Style
+	headerStyle     lipgloss.Style
 
-	tabInactiveStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#ffffff")).
-				Background(lipgloss.Color("#333333")).
-				Padding(0, 1)
+	tagStyle         lipgloss.Style
+	tagSelectedStyle lipgloss.Style
 
-	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#A8FF78")).
-			Bold(true)
+	overdueCountStyle lipgloss.Style
+	activeCountStyle  lipgloss.Style
+	doneCountStyle    lipgloss.Style
 
-	normalStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF"))
+	pageIndicatorStyle lipgloss.Style
 
-	overdueStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF0000")).
-			Bold(true)
+	learningStyle         lipgloss.Style
+	learningSelectedStyle lipgloss.Style
 
-	depOverdueStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF9E64")).
-			Bold(true)
+	statsHeaderStyle lipgloss.Style
+	timerStyle       lipgloss.Style
 
-	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#888888"))
+	calHeaderStyle      lipgloss.Style
+	calSelectedDayStyle lipgloss.Style
+	calTodayStyle       lipgloss.Style
 
-	detailTitleStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#FFFFFF"))
-
-	detailLabelStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#FF6E9C"))
-
-	detailValueStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFFFF"))
-
-	detailSelectedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#A8FF78")).
-				Bold(true)
-
-	inputStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#FF6E9C")).
-			Padding(0, 1)
-
-	confirmStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF0000")).
-			Bold(true)
-
-	searchStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#A8FF78")).
-			Padding(0, 1)
-
-	dimStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#555555"))
-
-	listPanelStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#555555")).
-			Padding(0, 1).
-			MarginLeft(2)
-
-	detailPanelStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("#555555")).
-				Padding(0, 1).
-				MarginLeft(2)
-
-	ganttTodayStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF9E64")).
-			Bold(true)
-
-	ganttDoneStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#555555"))
-
-	checkDoneStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#A8FF78")).
-			Bold(true)
-
-	headerStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FF6E9C"))
-
-	tagStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#d480f0")).
-			Bold(true)
-
-	tagSelectedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#e8a0ff")).
-				Bold(true)
-
-	overdueCountStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FF0000")).
-				Bold(true)
-
-	activeCountStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#A8FF78")).
-				Bold(true)
-
-	doneCountStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#555555"))
-
-	pageIndicatorStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FF9E64")).
-				Bold(true)
-
-	learningStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFE66D")).
-			Bold(true)
-
-	learningSelectedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFF5A0")).
-				Bold(true)
-
-	statsHeaderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#78D4FF")).
-				Bold(true)
-
-	timerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#5EEAD4")).
-			Bold(true)
-
-	calHeaderStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#5EEAD4")).
-			Bold(true)
-
-	calSelectedDayStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#1a1a1a")).
-				Background(lipgloss.Color("#5EEAD4")).
-				Bold(true)
-
-	calTodayStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF9E64")).
-			Bold(true)
-
-	projLabelStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF9E64"))
+	projLabelStyle lipgloss.Style
 )
+
+// applyTheme rebuilds every style from the given palette. Call at startup and
+// whenever the user switches theme.
+func applyTheme(t theme) {
+	activeTab := func(c lipgloss.Color) lipgloss.Style {
+		return lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(c).Padding(0, 1)
+	}
+
+	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent)
+
+	tabTasksActiveStyle = activeTab(t.green)
+	tabProjectsActiveStyle = activeTab(t.orange)
+	tabTagsActiveStyle = activeTab(t.purple)
+	tabLearningsActiveStyle = activeTab(t.yellow)
+	tabStatsActiveStyle = activeTab(t.blue)
+	tabCalendarActiveStyle = activeTab(t.teal)
+	tabSettingsActiveStyle = activeTab(t.accent)
+	tabInactiveStyle = lipgloss.NewStyle().Foreground(t.fg).Background(t.inactiveBg).Padding(0, 1)
+
+	selectedStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
+	normalStyle = lipgloss.NewStyle().Foreground(t.fg)
+	overdueStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
+	depOverdueStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
+	helpStyle = lipgloss.NewStyle().Foreground(t.help)
+
+	detailTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(t.fg)
+	detailLabelStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent)
+	detailValueStyle = lipgloss.NewStyle().Foreground(t.fg)
+	detailSelectedStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
+
+	inputStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.accent).Padding(0, 1)
+	confirmStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
+	searchStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.green).Padding(0, 1)
+	dimStyle = lipgloss.NewStyle().Foreground(t.dim)
+
+	listPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.dim).Padding(0, 1).MarginLeft(2)
+	detailPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.dim).Padding(0, 1).MarginLeft(2)
+
+	ganttTodayStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
+	ganttDoneStyle = lipgloss.NewStyle().Foreground(t.dim)
+	checkDoneStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
+	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent)
+
+	tagStyle = lipgloss.NewStyle().Foreground(t.purple).Bold(true)
+	tagSelectedStyle = lipgloss.NewStyle().Foreground(t.purpleLt).Bold(true)
+
+	overdueCountStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
+	activeCountStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
+	doneCountStyle = lipgloss.NewStyle().Foreground(t.dim)
+
+	pageIndicatorStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
+
+	learningStyle = lipgloss.NewStyle().Foreground(t.yellow).Bold(true)
+	learningSelectedStyle = lipgloss.NewStyle().Foreground(t.yellowLt).Bold(true)
+
+	statsHeaderStyle = lipgloss.NewStyle().Foreground(t.blue).Bold(true)
+	timerStyle = lipgloss.NewStyle().Foreground(t.teal).Bold(true)
+
+	calHeaderStyle = lipgloss.NewStyle().Foreground(t.teal).Bold(true)
+	calSelectedDayStyle = lipgloss.NewStyle().Foreground(t.bg).Background(t.teal).Bold(true)
+	calTodayStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
+
+	projLabelStyle = lipgloss.NewStyle().Foreground(t.orange)
+}
+
+// Ensure styles are always populated (e.g. in tests that render without
+// constructing a full model). initialModel overrides this with the saved theme.
+func init() { applyTheme(themes[0]) }
 
 var ganttGradient = []lipgloss.Style{
 	lipgloss.NewStyle().Foreground(lipgloss.Color("#2a5a14")),

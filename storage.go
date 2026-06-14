@@ -22,6 +22,7 @@ type appSettings struct {
 	TaskSort     taskSortMode     `json:"task_sort"`
 	TagSort      tagSortMode      `json:"tag_sort"`
 	LearningSort learningSortMode `json:"learning_sort"`
+	Theme        string           `json:"theme"`
 }
 
 func settingsPath() string {

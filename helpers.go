@@ -533,6 +533,17 @@ func copyFile(srcPath, dstPath string) error {
 	return err
 }
 
+// latestRelease returns the tag name of the most recent GitHub release.
+func latestRelease() (string, error) {
+	cmd := exec.Command("gh", "release", "view", "--repo", "iliorn/taskr",
+		"--json", "tagName", "-q", ".tagName")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // ── Date parsing ─────────────────────────────────────────────────────────────
 
 // parseDueDate accepts dd-mm-yy, dd-mm-yyyy, and natural language shortcuts.

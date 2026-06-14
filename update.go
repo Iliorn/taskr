@@ -37,8 +37,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateDoneMsg:
 		if msg.err != nil {
 			m.err = fmt.Sprintf("Update failed: %v", msg.err)
+			m.updateStatus = "Update failed"
 		} else {
 			m.err = "Updated! Restart taskr to apply."
+			m.updateStatus = "Updated — restart to apply"
+		}
+		return m, clearErrAfter()
+	case updateCheckMsg:
+		if msg.err != nil {
+			m.err = fmt.Sprintf("Update check failed: %v", msg.err)
+			m.updateStatus = "Check failed"
+		} else if msg.latest == "" || msg.latest == appVersion {
+			m.updateStatus = "Up to date (" + appVersion + ")"
+		} else {
+			m.updateStatus = "Update available: " + msg.latest
 		}
 		return m, clearErrAfter()
 	case saveDoneMsg:
@@ -267,11 +279,6 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "u":
 			return m, m.performUndo()
-		case "U":
-			m.err = "Updating..."
-			return m, func() tea.Msg {
-				return updateDoneMsg{err: selfUpdate()}
-			}
 
 		case "n":
 			if m.tab == tabTasks && !m.showHistory && m.currentTodo() != nil {
@@ -281,17 +288,19 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "1":
 			m.switchTab(tabTasks)
 		case "2":
-			m.switchTab(tabProjects)
+			m.switchTab(tabCalendar)
 		case "3":
-			m.switchTab(tabTags)
+			m.switchTab(tabProjects)
 		case "4":
-			m.switchTab(tabLearnings)
+			m.switchTab(tabTags)
 		case "5":
+			m.switchTab(tabLearnings)
+		case "6":
 			m.tab = tabStats
 			m.pane = paneList
 			m.listOffset = 0
-		case "6":
-			m.switchTab(tabCalendar)
+		case "7":
+			m.switchTab(tabSettings)
 
 		case "tab":
 			m.switchTab((m.tab + 1) % numTabs)
@@ -314,6 +323,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "right":
 			if m.tab == tabCalendar {
 				m.moveCalendarDay(1)
+			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
+				m.cycleTheme(1)
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil && len(t.SubtaskIDs) > 0 {
 					m.expandedTasks[t.ID] = true
@@ -322,6 +333,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "left":
 			if m.tab == tabCalendar {
 				m.moveCalendarDay(-1)
+			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
+				m.cycleTheme(-1)
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil {
 					delete(m.expandedTasks, t.ID)
@@ -440,6 +453,7 @@ func (m *model) switchTab(t tab) {
 	m.projectCursor = 0
 	m.tagTabCursor = 0
 	m.learningCursor = 0
+	m.settingsCursor = 0
 	m.listOffset = 0
 	m.pane = paneList
 	m.searchQuery = ""
@@ -544,10 +558,16 @@ func (m *model) cycleSortMode() {
 		}
 		m.learningCursor = 0
 	}
+	m.persistSettings()
+}
+
+// persistSettings writes all current preferences to disk.
+func (m model) persistSettings() {
 	saveSettings(appSettings{
 		TaskSort:     m.taskSort,
 		TagSort:      m.tagSort,
 		LearningSort: m.learningSort,
+		Theme:        m.themeName,
 	})
 }
 
@@ -594,6 +614,10 @@ func (m *model) moveCursorUp() {
 		if m.learningCursor > 0 {
 			m.learningCursor--
 		}
+	case tabSettings:
+		if m.settingsCursor > 0 {
+			m.settingsCursor--
+		}
 	case tabProjects:
 		if m.projectTaskMode {
 			if m.cursor > 0 {
@@ -628,6 +652,10 @@ func (m *model) moveCursorDown() {
 	case tabLearnings:
 		if learnings := m.allLearnings(); m.learningCursor < len(learnings)-1 {
 			m.learningCursor++
+		}
+	case tabSettings:
+		if m.settingsCursor < numSettingsRows-1 {
+			m.settingsCursor++
 		}
 	case tabProjects:
 		projects := m.allProjectsForList()
@@ -684,8 +712,53 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 			m.detail = detailState{field: fieldStartDate}
 			m.invalidateDetailCache()
 		}
+	case tabSettings:
+		return m.handleSettingsEnter()
 	}
 	return m, nil
+}
+
+// ── Settings tab ──────────────────────────────────────────────────────────────
+
+func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
+	switch m.settingsCursor {
+	case settingTheme:
+		m.cycleTheme(1)
+	case settingCheckUpdate:
+		m.updateStatus = "Checking…"
+		return m, checkForUpdate()
+	case settingUpdate:
+		m.updateStatus = "Updating…"
+		return m, func() tea.Msg {
+			return updateDoneMsg{err: selfUpdate()}
+		}
+	}
+	return m, nil
+}
+
+// checkForUpdate queries the latest release tag asynchronously.
+func checkForUpdate() tea.Cmd {
+	return func() tea.Msg {
+		latest, err := latestRelease()
+		return updateCheckMsg{latest: latest, err: err}
+	}
+}
+
+// cycleTheme advances the theme by dir (+1 / -1), applies it, and persists.
+func (m *model) cycleTheme(dir int) {
+	idx := 0
+	for i, t := range themes {
+		if t.name == m.themeName {
+			idx = i
+			break
+		}
+	}
+	idx = (idx + dir + len(themes)) % len(themes)
+	m.themeName = themes[idx].name
+	applyTheme(themes[idx])
+	m.persistSettings()
+	m.invalidateDetailCache()
+	m.markCacheDirty()
 }
 
 func (m model) handleListRename() (tea.Model, tea.Cmd) {

@@ -733,3 +733,41 @@ func (m model) renderProjectListContent(projects []string) string {
 	}
 	return b.String()
 }
+
+// ── Settings list ─────────────────────────────────────────────────────────────
+
+func (m model) renderSettingsList() string {
+	b := getBuilder()
+	defer putBuilder(b)
+
+	labels := [numSettingsRows]string{
+		"Theme",
+		"Version",
+		"Check for updates",
+		"Update to latest release",
+	}
+	values := [numSettingsRows]string{
+		"‹ " + m.themeName + " ›",
+		appVersion,
+		"press enter to check",
+		"press enter to update",
+	}
+
+	b.WriteString(headerStyle.Render("Settings") + "\n\n")
+	for i := 0; i < numSettingsRows; i++ {
+		cursor := "  "
+		labelStyle := normalStyle
+		if i == m.settingsCursor {
+			cursor = selectedStyle.Render("→ ")
+			labelStyle = selectedStyle
+		}
+		label := labelStyle.Render(fmt.Sprintf("%-26s", labels[i]))
+		b.WriteString(cursor + label + helpStyle.Render(values[i]) + "\n")
+	}
+
+	if m.updateStatus != "" {
+		b.WriteString("\n  " + activeCountStyle.Render(m.updateStatus) + "\n")
+	}
+	b.WriteString("\n" + helpStyle.Render("  ↑/↓ select · ←/→ change theme · enter activate") + "\n")
+	return b.String()
+}

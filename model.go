@@ -17,14 +17,24 @@ type tab int
 
 const (
 	tabTasks tab = iota
+	tabCalendar
 	tabProjects
 	tabTags
 	tabLearnings
 	tabStats
-	tabCalendar
+	tabSettings
 )
 
-const numTabs = 6
+const numTabs = 7
+
+// Rows in the Settings tab.
+const (
+	settingTheme = iota
+	settingVersion
+	settingCheckUpdate
+	settingUpdate
+	numSettingsRows
+)
 
 type pane int
 
@@ -113,6 +123,10 @@ type editorFinishedMsg struct {
 }
 type saveTickMsg struct{}
 type updateDoneMsg struct{ err error }
+type updateCheckMsg struct {
+	latest string
+	err    error
+}
 type timerTickMsg struct{}
 
 // ── Sub-state structs ─────────────────────────────────────────────────────────
@@ -190,6 +204,7 @@ type model struct {
 	projectCursor       int
 	tagTabCursor        int
 	learningCursor      int
+	settingsCursor      int
 	searchQuery         string
 	tagTabSearchQuery   string
 	learningSearchQuery string
@@ -203,6 +218,8 @@ type model struct {
 	tagSort             tagSortMode
 	taskSort            taskSortMode
 	learningSort        learningSortMode
+	themeName           string
+	updateStatus        string
 	searchCursor        int
 
 	// Persistence
@@ -261,6 +278,8 @@ func initialModel() model {
 	}
 
 	settings := loadSettings()
+	th := themeByName(settings.Theme)
+	applyTheme(th)
 
 	m := model{
 		todos:               todos,
@@ -280,6 +299,7 @@ func initialModel() model {
 		tagSort:             settings.TagSort,
 		taskSort:            settings.TaskSort,
 		learningSort:        settings.LearningSort,
+		themeName:           th.name,
 		expandedTasks:       make(map[string]bool),
 		editorCmd:           resolveEditorCmd(),
 		frameTime:           time.Now(),
