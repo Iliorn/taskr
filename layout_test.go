@@ -3,118 +3,118 @@ package main
 import "testing"
 
 func TestComputeLayout(t *testing.T) {
-    tests := []struct {
-        name        string
-        input       layoutInput
-        wantDetailH int
-    }{
-        {
-            name: "basic layout",
-            input: layoutInput{
-                termW:       120,
-                termH:       40,
-                mode:        modeNormal,
-                tab:         tabTasks,
-                detailLines: 10,
-            },
-            wantDetailH: 10,
-        },
-        {
-            name: "stats tab no detail",
-            input: layoutInput{
-                termW:       120,
-                termH:       40,
-                mode:        modeNormal,
-                tab:         tabStats,
-                detailLines: 10,
-            },
-            wantDetailH: 0,
-        },
-        {
-            name: "input mode no detail",
-            input: layoutInput{
-                termW:       120,
-                termH:       40,
-                mode:        modeInput,
-                tab:         tabTasks,
-                detailLines: 10,
-            },
-            wantDetailH: 0,
-        },
-        {
-            name: "very small terminal",
-            input: layoutInput{
-                termW:       40,
-                termH:       10,
-                mode:        modeNormal,
-                tab:         tabTasks,
-                detailLines: 20,
-            },
-        },
-        {
-            name: "with error and search",
-            input: layoutInput{
-                termW:       120,
-                termH:       40,
-                hasErr:      true,
-                hasSearch:   true,
-                mode:        modeNormal,
-                tab:         tabTasks,
-                detailLines: 10,
-            },
-            wantDetailH: 10,
-        },
-        {
-            name: "detail capped at max pct",
-            input: layoutInput{
-                termW:       120,
-                termH:       30,
-                mode:        modeNormal,
-                tab:         tabTasks,
-                detailLines: 100,
-            },
-        },
-    }
+	tests := []struct {
+		name        string
+		input       layoutInput
+		wantDetailH int
+	}{
+		{
+			name: "basic layout",
+			input: layoutInput{
+				termW:       120,
+				termH:       40,
+				mode:        modeNormal,
+				tab:         tabTasks,
+				detailLines: 10,
+			},
+			wantDetailH: 10,
+		},
+		{
+			name: "stats tab no detail",
+			input: layoutInput{
+				termW:       120,
+				termH:       40,
+				mode:        modeNormal,
+				tab:         tabStats,
+				detailLines: 10,
+			},
+			wantDetailH: 0,
+		},
+		{
+			name: "input mode no detail",
+			input: layoutInput{
+				termW:       120,
+				termH:       40,
+				mode:        modeInput,
+				tab:         tabTasks,
+				detailLines: 10,
+			},
+			wantDetailH: 0,
+		},
+		{
+			name: "very small terminal",
+			input: layoutInput{
+				termW:       40,
+				termH:       10,
+				mode:        modeNormal,
+				tab:         tabTasks,
+				detailLines: 20,
+			},
+		},
+		{
+			name: "with error and search",
+			input: layoutInput{
+				termW:       120,
+				termH:       40,
+				hasErr:      true,
+				hasSearch:   true,
+				mode:        modeNormal,
+				tab:         tabTasks,
+				detailLines: 10,
+			},
+			wantDetailH: 10,
+		},
+		{
+			name: "detail capped at max pct",
+			input: layoutInput{
+				termW:       120,
+				termH:       30,
+				mode:        modeNormal,
+				tab:         tabTasks,
+				detailLines: 100,
+			},
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            l := computeLayout(tt.input)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := computeLayout(tt.input)
 
-            if l.contentW != tt.input.termW-4 {
-                t.Errorf("contentW = %d, want %d", l.contentW, tt.input.termW-4)
-            }
-            if l.listH < minListHeight {
-                t.Errorf("listH = %d, below minimum %d", l.listH, minListHeight)
-            }
-            if tt.wantDetailH > 0 && l.detailH != tt.wantDetailH {
-                t.Errorf("detailH = %d, want %d", l.detailH, tt.wantDetailH)
-            }
+			if l.contentW != tt.input.termW-4 {
+				t.Errorf("contentW = %d, want %d", l.contentW, tt.input.termW-4)
+			}
+			if l.listH < minListHeight {
+				t.Errorf("listH = %d, below minimum %d", l.listH, minListHeight)
+			}
+			if tt.wantDetailH > 0 && l.detailH != tt.wantDetailH {
+				t.Errorf("detailH = %d, want %d", l.detailH, tt.wantDetailH)
+			}
 
-            total := l.headerH + l.listH + l.detailH + l.footerH
-            if total > tt.input.termH+minListHeight {
-                t.Errorf("total layout %d exceeds terminal height %d (with minList tolerance)",
-                    total, tt.input.termH)
-            }
-        })
-    }
+			total := l.headerH + l.listH + l.detailH + l.footerH
+			if total > tt.input.termH+minListHeight {
+				t.Errorf("total layout %d exceeds terminal height %d (with minList tolerance)",
+					total, tt.input.termH)
+			}
+		})
+	}
 }
 
 func TestComputeLayoutContentWidth(t *testing.T) {
-    l := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks})
-    if l.contentW != 96 {
-        t.Errorf("contentW = %d, want 96", l.contentW)
-    }
+	l := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks})
+	if l.contentW != 96 {
+		t.Errorf("contentW = %d, want 96", l.contentW)
+	}
 }
 
 func TestComputeLayoutHeaderGrows(t *testing.T) {
-    base := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks})
-    withErr := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks, hasErr: true})
-    withAll := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks, hasErr: true, hasSearch: true, hasFocus: true})
+	base := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks})
+	withErr := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks, hasErr: true})
+	withAll := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks, hasErr: true, hasSearch: true, hasFocus: true})
 
-    if withErr.headerH <= base.headerH {
-        t.Error("error should increase header height")
-    }
-    if withAll.headerH <= withErr.headerH {
-        t.Error("search+focus should further increase header height")
-    }
+	if withErr.headerH <= base.headerH {
+		t.Error("error should increase header height")
+	}
+	if withAll.headerH <= withErr.headerH {
+		t.Error("search+focus should further increase header height")
+	}
 }

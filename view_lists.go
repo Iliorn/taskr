@@ -101,15 +101,15 @@ func (m model) renderTagList() string {
 		pctStr := fmt.Sprintf(" %3d%% (%d done / %d total)", int(pct*100), done, total)
 		if i == m.tagTabCursor {
 			b.WriteString(
-				tagSelectedStyle.Render(cur+tagLabel)+
-					barStr.String()+
-					selectedStyle.Render(pctStr)+"\n",
+				tagSelectedStyle.Render(cur+tagLabel) +
+					barStr.String() +
+					selectedStyle.Render(pctStr) + "\n",
 			)
 		} else {
 			b.WriteString(
-				tagStyle.Render(cur+tagLabel)+
-					barStr.String()+
-					normalStyle.Render(pctStr)+"\n",
+				tagStyle.Render(cur+tagLabel) +
+					barStr.String() +
+					normalStyle.Render(pctStr) + "\n",
 			)
 		}
 	}
@@ -176,15 +176,15 @@ func (m model) renderLearningList() string {
 
 		if i == m.learningCursor {
 			b.WriteString(
-				learningSelectedStyle.Render(cur+textCol)+
-					tagStyle.Render(tagsCol)+
-					learningStyle.Render(dateCol)+"\n",
+				learningSelectedStyle.Render(cur+textCol) +
+					tagStyle.Render(tagsCol) +
+					learningStyle.Render(dateCol) + "\n",
 			)
 		} else {
 			b.WriteString(
-				normalStyle.Render(cur+textCol)+
-					dimStyle.Render(tagsCol)+
-					dimStyle.Render(dateCol)+"\n",
+				normalStyle.Render(cur+textCol) +
+					dimStyle.Render(tagsCol) +
+					dimStyle.Render(dateCol) + "\n",
 			)
 		}
 	}
@@ -725,10 +725,10 @@ func (m model) renderProjectListContent(projects []string) string {
 				ovdRendered = overdueCountStyle.Render(overdueStr)
 			}
 			b.WriteString(
-				normalStyle.Render(cursorStr+"• "+nameCol)+
-					activeCountStyle.Render(activeStr)+
-					doneCountStyle.Render(doneStr)+
-					ovdRendered+"\n")
+				normalStyle.Render(cursorStr+"• "+nameCol) +
+					activeCountStyle.Render(activeStr) +
+					doneCountStyle.Render(doneStr) +
+					ovdRendered + "\n")
 		}
 	}
 	return b.String()

@@ -1,359 +1,359 @@
 package main
 
 import (
-    "testing"
-    "time"
+	"testing"
+	"time"
 
-    "taskr/todo"
+	"taskr/todo"
 )
 
 // ── parseDueDate ──────────────────────────────────────────────────────────────
 
 func TestParseDueDate(t *testing.T) {
-    now := time.Now()
-    today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
-    tests := []struct {
-        name    string
-        input   string
-        want    time.Time
-        wantErr bool
-    }{
-        {"today", "today", today, false},
-        {"tomorrow", "tomorrow", today.AddDate(0, 0, 1), false},
-        {"yesterday", "yesterday", today.AddDate(0, 0, -1), false},
-        {"next week", "next week", today.AddDate(0, 0, 7), false},
-        {"next month", "next month", today.AddDate(0, 1, 0), false},
-        {"relative +3d", "+3d", today.AddDate(0, 0, 3), false},
-        {"relative +2w", "+2w", today.AddDate(0, 0, 14), false},
-        {"relative +1m", "+1m", today.AddDate(0, 1, 0), false},
-        {"relative +10d", "+10d", today.AddDate(0, 0, 10), false},
-        {"dd-mm-yy", "15-06-25", time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC), false},
-        {"dd-mm-yyyy", "15-06-2025", time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC), false},
-        {"invalid", "not-a-date", time.Time{}, true},
-        {"empty", "", time.Time{}, true},
-        {"garbage", "xyz123", time.Time{}, true},
-        {"partial relative", "+d", time.Time{}, true},
-        {"relative zero", "+0d", time.Time{}, true},
-    }
+	tests := []struct {
+		name    string
+		input   string
+		want    time.Time
+		wantErr bool
+	}{
+		{"today", "today", today, false},
+		{"tomorrow", "tomorrow", today.AddDate(0, 0, 1), false},
+		{"yesterday", "yesterday", today.AddDate(0, 0, -1), false},
+		{"next week", "next week", today.AddDate(0, 0, 7), false},
+		{"next month", "next month", today.AddDate(0, 1, 0), false},
+		{"relative +3d", "+3d", today.AddDate(0, 0, 3), false},
+		{"relative +2w", "+2w", today.AddDate(0, 0, 14), false},
+		{"relative +1m", "+1m", today.AddDate(0, 1, 0), false},
+		{"relative +10d", "+10d", today.AddDate(0, 0, 10), false},
+		{"dd-mm-yy", "15-06-25", time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC), false},
+		{"dd-mm-yyyy", "15-06-2025", time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC), false},
+		{"invalid", "not-a-date", time.Time{}, true},
+		{"empty", "", time.Time{}, true},
+		{"garbage", "xyz123", time.Time{}, true},
+		{"partial relative", "+d", time.Time{}, true},
+		{"relative zero", "+0d", time.Time{}, true},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            got, err := parseDueDate(tt.input)
-            if (err != nil) != tt.wantErr {
-                t.Errorf("parseDueDate(%q) error = %v, wantErr %v",
-                    tt.input, err, tt.wantErr)
-                return
-            }
-            if !tt.wantErr && !got.Equal(tt.want) {
-                t.Errorf("parseDueDate(%q) = %v, want %v",
-                    tt.input, got, tt.want)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseDueDate(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseDueDate(%q) error = %v, wantErr %v",
+					tt.input, err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && !got.Equal(tt.want) {
+				t.Errorf("parseDueDate(%q) = %v, want %v",
+					tt.input, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestParseDueDateWeekdays(t *testing.T) {
-    weekdays := []string{
-        "monday", "tuesday", "wednesday", "thursday",
-        "friday", "saturday", "sunday",
-        "mon", "tue", "wed", "thu", "fri", "sat", "sun",
-    }
+	weekdays := []string{
+		"monday", "tuesday", "wednesday", "thursday",
+		"friday", "saturday", "sunday",
+		"mon", "tue", "wed", "thu", "fri", "sat", "sun",
+	}
 
-    for _, day := range weekdays {
-        t.Run(day, func(t *testing.T) {
-            got, err := parseDueDate(day)
-            if err != nil {
-                t.Errorf("parseDueDate(%q) unexpected error: %v", day, err)
-                return
-            }
-            if got.IsZero() {
-                t.Errorf("parseDueDate(%q) returned zero time", day)
-                return
-            }
-            // Should be in the future
-            now := time.Now()
-            today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-            if !got.After(today) {
-                t.Errorf("parseDueDate(%q) = %v, expected future date", day, got)
-            }
-        })
-    }
+	for _, day := range weekdays {
+		t.Run(day, func(t *testing.T) {
+			got, err := parseDueDate(day)
+			if err != nil {
+				t.Errorf("parseDueDate(%q) unexpected error: %v", day, err)
+				return
+			}
+			if got.IsZero() {
+				t.Errorf("parseDueDate(%q) returned zero time", day)
+				return
+			}
+			// Should be in the future
+			now := time.Now()
+			today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+			if !got.After(today) {
+				t.Errorf("parseDueDate(%q) = %v, expected future date", day, got)
+			}
+		})
+	}
 }
 
 func TestParseDueDateNextWeekday(t *testing.T) {
-    prefixed := []string{
-        "next monday", "next tuesday", "next wednesday",
-        "next thursday", "next friday", "next saturday", "next sunday",
-    }
+	prefixed := []string{
+		"next monday", "next tuesday", "next wednesday",
+		"next thursday", "next friday", "next saturday", "next sunday",
+	}
 
-    for _, input := range prefixed {
-        t.Run(input, func(t *testing.T) {
-            got, err := parseDueDate(input)
-            if err != nil {
-                t.Errorf("parseDueDate(%q) unexpected error: %v", input, err)
-                return
-            }
-            now := time.Now()
-            today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-            if !got.After(today) {
-                t.Errorf("parseDueDate(%q) = %v, expected future date", input, got)
-            }
-        })
-    }
+	for _, input := range prefixed {
+		t.Run(input, func(t *testing.T) {
+			got, err := parseDueDate(input)
+			if err != nil {
+				t.Errorf("parseDueDate(%q) unexpected error: %v", input, err)
+				return
+			}
+			now := time.Now()
+			today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+			if !got.After(today) {
+				t.Errorf("parseDueDate(%q) = %v, expected future date", input, got)
+			}
+		})
+	}
 }
 
 // ── parseWeekday ──────────────────────────────────────────────────────────────
 
 func TestParseWeekday(t *testing.T) {
-    tests := []struct {
-        input string
-        want  time.Weekday
-        ok    bool
-    }{
-        {"monday", time.Monday, true},
-        {"mon", time.Monday, true},
-        {"tuesday", time.Tuesday, true},
-        {"tue", time.Tuesday, true},
-        {"wednesday", time.Wednesday, true},
-        {"wed", time.Wednesday, true},
-        {"thursday", time.Thursday, true},
-        {"thu", time.Thursday, true},
-        {"friday", time.Friday, true},
-        {"fri", time.Friday, true},
-        {"saturday", time.Saturday, true},
-        {"sat", time.Saturday, true},
-        {"sunday", time.Sunday, true},
-        {"sun", time.Sunday, true},
-        {"invalid", 0, false},
-        {"", 0, false},
-        {"mond", 0, false},
-    }
+	tests := []struct {
+		input string
+		want  time.Weekday
+		ok    bool
+	}{
+		{"monday", time.Monday, true},
+		{"mon", time.Monday, true},
+		{"tuesday", time.Tuesday, true},
+		{"tue", time.Tuesday, true},
+		{"wednesday", time.Wednesday, true},
+		{"wed", time.Wednesday, true},
+		{"thursday", time.Thursday, true},
+		{"thu", time.Thursday, true},
+		{"friday", time.Friday, true},
+		{"fri", time.Friday, true},
+		{"saturday", time.Saturday, true},
+		{"sat", time.Saturday, true},
+		{"sunday", time.Sunday, true},
+		{"sun", time.Sunday, true},
+		{"invalid", 0, false},
+		{"", 0, false},
+		{"mond", 0, false},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.input, func(t *testing.T) {
-            got, ok := parseWeekday(tt.input)
-            if ok != tt.ok {
-                t.Errorf("parseWeekday(%q) ok = %v, want %v", tt.input, ok, tt.ok)
-            }
-            if ok && got != tt.want {
-                t.Errorf("parseWeekday(%q) = %v, want %v", tt.input, got, tt.want)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, ok := parseWeekday(tt.input)
+			if ok != tt.ok {
+				t.Errorf("parseWeekday(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if ok && got != tt.want {
+				t.Errorf("parseWeekday(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
 }
 
 // ── nextWeekday ───────────────────────────────────────────────────────────────
 
 func TestNextWeekday(t *testing.T) {
-    // Use a known Monday: 2025-01-06
-    monday := time.Date(2025, 1, 6, 0, 0, 0, 0, time.UTC)
+	// Use a known Monday: 2025-01-06
+	monday := time.Date(2025, 1, 6, 0, 0, 0, 0, time.UTC)
 
-    tests := []struct {
-        name   string
-        from   time.Time
-        target time.Weekday
-        want   time.Time
-    }{
-        {"monday to tuesday", monday, time.Tuesday, time.Date(2025, 1, 7, 0, 0, 0, 0, time.UTC)},
-        {"monday to wednesday", monday, time.Wednesday, time.Date(2025, 1, 8, 0, 0, 0, 0, time.UTC)},
-        {"monday to friday", monday, time.Friday, time.Date(2025, 1, 10, 0, 0, 0, 0, time.UTC)},
-        {"monday to sunday", monday, time.Sunday, time.Date(2025, 1, 12, 0, 0, 0, 0, time.UTC)},
-        {"monday to next monday", monday, time.Monday, time.Date(2025, 1, 13, 0, 0, 0, 0, time.UTC)},
-    }
+	tests := []struct {
+		name   string
+		from   time.Time
+		target time.Weekday
+		want   time.Time
+	}{
+		{"monday to tuesday", monday, time.Tuesday, time.Date(2025, 1, 7, 0, 0, 0, 0, time.UTC)},
+		{"monday to wednesday", monday, time.Wednesday, time.Date(2025, 1, 8, 0, 0, 0, 0, time.UTC)},
+		{"monday to friday", monday, time.Friday, time.Date(2025, 1, 10, 0, 0, 0, 0, time.UTC)},
+		{"monday to sunday", monday, time.Sunday, time.Date(2025, 1, 12, 0, 0, 0, 0, time.UTC)},
+		{"monday to next monday", monday, time.Monday, time.Date(2025, 1, 13, 0, 0, 0, 0, time.UTC)},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            got := nextWeekday(tt.from, tt.target)
-            if !got.Equal(tt.want) {
-                t.Errorf("nextWeekday(%v, %v) = %v, want %v",
-                    tt.from.Format("Mon 02-01"), tt.target, got.Format("Mon 02-01"), tt.want.Format("Mon 02-01"))
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := nextWeekday(tt.from, tt.target)
+			if !got.Equal(tt.want) {
+				t.Errorf("nextWeekday(%v, %v) = %v, want %v",
+					tt.from.Format("Mon 02-01"), tt.target, got.Format("Mon 02-01"), tt.want.Format("Mon 02-01"))
+			}
+		})
+	}
 }
 
 // ── parsePositiveInt ──────────────────────────────────────────────────────────
 
 func TestParsePositiveInt(t *testing.T) {
-    tests := []struct {
-        input string
-        want  int
-        ok    bool
-    }{
-        {"0", 0, true},
-        {"1", 1, true},
-        {"42", 42, true},
-        {"123", 123, true},
-        {"999", 999, true},
-        {"", 0, false},
-        {"abc", 0, false},
-        {"-1", 0, false},
-        {"3.5", 0, false},
-        {"12a", 0, false},
-        {"a12", 0, false},
-    }
+	tests := []struct {
+		input string
+		want  int
+		ok    bool
+	}{
+		{"0", 0, true},
+		{"1", 1, true},
+		{"42", 42, true},
+		{"123", 123, true},
+		{"999", 999, true},
+		{"", 0, false},
+		{"abc", 0, false},
+		{"-1", 0, false},
+		{"3.5", 0, false},
+		{"12a", 0, false},
+		{"a12", 0, false},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.input, func(t *testing.T) {
-            got, ok := parsePositiveInt(tt.input)
-            if ok != tt.ok {
-                t.Errorf("parsePositiveInt(%q) ok = %v, want %v", tt.input, ok, tt.ok)
-            }
-            if ok && got != tt.want {
-                t.Errorf("parsePositiveInt(%q) = %d, want %d", tt.input, got, tt.want)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, ok := parsePositiveInt(tt.input)
+			if ok != tt.ok {
+				t.Errorf("parsePositiveInt(%q) ok = %v, want %v", tt.input, ok, tt.ok)
+			}
+			if ok && got != tt.want {
+				t.Errorf("parsePositiveInt(%q) = %d, want %d", tt.input, got, tt.want)
+			}
+		})
+	}
 }
 
 // ── sortTodosByMode ───────────────────────────────────────────────────────────
 
 func TestSortTodosByMode(t *testing.T) {
-    now := time.Now()
-    todos := []todo.Todo{
-        {ID: "a", Title: "No date low", Priority: todo.PriorityLow, CreatedAt: now.Add(-3 * time.Hour)},
-        {ID: "b", Title: "Tomorrow high", Priority: todo.PriorityHigh, DueDate: now.AddDate(0, 0, 1), CreatedAt: now.Add(-2 * time.Hour)},
-        {ID: "c", Title: "Today medium", Priority: todo.PriorityMedium, DueDate: now, CreatedAt: now.Add(-1 * time.Hour)},
-    }
+	now := time.Now()
+	todos := []todo.Todo{
+		{ID: "a", Title: "No date low", Priority: todo.PriorityLow, CreatedAt: now.Add(-3 * time.Hour)},
+		{ID: "b", Title: "Tomorrow high", Priority: todo.PriorityHigh, DueDate: now.AddDate(0, 0, 1), CreatedAt: now.Add(-2 * time.Hour)},
+		{ID: "c", Title: "Today medium", Priority: todo.PriorityMedium, DueDate: now, CreatedAt: now.Add(-1 * time.Hour)},
+	}
 
-    t.Run("by due date", func(t *testing.T) {
-        cp := make([]todo.Todo, len(todos))
-        copy(cp, todos)
-        sortTodosByMode(cp, taskSortDueDate)
-        if cp[0].ID != "c" {
-            t.Errorf("first should be 'c' (today), got %s", cp[0].ID)
-        }
-        if cp[1].ID != "b" {
-            t.Errorf("second should be 'b' (tomorrow), got %s", cp[1].ID)
-        }
-        if cp[2].ID != "a" {
-            t.Errorf("third should be 'a' (no date), got %s", cp[2].ID)
-        }
-    })
+	t.Run("by due date", func(t *testing.T) {
+		cp := make([]todo.Todo, len(todos))
+		copy(cp, todos)
+		sortTodosByMode(cp, taskSortDueDate)
+		if cp[0].ID != "c" {
+			t.Errorf("first should be 'c' (today), got %s", cp[0].ID)
+		}
+		if cp[1].ID != "b" {
+			t.Errorf("second should be 'b' (tomorrow), got %s", cp[1].ID)
+		}
+		if cp[2].ID != "a" {
+			t.Errorf("third should be 'a' (no date), got %s", cp[2].ID)
+		}
+	})
 
-    t.Run("by priority", func(t *testing.T) {
-        cp := make([]todo.Todo, len(todos))
-        copy(cp, todos)
-        sortTodosByMode(cp, taskSortPriority)
-        if cp[0].ID != "b" {
-            t.Errorf("first should be 'b' (high), got %s", cp[0].ID)
-        }
-        if cp[1].ID != "c" {
-            t.Errorf("second should be 'c' (medium), got %s", cp[1].ID)
-        }
-        if cp[2].ID != "a" {
-            t.Errorf("third should be 'a' (low), got %s", cp[2].ID)
-        }
-    })
+	t.Run("by priority", func(t *testing.T) {
+		cp := make([]todo.Todo, len(todos))
+		copy(cp, todos)
+		sortTodosByMode(cp, taskSortPriority)
+		if cp[0].ID != "b" {
+			t.Errorf("first should be 'b' (high), got %s", cp[0].ID)
+		}
+		if cp[1].ID != "c" {
+			t.Errorf("second should be 'c' (medium), got %s", cp[1].ID)
+		}
+		if cp[2].ID != "a" {
+			t.Errorf("third should be 'a' (low), got %s", cp[2].ID)
+		}
+	})
 
-    t.Run("by created", func(t *testing.T) {
-        cp := make([]todo.Todo, len(todos))
-        copy(cp, todos)
-        sortTodosByMode(cp, taskSortCreated)
-        if cp[0].ID != "a" {
-            t.Errorf("first should be 'a' (oldest), got %s", cp[0].ID)
-        }
-        if cp[1].ID != "b" {
-            t.Errorf("second should be 'b', got %s", cp[1].ID)
-        }
-        if cp[2].ID != "c" {
-            t.Errorf("third should be 'c' (newest), got %s", cp[2].ID)
-        }
-    })
+	t.Run("by created", func(t *testing.T) {
+		cp := make([]todo.Todo, len(todos))
+		copy(cp, todos)
+		sortTodosByMode(cp, taskSortCreated)
+		if cp[0].ID != "a" {
+			t.Errorf("first should be 'a' (oldest), got %s", cp[0].ID)
+		}
+		if cp[1].ID != "b" {
+			t.Errorf("second should be 'b', got %s", cp[1].ID)
+		}
+		if cp[2].ID != "c" {
+			t.Errorf("third should be 'c' (newest), got %s", cp[2].ID)
+		}
+	})
 
-    t.Run("empty slice", func(t *testing.T) {
-        var empty []todo.Todo
-        sortTodosByMode(empty, taskSortDueDate) // should not panic
-    })
+	t.Run("empty slice", func(t *testing.T) {
+		var empty []todo.Todo
+		sortTodosByMode(empty, taskSortDueDate) // should not panic
+	})
 
-    t.Run("single item", func(t *testing.T) {
-        single := []todo.Todo{{ID: "x"}}
-        sortTodosByMode(single, taskSortDueDate) // should not panic
-    })
+	t.Run("single item", func(t *testing.T) {
+		single := []todo.Todo{{ID: "x"}}
+		sortTodosByMode(single, taskSortDueDate) // should not panic
+	})
 }
 
 // ── sortTodosByStartDate ──────────────────────────────────────────────────────
 
 func TestSortTodosByStartDate(t *testing.T) {
-    now := time.Now()
-    todos := []todo.Todo{
-        {ID: "a", StartDate: now.AddDate(0, 0, 5), CreatedAt: now},
-        {ID: "b", CreatedAt: now.Add(-1 * time.Hour)}, // no start date
-        {ID: "c", StartDate: now.AddDate(0, 0, 1), CreatedAt: now},
-    }
+	now := time.Now()
+	todos := []todo.Todo{
+		{ID: "a", StartDate: now.AddDate(0, 0, 5), CreatedAt: now},
+		{ID: "b", CreatedAt: now.Add(-1 * time.Hour)}, // no start date
+		{ID: "c", StartDate: now.AddDate(0, 0, 1), CreatedAt: now},
+	}
 
-    result := sortTodosByStartDate(todos)
+	result := sortTodosByStartDate(todos)
 
-    if result[0].ID != "c" {
-        t.Errorf("first should be 'c' (earliest start), got %s", result[0].ID)
-    }
-    if result[1].ID != "a" {
-        t.Errorf("second should be 'a' (later start), got %s", result[1].ID)
-    }
-    if result[2].ID != "b" {
-        t.Errorf("third should be 'b' (no start date), got %s", result[2].ID)
-    }
+	if result[0].ID != "c" {
+		t.Errorf("first should be 'c' (earliest start), got %s", result[0].ID)
+	}
+	if result[1].ID != "a" {
+		t.Errorf("second should be 'a' (later start), got %s", result[1].ID)
+	}
+	if result[2].ID != "b" {
+		t.Errorf("third should be 'b' (no start date), got %s", result[2].ID)
+	}
 
-    // Verify original slice is unchanged
-    if todos[0].ID != "a" {
-        t.Error("original slice should not be modified")
-    }
+	// Verify original slice is unchanged
+	if todos[0].ID != "a" {
+		t.Error("original slice should not be modified")
+	}
 }
 
 // ── getProjects ───────────────────────────────────────────────────────────────
 
 func TestGetProjects(t *testing.T) {
-    todos := []todo.Todo{
-        {Project: "alpha"},
-        {Project: "beta"},
-        {Project: "alpha"}, // duplicate
-        {Project: ""},      // no project
-        {Project: "gamma"},
-    }
+	todos := []todo.Todo{
+		{Project: "alpha"},
+		{Project: "beta"},
+		{Project: "alpha"}, // duplicate
+		{Project: ""},      // no project
+		{Project: "gamma"},
+	}
 
-    projects := getProjects(todos)
+	projects := getProjects(todos)
 
-    if len(projects) != 3 {
-        t.Fatalf("expected 3 projects, got %d: %v", len(projects), projects)
-    }
-    // Should be sorted alphabetically
-    if projects[0] != "alpha" || projects[1] != "beta" || projects[2] != "gamma" {
-        t.Errorf("projects = %v, want [alpha beta gamma]", projects)
-    }
+	if len(projects) != 3 {
+		t.Fatalf("expected 3 projects, got %d: %v", len(projects), projects)
+	}
+	// Should be sorted alphabetically
+	if projects[0] != "alpha" || projects[1] != "beta" || projects[2] != "gamma" {
+		t.Errorf("projects = %v, want [alpha beta gamma]", projects)
+	}
 }
 
 func TestGetProjectsEmpty(t *testing.T) {
-    projects := getProjects([]todo.Todo{})
-    if len(projects) != 0 {
-        t.Errorf("expected 0 projects, got %d", len(projects))
-    }
+	projects := getProjects([]todo.Todo{})
+	if len(projects) != 0 {
+		t.Errorf("expected 0 projects, got %d", len(projects))
+	}
 }
 
 // ── getTasksForProject ────────────────────────────────────────────────────────
 
 func TestGetTasksForProject(t *testing.T) {
-    now := time.Now()
-    todos := []todo.Todo{
-        {ID: "a", Project: "web", StartDate: now.AddDate(0, 0, 5), CreatedAt: now},
-        {ID: "b", Project: "api", CreatedAt: now},
-        {ID: "c", Project: "web", StartDate: now.AddDate(0, 0, 1), CreatedAt: now},
-        {ID: "d", Project: "web", CreatedAt: now.Add(-1 * time.Hour)}, // no start date
-    }
+	now := time.Now()
+	todos := []todo.Todo{
+		{ID: "a", Project: "web", StartDate: now.AddDate(0, 0, 5), CreatedAt: now},
+		{ID: "b", Project: "api", CreatedAt: now},
+		{ID: "c", Project: "web", StartDate: now.AddDate(0, 0, 1), CreatedAt: now},
+		{ID: "d", Project: "web", CreatedAt: now.Add(-1 * time.Hour)}, // no start date
+	}
 
-    result := getTasksForProject(todos, "web")
+	result := getTasksForProject(todos, "web")
 
-    if len(result) != 3 {
-        t.Fatalf("expected 3 tasks for 'web', got %d", len(result))
-    }
-    // Should be sorted by start date
-    if result[0].ID != "c" {
-        t.Errorf("first should be 'c' (earliest start), got %s", result[0].ID)
-    }
+	if len(result) != 3 {
+		t.Fatalf("expected 3 tasks for 'web', got %d", len(result))
+	}
+	// Should be sorted by start date
+	if result[0].ID != "c" {
+		t.Errorf("first should be 'c' (earliest start), got %s", result[0].ID)
+	}
 
-    // Non-existent project
-    empty := getTasksForProject(todos, "nonexistent")
-    if len(empty) != 0 {
-        t.Errorf("expected 0 tasks for nonexistent project, got %d", len(empty))
-    }
+	// Non-existent project
+	empty := getTasksForProject(todos, "nonexistent")
+	if len(empty) != 0 {
+		t.Errorf("expected 0 tasks for nonexistent project, got %d", len(empty))
+	}
 }

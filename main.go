@@ -1,21 +1,21 @@
 package main
 
 import (
-    "fmt"
-    "os"
+	"fmt"
+	"os"
 
-    tea "github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {
-    // Remove leftover binary from a previous Windows self-update, if any.
-    if execPath, err := os.Executable(); err == nil {
-        _ = os.Remove(execPath + ".old")
-    }
+	// Remove leftover binary from a previous Windows self-update, if any.
+	if execPath, err := os.Executable(); err == nil {
+		_ = os.Remove(execPath + ".old")
+	}
 
-    p := tea.NewProgram(initialModel(), tea.WithAltScreen())
-    if _, err := p.Run(); err != nil {
-        fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-        os.Exit(1)
-    }
+	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }

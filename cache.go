@@ -11,17 +11,17 @@ import (
 // ── Caches ────────────────────────────────────────────────────────────────────
 
 type cacheState struct {
-	dirty          bool
-	todoIndex      map[string]int
-	overdueSet     map[string]bool
-	active         []todo.Todo
-	done           []todo.Todo
-	tags           map[string]tagStats
-	learnings      []todo.Learning
-	projects       []string
-	projectTasks   map[string][]todo.Todo
-	subtaskIndex   map[string][]int
-	tagRender      map[string]string
+	dirty        bool
+	todoIndex    map[string]int
+	overdueSet   map[string]bool
+	active       []todo.Todo
+	done         []todo.Todo
+	tags         map[string]tagStats
+	learnings    []todo.Learning
+	projects     []string
+	projectTasks map[string][]todo.Todo
+	subtaskIndex map[string][]int
+	tagRender    map[string]string
 
 	learningSearch string
 	learningSort   learningSortMode

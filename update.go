@@ -1,1177 +1,1176 @@
 package main
 
 import (
-    "fmt"
-    "os"
-    "os/exec"
-    "runtime"
-    "strings"
-    "time"
+	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
+	"strings"
+	"time"
 
-    "github.com/charmbracelet/bubbles/textinput"
-    tea "github.com/charmbracelet/bubbletea"
-    "taskr/todo"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"taskr/todo"
 )
 
 // ── Top-level Update ──────────────────────────────────────────────────────────
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-    m.frameTime = time.Now()
+	m.frameTime = time.Now()
 
-    if sz, ok := msg.(tea.WindowSizeMsg); ok {
-        m.termWidth = sz.Width
-        m.termHeight = sz.Height
-        m.invalidateDetailCache()
-    }
+	if sz, ok := msg.(tea.WindowSizeMsg); ok {
+		m.termWidth = sz.Width
+		m.termHeight = sz.Height
+		m.invalidateDetailCache()
+	}
 
-    switch msg := msg.(type) {
-    case clearErrMsg:
-        m.err = ""
-        return m, nil
-    case timerTickMsg:
-        if m.anyTimerRunning() {
-            return m, timerTick()
-        }
-        m.timerTickOn = false
-        return m, nil
-    case updateDoneMsg:
-        if msg.err != nil {
-            m.err = fmt.Sprintf("Update failed: %v", msg.err)
-        } else {
-            m.err = "Updated! Restart taskr to apply."
-        }
-        return m, clearErrAfter()
-    case saveDoneMsg:
-        return m, nil
-    case saveErrMsg:
-        m.err = fmt.Sprintf("Error saving tasks: %v", msg.err)
-        return m, clearErrAfter()
-    case editorFinishedMsg:
-        return m.handleEditorFinished(msg)
-    case saveTickMsg:
-        m.saveScheduled = false
-        if m.savePending {
-            m.savePending = false
-            saveCmd, err := prepareSave(m.todos)
-            if err != nil {
-                m.err = fmt.Sprintf("Error marshalling tasks: %v", err)
-                return m, clearErrAfter()
-            }
-            return m, saveCmd
-        }
-        return m, nil
-    }
+	switch msg := msg.(type) {
+	case clearErrMsg:
+		m.err = ""
+		return m, nil
+	case timerTickMsg:
+		if m.anyTimerRunning() {
+			return m, timerTick()
+		}
+		m.timerTickOn = false
+		return m, nil
+	case updateDoneMsg:
+		if msg.err != nil {
+			m.err = fmt.Sprintf("Update failed: %v", msg.err)
+		} else {
+			m.err = "Updated! Restart taskr to apply."
+		}
+		return m, clearErrAfter()
+	case saveDoneMsg:
+		return m, nil
+	case saveErrMsg:
+		m.err = fmt.Sprintf("Error saving tasks: %v", msg.err)
+		return m, clearErrAfter()
+	case editorFinishedMsg:
+		return m.handleEditorFinished(msg)
+	case saveTickMsg:
+		m.saveScheduled = false
+		if m.savePending {
+			m.savePending = false
+			saveCmd, err := prepareSave(m.todos)
+			if err != nil {
+				m.err = fmt.Sprintf("Error marshalling tasks: %v", err)
+				return m, clearErrAfter()
+			}
+			return m, saveCmd
+		}
+		return m, nil
+	}
 
-    switch m.mode {
-    case modeHelp:
-        return m.updateHelp(msg)
-    case modeConfirmDelete:
-        return m.updateConfirmDelete(msg)
-    case modeConfirmDeleteComment:
-        return m.updateConfirmDeleteComment(msg)
-    case modeConfirmDeleteDep:
-        return m.updateConfirmDeleteDep(msg)
-    case modeConfirmDeleteTag:
-        return m.updateConfirmDeleteTag(msg)
-    case modeConfirmDeleteTagGlobal:
-        return m.updateConfirmDeleteTagGlobal(msg)
-    case modeConfirmDeleteProject:
-        return m.updateConfirmDeleteProject(msg)
-    case modeConfirmDeleteLearning:
-        return m.updateConfirmDeleteLearning(msg)
-    case modeConfirmDeleteSubtask:
-        return m.updateConfirmDeleteSubtask(msg)
-    case modeConfirmDeleteTimeEntry:
-        return m.updateConfirmDeleteTimeEntry(msg)
-    case modeEditTimeEntry:
-        return m.updateEditTimeEntry(msg)
-    case modeIdlePrompt:
-        return m.updateIdlePrompt(msg)
-    case modeInput:
-        return m.updateInput(msg)
-    case modeEditComment:
-        return m.updateEditComment(msg)
-    case modeEditTag:
-        return m.updateEditTag(msg)
-    case modeEditTitle:
-        return m.updateEditTitle(msg)
-    case modeEditProjectInline:
-        return m.updateEditProjectInline(msg)
-    case modeEditLearning:
-        return m.updateEditLearning(msg)
-    case modeAddLearning:
-        return m.updateAddLearning(msg)
-    case modeAddSubtask:
-        return m.updateAddSubtask(msg)
-    case modeSearch:
-        return m.updateSearch(msg)
-    case modeSearchDep:
-        return m.updateSearchDep(msg)
-    case modeSearchTag:
-        return m.updateSearchTag(msg)
-    case modeSearchProject:
-        return m.updateSearchProject(msg)
-    case modeSearchTagTab:
-        return m.updateSearchTagTab(msg)
-    }
+	switch m.mode {
+	case modeHelp:
+		return m.updateHelp(msg)
+	case modeConfirmDelete:
+		return m.updateConfirmDelete(msg)
+	case modeConfirmDeleteComment:
+		return m.updateConfirmDeleteComment(msg)
+	case modeConfirmDeleteDep:
+		return m.updateConfirmDeleteDep(msg)
+	case modeConfirmDeleteTag:
+		return m.updateConfirmDeleteTag(msg)
+	case modeConfirmDeleteTagGlobal:
+		return m.updateConfirmDeleteTagGlobal(msg)
+	case modeConfirmDeleteProject:
+		return m.updateConfirmDeleteProject(msg)
+	case modeConfirmDeleteLearning:
+		return m.updateConfirmDeleteLearning(msg)
+	case modeConfirmDeleteSubtask:
+		return m.updateConfirmDeleteSubtask(msg)
+	case modeConfirmDeleteTimeEntry:
+		return m.updateConfirmDeleteTimeEntry(msg)
+	case modeEditTimeEntry:
+		return m.updateEditTimeEntry(msg)
+	case modeIdlePrompt:
+		return m.updateIdlePrompt(msg)
+	case modeInput:
+		return m.updateInput(msg)
+	case modeEditComment:
+		return m.updateEditComment(msg)
+	case modeEditTag:
+		return m.updateEditTag(msg)
+	case modeEditTitle:
+		return m.updateEditTitle(msg)
+	case modeEditProjectInline:
+		return m.updateEditProjectInline(msg)
+	case modeEditLearning:
+		return m.updateEditLearning(msg)
+	case modeAddLearning:
+		return m.updateAddLearning(msg)
+	case modeAddSubtask:
+		return m.updateAddSubtask(msg)
+	case modeSearch:
+		return m.updateSearch(msg)
+	case modeSearchDep:
+		return m.updateSearchDep(msg)
+	case modeSearchTag:
+		return m.updateSearchTag(msg)
+	case modeSearchProject:
+		return m.updateSearchProject(msg)
+	case modeSearchTagTab:
+		return m.updateSearchTagTab(msg)
+	}
 
-    var newModel tea.Model
-    var cmd tea.Cmd
-    if m.pane == paneList {
-        newModel, cmd = m.updateList(msg)
-    } else {
-        newModel, cmd = m.updateDetail(msg)
-    }
+	var newModel tea.Model
+	var cmd tea.Cmd
+	if m.pane == paneList {
+		newModel, cmd = m.updateList(msg)
+	} else {
+		newModel, cmd = m.updateDetail(msg)
+	}
 
-    if nm, ok := newModel.(model); ok {
-        if nm.dirty {
-            nm.dirty = false
-            nm.savePending = true
-            if !nm.saveScheduled {
-                nm.saveScheduled = true
-                saveCmd := scheduleSave()
-                if cmd != nil {
-                    return nm, tea.Batch(cmd, saveCmd)
-                }
-                return nm, saveCmd
-            }
-            return nm, cmd
-        }
-        return nm, cmd
-    }
-    return newModel, cmd
+	if nm, ok := newModel.(model); ok {
+		if nm.dirty {
+			nm.dirty = false
+			nm.savePending = true
+			if !nm.saveScheduled {
+				nm.saveScheduled = true
+				saveCmd := scheduleSave()
+				if cmd != nil {
+					return nm, tea.Batch(cmd, saveCmd)
+				}
+				return nm, saveCmd
+			}
+			return nm, cmd
+		}
+		return nm, cmd
+	}
+	return newModel, cmd
 }
 
 // ── Editor handling ───────────────────────────────────────────────────────────
 
 func (m *model) openEditorForNotes() tea.Cmd {
-    idx := m.currentTodoIndex()
-    if idx < 0 {
-        return nil
-    }
-    t := &m.todos[idx]
-    taskID := t.ID
+	idx := m.currentTodoIndex()
+	if idx < 0 {
+		return nil
+	}
+	t := &m.todos[idx]
+	taskID := t.ID
 
-    if err := writeNotesFile(taskID, t.Notes); err != nil {
-        m.err = fmt.Sprintf("Error writing notes file: %v", err)
-        return clearErrAfter()
-    }
+	if err := writeNotesFile(taskID, t.Notes); err != nil {
+		m.err = fmt.Sprintf("Error writing notes file: %v", err)
+		return clearErrAfter()
+	}
 
-    editorCmd := resolveEditorCmd()
-    if editorCmd == "" {
-        if runtime.GOOS == "windows" {
-            m.err = "No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"
-        } else {
-            m.err = "No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"
-        }
-        return clearErrAfter()
-    }
+	editorCmd := resolveEditorCmd()
+	if editorCmd == "" {
+		if runtime.GOOS == "windows" {
+			m.err = "No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"
+		} else {
+			m.err = "No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"
+		}
+		return clearErrAfter()
+	}
 
-    m.editorTaskID = taskID
-    return execEditor(editorCmd, taskID, false)
+	m.editorTaskID = taskID
+	return execEditor(editorCmd, taskID, false)
 }
 
 func execEditor(editorCmd, taskID string, isFallback bool) tea.Cmd {
-    c := exec.Command(editorCmd, notesFilePath(taskID))
-    c.Stdin = os.Stdin
-    c.Stdout = os.Stdout
-    c.Stderr = os.Stderr
-    return tea.ExecProcess(c, func(err error) tea.Msg {
-        return editorFinishedMsg{taskID: taskID, err: err, fallback: isFallback}
-    })
+	c := exec.Command(editorCmd, notesFilePath(taskID))
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return editorFinishedMsg{taskID: taskID, err: err, fallback: isFallback}
+	})
 }
 
 func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
-    if msg.err != nil {
-        // On Windows, fall back to notepad once if the configured editor failed.
-        if runtime.GOOS == "windows" && !msg.fallback {
-            if notepad, lookErr := exec.LookPath("notepad"); lookErr == nil {
-                m.err = "Editor failed — falling back to notepad"
-                return m, tea.Batch(clearErrAfter(), execEditor(notepad, msg.taskID, true))
-            }
-        }
-        m.err = fmt.Sprintf("Editor exited with error: %v", msg.err)
-        return m, clearErrAfter()
-    }
-    taskID := msg.taskID
-    content, err := readNotesFile(taskID)
-    if err != nil {
-        m.err = fmt.Sprintf("Error reading notes: %v", err)
-        return m, clearErrAfter()
-    }
+	if msg.err != nil {
+		// On Windows, fall back to notepad once if the configured editor failed.
+		if runtime.GOOS == "windows" && !msg.fallback {
+			if notepad, lookErr := exec.LookPath("notepad"); lookErr == nil {
+				m.err = "Editor failed — falling back to notepad"
+				return m, tea.Batch(clearErrAfter(), execEditor(notepad, msg.taskID, true))
+			}
+		}
+		m.err = fmt.Sprintf("Editor exited with error: %v", msg.err)
+		return m, clearErrAfter()
+	}
+	taskID := msg.taskID
+	content, err := readNotesFile(taskID)
+	if err != nil {
+		m.err = fmt.Sprintf("Error reading notes: %v", err)
+		return m, clearErrAfter()
+	}
 
-    for i := range m.todos {
-        if m.todos[i].ID == taskID {
-            newNotes := strings.TrimRight(content, "\n\r ")
-            if newNotes != m.todos[i].Notes {
-                m.pushUndo("edit notes")
-                m.todos[i].SetNotes(newNotes)
-                m.dirty = true
-                m.cache.dirty = true
-                m.invalidateDetailCache()
-                m.refreshCaches()
-            }
-            break
-        }
-    }
+	for i := range m.todos {
+		if m.todos[i].ID == taskID {
+			newNotes := strings.TrimRight(content, "\n\r ")
+			if newNotes != m.todos[i].Notes {
+				m.pushUndo("edit notes")
+				m.todos[i].SetNotes(newNotes)
+				m.dirty = true
+				m.cache.dirty = true
+				m.invalidateDetailCache()
+				m.refreshCaches()
+			}
+			break
+		}
+	}
 
-    cleanupNotesFile(taskID)
-    m.editorTaskID = ""
+	cleanupNotesFile(taskID)
+	m.editorTaskID = ""
 
-    if m.dirty {
-        m.dirty = false
-        m.savePending = true
-        if !m.saveScheduled {
-            m.saveScheduled = true
-            return m, scheduleSave()
-        }
-    }
-    return m, nil
+	if m.dirty {
+		m.dirty = false
+		m.savePending = true
+		if !m.saveScheduled {
+			m.saveScheduled = true
+			return m, scheduleSave()
+		}
+	}
+	return m, nil
 }
 
 // ── Undo action ───────────────────────────────────────────────────────────────
 
 func (m *model) performUndo() tea.Cmd {
-    entry, ok := m.popUndo()
-    if !ok {
-        m.err = "Nothing to undo"
-        return clearErrAfter()
-    }
-    m.todos = entry.todos
-    m.markModifiedNoUndo()
-    m.err = fmt.Sprintf("Undid: %s", entry.desc)
-    return clearErrAfter()
+	entry, ok := m.popUndo()
+	if !ok {
+		m.err = "Nothing to undo"
+		return clearErrAfter()
+	}
+	m.todos = entry.todos
+	m.markModifiedNoUndo()
+	m.err = fmt.Sprintf("Undid: %s", entry.desc)
+	return clearErrAfter()
 }
 
 // ── Help overlay ──────────────────────────────────────────────────────────────
 
 func (m model) updateHelp(msg tea.Msg) (tea.Model, tea.Cmd) {
-    if key, ok := msg.(tea.KeyMsg); ok {
-        switch key.String() {
-        case "?", "esc", "q":
-            m.mode = modeNormal
-        }
-    }
-    return m, nil
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "?", "esc", "q":
+			m.mode = modeNormal
+		}
+	}
+	return m, nil
 }
 
 // ── List pane ─────────────────────────────────────────────────────────────────
 
 func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
-    if key, ok := msg.(tea.KeyMsg); ok {
-        switch key.String() {
-        case "q", "ctrl+c":
-            return m, tea.Quit
-        case "?":
-            m.mode = modeHelp
-            return m, nil
-        case "u":
-            return m, m.performUndo()
-        case "U":
-            m.err = "Updating..."
-            return m, func() tea.Msg {
-                return updateDoneMsg{err: selfUpdate()}
-            }
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		case "?":
+			m.mode = modeHelp
+			return m, nil
+		case "u":
+			return m, m.performUndo()
+		case "U":
+			m.err = "Updating..."
+			return m, func() tea.Msg {
+				return updateDoneMsg{err: selfUpdate()}
+			}
 
-        case "n":
-            if m.tab == tabTasks && !m.showHistory && m.currentTodo() != nil {
-                return m, m.openEditorForNotes()
-            }
+		case "n":
+			if m.tab == tabTasks && !m.showHistory && m.currentTodo() != nil {
+				return m, m.openEditorForNotes()
+			}
 
-        case "1":
-            m.switchTab(tabTasks)
-        case "2":
-            m.switchTab(tabProjects)
-        case "3":
-            m.switchTab(tabTags)
-        case "4":
-            m.switchTab(tabLearnings)
-        case "5":
-            m.tab = tabStats
-            m.pane = paneList
-            m.listOffset = 0
-        case "6":
-            m.switchTab(tabCalendar)
+		case "1":
+			m.switchTab(tabTasks)
+		case "2":
+			m.switchTab(tabProjects)
+		case "3":
+			m.switchTab(tabTags)
+		case "4":
+			m.switchTab(tabLearnings)
+		case "5":
+			m.tab = tabStats
+			m.pane = paneList
+			m.listOffset = 0
+		case "6":
+			m.switchTab(tabCalendar)
 
-        case "tab":
-            m.switchTab((m.tab + 1) % numTabs)
+		case "tab":
+			m.switchTab((m.tab + 1) % numTabs)
 
-        case "h":
-            if m.tab == tabTasks {
-                m.showHistory = !m.showHistory
-                m.cursor = 0
-                m.listOffset = 0
-            }
+		case "h":
+			if m.tab == tabTasks {
+				m.showHistory = !m.showHistory
+				m.cursor = 0
+				m.listOffset = 0
+			}
 
-        case "f":
-            if m.tab == tabTasks && !m.showHistory {
-                m.focusFilter = !m.focusFilter
-                m.cursor = 0
-                m.listOffset = 0
-                m.markCacheDirty()
-            }
+		case "f":
+			if m.tab == tabTasks && !m.showHistory {
+				m.focusFilter = !m.focusFilter
+				m.cursor = 0
+				m.listOffset = 0
+				m.markCacheDirty()
+			}
 
-        case "right":
-            if m.tab == tabCalendar {
-                m.moveCalendarDay(1)
-            } else if m.tab == tabTasks && !m.showHistory {
-                if t := m.currentTodo(); t != nil && len(t.SubtaskIDs) > 0 {
-                    m.expandedTasks[t.ID] = true
-                }
-            }
-        case "left":
-            if m.tab == tabCalendar {
-                m.moveCalendarDay(-1)
-            } else if m.tab == tabTasks && !m.showHistory {
-                if t := m.currentTodo(); t != nil {
-                    delete(m.expandedTasks, t.ID)
-                }
-            }
+		case "right":
+			if m.tab == tabCalendar {
+				m.moveCalendarDay(1)
+			} else if m.tab == tabTasks && !m.showHistory {
+				if t := m.currentTodo(); t != nil && len(t.SubtaskIDs) > 0 {
+					m.expandedTasks[t.ID] = true
+				}
+			}
+		case "left":
+			if m.tab == tabCalendar {
+				m.moveCalendarDay(-1)
+			} else if m.tab == tabTasks && !m.showHistory {
+				if t := m.currentTodo(); t != nil {
+					delete(m.expandedTasks, t.ID)
+				}
+			}
 
-        case "[", "]":
-            if m.tab == tabCalendar {
-                months := 1
-                if key.String() == "[" {
-                    months = -1
-                }
-                m.calendar.selected = startOfDay(m.calendar.selected.AddDate(0, months, 0))
-                m.calendar.entryCursor = 0
-                m.calendar.focusTimeline = false
-            }
+		case "[", "]":
+			if m.tab == tabCalendar {
+				months := 1
+				if key.String() == "[" {
+					months = -1
+				}
+				m.calendar.selected = startOfDay(m.calendar.selected.AddDate(0, months, 0))
+				m.calendar.entryCursor = 0
+				m.calendar.focusTimeline = false
+			}
 
-        case "t":
-            if m.tab == tabCalendar {
-                m.calendar.selected = startOfDay(time.Now())
-                m.calendar.entryCursor = 0
-                m.calendar.focusTimeline = false
-            } else if m.tab == tabTasks && !m.showHistory {
-                if idx := m.currentTodoIndex(); idx >= 0 {
-                    if e := m.todos[idx].RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
-                        m.openIdlePrompt(idx)
-                        return m, nil
-                    }
-                    m.toggleTimer(idx)
-                    m.markModified()
-                    if !m.timerTickOn && m.anyTimerRunning() {
-                        m.timerTickOn = true
-                        return m, timerTick()
-                    }
-                }
-            }
+		case "t":
+			if m.tab == tabCalendar {
+				m.calendar.selected = startOfDay(time.Now())
+				m.calendar.entryCursor = 0
+				m.calendar.focusTimeline = false
+			} else if m.tab == tabTasks && !m.showHistory {
+				if idx := m.currentTodoIndex(); idx >= 0 {
+					if e := m.todos[idx].RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
+						m.openIdlePrompt(idx)
+						return m, nil
+					}
+					m.toggleTimer(idx)
+					m.markModified()
+					if !m.timerTickOn && m.anyTimerRunning() {
+						m.timerTickOn = true
+						return m, timerTick()
+					}
+				}
+			}
 
-        case "/":
-            return m.startSearch()
+		case "/":
+			return m.startSearch()
 
-        case "s":
-            m.cycleSortMode()
+		case "s":
+			m.cycleSortMode()
 
-        case "esc":
-            m.handleListEsc()
+		case "esc":
+			m.handleListEsc()
 
-        case "up", "k":
-            m.moveCursorUp()
-        case "down", "j":
-            m.moveCursorDown()
+		case "up", "k":
+			m.moveCursorUp()
+		case "down", "j":
+			m.moveCursorDown()
 
-        case "enter":
-            return m.handleListEnter()
+		case "enter":
+			return m.handleListEnter()
 
-        case "r":
-            return m.handleListRename()
+		case "r":
+			return m.handleListRename()
 
-        case "x", "delete":
-            return m.handleListDelete()
+		case "x", "delete":
+			return m.handleListDelete()
 
-        case "a":
-            if m.tab == tabTasks && !m.showHistory {
-                m.mode = modeInput
-                m.textInput.SetValue("")
-                m.textInput.Placeholder = "New task (use #tag due:date p:high @project)..."
-                m.textInput.Focus()
-                return m, textinput.Blink
-            }
+		case "a":
+			if m.tab == tabTasks && !m.showHistory {
+				m.mode = modeInput
+				m.textInput.SetValue("")
+				m.textInput.Placeholder = "New task (use #tag due:date p:high @project)..."
+				m.textInput.Focus()
+				return m, textinput.Blink
+			}
 
-        case "d":
-            if m.tab == tabTasks {
-                if idx := m.currentTodoIndex(); idx >= 0 {
-                    m.todos[idx].Toggle()
-                    m.markModified()
-                    if m.cursor > 0 {
-                        m.cursor--
-                    }
-                }
-            }
+		case "d":
+			if m.tab == tabTasks {
+				if idx := m.currentTodoIndex(); idx >= 0 {
+					m.todos[idx].Toggle()
+					m.markModified()
+					if m.cursor > 0 {
+						m.cursor--
+					}
+				}
+			}
 
-        case "p":
-            if m.tab == tabTasks && !m.showHistory {
-                if idx := m.currentTodoIndex(); idx >= 0 {
-                    switch m.todos[idx].Priority {
-                    case todo.PriorityLow:
-                        m.todos[idx].SetPriority(todo.PriorityMedium)
-                    case todo.PriorityMedium:
-                        m.todos[idx].SetPriority(todo.PriorityHigh)
-                    default:
-                        m.todos[idx].SetPriority(todo.PriorityLow)
-                    }
-                    m.markModified()
-                }
-            }
-        }
-    }
+		case "p":
+			if m.tab == tabTasks && !m.showHistory {
+				if idx := m.currentTodoIndex(); idx >= 0 {
+					switch m.todos[idx].Priority {
+					case todo.PriorityLow:
+						m.todos[idx].SetPriority(todo.PriorityMedium)
+					case todo.PriorityMedium:
+						m.todos[idx].SetPriority(todo.PriorityHigh)
+					default:
+						m.todos[idx].SetPriority(todo.PriorityLow)
+					}
+					m.markModified()
+				}
+			}
+		}
+	}
 
-    switch m.tab {
-    case tabTasks:
-        if m.showHistory {
-            m.clampListOffset(len(m.cache.done))
-        } else {
-            m.clampListOffset(len(m.cache.active))
-        }
-    case tabProjects:
-        m.clampListOffset(len(m.allProjectsForList()))
-    }
-    return m, nil
+	switch m.tab {
+	case tabTasks:
+		if m.showHistory {
+			m.clampListOffset(len(m.cache.done))
+		} else {
+			m.clampListOffset(len(m.cache.active))
+		}
+	case tabProjects:
+		m.clampListOffset(len(m.allProjectsForList()))
+	}
+	return m, nil
 }
 
 // ── List helper methods ───────────────────────────────────────────────────────
 
 func (m *model) switchTab(t tab) {
-    m.tab = t
-    m.cursor = 0
-    m.projectCursor = 0
-    m.tagTabCursor = 0
-    m.learningCursor = 0
-    m.listOffset = 0
-    m.pane = paneList
-    m.searchQuery = ""
-    m.tagTabSearchQuery = ""
-    m.learningSearchQuery = ""
-    m.projectTaskMode = false
-    m.showHistory = false
-    if t == tabCalendar {
-        m.calendar.selected = startOfDay(time.Now())
-        m.calendar.entryCursor = 0
-        m.calendar.focusTimeline = false
-    }
-    m.invalidateDetailCache()
-    m.markCacheDirty()
+	m.tab = t
+	m.cursor = 0
+	m.projectCursor = 0
+	m.tagTabCursor = 0
+	m.learningCursor = 0
+	m.listOffset = 0
+	m.pane = paneList
+	m.searchQuery = ""
+	m.tagTabSearchQuery = ""
+	m.learningSearchQuery = ""
+	m.projectTaskMode = false
+	m.showHistory = false
+	if t == tabCalendar {
+		m.calendar.selected = startOfDay(time.Now())
+		m.calendar.entryCursor = 0
+		m.calendar.focusTimeline = false
+	}
+	m.invalidateDetailCache()
+	m.markCacheDirty()
 }
 
 // startEditTimeEntry opens the inline editor for an entry's times,
 // prefilled with the current range.
 func (m *model) startEditTimeEntry(taskID, entryID string) tea.Cmd {
-    t := m.findTodoByID(taskID)
-    if t == nil {
-        return nil
-    }
-    for i := range t.TimeEntries {
-        if t.TimeEntries[i].ID == entryID {
-            e := &t.TimeEntries[i]
-            val := e.StartedAt.Format("15:04") + "-"
-            if e.IsRunning() {
-                val += "now"
-            } else {
-                val += e.StoppedAt.Format("15:04")
-            }
-            m.pendingEntryTaskID = taskID
-            m.pendingEntryID = entryID
-            m.mode = modeEditTimeEntry
-            m.textInput.SetValue(val)
-            m.textInput.Placeholder = "HH:MM-HH:MM or duration (45m, 1h30m)..."
-            m.textInput.Focus()
-            return textinput.Blink
-        }
-    }
-    return nil
+	t := m.findTodoByID(taskID)
+	if t == nil {
+		return nil
+	}
+	for i := range t.TimeEntries {
+		if t.TimeEntries[i].ID == entryID {
+			e := &t.TimeEntries[i]
+			val := e.StartedAt.Format("15:04") + "-"
+			if e.IsRunning() {
+				val += "now"
+			} else {
+				val += e.StoppedAt.Format("15:04")
+			}
+			m.pendingEntryTaskID = taskID
+			m.pendingEntryID = entryID
+			m.mode = modeEditTimeEntry
+			m.textInput.SetValue(val)
+			m.textInput.Placeholder = "HH:MM-HH:MM or duration (45m, 1h30m)..."
+			m.textInput.Focus()
+			return textinput.Blink
+		}
+	}
+	return nil
 }
 
 func (m *model) moveCalendarDay(days int) {
-    m.calendar.selected = m.calendar.selected.AddDate(0, 0, days)
-    m.calendar.entryCursor = 0
-    m.calendar.focusTimeline = false
+	m.calendar.selected = m.calendar.selected.AddDate(0, 0, days)
+	m.calendar.entryCursor = 0
+	m.calendar.focusTimeline = false
 }
 
 func (m model) startSearch() (tea.Model, tea.Cmd) {
-    switch m.tab {
-    case tabTags:
-        m.mode = modeSearchTagTab
-        m.tagTabSearchInput.SetValue("")
-        m.tagTabSearchQuery = ""
-        m.tagTabCursor = 0
-        m.tagTabSearchInput.Focus()
-        return m, textinput.Blink
-    case tabLearnings:
-        m.mode = modeSearch
-        m.learningSearchInput.SetValue("")
-        m.learningSearchQuery = ""
-        m.learningCursor = 0
-        m.learningSearchInput.Focus()
-        return m, textinput.Blink
-    case tabTasks, tabProjects:
-        m.mode = modeSearch
-        m.searchInput.SetValue("")
-        m.searchInput.Focus()
-        return m, textinput.Blink
-    }
-    return m, nil
+	switch m.tab {
+	case tabTags:
+		m.mode = modeSearchTagTab
+		m.tagTabSearchInput.SetValue("")
+		m.tagTabSearchQuery = ""
+		m.tagTabCursor = 0
+		m.tagTabSearchInput.Focus()
+		return m, textinput.Blink
+	case tabLearnings:
+		m.mode = modeSearch
+		m.learningSearchInput.SetValue("")
+		m.learningSearchQuery = ""
+		m.learningCursor = 0
+		m.learningSearchInput.Focus()
+		return m, textinput.Blink
+	case tabTasks, tabProjects:
+		m.mode = modeSearch
+		m.searchInput.SetValue("")
+		m.searchInput.Focus()
+		return m, textinput.Blink
+	}
+	return m, nil
 }
 
 func (m *model) cycleSortMode() {
-    switch m.tab {
-    case tabTags:
-        if m.tagSort == tagSortAlpha {
-            m.tagSort = tagSortCount
-        } else {
-            m.tagSort = tagSortAlpha
-        }
-        m.tagTabCursor = 0
-    case tabTasks:
-        switch m.taskSort {
-        case taskSortDueDate:
-            m.taskSort = taskSortPriority
-        case taskSortPriority:
-            m.taskSort = taskSortStartDate
-        default:
-            m.taskSort = taskSortDueDate
-        }
-        m.cursor = 0
-        m.listOffset = 0
-        m.markCacheDirty()
-    case tabLearnings:
-        if m.learningSort == learningSortDate {
-            m.learningSort = learningSortAlpha
-        } else {
-            m.learningSort = learningSortDate
-        }
-        m.learningCursor = 0
-    }
-    saveSettings(appSettings{
-        TaskSort:     m.taskSort,
-        TagSort:      m.tagSort,
-        LearningSort: m.learningSort,
-    })
+	switch m.tab {
+	case tabTags:
+		if m.tagSort == tagSortAlpha {
+			m.tagSort = tagSortCount
+		} else {
+			m.tagSort = tagSortAlpha
+		}
+		m.tagTabCursor = 0
+	case tabTasks:
+		switch m.taskSort {
+		case taskSortDueDate:
+			m.taskSort = taskSortPriority
+		case taskSortPriority:
+			m.taskSort = taskSortStartDate
+		default:
+			m.taskSort = taskSortDueDate
+		}
+		m.cursor = 0
+		m.listOffset = 0
+		m.markCacheDirty()
+	case tabLearnings:
+		if m.learningSort == learningSortDate {
+			m.learningSort = learningSortAlpha
+		} else {
+			m.learningSort = learningSortDate
+		}
+		m.learningCursor = 0
+	}
+	saveSettings(appSettings{
+		TaskSort:     m.taskSort,
+		TagSort:      m.tagSort,
+		LearningSort: m.learningSort,
+	})
 }
 
 func (m *model) handleListEsc() {
-    switch {
-    case m.tab == tabCalendar && m.calendar.focusTimeline:
-        m.calendar.focusTimeline = false
-    case m.tab == tabTasks && m.focusFilter:
-        m.focusFilter = false
-        m.cursor = 0
-        m.listOffset = 0
-        m.markCacheDirty()
-    case m.tab == tabTags && m.tagTabSearchQuery != "":
-        m.tagTabSearchQuery = ""
-        m.tagTabCursor = 0
-    case m.tab == tabLearnings && m.learningSearchQuery != "":
-        m.learningSearchQuery = ""
-        m.learningCursor = 0
-    case m.tab == tabProjects && m.projectTaskMode:
-        m.projectTaskMode = false
-        m.cursor = 0
-    case m.tab == tabTasks && m.showHistory:
-        m.showHistory = false
-        m.cursor = 0
-        m.listOffset = 0
-    }
+	switch {
+	case m.tab == tabCalendar && m.calendar.focusTimeline:
+		m.calendar.focusTimeline = false
+	case m.tab == tabTasks && m.focusFilter:
+		m.focusFilter = false
+		m.cursor = 0
+		m.listOffset = 0
+		m.markCacheDirty()
+	case m.tab == tabTags && m.tagTabSearchQuery != "":
+		m.tagTabSearchQuery = ""
+		m.tagTabCursor = 0
+	case m.tab == tabLearnings && m.learningSearchQuery != "":
+		m.learningSearchQuery = ""
+		m.learningCursor = 0
+	case m.tab == tabProjects && m.projectTaskMode:
+		m.projectTaskMode = false
+		m.cursor = 0
+	case m.tab == tabTasks && m.showHistory:
+		m.showHistory = false
+		m.cursor = 0
+		m.listOffset = 0
+	}
 }
 
 func (m *model) moveCursorUp() {
-    switch m.tab {
-    case tabCalendar:
-        if m.calendar.focusTimeline {
-            if m.calendar.entryCursor > 0 {
-                m.calendar.entryCursor--
-            }
-        } else {
-            m.moveCalendarDay(-7)
-        }
-    case tabTags:
-        if m.tagTabCursor > 0 {
-            m.tagTabCursor--
-        }
-    case tabLearnings:
-        if m.learningCursor > 0 {
-            m.learningCursor--
-        }
-    case tabProjects:
-        if m.projectTaskMode {
-            if m.cursor > 0 {
-                m.cursor--
-            }
-        } else if m.projectCursor > 0 {
-            m.projectCursor--
-            m.cursor = 0
-            m.listOffset = 0
-        }
-    case tabTasks:
-        if m.cursor > 0 {
-            m.cursor--
-        }
-    }
+	switch m.tab {
+	case tabCalendar:
+		if m.calendar.focusTimeline {
+			if m.calendar.entryCursor > 0 {
+				m.calendar.entryCursor--
+			}
+		} else {
+			m.moveCalendarDay(-7)
+		}
+	case tabTags:
+		if m.tagTabCursor > 0 {
+			m.tagTabCursor--
+		}
+	case tabLearnings:
+		if m.learningCursor > 0 {
+			m.learningCursor--
+		}
+	case tabProjects:
+		if m.projectTaskMode {
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		} else if m.projectCursor > 0 {
+			m.projectCursor--
+			m.cursor = 0
+			m.listOffset = 0
+		}
+	case tabTasks:
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	}
 }
 
 func (m *model) moveCursorDown() {
-    switch m.tab {
-    case tabCalendar:
-        if m.calendar.focusTimeline {
-            if acts := m.activitiesForDay(m.calendar.selected); m.calendar.entryCursor < len(acts)-1 {
-                m.calendar.entryCursor++
-            }
-        } else {
-            m.moveCalendarDay(7)
-        }
-    case tabTags:
-        if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags)-1 {
-            m.tagTabCursor++
-        }
-    case tabLearnings:
-        if learnings := m.allLearnings(); m.learningCursor < len(learnings)-1 {
-            m.learningCursor++
-        }
-    case tabProjects:
-        projects := m.allProjectsForList()
-        if m.projectTaskMode {
-            if m.projectCursor < len(projects) {
-                tasks := m.getProjectTasks(projects[m.projectCursor])
-                if m.cursor < len(tasks)-1 {
-                    m.cursor++
-                }
-            }
-        } else if m.projectCursor < len(projects)-1 {
-            m.projectCursor++
-            m.cursor = 0
-            m.listOffset = 0
-        }
-    case tabTasks:
-        if m.showHistory {
-            if m.cursor < len(m.cache.done)-1 {
-                m.cursor++
-            }
-        } else {
-            if m.cursor < len(m.cache.active)-1 {
-                m.cursor++
-            }
-        }
-    }
+	switch m.tab {
+	case tabCalendar:
+		if m.calendar.focusTimeline {
+			if acts := m.activitiesForDay(m.calendar.selected); m.calendar.entryCursor < len(acts)-1 {
+				m.calendar.entryCursor++
+			}
+		} else {
+			m.moveCalendarDay(7)
+		}
+	case tabTags:
+		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags)-1 {
+			m.tagTabCursor++
+		}
+	case tabLearnings:
+		if learnings := m.allLearnings(); m.learningCursor < len(learnings)-1 {
+			m.learningCursor++
+		}
+	case tabProjects:
+		projects := m.allProjectsForList()
+		if m.projectTaskMode {
+			if m.projectCursor < len(projects) {
+				tasks := m.getProjectTasks(projects[m.projectCursor])
+				if m.cursor < len(tasks)-1 {
+					m.cursor++
+				}
+			}
+		} else if m.projectCursor < len(projects)-1 {
+			m.projectCursor++
+			m.cursor = 0
+			m.listOffset = 0
+		}
+	case tabTasks:
+		if m.showHistory {
+			if m.cursor < len(m.cache.done)-1 {
+				m.cursor++
+			}
+		} else {
+			if m.cursor < len(m.cache.active)-1 {
+				m.cursor++
+			}
+		}
+	}
 }
 
 func (m model) handleListEnter() (tea.Model, tea.Cmd) {
-    switch m.tab {
-    case tabCalendar:
-        if len(m.activitiesForDay(m.calendar.selected)) > 0 {
-            m.calendar.focusTimeline = true
-            m.calendar.entryCursor = 0
-        }
-    case tabLearnings:
-        if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-            m.pane = paneDetail
-        }
-    case tabProjects:
-        if !m.projectTaskMode {
-            if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
-                m.projectTaskMode = true
-                m.cursor = 0
-            }
-        } else if m.currentTodo() != nil {
-            m.pane = paneDetail
-            m.detail = detailState{field: fieldStartDate}
-            m.invalidateDetailCache()
-        }
-    case tabTasks:
-        if m.currentTodo() != nil {
-            m.pane = paneDetail
-            m.detail = detailState{field: fieldStartDate}
-            m.invalidateDetailCache()
-        }
-    }
-    return m, nil
+	switch m.tab {
+	case tabCalendar:
+		if len(m.activitiesForDay(m.calendar.selected)) > 0 {
+			m.calendar.focusTimeline = true
+			m.calendar.entryCursor = 0
+		}
+	case tabLearnings:
+		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
+			m.pane = paneDetail
+		}
+	case tabProjects:
+		if !m.projectTaskMode {
+			if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
+				m.projectTaskMode = true
+				m.cursor = 0
+			}
+		} else if m.currentTodo() != nil {
+			m.pane = paneDetail
+			m.detail = detailState{field: fieldStartDate}
+			m.invalidateDetailCache()
+		}
+	case tabTasks:
+		if m.currentTodo() != nil {
+			m.pane = paneDetail
+			m.detail = detailState{field: fieldStartDate}
+			m.invalidateDetailCache()
+		}
+	}
+	return m, nil
 }
 
 func (m model) handleListRename() (tea.Model, tea.Cmd) {
-    switch m.tab {
-    case tabCalendar:
-        if m.calendar.focusTimeline {
-            acts := m.activitiesForDay(m.calendar.selected)
-            if m.calendar.entryCursor < len(acts) {
-                a := acts[m.calendar.entryCursor]
-                return m, m.startEditTimeEntry(a.taskID, a.entryID)
-            }
-        }
-    case tabTags:
-        if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
-            m.editingTagName = tags[m.tagTabCursor]
-            m.mode = modeEditTag
-            m.textInput.SetValue(tags[m.tagTabCursor])
-            m.textInput.Placeholder = "Edit tag name..."
-            m.textInput.Focus()
-            return m, textinput.Blink
-        }
-    case tabTasks:
-        if !m.showHistory {
-            if t := m.currentTodo(); t != nil {
-                m.mode = modeEditTitle
-                m.textInput.SetValue(t.Title)
-                m.textInput.Placeholder = "Edit task title..."
-                m.textInput.Focus()
-                return m, textinput.Blink
-            }
-        }
-    case tabProjects:
-        if !m.projectTaskMode {
-            if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
-                m.editingProjectName = projects[m.projectCursor]
-                m.mode = modeEditProjectInline
-                m.textInput.SetValue(projects[m.projectCursor])
-                m.textInput.Focus()
-                return m, textinput.Blink
-            }
-        }
-    case tabLearnings:
-        if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-            m.pendingLearning = m.learningCursor
-            m.mode = modeEditLearning
-            m.textInput.SetValue(learnings[m.learningCursor].Text)
-            m.textInput.Placeholder = "Edit learning..."
-            m.textInput.Focus()
-            return m, textinput.Blink
-        }
-    }
-    return m, nil
+	switch m.tab {
+	case tabCalendar:
+		if m.calendar.focusTimeline {
+			acts := m.activitiesForDay(m.calendar.selected)
+			if m.calendar.entryCursor < len(acts) {
+				a := acts[m.calendar.entryCursor]
+				return m, m.startEditTimeEntry(a.taskID, a.entryID)
+			}
+		}
+	case tabTags:
+		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
+			m.editingTagName = tags[m.tagTabCursor]
+			m.mode = modeEditTag
+			m.textInput.SetValue(tags[m.tagTabCursor])
+			m.textInput.Placeholder = "Edit tag name..."
+			m.textInput.Focus()
+			return m, textinput.Blink
+		}
+	case tabTasks:
+		if !m.showHistory {
+			if t := m.currentTodo(); t != nil {
+				m.mode = modeEditTitle
+				m.textInput.SetValue(t.Title)
+				m.textInput.Placeholder = "Edit task title..."
+				m.textInput.Focus()
+				return m, textinput.Blink
+			}
+		}
+	case tabProjects:
+		if !m.projectTaskMode {
+			if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
+				m.editingProjectName = projects[m.projectCursor]
+				m.mode = modeEditProjectInline
+				m.textInput.SetValue(projects[m.projectCursor])
+				m.textInput.Focus()
+				return m, textinput.Blink
+			}
+		}
+	case tabLearnings:
+		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
+			m.pendingLearning = m.learningCursor
+			m.mode = modeEditLearning
+			m.textInput.SetValue(learnings[m.learningCursor].Text)
+			m.textInput.Placeholder = "Edit learning..."
+			m.textInput.Focus()
+			return m, textinput.Blink
+		}
+	}
+	return m, nil
 }
 
 func (m model) handleListDelete() (tea.Model, tea.Cmd) {
-    switch m.tab {
-    case tabCalendar:
-        if m.calendar.focusTimeline {
-            acts := m.activitiesForDay(m.calendar.selected)
-            if m.calendar.entryCursor < len(acts) {
-                a := acts[m.calendar.entryCursor]
-                m.mode = modeConfirmDeleteTimeEntry
-                m.pendingEntryTaskID = a.taskID
-                m.pendingEntryID = a.entryID
-                m.confirmMsg = fmt.Sprintf("Delete %s entry for '%s'? (y/n)",
-                    formatDuration(a.duration()), truncate(a.title, 30))
-            }
-        }
-    case tabTags:
-        if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
-            m.mode = modeConfirmDeleteTagGlobal
-            m.confirmMsg = fmt.Sprintf("Delete tag '#%s' from ALL tasks? (y/n)", tags[m.tagTabCursor])
-        }
-    case tabTasks:
-        if t := m.currentTodo(); t != nil {
-            m.mode = modeConfirmDelete
-            m.pendingDelete = m.cursor
-            m.confirmMsg = fmt.Sprintf("Delete '%s'? (y/n)", t.Title)
-        }
-    case tabLearnings:
-        if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-            m.mode = modeConfirmDeleteLearning
-            m.pendingLearning = m.learningCursor
-            m.confirmMsg = fmt.Sprintf("Delete learning '%s'? (y/n)", truncate(learnings[m.learningCursor].Text, 40))
-        }
-    }
-    return m, nil
+	switch m.tab {
+	case tabCalendar:
+		if m.calendar.focusTimeline {
+			acts := m.activitiesForDay(m.calendar.selected)
+			if m.calendar.entryCursor < len(acts) {
+				a := acts[m.calendar.entryCursor]
+				m.mode = modeConfirmDeleteTimeEntry
+				m.pendingEntryTaskID = a.taskID
+				m.pendingEntryID = a.entryID
+				m.confirmMsg = fmt.Sprintf("Delete %s entry for '%s'? (y/n)",
+					formatDuration(a.duration()), truncate(a.title, 30))
+			}
+		}
+	case tabTags:
+		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
+			m.mode = modeConfirmDeleteTagGlobal
+			m.confirmMsg = fmt.Sprintf("Delete tag '#%s' from ALL tasks? (y/n)", tags[m.tagTabCursor])
+		}
+	case tabTasks:
+		if t := m.currentTodo(); t != nil {
+			m.mode = modeConfirmDelete
+			m.pendingDelete = m.cursor
+			m.confirmMsg = fmt.Sprintf("Delete '%s'? (y/n)", t.Title)
+		}
+	case tabLearnings:
+		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
+			m.mode = modeConfirmDeleteLearning
+			m.pendingLearning = m.learningCursor
+			m.confirmMsg = fmt.Sprintf("Delete learning '%s'? (y/n)", truncate(learnings[m.learningCursor].Text, 40))
+		}
+	}
+	return m, nil
 }
 
 // ── Detail pane ───────────────────────────────────────────────────────────────
 
 func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
-    if m.tab == tabLearnings {
-        return m.updateLearningsDetail(msg)
-    }
+	if m.tab == tabLearnings {
+		return m.updateLearningsDetail(msg)
+	}
 
-    key, ok := msg.(tea.KeyMsg)
-    if !ok {
-        return m, nil
-    }
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
 
-    switch key.String() {
-    case "?":
-        m.mode = modeHelp
-        return m, nil
-    case "u":
-        return m, m.performUndo()
-    case "n":
-        if m.currentTodo() != nil {
-            return m, m.openEditorForNotes()
-        }
-        return m, nil
-    case "esc":
-        m.pane = paneList
-        m.detail = detailState{field: fieldStartDate}
-        m.invalidateDetailCache()
+	switch key.String() {
+	case "?":
+		m.mode = modeHelp
+		return m, nil
+	case "u":
+		return m, m.performUndo()
+	case "n":
+		if m.currentTodo() != nil {
+			return m, m.openEditorForNotes()
+		}
+		return m, nil
+	case "esc":
+		m.pane = paneList
+		m.detail = detailState{field: fieldStartDate}
+		m.invalidateDetailCache()
 
-    case "left":
-        if m.detail.page > 0 {
-            m.detail.page--
-            if m.detail.page == 0 {
-                m.detail.field = fieldStartDate
-            } else {
-                m.detail.field = fieldSubtasks
-            }
-            m.invalidateDetailCache()
-        }
-    case "right", "l":
-        if m.detail.page < 2 {
-            m.detail.page++
-            if m.detail.page == 1 {
-                m.detail.field = fieldSubtasks
-                m.detail.subtaskCursor = 0
-            } else {
-                m.detail.commentCursor = 0
-            }
-            m.invalidateDetailCache()
-        }
+	case "left":
+		if m.detail.page > 0 {
+			m.detail.page--
+			if m.detail.page == 0 {
+				m.detail.field = fieldStartDate
+			} else {
+				m.detail.field = fieldSubtasks
+			}
+			m.invalidateDetailCache()
+		}
+	case "right", "l":
+		if m.detail.page < 2 {
+			m.detail.page++
+			if m.detail.page == 1 {
+				m.detail.field = fieldSubtasks
+				m.detail.subtaskCursor = 0
+			} else {
+				m.detail.commentCursor = 0
+			}
+			m.invalidateDetailCache()
+		}
 
-    case "up", "k":
-        m.detailCursorUp()
-    case "down", "j":
-        m.detailCursorDown()
+	case "up", "k":
+		m.detailCursorUp()
+	case "down", "j":
+		m.detailCursorDown()
 
-    case "enter":
-        return m.startEditing()
+	case "enter":
+		return m.startEditing()
 
-    case "d":
-        if m.detail.page == 1 && m.detail.field == fieldSubtasks {
-            if idx := m.currentTodoIndex(); idx >= 0 {
-                if m.detail.subtaskCursor < len(m.todos[idx].SubtaskIDs) {
-                    m.toggleSubtask(idx, m.detail.subtaskCursor)
-                    m.markModified()
-                }
-            }
-        }
+	case "d":
+		if m.detail.page == 1 && m.detail.field == fieldSubtasks {
+			if idx := m.currentTodoIndex(); idx >= 0 {
+				if m.detail.subtaskCursor < len(m.todos[idx].SubtaskIDs) {
+					m.toggleSubtask(idx, m.detail.subtaskCursor)
+					m.markModified()
+				}
+			}
+		}
 
-    case "a":
-        return m.detailAdd()
+	case "a":
+		return m.detailAdd()
 
-    case "x", "delete":
-        return m.detailDelete()
-    }
-    return m, nil
+	case "x", "delete":
+		return m.detailDelete()
+	}
+	return m, nil
 }
 
 func (m *model) detailCursorUp() {
-    m.invalidateDetailCache()
-    if m.detail.page == 0 {
-        switch m.detail.field {
-        case fieldDueDate:
-            m.detail.field = fieldStartDate
-        case fieldPriority:
-            m.detail.field = fieldDueDate
-        case fieldProject:
-            m.detail.field = fieldPriority
-        case fieldNotes:
-            m.detail.field = fieldProject
-        case fieldTags:
-            if m.detail.tagCursor > 0 {
-                m.detail.tagCursor--
-            } else {
-                m.detail.field = fieldNotes
-            }
-        }
-    } else if m.detail.page == 1 {
-        t := m.currentTodo()
-        switch m.detail.field {
-        case fieldSubtasks:
-            if m.detail.subtaskCursor > 0 {
-                m.detail.subtaskCursor--
-            }
-        case fieldDependencies:
-            if m.detail.depCursor > 0 {
-                m.detail.depCursor--
-            } else {
-                m.detail.field = fieldSubtasks
-                if t != nil && len(t.SubtaskIDs) > 0 {
-                    m.detail.subtaskCursor = len(t.SubtaskIDs) - 1
-                }
-            }
-        case fieldLearnings:
-            if m.detail.learningCursor > 0 {
-                m.detail.learningCursor--
-            } else {
-                m.detail.field = fieldDependencies
-                if t != nil && len(t.Dependencies) > 0 {
-                    m.detail.depCursor = len(t.Dependencies) - 1
-                }
-            }
-        }
-    } else if m.detail.commentCursor > 0 {
-        m.detail.commentCursor--
-    }
+	m.invalidateDetailCache()
+	if m.detail.page == 0 {
+		switch m.detail.field {
+		case fieldDueDate:
+			m.detail.field = fieldStartDate
+		case fieldPriority:
+			m.detail.field = fieldDueDate
+		case fieldProject:
+			m.detail.field = fieldPriority
+		case fieldNotes:
+			m.detail.field = fieldProject
+		case fieldTags:
+			if m.detail.tagCursor > 0 {
+				m.detail.tagCursor--
+			} else {
+				m.detail.field = fieldNotes
+			}
+		}
+	} else if m.detail.page == 1 {
+		t := m.currentTodo()
+		switch m.detail.field {
+		case fieldSubtasks:
+			if m.detail.subtaskCursor > 0 {
+				m.detail.subtaskCursor--
+			}
+		case fieldDependencies:
+			if m.detail.depCursor > 0 {
+				m.detail.depCursor--
+			} else {
+				m.detail.field = fieldSubtasks
+				if t != nil && len(t.SubtaskIDs) > 0 {
+					m.detail.subtaskCursor = len(t.SubtaskIDs) - 1
+				}
+			}
+		case fieldLearnings:
+			if m.detail.learningCursor > 0 {
+				m.detail.learningCursor--
+			} else {
+				m.detail.field = fieldDependencies
+				if t != nil && len(t.Dependencies) > 0 {
+					m.detail.depCursor = len(t.Dependencies) - 1
+				}
+			}
+		}
+	} else if m.detail.commentCursor > 0 {
+		m.detail.commentCursor--
+	}
 }
 
 func (m *model) detailCursorDown() {
-    m.invalidateDetailCache()
-    if m.detail.page == 0 {
-        t := m.currentTodo()
-        switch m.detail.field {
-        case fieldStartDate:
-            m.detail.field = fieldDueDate
-        case fieldDueDate:
-            m.detail.field = fieldPriority
-        case fieldPriority:
-            m.detail.field = fieldProject
-        case fieldProject:
-            m.detail.field = fieldNotes
-        case fieldNotes:
-            m.detail.field = fieldTags
-            m.detail.tagCursor = 0
-        case fieldTags:
-            if t != nil && m.detail.tagCursor < len(t.Tags)-1 {
-                m.detail.tagCursor++
-            }
-        }
-    } else if m.detail.page == 1 {
-        t := m.currentTodo()
-        switch m.detail.field {
-        case fieldSubtasks:
-            if t != nil && m.detail.subtaskCursor < len(t.SubtaskIDs)-1 {
-                m.detail.subtaskCursor++
-            } else {
-                m.detail.field = fieldDependencies
-                m.detail.depCursor = 0
-            }
-        case fieldDependencies:
-            if t != nil && m.detail.depCursor < len(t.Dependencies)-1 {
-                m.detail.depCursor++
-            } else {
-                m.detail.field = fieldLearnings
-                m.detail.learningCursor = 0
-            }
-        case fieldLearnings:
-            if t != nil && m.detail.learningCursor < len(t.Learnings)-1 {
-                m.detail.learningCursor++
-            }
-        }
-    } else if t := m.currentTodo(); t != nil && m.detail.commentCursor < len(t.Comments)-1 {
-        m.detail.commentCursor++
-    }
+	m.invalidateDetailCache()
+	if m.detail.page == 0 {
+		t := m.currentTodo()
+		switch m.detail.field {
+		case fieldStartDate:
+			m.detail.field = fieldDueDate
+		case fieldDueDate:
+			m.detail.field = fieldPriority
+		case fieldPriority:
+			m.detail.field = fieldProject
+		case fieldProject:
+			m.detail.field = fieldNotes
+		case fieldNotes:
+			m.detail.field = fieldTags
+			m.detail.tagCursor = 0
+		case fieldTags:
+			if t != nil && m.detail.tagCursor < len(t.Tags)-1 {
+				m.detail.tagCursor++
+			}
+		}
+	} else if m.detail.page == 1 {
+		t := m.currentTodo()
+		switch m.detail.field {
+		case fieldSubtasks:
+			if t != nil && m.detail.subtaskCursor < len(t.SubtaskIDs)-1 {
+				m.detail.subtaskCursor++
+			} else {
+				m.detail.field = fieldDependencies
+				m.detail.depCursor = 0
+			}
+		case fieldDependencies:
+			if t != nil && m.detail.depCursor < len(t.Dependencies)-1 {
+				m.detail.depCursor++
+			} else {
+				m.detail.field = fieldLearnings
+				m.detail.learningCursor = 0
+			}
+		case fieldLearnings:
+			if t != nil && m.detail.learningCursor < len(t.Learnings)-1 {
+				m.detail.learningCursor++
+			}
+		}
+	} else if t := m.currentTodo(); t != nil && m.detail.commentCursor < len(t.Comments)-1 {
+		m.detail.commentCursor++
+	}
 }
 
 func (m model) detailAdd() (tea.Model, tea.Cmd) {
-    if m.detail.page == 2 {
-        m.mode = modeInput
-        m.textInput.SetValue("")
-        m.textInput.Placeholder = "Add comment..."
-        m.textInput.Focus()
-        return m, textinput.Blink
-    }
-    switch m.detail.field {
-    case fieldDependencies:
-        m.mode = modeSearchDep
-        m.depSearchInput.SetValue("")
-        m.depSearch = searchState{}
-        m.depSearchInput.Focus()
-        return m, textinput.Blink
-    case fieldTags:
-        m.mode = modeSearchTag
-        m.tagSearchInput.SetValue("")
-        m.tagSearch = searchState{}
-        m.tagSearchInput.Focus()
-        return m, textinput.Blink
-    case fieldProject:
-        m.mode = modeSearchProject
-        m.projSearchInput.SetValue("")
-        m.projSearch = searchState{}
-        m.projSearchInput.Focus()
-        return m, textinput.Blink
-    case fieldLearnings:
-        m.mode = modeAddLearning
-        m.textInput.SetValue("")
-        m.textInput.Placeholder = "Add learning..."
-        m.textInput.Focus()
-        return m, textinput.Blink
-    case fieldSubtasks:
-        m.mode = modeAddSubtask
-        m.textInput.SetValue("")
-        m.textInput.Placeholder = "Add subtask..."
-        m.textInput.Focus()
-        return m, textinput.Blink
-    }
-    return m, nil
+	if m.detail.page == 2 {
+		m.mode = modeInput
+		m.textInput.SetValue("")
+		m.textInput.Placeholder = "Add comment..."
+		m.textInput.Focus()
+		return m, textinput.Blink
+	}
+	switch m.detail.field {
+	case fieldDependencies:
+		m.mode = modeSearchDep
+		m.depSearchInput.SetValue("")
+		m.depSearch = searchState{}
+		m.depSearchInput.Focus()
+		return m, textinput.Blink
+	case fieldTags:
+		m.mode = modeSearchTag
+		m.tagSearchInput.SetValue("")
+		m.tagSearch = searchState{}
+		m.tagSearchInput.Focus()
+		return m, textinput.Blink
+	case fieldProject:
+		m.mode = modeSearchProject
+		m.projSearchInput.SetValue("")
+		m.projSearch = searchState{}
+		m.projSearchInput.Focus()
+		return m, textinput.Blink
+	case fieldLearnings:
+		m.mode = modeAddLearning
+		m.textInput.SetValue("")
+		m.textInput.Placeholder = "Add learning..."
+		m.textInput.Focus()
+		return m, textinput.Blink
+	case fieldSubtasks:
+		m.mode = modeAddSubtask
+		m.textInput.SetValue("")
+		m.textInput.Placeholder = "Add subtask..."
+		m.textInput.Focus()
+		return m, textinput.Blink
+	}
+	return m, nil
 }
 
 func (m model) detailDelete() (tea.Model, tea.Cmd) {
-    idx := m.currentTodoIndex()
-    if idx < 0 {
-        return m, nil
-    }
-    if m.detail.page == 2 {
-        if len(m.todos[idx].Comments) > 0 {
-            m.mode = modeConfirmDeleteComment
-            m.pendingComment = m.detail.commentCursor
-            m.confirmMsg = "Delete this comment? (y/n)"
-        }
-        return m, nil
-    }
-    switch m.detail.field {
-    case fieldProject:
-        if m.todos[idx].Project != "" {
-            m.mode = modeConfirmDeleteProject
-            m.confirmMsg = fmt.Sprintf("Remove project '%s' from this task? (y/n)", m.todos[idx].Project)
-        }
-    case fieldNotes:
-        if m.todos[idx].Notes != "" {
-            m.pushUndo("clear notes")
-            m.todos[idx].SetNotes("")
-            m.markModifiedNoUndo()
-        }
-    case fieldTags:
-        if len(m.todos[idx].Tags) > 0 && m.detail.tagCursor < len(m.todos[idx].Tags) {
-            m.mode = modeConfirmDeleteTag
-            m.pendingTag = m.detail.tagCursor
-            m.confirmMsg = fmt.Sprintf("Remove tag '#%s' from this task? (y/n)", m.todos[idx].Tags[m.detail.tagCursor])
-        }
-    case fieldDependencies:
-        if len(m.todos[idx].Dependencies) > 0 && m.detail.depCursor < len(m.todos[idx].Dependencies) {
-            m.mode = modeConfirmDeleteDep
-            m.pendingDep = m.detail.depCursor
-            m.confirmMsg = "Remove this dependency? (y/n)"
-        }
-    case fieldLearnings:
-        if len(m.todos[idx].Learnings) > 0 && m.detail.learningCursor < len(m.todos[idx].Learnings) {
-            m.mode = modeConfirmDeleteLearning
-            m.pendingLearning = m.detail.learningCursor
-            m.confirmMsg = fmt.Sprintf("Delete learning '%s'? (y/n)", truncate(m.todos[idx].Learnings[m.detail.learningCursor].Text, 40))
-        }
-    case fieldSubtasks:
-        if len(m.todos[idx].SubtaskIDs) > 0 && m.detail.subtaskCursor < len(m.todos[idx].SubtaskIDs) {
-            subID := m.todos[idx].SubtaskIDs[m.detail.subtaskCursor]
-            subTitle := subID
-            if sub := m.findTodoByID(subID); sub != nil {
-                subTitle = sub.Title
-            }
-            m.mode = modeConfirmDeleteSubtask
-            m.pendingSubtask = m.detail.subtaskCursor
-            m.confirmMsg = fmt.Sprintf("Delete subtask '%s'? (y/n)", truncate(subTitle, 40))
-        }
-    }
-    return m, nil
+	idx := m.currentTodoIndex()
+	if idx < 0 {
+		return m, nil
+	}
+	if m.detail.page == 2 {
+		if len(m.todos[idx].Comments) > 0 {
+			m.mode = modeConfirmDeleteComment
+			m.pendingComment = m.detail.commentCursor
+			m.confirmMsg = "Delete this comment? (y/n)"
+		}
+		return m, nil
+	}
+	switch m.detail.field {
+	case fieldProject:
+		if m.todos[idx].Project != "" {
+			m.mode = modeConfirmDeleteProject
+			m.confirmMsg = fmt.Sprintf("Remove project '%s' from this task? (y/n)", m.todos[idx].Project)
+		}
+	case fieldNotes:
+		if m.todos[idx].Notes != "" {
+			m.pushUndo("clear notes")
+			m.todos[idx].SetNotes("")
+			m.markModifiedNoUndo()
+		}
+	case fieldTags:
+		if len(m.todos[idx].Tags) > 0 && m.detail.tagCursor < len(m.todos[idx].Tags) {
+			m.mode = modeConfirmDeleteTag
+			m.pendingTag = m.detail.tagCursor
+			m.confirmMsg = fmt.Sprintf("Remove tag '#%s' from this task? (y/n)", m.todos[idx].Tags[m.detail.tagCursor])
+		}
+	case fieldDependencies:
+		if len(m.todos[idx].Dependencies) > 0 && m.detail.depCursor < len(m.todos[idx].Dependencies) {
+			m.mode = modeConfirmDeleteDep
+			m.pendingDep = m.detail.depCursor
+			m.confirmMsg = "Remove this dependency? (y/n)"
+		}
+	case fieldLearnings:
+		if len(m.todos[idx].Learnings) > 0 && m.detail.learningCursor < len(m.todos[idx].Learnings) {
+			m.mode = modeConfirmDeleteLearning
+			m.pendingLearning = m.detail.learningCursor
+			m.confirmMsg = fmt.Sprintf("Delete learning '%s'? (y/n)", truncate(m.todos[idx].Learnings[m.detail.learningCursor].Text, 40))
+		}
+	case fieldSubtasks:
+		if len(m.todos[idx].SubtaskIDs) > 0 && m.detail.subtaskCursor < len(m.todos[idx].SubtaskIDs) {
+			subID := m.todos[idx].SubtaskIDs[m.detail.subtaskCursor]
+			subTitle := subID
+			if sub := m.findTodoByID(subID); sub != nil {
+				subTitle = sub.Title
+			}
+			m.mode = modeConfirmDeleteSubtask
+			m.pendingSubtask = m.detail.subtaskCursor
+			m.confirmMsg = fmt.Sprintf("Delete subtask '%s'? (y/n)", truncate(subTitle, 40))
+		}
+	}
+	return m, nil
 }
 
 func (m model) updateLearningsDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
-    key, ok := msg.(tea.KeyMsg)
-    if !ok {
-        return m, nil
-    }
-    switch key.String() {
-    case "?":
-        m.mode = modeHelp
-    case "u":
-        return m, m.performUndo()
-    case "esc":
-        m.pane = paneList
-    case "x", "delete":
-        if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-            m.mode = modeConfirmDeleteLearning
-            m.pendingLearning = m.learningCursor
-            m.confirmMsg = fmt.Sprintf("Delete learning '%s'? (y/n)", truncate(learnings[m.learningCursor].Text, 40))
-        }
-    case "r":
-        if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-            m.mode = modeEditLearning
-            m.textInput.SetValue(learnings[m.learningCursor].Text)
-            m.textInput.Placeholder = "Edit learning..."
-            m.textInput.Focus()
-            return m, textinput.Blink
-        }
-    }
-    return m, nil
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "?":
+		m.mode = modeHelp
+	case "u":
+		return m, m.performUndo()
+	case "esc":
+		m.pane = paneList
+	case "x", "delete":
+		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
+			m.mode = modeConfirmDeleteLearning
+			m.pendingLearning = m.learningCursor
+			m.confirmMsg = fmt.Sprintf("Delete learning '%s'? (y/n)", truncate(learnings[m.learningCursor].Text, 40))
+		}
+	case "r":
+		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
+			m.mode = modeEditLearning
+			m.textInput.SetValue(learnings[m.learningCursor].Text)
+			m.textInput.Placeholder = "Edit learning..."
+			m.textInput.Focus()
+			return m, textinput.Blink
+		}
+	}
+	return m, nil
 }
 
 func (m model) startEditing() (tea.Model, tea.Cmd) {
-    idx := m.currentTodoIndex()
-    if idx < 0 {
-        return m, nil
-    }
-    t := &m.todos[idx]
+	idx := m.currentTodoIndex()
+	if idx < 0 {
+		return m, nil
+	}
+	t := &m.todos[idx]
 
-    if m.detail.page == 2 {
-        if len(t.Comments) > 0 {
-            m.mode = modeEditComment
-            m.pendingComment = m.detail.commentCursor
-            m.textInput.SetValue(t.Comments[m.detail.commentCursor].Text)
-            m.textInput.Placeholder = "Edit comment..."
-            m.textInput.Focus()
-        }
-        return m, textinput.Blink
-    }
+	if m.detail.page == 2 {
+		if len(t.Comments) > 0 {
+			m.mode = modeEditComment
+			m.pendingComment = m.detail.commentCursor
+			m.textInput.SetValue(t.Comments[m.detail.commentCursor].Text)
+			m.textInput.Placeholder = "Edit comment..."
+			m.textInput.Focus()
+		}
+		return m, textinput.Blink
+	}
 
-    switch m.detail.field {
-    case fieldStartDate:
-        m.mode = modeInput
-        if !t.StartDate.IsZero() {
-            m.textInput.SetValue(t.StartDate.Format("02-01-06"))
-        } else {
-            m.textInput.SetValue("")
-        }
-        m.textInput.Placeholder = "Start date (dd-mm-yy, 'today', 'next week', '+3d')..."
-        m.textInput.Focus()
-    case fieldDueDate:
-        m.mode = modeInput
-        if !t.DueDate.IsZero() {
-            m.textInput.SetValue(t.DueDate.Format("02-01-06"))
-        } else {
-            m.textInput.SetValue("")
-        }
-        m.textInput.Placeholder = "Due date (dd-mm-yy, 'today', 'next week', '+3d')..."
-        m.textInput.Focus()
-    case fieldPriority:
-        switch t.Priority {
-        case todo.PriorityLow:
-            m.todos[idx].SetPriority(todo.PriorityMedium)
-        case todo.PriorityMedium:
-            m.todos[idx].SetPriority(todo.PriorityHigh)
-        default:
-            m.todos[idx].SetPriority(todo.PriorityLow)
-        }
-        m.markModified()
-        return m, nil
-    case fieldProject:
-        m.mode = modeSearchProject
-        m.projSearchInput.SetValue(t.Project)
-        m.projSearch = searchState{query: t.Project}
-        m.projSearchInput.Focus()
-        return m, textinput.Blink
-    case fieldNotes:
-        return m, m.openEditorForNotes()
-    case fieldTags:
-        m.mode = modeSearchTag
-        m.tagSearchInput.SetValue("")
-        m.tagSearch = searchState{}
-        m.tagSearchInput.Focus()
-        return m, textinput.Blink
-    case fieldDependencies:
-        if len(t.Dependencies) > 0 && m.detail.depCursor < len(t.Dependencies) {
-            depID := t.Dependencies[m.detail.depCursor]
-            for i, candidate := range m.cache.active {
-                if candidate.ID == depID {
-                    m.pane = paneList
-                    m.cursor = i
-                    m.tab = tabTasks
-                    m.invalidateDetailCache()
-                    return m, nil
-                }
-            }
-        }
-        return m, nil
-    case fieldLearnings:
-        if len(t.Learnings) > 0 && m.detail.learningCursor < len(t.Learnings) {
-            m.mode = modeEditLearning
-            m.textInput.SetValue(t.Learnings[m.detail.learningCursor].Text)
-            m.textInput.Placeholder = "Edit learning..."
-            m.textInput.Focus()
-            return m, textinput.Blink
-        }
-    case fieldSubtasks:
-        if len(t.SubtaskIDs) > 0 && m.detail.subtaskCursor < len(t.SubtaskIDs) {
-            m.toggleSubtask(idx, m.detail.subtaskCursor)
-            m.markModified()
-            return m, nil
-        }
-    }
-    return m, textinput.Blink
+	switch m.detail.field {
+	case fieldStartDate:
+		m.mode = modeInput
+		if !t.StartDate.IsZero() {
+			m.textInput.SetValue(t.StartDate.Format("02-01-06"))
+		} else {
+			m.textInput.SetValue("")
+		}
+		m.textInput.Placeholder = "Start date (dd-mm-yy, 'today', 'next week', '+3d')..."
+		m.textInput.Focus()
+	case fieldDueDate:
+		m.mode = modeInput
+		if !t.DueDate.IsZero() {
+			m.textInput.SetValue(t.DueDate.Format("02-01-06"))
+		} else {
+			m.textInput.SetValue("")
+		}
+		m.textInput.Placeholder = "Due date (dd-mm-yy, 'today', 'next week', '+3d')..."
+		m.textInput.Focus()
+	case fieldPriority:
+		switch t.Priority {
+		case todo.PriorityLow:
+			m.todos[idx].SetPriority(todo.PriorityMedium)
+		case todo.PriorityMedium:
+			m.todos[idx].SetPriority(todo.PriorityHigh)
+		default:
+			m.todos[idx].SetPriority(todo.PriorityLow)
+		}
+		m.markModified()
+		return m, nil
+	case fieldProject:
+		m.mode = modeSearchProject
+		m.projSearchInput.SetValue(t.Project)
+		m.projSearch = searchState{query: t.Project}
+		m.projSearchInput.Focus()
+		return m, textinput.Blink
+	case fieldNotes:
+		return m, m.openEditorForNotes()
+	case fieldTags:
+		m.mode = modeSearchTag
+		m.tagSearchInput.SetValue("")
+		m.tagSearch = searchState{}
+		m.tagSearchInput.Focus()
+		return m, textinput.Blink
+	case fieldDependencies:
+		if len(t.Dependencies) > 0 && m.detail.depCursor < len(t.Dependencies) {
+			depID := t.Dependencies[m.detail.depCursor]
+			for i, candidate := range m.cache.active {
+				if candidate.ID == depID {
+					m.pane = paneList
+					m.cursor = i
+					m.tab = tabTasks
+					m.invalidateDetailCache()
+					return m, nil
+				}
+			}
+		}
+		return m, nil
+	case fieldLearnings:
+		if len(t.Learnings) > 0 && m.detail.learningCursor < len(t.Learnings) {
+			m.mode = modeEditLearning
+			m.textInput.SetValue(t.Learnings[m.detail.learningCursor].Text)
+			m.textInput.Placeholder = "Edit learning..."
+			m.textInput.Focus()
+			return m, textinput.Blink
+		}
+	case fieldSubtasks:
+		if len(t.SubtaskIDs) > 0 && m.detail.subtaskCursor < len(t.SubtaskIDs) {
+			m.toggleSubtask(idx, m.detail.subtaskCursor)
+			m.markModified()
+			return m, nil
+		}
+	}
+	return m, textinput.Blink
 }
-
