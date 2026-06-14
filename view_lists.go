@@ -744,13 +744,11 @@ func (m model) renderSettingsList() string {
 		"Theme",
 		"Version",
 		"Check for updates",
-		"Update to latest release",
 	}
 	values := [numSettingsRows]string{
 		"‹ " + m.themeName + " ›",
 		appVersion,
 		"press enter to check",
-		"press enter to update",
 	}
 
 	b.WriteString(headerStyle.Render("Settings") + "\n\n")

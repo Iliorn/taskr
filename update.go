@@ -47,12 +47,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = fmt.Sprintf("Update check failed: %v", msg.err)
 			m.updateStatus = "Check failed"
-		} else if msg.latest == "" || msg.latest == appVersion {
-			m.updateStatus = "Up to date (" + appVersion + ")"
-		} else {
-			m.updateStatus = "Update available: " + msg.latest
+			return m, clearErrAfter()
 		}
-		return m, clearErrAfter()
+		if msg.latest == "" || msg.latest == appVersion {
+			m.updateStatus = "Up to date (" + appVersion + ")"
+			return m, nil
+		}
+		// Newer release available — ask before pulling it.
+		m.updateStatus = "Update available: " + msg.latest
+		m.mode = modeConfirmUpdate
+		m.confirmMsg = msg.latest + " is available — update now? (y/n)"
+		return m, nil
 	case saveDoneMsg:
 		return m, nil
 	case saveErrMsg:
@@ -95,6 +100,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateConfirmDeleteSubtask(msg)
 	case modeConfirmDeleteTimeEntry:
 		return m.updateConfirmDeleteTimeEntry(msg)
+	case modeConfirmUpdate:
+		return m.updateConfirmUpdate(msg)
 	case modeEditTimeEntry:
 		return m.updateEditTimeEntry(msg)
 	case modeIdlePrompt:
@@ -727,10 +734,22 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	case settingCheckUpdate:
 		m.updateStatus = "Checking…"
 		return m, checkForUpdate()
-	case settingUpdate:
-		m.updateStatus = "Updating…"
-		return m, func() tea.Msg {
-			return updateDoneMsg{err: selfUpdate()}
+	}
+	return m, nil
+}
+
+// updateConfirmUpdate handles the "newer release available — update now?" prompt.
+func (m model) updateConfirmUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "y", "enter":
+			m.mode = modeNormal
+			m.updateStatus = "Updating…"
+			return m, func() tea.Msg {
+				return updateDoneMsg{err: selfUpdate()}
+			}
+		case "n", "esc":
+			m.mode = modeNormal
 		}
 	}
 	return m, nil

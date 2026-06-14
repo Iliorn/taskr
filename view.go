@@ -219,7 +219,7 @@ func (m model) buildFooterContent(w int) string {
 		modeAddLearning, modeEditLearning, modeAddSubtask, modeEditProjectInline,
 		modeEditTimeEntry:
 		return inputStyle.Width(w).Render(m.textInput.View())
-	case modeIdlePrompt:
+	case modeIdlePrompt, modeConfirmUpdate:
 		return calTodayStyle.Render(m.confirmMsg)
 	case modeSearch:
 		if m.tab == tabLearnings {
@@ -515,7 +515,8 @@ func (m model) renderHelpFullscreen() string {
 		{"Settings (tab 7)", [][2]string{
 			{"↑/↓", "select setting"},
 			{"←/→", "change theme"},
-			{"enter", "change / check updates / self-update"},
+			{"enter", "apply theme / check for updates"},
+			{"y / n", "confirm update when one is offered"},
 		}},
 		{"App", [][2]string{
 			{"u", "undo last change"},

@@ -32,7 +32,6 @@ const (
 	settingTheme = iota
 	settingVersion
 	settingCheckUpdate
-	settingUpdate
 	numSettingsRows
 )
 
@@ -77,6 +76,7 @@ const (
 	modeConfirmDeleteLearning
 	modeConfirmDeleteSubtask
 	modeConfirmDeleteTimeEntry
+	modeConfirmUpdate
 	modeEditTimeEntry
 	modeIdlePrompt
 	modeEditComment
@@ -1036,7 +1036,7 @@ func (m model) extraOverheadLines() int {
 		modeConfirmDeleteDep, modeConfirmDeleteTag,
 		modeConfirmDeleteTagGlobal, modeConfirmDeleteProject,
 		modeConfirmDeleteLearning, modeConfirmDeleteSubtask,
-		modeConfirmDeleteTimeEntry, modeIdlePrompt:
+		modeConfirmDeleteTimeEntry, modeConfirmUpdate, modeIdlePrompt:
 		return 1
 	}
 	return 0
