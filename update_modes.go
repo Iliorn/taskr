@@ -28,7 +28,9 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if parsed.project != "" {
 						t.Project = parsed.project
 					}
-					t.Tags = append(t.Tags, parsed.tags...)
+					for _, tg := range parsed.tags {
+						t.AddTag(tg)
+					}
 					m.todos = append(m.todos, t)
 					m.markModified()
 				}

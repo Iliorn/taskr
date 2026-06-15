@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"taskr/todo"
 )
 
@@ -61,9 +62,15 @@ func (m model) renderTagList() string {
 
 	for i := startIdx; i < endIdx; i++ {
 		tag := tags[i]
-		s := stats[tag]
-		total := s.total
-		done := s.done
+		var s tagStats
+		label := "#" + tag
+		if tag == untaggedKey {
+			s = tagStats{total: m.cache.untaggedTotal, done: m.cache.untaggedDone}
+			label = "(untagged)"
+		} else {
+			s = stats[tag]
+		}
+		total, done := s.total, s.done
 
 		pct := 0.0
 		if total > 0 {
@@ -74,7 +81,7 @@ func (m model) renderTagList() string {
 		if i == m.tagTabCursor {
 			cur = "▶ "
 		}
-		tagLabel := padRight(truncate("#"+tag, tagLabelColWidth-4), tagLabelColWidth-2)
+		tagLabel := padRight(truncate(label, tagLabelColWidth-4), tagLabelColWidth-2)
 
 		barStr.Reset()
 		// Group consecutive cells that share a gradient color into a single
@@ -112,6 +119,21 @@ func (m model) renderTagList() string {
 		}
 
 		pctStr := fmt.Sprintf(" %3d%% (%d done / %d total)", int(pct*100), done, total)
+		// Extra columns (clipped first on narrow terminals): average age of open
+		// tasks, then total tracked time. Labelled inline so they're self-
+		// explanatory, dot-separated. Skipped for the virtual untagged row.
+		if tag != untaggedKey {
+			var extras []string
+			if s.openCount > 0 {
+				extras = append(extras, "avg age "+formatDaysCompact(s.ageSum/time.Duration(s.openCount)))
+			}
+			if s.tracked > 0 {
+				extras = append(extras, "⏱ time spent "+formatDurationCompact(s.tracked))
+			}
+			if len(extras) > 0 {
+				pctStr += "  " + strings.Join(extras, " · ")
+			}
+		}
 		if i == m.tagTabCursor {
 			b.WriteString(
 				tagSelectedStyle.Render(cur+tagLabel) +
@@ -281,125 +303,206 @@ func (m model) renderStatsList() string {
 	availW := m.termWidth - 8
 	gradLen := len(statsGradient)
 
+	// Lay sections out in two columns when there's room, so the page stays short
+	// enough to fit a not-very-tall screen. Falls back to one column when narrow.
+	const gap = 4
+	colW := availW
+	valW := statsValueWidth
+	twoCol := (availW-gap)/2 >= 36
+	if twoCol {
+		colW = (availW - gap) / 2
+		valW = 5
+	}
+
+	// stat writes one row sized to colW into sb (bar only if it fits).
+	stat := func(sb *strings.Builder, label string, value, total int, showBar bool) {
+		labelStr := padRight("  "+label, statsLabelWidth)
+		valStr := fmt.Sprintf("%d", value)
+		barW := colW - statsLabelWidth - valW - 6
+		if barW > statsBarWidth {
+			barW = statsBarWidth
+		}
+		if !showBar || total <= 0 || barW < 6 {
+			sb.WriteString(detailLabelStyle.Render(labelStr) + normalStyle.Render(valStr) + "\n")
+			return
+		}
+		pct := float64(value) / float64(total)
+		filled := int(pct * float64(barW))
+		if filled > barW {
+			filled = barW
+		}
+		var bar strings.Builder
+		bar.Grow(barW * 4)
+		for j := 0; j < barW; j++ {
+			if j < filled {
+				pos := 0.0
+				if filled > 1 {
+					pos = float64(j) / float64(filled-1)
+				}
+				gradIdx := int(pos * float64(gradLen-1))
+				if gradIdx >= gradLen {
+					gradIdx = gradLen - 1
+				}
+				bar.WriteString(statsGradient[gradIdx].Render("█"))
+			} else {
+				bar.WriteString(dimStyle.Render("░"))
+			}
+		}
+		sb.WriteString(detailLabelStyle.Render(labelStr) + normalStyle.Render(padRight(valStr, valW)) +
+			bar.String() + dimStyle.Render(fmt.Sprintf(" %3d%%", int(pct*100))) + "\n")
+	}
+
+	section := func(build func(*strings.Builder)) string {
+		var sb strings.Builder
+		build(&sb)
+		return strings.TrimRight(sb.String(), "\n")
+	}
+
+	workload := section(func(sb *strings.Builder) {
+		sb.WriteString(statsHeaderStyle.Render("  Workload") + "\n")
+		if overdueTasks > 0 {
+			sb.WriteString(detailLabelStyle.Render(padRight("  Overdue", statsLabelWidth)) +
+				overdueCountStyle.Render(fmt.Sprintf("%d", overdueTasks)) + "\n")
+		} else {
+			stat(sb, "Overdue", 0, 0, false)
+		}
+		stat(sb, "Due today", dueToday, 0, false)
+		stat(sb, "Due this week", dueThisWeek, 0, false)
+		stat(sb, "Active total", activeTasks, 0, false)
+	})
+
+	flow := section(func(sb *strings.Builder) {
+		sb.WriteString(statsHeaderStyle.Render("  Flow (last 7 days)") + "\n")
+		stat(sb, "Created", createdThisWeek, 0, false)
+		stat(sb, "Completed", doneThisWeek, 0, false)
+		net := createdThisWeek - doneThisWeek
+		netLabel := detailLabelStyle.Render(padRight("  Net backlog", statsLabelWidth))
+		switch {
+		case net > 0:
+			sb.WriteString(netLabel + overdueCountStyle.Render(fmt.Sprintf("+%d ▲ growing", net)) + "\n")
+		case net < 0:
+			sb.WriteString(netLabel + activeCountStyle.Render(fmt.Sprintf("%d ▼ shrinking", net)) + "\n")
+		default:
+			sb.WriteString(netLabel + dimStyle.Render("±0 → steady") + "\n")
+		}
+		trendArrow := "→"
+		if doneThisWeek > doneLastWeek {
+			trendArrow = "↑"
+		} else if doneThisWeek < doneLastWeek {
+			trendArrow = "↓"
+		}
+		sb.WriteString(detailLabelStyle.Render(padRight("  vs last week", statsLabelWidth)) +
+			normalStyle.Render(fmt.Sprintf("%d done vs %d  %s", doneThisWeek, doneLastWeek, trendArrow)) + "\n")
+	})
+
+	throughput := section(func(sb *strings.Builder) {
+		sb.WriteString(statsHeaderStyle.Render("  Throughput") + "\n")
+		ttdLabel := detailLabelStyle.Render(padRight("  Time to done (30d)", statsLabelWidth))
+		if len(timeToDone) > 0 {
+			sb.WriteString(ttdLabel + normalStyle.Render("median "+formatDaysCompact(medianDuration(timeToDone))) + "\n")
+		} else {
+			sb.WriteString(ttdLabel + dimStyle.Render("none yet") + "\n")
+		}
+		if len(activeAges) > 0 {
+			sb.WriteString(detailLabelStyle.Render(padRight("  Median active age", statsLabelWidth)) +
+				normalStyle.Render(formatDaysCompact(medianDuration(activeAges))) + "\n")
+			oldestW := colW - statsLabelWidth - 12
+			if oldestW < 8 {
+				oldestW = 8
+			}
+			sb.WriteString(detailLabelStyle.Render(padRight("  Oldest active", statsLabelWidth)) +
+				normalStyle.Render(truncate(oldestTitle, oldestW)) +
+				dimStyle.Render(" ("+formatDaysCompact(oldestAge)+")") + "\n")
+		}
+	})
+
+	var priority string
+	if activeTasks > 0 {
+		priority = section(func(sb *strings.Builder) {
+			sb.WriteString(statsHeaderStyle.Render("  Active by priority") + "\n")
+			stat(sb, "↑ High", highPri, activeTasks, true)
+			stat(sb, "→ Medium", medPri, activeTasks, true)
+			stat(sb, "↓ Low", lowPri, activeTasks, true)
+		})
+	}
+
+	velocity := section(func(sb *strings.Builder) {
+		sb.WriteString(statsHeaderStyle.Render("  Completion velocity") + "\n")
+		stat(sb, "Today", doneToday, 0, false)
+		stat(sb, "This week", doneThisWeek, 0, false)
+		stat(sb, "This month", doneThisMonth, 0, false)
+		if doneThisWeek > 0 {
+			sb.WriteString(detailLabelStyle.Render(padRight("  Avg (7d)", statsLabelWidth)) +
+				normalStyle.Render(fmt.Sprintf("%.1f tasks/day", float64(doneThisWeek)/7.0)) + "\n")
+		}
+	})
+
 	b.WriteString(statsHeaderStyle.Render("  Productivity Stats") + "\n")
 	b.WriteString(renderPlainDivider(availW))
 
-	barW := availW - statsLabelWidth - statsValueWidth - 5
-	if barW < 0 {
-		barW = 0
-	}
-	if barW > statsBarWidth {
-		barW = statsBarWidth
-	}
-
-	renderStat := func(label string, value int, total int, showBar bool) {
-		labelStr := padRight("  "+label, statsLabelWidth)
-		valStr := fmt.Sprintf("%d", value)
-		if showBar && total > 0 {
-			pct := float64(value) / float64(total)
-			filled := int(pct * float64(barW))
-			if filled > barW {
-				filled = barW
+	if twoCol {
+		left := stackSections(workload, flow)
+		right := stackSections(throughput, priority, velocity)
+		b.WriteString(zipColumns(colW, gap, left, right))
+	} else {
+		first := true
+		for _, s := range []string{workload, flow, throughput, priority, velocity} {
+			if strings.TrimSpace(s) == "" {
+				continue
 			}
-			var bar strings.Builder
-			bar.Grow(barW * 4)
-			for j := 0; j < barW; j++ {
-				if j < filled {
-					pos := 0.0
-					if filled > 1 {
-						pos = float64(j) / float64(filled-1)
-					}
-					gradIdx := int(pos * float64(gradLen-1))
-					if gradIdx >= gradLen {
-						gradIdx = gradLen - 1
-					}
-					bar.WriteString(statsGradient[gradIdx].Render("█"))
-				} else {
-					bar.WriteString(dimStyle.Render("░"))
-				}
+			if !first {
+				b.WriteString("\n")
 			}
-			pctStr := fmt.Sprintf(" %3d%%", int(pct*100))
-			b.WriteString(detailLabelStyle.Render(labelStr) + normalStyle.Render(padRight(valStr, statsValueWidth)) + bar.String() + dimStyle.Render(pctStr) + "\n")
-		} else {
-			b.WriteString(detailLabelStyle.Render(labelStr) + normalStyle.Render(valStr) + "\n")
+			b.WriteString(s + "\n")
+			first = false
 		}
 	}
 
-	// ── Workload: what demands attention right now ───────────────────────
-	b.WriteString(statsHeaderStyle.Render("  Workload") + "\n")
-	if overdueTasks > 0 {
-		labelStr := padRight("  Overdue", statsLabelWidth)
-		b.WriteString(detailLabelStyle.Render(labelStr) + overdueCountStyle.Render(fmt.Sprintf("%d", overdueTasks)) + "\n")
-	} else {
-		renderStat("Overdue", 0, 0, false)
-	}
-	renderStat("Due today", dueToday, 0, false)
-	renderStat("Due this week", dueThisWeek, 0, false)
-	renderStat("Active total", activeTasks, 0, false)
-	b.WriteString("\n")
+	return b.String()
+}
 
-	// ── Flow: is the backlog growing or shrinking? ───────────────────────
-	b.WriteString(statsHeaderStyle.Render("  Flow (last 7 days)") + "\n")
-	renderStat("Created", createdThisWeek, 0, false)
-	renderStat("Completed", doneThisWeek, 0, false)
-	net := createdThisWeek - doneThisWeek
-	netLabel := detailLabelStyle.Render(padRight("  Net backlog", statsLabelWidth))
-	switch {
-	case net > 0:
-		b.WriteString(netLabel + overdueCountStyle.Render(fmt.Sprintf("+%d ▲ growing", net)) + "\n")
-	case net < 0:
-		b.WriteString(netLabel + activeCountStyle.Render(fmt.Sprintf("%d ▼ shrinking", net)) + "\n")
-	default:
-		b.WriteString(netLabel + dimStyle.Render("±0 → steady") + "\n")
-	}
-	trendArrow := "→"
-	if doneThisWeek > doneLastWeek {
-		trendArrow = "↑"
-	} else if doneThisWeek < doneLastWeek {
-		trendArrow = "↓"
-	}
-	b.WriteString(detailLabelStyle.Render(padRight("  vs last week", statsLabelWidth)) +
-		normalStyle.Render(fmt.Sprintf("%d done vs %d  %s", doneThisWeek, doneLastWeek, trendArrow)) + "\n")
-	b.WriteString("\n")
-
-	// ── Throughput: how long do tasks linger? ────────────────────────────
-	b.WriteString(statsHeaderStyle.Render("  Throughput") + "\n")
-	ttdLabel := detailLabelStyle.Render(padRight("  Time to done (30d)", statsLabelWidth))
-	if len(timeToDone) > 0 {
-		b.WriteString(ttdLabel + normalStyle.Render("median "+formatDays(medianDuration(timeToDone))) + "\n")
-	} else {
-		b.WriteString(ttdLabel + dimStyle.Render("no completions yet") + "\n")
-	}
-	if len(activeAges) > 0 {
-		b.WriteString(detailLabelStyle.Render(padRight("  Median active age", statsLabelWidth)) +
-			normalStyle.Render(formatDays(medianDuration(activeAges))) + "\n")
-		oldestW := availW - statsLabelWidth - 16
-		if oldestW < 10 {
-			oldestW = 10
+// stackSections concatenates non-empty section blocks into a line slice with a
+// blank line between each.
+func stackSections(sections ...string) []string {
+	var lines []string
+	for _, s := range sections {
+		if strings.TrimSpace(s) == "" {
+			continue
 		}
-		b.WriteString(detailLabelStyle.Render(padRight("  Oldest active", statsLabelWidth)) +
-			normalStyle.Render(truncate(oldestTitle, oldestW)) +
-			dimStyle.Render("  ("+formatDays(oldestAge)+")") + "\n")
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, strings.Split(s, "\n")...)
 	}
-	b.WriteString("\n")
+	return lines
+}
 
-	if activeTasks > 0 {
-		b.WriteString(statsHeaderStyle.Render("  Active by priority") + "\n")
-		renderStat("↑ High", highPri, activeTasks, true)
-		renderStat("→ Medium", medPri, activeTasks, true)
-		renderStat("↓ Low", lowPri, activeTasks, true)
-		b.WriteString("\n")
+// zipColumns places two line slices side by side, left padded (ANSI-aware) to
+// colW with a gap between. Trailing rows in the taller column stand alone.
+func zipColumns(colW, gap int, left, right []string) string {
+	n := len(left)
+	if len(right) > n {
+		n = len(right)
 	}
-
-	b.WriteString(statsHeaderStyle.Render("  Completion velocity") + "\n")
-	renderStat("Today", doneToday, 0, false)
-	renderStat("This week", doneThisWeek, 0, false)
-	renderStat("This month", doneThisMonth, 0, false)
-	if doneThisWeek > 0 {
-		avg := fmt.Sprintf("%.1f tasks/day", float64(doneThisWeek)/7.0)
-		b.WriteString(detailLabelStyle.Render(padRight("  Avg (7d)", statsLabelWidth)) + normalStyle.Render(avg) + "\n")
+	var b strings.Builder
+	pad := strings.Repeat(" ", gap)
+	for i := 0; i < n; i++ {
+		var l, r string
+		if i < len(left) {
+			l = left[i]
+		}
+		if i < len(right) {
+			r = right[i]
+		}
+		if r == "" {
+			b.WriteString(l + "\n")
+			continue
+		}
+		if lw := ansi.StringWidth(l); lw < colW {
+			l += strings.Repeat(" ", colW-lw)
+		}
+		b.WriteString(l + pad + r + "\n")
 	}
-
 	return b.String()
 }
 
@@ -413,15 +516,16 @@ func medianDuration(ds []time.Duration) time.Duration {
 	return ds[mid]
 }
 
-func formatDays(d time.Duration) string {
+// formatDaysCompact is a tight form of formatDays ("~12d") for inline columns.
+func formatDaysCompact(d time.Duration) string {
 	days := d.Hours() / 24
 	switch {
 	case days < 1:
-		return "<1 day"
+		return "<1d"
 	case days < 10:
-		return fmt.Sprintf("%.1f days", days)
+		return fmt.Sprintf("%.1fd", days)
 	default:
-		return fmt.Sprintf("%.0f days", days)
+		return fmt.Sprintf("%.0fd", days)
 	}
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -47,7 +48,11 @@ func (m model) View() string {
 		out.WriteString(confirmStyle.Render("⚡ FOCUS: today + overdue only (f to toggle)") + "\n")
 	}
 	if m.searchQuery != "" {
-		out.WriteString(searchStyle.Render("/ "+m.searchQuery) + "\n")
+		label := m.searchQuery
+		if label == untaggedKey {
+			label = "(untagged)"
+		}
+		out.WriteString(searchStyle.Render("/ "+label) + "\n")
 	}
 	if m.tab == tabTags && m.tagTabSearchQuery != "" {
 		out.WriteString(searchStyle.Render("/ "+m.tagTabSearchQuery) + "\n")
@@ -744,63 +749,194 @@ func (m model) buildTagDetailLines() []string {
 	b := getBuilder()
 	defer putBuilder(b)
 
-	title := fmt.Sprintf("  #%s", tag)
-	count := m.countTasksWithTag(tag)
-	hint := fmt.Sprintf("(%d task", count)
-	if count != 1 {
-		hint += "s"
-	}
-	hint += ")  r to rename"
-
+	// availW is the panel's inner text width (see View: w = termWidth-6, minus
+	// the panel's horizontal padding). Every line is truncated to it so the
+	// pane never wraps on a slim window.
 	availW := m.termWidth - 8
-	padW := availW - len([]rune(title)) - len([]rune(hint))
-	if padW < 1 {
-		padW = 1
+	if availW < 12 {
+		availW = 12
 	}
-	b.WriteString(
-		tagSelectedStyle.Render(title) +
-			strings.Repeat(" ", padW) +
-			dimStyle.Render(hint) + "\n\n",
-	)
 
-	hasAny := false
+	untagged := tag == untaggedKey
+
+	// One pass: split active/done/overdue, tally co-occurring tags, and collect
+	// the matching task indices to list below.
+	var matches []int
+	active, done, overdue := 0, 0, 0
+	cooccur := make(map[string]int)
 	for i := range m.todos {
-		for _, tt := range m.todos[i].Tags {
-			if tt != tag {
-				continue
-			}
-			hasAny = true
-			t := &m.todos[i]
-			status := "[ ]"
-			if t.Status == todo.Done {
-				status = "[✓]"
-			}
-			dueStr := ""
-			if !t.DueDate.IsZero() {
-				dueStr = "  due: " + t.DueDate.Format("02-01-06")
-				if t.IsOverdue() {
-					dueStr += " ⚠"
+		match := false
+		if untagged {
+			match = len(m.todos[i].Tags) == 0
+		} else {
+			for _, tt := range m.todos[i].Tags {
+				if tt == tag {
+					match = true
+					break
 				}
 			}
-			projStr := ""
-			if t.Project != "" {
-				projStr = "  [" + t.Project + "]"
-			}
-			line := fmt.Sprintf("  %s %s%s%s", status, truncate(t.Title, 34), dueStr, projStr)
-			switch {
-			case t.IsOverdue():
-				b.WriteString(overdueStyle.Render(line) + "\n")
-			case t.Status == todo.Done:
-				b.WriteString(doneCountStyle.Render(line) + "\n")
-			default:
-				b.WriteString(normalStyle.Render(line) + "\n")
+		}
+		if !match {
+			continue
+		}
+		matches = append(matches, i)
+		t := &m.todos[i]
+		if t.Status == todo.Done {
+			done++
+		} else {
+			active++
+		}
+		if t.IsOverdue() {
+			overdue++
+		}
+		for _, tt := range t.Tags {
+			if tt != tag {
+				cooccur[tt]++
 			}
 		}
 	}
 
-	if !hasAny {
-		b.WriteString(dimStyle.Render("  No tasks carry this tag.") + "\n")
+	count := len(matches)
+	title := fmt.Sprintf("  #%s", tag)
+	if untagged {
+		title = "  (untagged)"
 	}
+	hint := fmt.Sprintf("(%d task", count)
+	if count != 1 {
+		hint += "s"
+	}
+	if untagged {
+		hint += " · enter: filter)"
+	} else {
+		hint += " · enter: filter · r: rename)"
+	}
+	if len([]rune(title))+1+len([]rune(hint)) <= availW {
+		padW := availW - len([]rune(title)) - len([]rune(hint))
+		b.WriteString(tagSelectedStyle.Render(title) + strings.Repeat(" ", padW) + dimStyle.Render(hint) + "\n")
+	} else {
+		b.WriteString(tagSelectedStyle.Render(truncate(title, availW)) + "\n")
+	}
+
+	summary := fmt.Sprintf("  %d active · %d done · %d overdue", active, done, overdue)
+	b.WriteString(normalStyle.Render(truncate(summary, availW)) + "\n")
+
+	// Co-occurring tags, most frequent first. Only emit chips that fit so the
+	// line can't wrap (no mid-string truncation of styled text).
+	if len(cooccur) > 0 {
+		type coTag struct {
+			name string
+			n    int
+		}
+		co := make([]coTag, 0, len(cooccur))
+		for name, n := range cooccur {
+			co = append(co, coTag{name, n})
+		}
+		sort.Slice(co, func(i, j int) bool {
+			if co[i].n != co[j].n {
+				return co[i].n > co[j].n
+			}
+			return co[i].name < co[j].name
+		})
+		label := "  often with: "
+		budget := availW - len([]rune(label))
+		var chips []string
+		used := 0
+		for _, c := range co {
+			chip := "#" + c.name
+			w := len([]rune(chip))
+			if len(chips) > 0 {
+				w++ // separating space
+			}
+			if used+w > budget {
+				break
+			}
+			chips = append(chips, chip)
+			used += w
+		}
+		if len(chips) > 0 {
+			b.WriteString(dimStyle.Render(label) + tagStyle.Render(strings.Join(chips, " ")) + "\n")
+		}
+	}
+	b.WriteString("\n")
+
+	if len(matches) == 0 {
+		b.WriteString(dimStyle.Render("  No tasks carry this tag.") + "\n")
+		return strings.Split(b.String(), "\n")
+	}
+
+	// Order: overdue first, then active, then done; alphabetical within each
+	// group so the height-capped list always shows the most relevant tasks.
+	cat := func(t *todo.Todo) int {
+		switch {
+		case t.Status == todo.Done:
+			return 2
+		case t.IsOverdue():
+			return 0
+		default:
+			return 1
+		}
+	}
+	sort.SliceStable(matches, func(a, b int) bool {
+		ta, tb := &m.todos[matches[a]], &m.todos[matches[b]]
+		if ca, cb := cat(ta), cat(tb); ca != cb {
+			return ca < cb
+		}
+		return strings.ToLower(ta.Title) < strings.ToLower(tb.Title)
+	})
+
+	// The detail pane is height-capped (see applyDetailScroll). Rather than let
+	// the generic scroll indicator hide the overflow, cap the list ourselves and
+	// state how many are hidden.
+	maxVisible := m.termHeight*detailMaxHeightPct/100 - 2
+	if maxVisible < 3 {
+		maxVisible = 3
+	}
+	taskBudget := maxVisible - strings.Count(b.String(), "\n")
+	if taskBudget < 1 {
+		taskBudget = 1
+	}
+	hidden := 0
+	if len(matches) > taskBudget {
+		shown := taskBudget - 1 // reserve a line for the "and N more" notice
+		if shown < 0 {
+			shown = 0
+		}
+		hidden = len(matches) - shown
+		matches = matches[:shown]
+	}
+
+	for _, i := range matches {
+		t := &m.todos[i]
+		status := "[ ]"
+		if t.Status == todo.Done {
+			status = "[✓]"
+		}
+		dueStr := ""
+		if !t.DueDate.IsZero() {
+			dueStr = "  due: " + t.DueDate.Format("02-01-06")
+			if t.IsOverdue() {
+				dueStr += " ⚠"
+			}
+		}
+		projStr := ""
+		if t.Project != "" {
+			projStr = "  [" + t.Project + "]"
+		}
+		line := truncate(fmt.Sprintf("  %s %s%s%s", status, t.Title, dueStr, projStr), availW)
+		switch {
+		case t.IsOverdue():
+			b.WriteString(overdueStyle.Render(line) + "\n")
+		case t.Status == todo.Done:
+			b.WriteString(doneCountStyle.Render(line) + "\n")
+		default:
+			b.WriteString(normalStyle.Render(line) + "\n")
+		}
+	}
+
+	if hidden > 0 {
+		b.WriteString(dimStyle.Render(truncate(fmt.Sprintf("  … and %d more", hidden), availW)) + "\n")
+	}
+
 	return strings.Split(b.String(), "\n")
 }
 

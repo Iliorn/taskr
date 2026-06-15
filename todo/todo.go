@@ -1,6 +1,7 @@
 package todo
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -155,7 +156,19 @@ func (t *Todo) SetProject(p string) {
 	t.ModifiedAt = time.Now()
 }
 
+// NormalizeTag canonicalizes a tag so that "#Work", "work ", and "work" all
+// collapse to a single tag. Returns "" for input that isn't a usable tag.
+func NormalizeTag(tag string) string {
+	tag = strings.TrimSpace(tag)
+	tag = strings.TrimPrefix(tag, "#")
+	return strings.ToLower(strings.TrimSpace(tag))
+}
+
 func (t *Todo) AddTag(tag string) {
+	tag = NormalizeTag(tag)
+	if tag == "" {
+		return
+	}
 	for _, existing := range t.Tags {
 		if existing == tag {
 			return
@@ -166,6 +179,7 @@ func (t *Todo) AddTag(tag string) {
 }
 
 func (t *Todo) RemoveTag(tag string) {
+	tag = NormalizeTag(tag)
 	tags := t.Tags[:0]
 	for _, existing := range t.Tags {
 		if existing != tag {

@@ -11,19 +11,21 @@ import (
 // ── Caches ────────────────────────────────────────────────────────────────────
 
 type cacheState struct {
-	dirty        bool
-	todoIndex    map[string]int
-	overdueSet   map[string]bool
-	active       []todo.Todo
-	done         []todo.Todo
-	tags         map[string]tagStats
-	tagsSorted   []string
-	tagsSortMode tagSortMode
-	learnings    []todo.Learning
-	projects     []string
-	projectTasks map[string][]todo.Todo
-	subtaskIndex map[string][]int
-	tagRender    map[string]string
+	dirty         bool
+	todoIndex     map[string]int
+	overdueSet    map[string]bool
+	active        []todo.Todo
+	done          []todo.Todo
+	tags          map[string]tagStats
+	tagsSorted    []string
+	tagsSortMode  tagSortMode
+	untaggedTotal int
+	untaggedDone  int
+	learnings     []todo.Learning
+	projects      []string
+	projectTasks  map[string][]todo.Todo
+	subtaskIndex  map[string][]int
+	tagRender     map[string]string
 
 	learningSearch string
 	learningSort   learningSortMode
@@ -106,8 +108,16 @@ func (m *model) refreshCaches() {
 // the same way (on data change, and on sort-mode toggle via sortCachedTags).
 func (m *model) rebuildSortedTags() {
 	m.cache.tagsSorted = m.cache.tagsSorted[:0]
+	m.cache.untaggedTotal, m.cache.untaggedDone = 0, 0
 	seen := make(map[string]struct{}, len(m.cache.tags))
 	for i := range m.todos {
+		if len(m.todos[i].Tags) == 0 {
+			m.cache.untaggedTotal++
+			if m.todos[i].Status == todo.Done {
+				m.cache.untaggedDone++
+			}
+			continue
+		}
 		for _, tag := range m.todos[i].Tags {
 			if _, ok := seen[tag]; ok {
 				continue

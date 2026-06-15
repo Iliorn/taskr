@@ -269,19 +269,35 @@ func cleanupNotesFile(taskID string) {
 // ── tagStats ──────────────────────────────────────────────────────────────────
 
 type tagStats struct {
-	total int
-	done  int
+	total     int
+	done      int
+	openCount int           // open (non-done) tasks, denominator for avg age
+	ageSum    time.Duration // Σ(now - CreatedAt) over open tasks
+	tracked   time.Duration // Σ time-entry durations across all tasks
 }
 
 func computeTagStats(todos []todo.Todo) map[string]tagStats {
+	now := time.Now()
 	stats := make(map[string]tagStats, 16)
 	for i := range todos {
-		for _, tag := range todos[i].Tags {
+		t := &todos[i]
+		var tracked time.Duration
+		for _, te := range t.TimeEntries {
+			tracked += te.Duration()
+		}
+		open := t.Status != todo.Done
+		age := now.Sub(t.CreatedAt)
+		for _, tag := range t.Tags {
 			s := stats[tag]
 			s.total++
-			if todos[i].Status == todo.Done {
+			if t.Status == todo.Done {
 				s.done++
 			}
+			if open {
+				s.openCount++
+				s.ageSum += age
+			}
+			s.tracked += tracked
 			stats[tag] = s
 		}
 	}

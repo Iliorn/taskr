@@ -87,6 +87,52 @@ func TestAddTag(t *testing.T) {
 	}
 }
 
+func TestAddTagNormalizes(t *testing.T) {
+	task := New("Normalize test")
+
+	// Different casing, surrounding whitespace, and a leading '#' all collapse
+	// to a single normalized tag.
+	task.AddTag("#Work")
+	task.AddTag("work ")
+	task.AddTag("  WORK")
+
+	if len(task.Tags) != 1 {
+		t.Fatalf("expected 1 tag, got %d: %v", len(task.Tags), task.Tags)
+	}
+	if task.Tags[0] != "work" {
+		t.Errorf("tag = %q, want %q", task.Tags[0], "work")
+	}
+
+	// Empty / punctuation-only input is rejected.
+	task.AddTag("   ")
+	task.AddTag("#")
+	if len(task.Tags) != 1 {
+		t.Errorf("empty tags should be ignored, got %v", task.Tags)
+	}
+
+	// RemoveTag normalizes its argument too.
+	task.RemoveTag("#WORK ")
+	if len(task.Tags) != 0 {
+		t.Errorf("expected tag removed, got %v", task.Tags)
+	}
+}
+
+func TestNormalizeTag(t *testing.T) {
+	cases := map[string]string{
+		"#Work":  "work",
+		" work ": "work",
+		"WORK":   "work",
+		"#":      "",
+		"   ":    "",
+		"a-b":    "a-b",
+	}
+	for in, want := range cases {
+		if got := NormalizeTag(in); got != want {
+			t.Errorf("NormalizeTag(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestRemoveTag(t *testing.T) {
 	task := New("Tag remove test")
 	task.AddTag("work")

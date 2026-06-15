@@ -588,6 +588,12 @@ func (m *model) handleListEsc() {
 		m.cursor = 0
 		m.listOffset = 0
 		m.markCacheDirty()
+	case m.tab == tabTasks && m.searchQuery != "":
+		m.searchQuery = ""
+		m.searchInput.SetValue("")
+		m.cursor = 0
+		m.listOffset = 0
+		m.markCacheDirty()
 	case m.tab == tabTags && m.tagTabSearchQuery != "":
 		m.tagTabSearchQuery = ""
 		m.tagTabCursor = 0
@@ -720,6 +726,17 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 			m.detail = detailState{field: fieldStartDate}
 			m.invalidateDetailCache()
 		}
+	case tabTags:
+		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
+			tag := tags[m.tagTabCursor]
+			m.switchTab(tabTasks)
+			if tag == untaggedKey {
+				m.searchQuery = untaggedKey
+			} else {
+				m.searchQuery = "#" + tag
+			}
+			m.markCacheDirty()
+		}
 	case tabSettings:
 		return m.handleSettingsEnter()
 	}
@@ -792,7 +809,7 @@ func (m model) handleListRename() (tea.Model, tea.Cmd) {
 			}
 		}
 	case tabTags:
-		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
+		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) && tags[m.tagTabCursor] != untaggedKey {
 			m.editingTagName = tags[m.tagTabCursor]
 			m.mode = modeEditTag
 			m.textInput.SetValue(tags[m.tagTabCursor])
@@ -848,7 +865,7 @@ func (m model) handleListDelete() (tea.Model, tea.Cmd) {
 			}
 		}
 	case tabTags:
-		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
+		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) && tags[m.tagTabCursor] != untaggedKey {
 			m.mode = modeConfirmDeleteTagGlobal
 			m.confirmMsg = fmt.Sprintf("Delete tag '#%s' from ALL tasks? (y/n)", tags[m.tagTabCursor])
 		}

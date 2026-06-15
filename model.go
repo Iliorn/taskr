@@ -95,6 +95,11 @@ const (
 	tagSortCount
 )
 
+// untaggedKey is a sentinel used both as the Tags-tab virtual row for tasks
+// with no tags and as the Tasks-tab search token that filters to them. The
+// NUL prefix guarantees it can never collide with a real (normalized) tag.
+const untaggedKey = "\x00untagged"
+
 type taskSortMode int
 
 const (
@@ -651,6 +656,9 @@ func (m model) matchesSearch(t todo.Todo) bool {
 	if m.searchQuery == "" {
 		return true
 	}
+	if m.searchQuery == untaggedKey {
+		return len(t.Tags) == 0
+	}
 	if strings.HasPrefix(m.searchQuery, "#") {
 		tagQuery := strings.ToLower(strings.TrimPrefix(m.searchQuery, "#"))
 		for _, tag := range t.Tags {
@@ -710,15 +718,23 @@ func (m model) getAllTagsSorted() []string {
 
 func (m model) getFilteredTagsForTab() []string {
 	all := m.getAllTagsSorted()
-	if m.tagTabSearchQuery == "" {
-		return all
-	}
 	q := strings.ToLower(m.tagTabSearchQuery)
-	result := make([]string, 0, len(all))
-	for _, tag := range all {
-		if strings.Contains(strings.ToLower(tag), q) {
-			result = append(result, tag)
+
+	result := all
+	if q != "" {
+		result = make([]string, 0, len(all))
+		for _, tag := range all {
+			if strings.Contains(strings.ToLower(tag), q) {
+				result = append(result, tag)
+			}
 		}
+	}
+
+	// Surface a virtual "(untagged)" row at the top so tasks with no tags are
+	// reachable for triage. Only when such tasks exist and the row matches the
+	// filter text.
+	if m.cache.untaggedTotal > 0 && (q == "" || strings.Contains("untagged", q)) {
+		return append([]string{untaggedKey}, result...)
 	}
 	return result
 }
@@ -757,19 +773,28 @@ func (m model) projSearchResults() []string {
 	return result
 }
 
-func (m model) countTasksWithTag(tag string) int {
-	return m.cache.tags[tag].total
-}
-
 // ── Global mutations ──────────────────────────────────────────────────────────
 
 func (m *model) renameTagGlobally(oldName, newName string) {
+	newName = todo.NormalizeTag(newName)
+	if newName == "" || newName == oldName {
+		return
+	}
 	for i := range m.todos {
-		for j, tag := range m.todos[i].Tags {
+		has := false
+		for _, tag := range m.todos[i].Tags {
 			if tag == oldName {
-				m.todos[i].Tags[j] = newName
+				has = true
+				break
 			}
 		}
+		if !has {
+			continue
+		}
+		// RemoveTag + AddTag merges into an existing tag (no duplicates) and
+		// normalizes, rather than blindly overwriting in place.
+		m.todos[i].RemoveTag(oldName)
+		m.todos[i].AddTag(newName)
 	}
 }
 
