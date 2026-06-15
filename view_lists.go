@@ -955,6 +955,5 @@ func (m model) renderSettingsList() string {
 	if m.updateStatus != "" {
 		b.WriteString("\n  " + activeCountStyle.Render(m.updateStatus) + "\n")
 	}
-	b.WriteString("\n" + helpStyle.Render("  ↑/↓ select · ←/→ change theme · enter activate") + "\n")
 	return b.String()
 }

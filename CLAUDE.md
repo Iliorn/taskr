@@ -27,6 +27,20 @@ Self-update depends on **exact release asset names** — they are load-bearing, 
 
 Settings tab → "Update to latest release" shells out to the **GitHub CLI** (`gh`) to fetch the matching asset, so `gh` must be installed at runtime for self-update.
 
+The version lives **only in git tags + the release** — there is no version constant in the tree (`appVersion` defaults to `"dev"` and is injected at build time). So the next version = bump the latest tag from `gh release list`; don't trust local `git tag` (release tags may exist on the remote but not locally). The full publish flow:
+
+```bash
+V=v1.10.0
+GOOS=linux   GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr .
+GOOS=windows GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr.exe .
+GOOS=darwin  GOARCH=arm64 go build -ldflags "-X main.appVersion=$V" -o taskr-macos-apple-silicon .
+GOOS=darwin  GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr-macos-intel .
+gh release create $V --title "..." --notes "..." \
+  taskr taskr.exe taskr-macos-apple-silicon taskr-macos-intel
+```
+
+Patch bumps are the norm for stat/layout tweaks; minor bumps for new interactive features. `gh release create` also creates the tag, so a plain `git push origin main` beforehand is enough.
+
 ## Architecture
 
 Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file convention is gone — the app is split by *concern*, with one big `model` struct threaded through everything:
@@ -60,9 +74,15 @@ Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file co
 - **Subtasks, dependencies, learnings** are all stored inside `m.todos` (subtasks are full `Todo`s with a `ParentID`, linked by `SubtaskIDs`), so global operations loop the whole slice — see `renameTagGlobally`, `deleteLearningByID`.
 - Data lives at `~/.taskr/tasks.json` (+ `.bak`), settings at `~/.taskr/settings.json`. Built binaries and `*.bak` are gitignored.
 
+### Rendering conventions
+
+- **ANSI-aware width math.** Once a string has been through a lipgloss `.Render`, `len([]rune(s))` over-counts by the escape sequences and silently breaks alignment/centering. Use `ansi.StringWidth` to measure and `ansi.Truncate` to clip **styled** strings; `len([]rune(...))` is only correct for plain text. Width tests assert no line exceeds the pane's inner width (`termWidth-8`) — that's the no-wrap contract.
+- **Shared list-column rule.** The leading "name" column on the Tasks / Projects / Tags / Learnings tabs is sized by `contentFitWidth` (hug the widest entry + gap, floored to the header label, capped by the responsive `nameColWidth`) in `layout.go`. Reuse it for any new list tab instead of inventing per-tab width constants, so all tabs reflow identically on resize.
+- **Group same-style runs.** When emitting a row of per-cell-styled glyphs (tag progress bars, the stats histogram via `statsCell`/`renderCellRow`), coalesce consecutive cells that share a style into one `.Render` call — far fewer escape sequences and it keeps `ansi.StringWidth` honest.
+
 ## House rules (from global CLAUDE.md)
 
 - Match the existing style of the file you edit; **no blanket reformatting**, and keep any formatting-only change in its own commit.
 - TokyoNight-style palette is the visual baseline.
 - Share the approach and get buy-in before large multi-file or expensive changes rather than spiraling.
-- After meaningful changes, remember this repo is public under GitHub user `iliorn`.
+- After meaningful changes, remember this repo is public under GitHub user `Iliorn` (capital I — `git remote` is `https://github.com/Iliorn/taskr.git`).
