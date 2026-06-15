@@ -239,10 +239,11 @@ func (m model) renderStatsList() string {
 	weekAgo := today.AddDate(0, 0, -7)
 	twoWeeksAgo := today.AddDate(0, 0, -14)
 	monthAgo := today.AddDate(0, -1, 0)
+	twoMonthsAgo := today.AddDate(0, -2, 0)
 
 	var activeTasks, overdueTasks, dueToday, dueThisWeek int
-	var doneToday, doneThisWeek, doneThisMonth, doneLastWeek int
-	var createdThisWeek int
+	var doneToday, doneThisWeek, doneThisMonth, doneLastWeek, donePrevMonth int
+	var createdThisWeek, createdThisMonth int
 	var highPri, medPri, lowPri int
 	var timeToDone []time.Duration
 	var activeAges []time.Duration
@@ -256,6 +257,9 @@ func (m model) renderStatsList() string {
 		}
 		if !t.CreatedAt.Before(weekAgo) {
 			createdThisWeek++
+		}
+		if !t.CreatedAt.Before(monthAgo) {
+			createdThisMonth++
 		}
 		if t.Status == todo.Done {
 			if !t.CompletedAt.IsZero() {
@@ -271,6 +275,9 @@ func (m model) renderStatsList() string {
 				if !t.CompletedAt.Before(monthAgo) {
 					doneThisMonth++
 					timeToDone = append(timeToDone, t.CompletedAt.Sub(t.CreatedAt))
+				}
+				if !t.CompletedAt.Before(twoMonthsAgo) && t.CompletedAt.Before(monthAgo) {
+					donePrevMonth++
 				}
 			}
 		} else {
@@ -371,29 +378,36 @@ func (m model) renderStatsList() string {
 		stat(sb, "Active total", activeTasks, 0, false)
 	})
 
-	flow := section(func(sb *strings.Builder) {
-		sb.WriteString(statsHeaderStyle.Render("  Flow (last 7 days)") + "\n")
-		stat(sb, "Created", createdThisWeek, 0, false)
-		stat(sb, "Completed", doneThisWeek, 0, false)
-		net := createdThisWeek - doneThisWeek
-		netLabel := detailLabelStyle.Render(padRight("  Net backlog", statsLabelWidth))
-		switch {
-		case net > 0:
-			sb.WriteString(netLabel + overdueCountStyle.Render(fmt.Sprintf("+%d ▲ growing", net)) + "\n")
-		case net < 0:
-			sb.WriteString(netLabel + activeCountStyle.Render(fmt.Sprintf("%d ▼ shrinking", net)) + "\n")
-		default:
-			sb.WriteString(netLabel + dimStyle.Render("±0 → steady") + "\n")
-		}
-		trendArrow := "→"
-		if doneThisWeek > doneLastWeek {
-			trendArrow = "↑"
-		} else if doneThisWeek < doneLastWeek {
-			trendArrow = "↓"
-		}
-		sb.WriteString(detailLabelStyle.Render(padRight("  vs last week", statsLabelWidth)) +
-			normalStyle.Render(fmt.Sprintf("%d done vs %d  %s", doneThisWeek, doneLastWeek, trendArrow)) + "\n")
-	})
+	// flowSection renders a created/completed/net-backlog block with a trend
+	// comparison against the previous equal-length period.
+	flowSection := func(title, vsLabel string, created, completed, prevCompleted int) string {
+		return section(func(sb *strings.Builder) {
+			sb.WriteString(statsHeaderStyle.Render("  "+title) + "\n")
+			stat(sb, "Created", created, 0, false)
+			stat(sb, "Completed", completed, 0, false)
+			net := created - completed
+			netLabel := detailLabelStyle.Render(padRight("  Net backlog", statsLabelWidth))
+			switch {
+			case net > 0:
+				sb.WriteString(netLabel + overdueCountStyle.Render(fmt.Sprintf("+%d ▲ growing", net)) + "\n")
+			case net < 0:
+				sb.WriteString(netLabel + activeCountStyle.Render(fmt.Sprintf("%d ▼ shrinking", net)) + "\n")
+			default:
+				sb.WriteString(netLabel + dimStyle.Render("±0 → steady") + "\n")
+			}
+			trendArrow := "→"
+			if completed > prevCompleted {
+				trendArrow = "↑"
+			} else if completed < prevCompleted {
+				trendArrow = "↓"
+			}
+			sb.WriteString(detailLabelStyle.Render(padRight("  "+vsLabel, statsLabelWidth)) +
+				normalStyle.Render(fmt.Sprintf("%d done vs %d  %s", completed, prevCompleted, trendArrow)) + "\n")
+		})
+	}
+
+	flow := flowSection("Flow (last 7 days)", "vs last week", createdThisWeek, doneThisWeek, doneLastWeek)
+	flow30 := flowSection("Flow (last 30 days)", "vs prior 30d", createdThisMonth, doneThisMonth, donePrevMonth)
 
 	throughput := section(func(sb *strings.Builder) {
 		sb.WriteString(statsHeaderStyle.Render("  Throughput") + "\n")
@@ -441,12 +455,12 @@ func (m model) renderStatsList() string {
 	b.WriteString(renderPlainDivider(availW))
 
 	if twoCol {
-		left := stackSections(workload, flow)
+		left := stackSections(workload, flow, flow30)
 		right := stackSections(throughput, priority, velocity)
 		b.WriteString(zipColumns(colW, gap, left, right))
 	} else {
 		first := true
-		for _, s := range []string{workload, flow, throughput, priority, velocity} {
+		for _, s := range []string{workload, flow, flow30, throughput, priority, velocity} {
 			if strings.TrimSpace(s) == "" {
 				continue
 			}

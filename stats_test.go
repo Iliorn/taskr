@@ -62,6 +62,14 @@ func TestStatsTwoColumnLayout(t *testing.T) {
 			strings.Join(wideLines, "\n"))
 	}
 
+	// Both Flow windows are present (symmetric 3-per-side layout).
+	joined := strings.Join(wideLines, "\n")
+	for _, want := range []string{"Flow (last 7 days)", "Flow (last 30 days)", "vs prior 30d"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("expected %q in stats page, got:\n%s", want, joined)
+		}
+	}
+
 	// Column content may not exceed the inner width, or it would wrap/clip and
 	// lose data. (The divider is a deliberate full-bleed rule, excluded here.)
 	for _, l := range wideLines {
