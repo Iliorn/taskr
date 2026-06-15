@@ -689,6 +689,11 @@ func (m model) depSearchResults() []todo.Todo {
 }
 
 func (m model) getAllTagsSorted() []string {
+	if m.cache.tagsSorted != nil && m.cache.tagsSortMode == m.tagSort {
+		return m.cache.tagsSorted
+	}
+	// Fallback: cache absent or stale for the current sort mode (e.g. tests
+	// that mutate tagSort without a refresh). Rebuild without touching cache.
 	seen := make(map[string]struct{}, 16)
 	tags := make([]string, 0, 16)
 	for i := range m.todos {
@@ -699,20 +704,7 @@ func (m model) getAllTagsSorted() []string {
 			}
 		}
 	}
-	switch m.tagSort {
-	case tagSortCount:
-		stats := m.cache.tags
-		sort.Slice(tags, func(i, j int) bool {
-			ci := stats[tags[i]].total
-			cj := stats[tags[j]].total
-			if ci != cj {
-				return ci > cj
-			}
-			return tags[i] < tags[j]
-		})
-	default:
-		sort.Strings(tags)
-	}
+	sortTags(tags, m.tagSort, m.cache.tags)
 	return tags
 }
 

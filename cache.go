@@ -17,6 +17,8 @@ type cacheState struct {
 	active       []todo.Todo
 	done         []todo.Todo
 	tags         map[string]tagStats
+	tagsSorted   []string
+	tagsSortMode tagSortMode
 	learnings    []todo.Learning
 	projects     []string
 	projectTasks map[string][]todo.Todo
@@ -65,6 +67,7 @@ func (m *model) refreshCaches() {
 	sortTodosByMode(m.cache.done, m.taskSort)
 
 	m.cache.tags = computeTagStats(m.todos)
+	m.rebuildSortedTags()
 
 	for k := range m.cache.subtaskIndex {
 		delete(m.cache.subtaskIndex, k)
@@ -95,6 +98,49 @@ func (m *model) refreshCaches() {
 	m.refreshTagRenderCache()
 
 	m.cache.dirty = false
+}
+
+// rebuildSortedTags refreshes the cached unique, sorted tag list. The list is
+// the expensive part of the Tags tab (a full scan + sort) and was previously
+// recomputed on every render; cache it alongside tagStats and invalidate it
+// the same way (on data change, and on sort-mode toggle via sortCachedTags).
+func (m *model) rebuildSortedTags() {
+	m.cache.tagsSorted = m.cache.tagsSorted[:0]
+	seen := make(map[string]struct{}, len(m.cache.tags))
+	for i := range m.todos {
+		for _, tag := range m.todos[i].Tags {
+			if _, ok := seen[tag]; ok {
+				continue
+			}
+			seen[tag] = struct{}{}
+			m.cache.tagsSorted = append(m.cache.tagsSorted, tag)
+		}
+	}
+	sortTags(m.cache.tagsSorted, m.tagSort, m.cache.tags)
+	m.cache.tagsSortMode = m.tagSort
+}
+
+// sortCachedTags re-sorts the cached tag list in place for the current sort
+// mode without rescanning todos — used when only the sort mode changes.
+func (m *model) sortCachedTags() {
+	sortTags(m.cache.tagsSorted, m.tagSort, m.cache.tags)
+	m.cache.tagsSortMode = m.tagSort
+}
+
+func sortTags(tags []string, mode tagSortMode, stats map[string]tagStats) {
+	switch mode {
+	case tagSortCount:
+		sort.Slice(tags, func(i, j int) bool {
+			ci := stats[tags[i]].total
+			cj := stats[tags[j]].total
+			if ci != cj {
+				return ci > cj
+			}
+			return tags[i] < tags[j]
+		})
+	default:
+		sort.Strings(tags)
+	}
 }
 
 func (m *model) refreshTagRenderCache() {

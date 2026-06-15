@@ -545,6 +545,7 @@ func (m *model) cycleSortMode() {
 			m.tagSort = tagSortAlpha
 		}
 		m.tagTabCursor = 0
+		m.sortCachedTags()
 	case tabTasks:
 		switch m.taskSort {
 		case taskSortDueDate:

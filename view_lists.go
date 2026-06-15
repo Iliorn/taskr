@@ -77,20 +77,33 @@ func (m model) renderTagList() string {
 		tagLabel := padRight(truncate("#"+tag, tagLabelColWidth-4), tagLabelColWidth-2)
 
 		barStr.Reset()
-		for j := 0; j < barW; j++ {
-			if j < filled {
-				pos := 0.0
-				if filled > 1 {
-					pos = float64(j) / float64(filled-1)
-				}
-				gradIdx := int(pos * float64(gradLen-1))
-				if gradIdx >= gradLen {
-					gradIdx = gradLen - 1
-				}
-				barStr.WriteString(tagProgressGradient[gradIdx].Render("█"))
-			} else {
-				barStr.WriteString(dimStyle.Render("░"))
+		// Group consecutive cells that share a gradient color into a single
+		// styled Render call (≤gradLen calls instead of one per column).
+		prevIdx := -1
+		runLen := 0
+		for j := 0; j < filled; j++ {
+			pos := 0.0
+			if filled > 1 {
+				pos = float64(j) / float64(filled-1)
 			}
+			gradIdx := int(pos * float64(gradLen-1))
+			if gradIdx >= gradLen {
+				gradIdx = gradLen - 1
+			}
+			if gradIdx != prevIdx {
+				if runLen > 0 {
+					barStr.WriteString(tagProgressGradient[prevIdx].Render(strings.Repeat("█", runLen)))
+				}
+				prevIdx = gradIdx
+				runLen = 0
+			}
+			runLen++
+		}
+		if runLen > 0 {
+			barStr.WriteString(tagProgressGradient[prevIdx].Render(strings.Repeat("█", runLen)))
+		}
+		if filled < barW {
+			barStr.WriteString(dimStyle.Render(strings.Repeat("░", barW-filled)))
 		}
 
 		if m.mode == modeEditTag && m.editingTagName == tag {
