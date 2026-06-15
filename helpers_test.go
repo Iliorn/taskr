@@ -300,9 +300,9 @@ func TestParseQuickAdd(t *testing.T) {
 	}
 }
 
-// ── titleColWidth ─────────────────────────────────────────────────────────────
+// ── nameColWidth ──────────────────────────────────────────────────────────────
 
-func TestTitleColWidth(t *testing.T) {
+func TestNameColWidth(t *testing.T) {
 	tests := []struct {
 		name      string
 		termWidth int
@@ -315,16 +315,18 @@ func TestTitleColWidth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := titleColWidth(tt.termWidth)
-			if got < minTitleColWidth {
-				t.Errorf("titleColWidth(%d) = %d, below minimum %d",
-					tt.termWidth, got, minTitleColWidth)
+			got := nameColWidth(tt.termWidth)
+			if got < nameColMinWidth {
+				t.Errorf("nameColWidth(%d) = %d, below minimum %d",
+					tt.termWidth, got, nameColMinWidth)
 			}
-			// Only check max when terminal is wide enough for it to make sense
-			max := tt.termWidth * titleColMaxWidthPct / 100
-			if max >= minTitleColWidth && got > max {
-				t.Errorf("titleColWidth(%d) = %d, above max %d",
-					tt.termWidth, got, max)
+			if got > nameColMaxWidth {
+				t.Errorf("nameColWidth(%d) = %d, above maximum %d",
+					tt.termWidth, got, nameColMaxWidth)
+			}
+			// Within the clamp range it is a straight percentage of the width.
+			if want := tt.termWidth * nameColWidthPct / 100; want >= nameColMinWidth && want <= nameColMaxWidth && got != want {
+				t.Errorf("nameColWidth(%d) = %d, want %d", tt.termWidth, got, want)
 			}
 		})
 	}

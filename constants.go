@@ -6,9 +6,14 @@ const (
 	ganttBarWidthDivisor   = 3
 	ganttLabelWidthDivisor = 5
 	detailMaxHeightPct     = 55
-	projectColWidthPct     = 30
 	overlayWidthPct        = 60
-	titleColMaxWidthPct    = 40
+
+	// Shared "name" column (task title, project name, tag, learning text) so the
+	// gap before the next column follows one rule on every list tab and all four
+	// reflow identically on resize.
+	nameColWidthPct = 30
+	nameColMinWidth = 20
+	nameColMaxWidth = 50
 
 	minGanttBarWidth   = 10
 	maxGanttBarWidth   = 60
@@ -17,20 +22,16 @@ const (
 	minChartWidth      = 10
 	minOverlayWidth    = 50
 	minTitleColWidth   = 20
-	minProjColWidth    = 20
-	maxProjColWidth    = 50
 	minTagBarWidth     = 10
 	maxTagBarWidth     = 60
 	minInnerWidth      = 20
 
 	ganttSuffixWidth    = 16
 	ganttChartPadding   = 8
-	tagLabelColWidth    = 24
 	projCountColWidth   = 10
 	projDoneColWidth    = 10
 	commentPrefixLen    = 22
 	detailLabelColWidth = 14
-	titleColFixedCols   = 50
 
 	maxDepSearchResults  = 5
 	maxTagSearchResults  = 5

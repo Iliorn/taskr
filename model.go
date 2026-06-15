@@ -100,6 +100,17 @@ const (
 // NUL prefix guarantees it can never collide with a real (normalized) tag.
 const untaggedKey = "\x00untagged"
 
+// statsRangeMode selects the window shown by the stats activity histogram,
+// cycled with Enter on the Stats tab.
+type statsRangeMode int
+
+const (
+	statsRange7Days statsRangeMode = iota
+	statsRange30Days
+	statsRange6Months
+	statsRangeCount
+)
+
 type taskSortMode int
 
 const (
@@ -223,6 +234,7 @@ type model struct {
 	tagSort             tagSortMode
 	taskSort            taskSortMode
 	learningSort        learningSortMode
+	statsRange          statsRangeMode
 	themeName           string
 	updateStatus        string
 	searchCursor        int

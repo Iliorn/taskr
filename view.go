@@ -33,8 +33,11 @@ func (m model) View() string {
 
 	// ── HEADER ───────────────────────────────────────────────────────────
 	shortcutHint := helpStyle.Render("? shortcuts")
-	tabsStr := titleStyle.Render("taskr") + "  " + m.renderTabs()
-	padW := m.termWidth - len([]rune(tabsStr)) - len([]rune("? shortcuts")) - 4
+	title := titleStyle.Render("taskr")
+	// Width left for the tab bar between the title and the right-aligned hint.
+	avail := m.termWidth - ansi.StringWidth(title) - 2 - ansi.StringWidth(shortcutHint) - 4
+	tabsStr := title + "  " + m.renderTabs(avail)
+	padW := m.termWidth - ansi.StringWidth(tabsStr) - ansi.StringWidth(shortcutHint) - 4
 	if padW < 1 {
 		padW = 1
 	}
@@ -312,7 +315,7 @@ func (m model) renderKeyHints(w int) string {
 	case m.tab == tabLearnings:
 		hints = "j/k nav · r edit · x delete · s sort · / search"
 	case m.tab == tabStats:
-		hints = "tab or 1-7 · switch view"
+		hints = "enter · cycle activity range"
 	case m.tab == tabCalendar && m.calendar.focusTimeline:
 		hints = "j/k select entry · r edit times · x delete · esc back"
 	case m.tab == tabCalendar:
@@ -574,29 +577,56 @@ func (m model) renderHelpFullscreen() string {
 
 // ── Stats detail (activity heatmap) ──────────────────────────────────────────
 
+// statsCell is one position in the activity histogram grid. gi is the gradient
+// index, or -1 for dim/structural glyphs (baseline, separators, labels).
+type statsCell struct {
+	ch rune
+	gi int
+}
+
 func (m model) renderStatsDetail() string {
 	b := getBuilder()
 	defer putBuilder(b)
 
 	now := m.frameTime
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-
-	// Each column = 1 cell (▄) + 1 space gap = 2 chars, last column = 1 char.
-	// 2 chars reserved for day labels on the left.
 	innerW := m.termWidth - 8
-	numWeeks := (innerW - 2 + 1) / 2
-	if numWeeks < 6 {
-		numWeeks = 6
+	if innerW < 12 {
+		innerW = 12
+	}
+	gradLen := len(statsGradient)
+
+	// Build the time buckets for the selected range. Each bucket spans one day,
+	// except the 6-month view which spans one (Mon-started) week.
+	type bucket struct {
+		start time.Time
+		count int
+	}
+	var buckets []bucket
+	var title string
+	weekly := false
+	switch m.statsRange {
+	case statsRange30Days:
+		title = "Last 30 days"
+		for d := 29; d >= 0; d-- {
+			buckets = append(buckets, bucket{start: today.AddDate(0, 0, -d)})
+		}
+	case statsRange6Months:
+		title = "Last 26 weeks"
+		weekly = true
+		curMon := today.AddDate(0, 0, -((int(today.Weekday()) + 6) % 7))
+		for w := 25; w >= 0; w-- {
+			buckets = append(buckets, bucket{start: curMon.AddDate(0, 0, -w*7)})
+		}
+	default:
+		title = "Last 7 days"
+		for d := 6; d >= 0; d-- {
+			buckets = append(buckets, bucket{start: today.AddDate(0, 0, -d)})
+		}
 	}
 
-	// Start on the Monday of the week numWeeks-1 weeks ago.
-	// (weekday+6)%7 converts Go's Sun=0..Sat=6 to Mon=0..Sun=6.
-	startMonday := today.AddDate(0, 0, -((int(today.Weekday())+6)%7 + (numWeeks-1)*7))
-
-	// Count completions per calendar day.
-	counts := make(map[string]int)
+	first := buckets[0].start
 	total := 0
-	maxCount := 0
 	for i := range m.todos {
 		t := &m.todos[i]
 		if t.Status != todo.Done || t.CompletedAt.IsZero() || t.ParentID != "" {
@@ -604,87 +634,198 @@ func (m model) renderStatsDetail() string {
 		}
 		d := time.Date(t.CompletedAt.Year(), t.CompletedAt.Month(), t.CompletedAt.Day(),
 			0, 0, 0, 0, t.CompletedAt.Location())
-		if !d.Before(startMonday) && !d.After(today) {
-			key := d.Format("2006-01-02")
-			counts[key]++
-			total++
-			if counts[key] > maxCount {
-				maxCount = counts[key]
-			}
+		if d.Before(first) || d.After(today) {
+			continue
 		}
+		idx := int(d.Sub(first).Hours()/24 + 0.5)
+		if weekly {
+			idx /= 7
+		}
+		if idx < 0 || idx >= len(buckets) {
+			continue
+		}
+		buckets[idx].count++
+		total++
 	}
 
-	gradLen := len(statsGradient)
+	// Chart height, also the per-bar cap. Kept modest so the stats list keeps
+	// most of a short screen.
+	chartH := m.termHeight*detailMaxHeightPct/100 - 2 - 9
+	if chartH < 5 {
+		chartH = 5
+	}
+	if chartH > 9 {
+		chartH = 9
+	}
 
-	// Header.
-	headerText := fmt.Sprintf("Activity — %d weeks", numWeeks)
-	totalText := fmt.Sprintf("%d completed", total)
-	spacer := innerW - len([]rune(headerText)) - len([]rune(totalText))
+	// Header: "<range> · N done" on the left, the legend on the right. Folding
+	// the legend in here saves a whole row versus a separate caption line.
+	headerLeft := statsHeaderStyle.Render(title) + dimStyle.Render(fmt.Sprintf("  ·  %d done", total))
+	if total == 0 {
+		b.WriteString(headerLeft + "\n")
+		b.WriteString("  " + dimStyle.Render("No completions in this range.") + "\n")
+		return b.String()
+	}
+	swatch := statsGradient[0].Render("▆") + statsGradient[gradLen/2].Render("▆") + statsGradient[gradLen-1].Render("▆")
+	legend := swatch + dimStyle.Render(": 1 block = 1 completed task")
+	spacer := innerW - ansi.StringWidth(headerLeft) - ansi.StringWidth(legend)
 	if spacer < 1 {
 		spacer = 1
 	}
-	b.WriteString(statsHeaderStyle.Render(headerText) + strings.Repeat(" ", spacer) + dimStyle.Render(totalText) + "\n")
+	b.WriteString(ansi.Truncate(headerLeft+strings.Repeat(" ", spacer)+legend, innerW, "") + "\n")
 
-	// Month labels: placed at the column where each new month begins.
-	// Grid width = numWeeks*2 - 1; each column starts at w*2.
-	gridW := numWeeks*2 - 1
-	labelRunes := make([]rune, gridW)
-	for i := range labelRunes {
-		labelRunes[i] = ' '
+	// Pick a bar width that fills the available width (capped so a handful of
+	// bars don't become absurdly fat), with a 1-column gap between bars.
+	avail := innerW - 2
+	n := len(buckets)
+	maxBw := 3
+	if m.statsRange == statsRange7Days {
+		maxBw = 10 // wide enough to spell weekday names under each bar
 	}
-	prevMonth := time.Month(0)
-	for w := 0; w < numWeeks; w++ {
-		weekMon := startMonday.AddDate(0, 0, w*7)
-		if weekMon.Month() != prevMonth {
-			pos := w * 2
-			if pos+3 > gridW {
-				pos = gridW - 3
-			}
-			if pos >= 0 {
-				for j, ch := range []rune(weekMon.Format("Jan")) {
-					labelRunes[pos+j] = ch
-				}
-			}
-			prevMonth = weekMon.Month()
+	bw := (avail - (n - 1)) / n
+	if bw < 1 {
+		bw = 1
+	}
+	if bw > maxBw {
+		bw = maxBw
+	}
+	slot := bw + 1 // bar + gap
+	if maxN := (avail + 1) / slot; n > maxN {
+		buckets = buckets[n-maxN:] // most recent that fit
+		n = len(buckets)
+	}
+	chartW := n*bw + (n - 1)
+	leftMargin := 2 + (avail-chartW)/2 // centre the chart in the pane
+	if leftMargin < 2 {
+		leftMargin = 2
+	}
+
+	// Compose into a grid (gi: -1 = dim/structural, >=0 = gradient index), then
+	// render each row grouping same-styled runs.
+	rows := chartH + 2 // bars + baseline + labels
+	grid := make([][]statsCell, rows)
+	for r := range grid {
+		grid[r] = make([]statsCell, chartW)
+		for c := range grid[r] {
+			grid[r][c] = statsCell{' ', -1}
 		}
 	}
-	b.WriteString("  " + dimStyle.Render(string(labelRunes)) + "\n")
+	barStart := func(k int) int { return k * slot }
 
-	// 7 day rows (Sunday first). ▄ = lower-half block: the empty upper half
-	// of each character acts as a natural row separator, giving a grid look.
-	// dow 1=Mon, 3=Wed, 5=Fri get a single-char label; others get a space.
-	// dow 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
-	dayLabels := [7]string{"m", " ", "w", " ", "f", " ", " "}
-	for dow := 0; dow < 7; dow++ {
-		b.WriteString(dimStyle.Render(dayLabels[dow]) + " ")
-		for w := 0; w < numWeeks; w++ {
-			day := startMonday.AddDate(0, 0, w*7+dow)
-			if day.After(today) {
-				b.WriteString(" ")
-			} else {
-				count := counts[day.Format("2006-01-02")]
-				if count == 0 {
-					b.WriteString(dimStyle.Render("▄"))
-				} else {
-					gradIdx := gradLen - 1
-					if maxCount > 1 {
-						gradIdx = int(float64(count-1) / float64(maxCount-1) * float64(gradLen-1))
-						if gradIdx >= gradLen {
-							gradIdx = gradLen - 1
-						}
-					}
-					b.WriteString(statsGradient[gradIdx].Render("▄"))
-				}
+	// Each block is one completed task, stacked bottom-up; the gradient steps one
+	// colour per task. A bar taller than the limit caps with a "+" overflow row.
+	for k := 0; k < n; k++ {
+		start := barStart(k)
+		cnt := buckets[k].count
+		for r := 0; r < chartH && r < cnt; r++ { // r = 0 is the bottom block
+			ch := '█'
+			gi := r
+			if cnt > chartH && r == chartH-1 {
+				ch = '+' // more tasks continue above the limit
 			}
-			if w < numWeeks-1 {
-				b.WriteString(" ")
+			if gi >= gradLen {
+				gi = gradLen - 1
+			}
+			rowIdx := chartH - 1 - r
+			for c := 0; c < bw; c++ {
+				grid[rowIdx][start+c] = statsCell{ch, gi}
 			}
 		}
-		b.WriteString("\n")
 	}
-	b.WriteString("\n")
 
+	// Baseline.
+	for c := 0; c < chartW; c++ {
+		grid[chartH][c] = statsCell{'─', -1}
+	}
+
+	// Dotted separators between weeks (30-day view).
+	if m.statsRange == statsRange30Days {
+		for k := 0; k < n-1; k++ {
+			if buckets[k+1].start.Weekday() == time.Monday {
+				col := barStart(k) + bw // the gap column after bar k
+				for r := 0; r < rows; r++ {
+					grid[r][col] = statsCell{'·', -1}
+				}
+			}
+		}
+	}
+
+	// Axis labels.
+	label := grid[rows-1]
+	if weekly {
+		for k := 0; k < n; k += 4 {
+			_, wk := buckets[k].start.ISOWeek()
+			for j, ch := range []rune(fmt.Sprintf("w%d", wk)) {
+				if c := barStart(k) + j; c < chartW {
+					label[c] = statsCell{ch, -1}
+				}
+			}
+		}
+	} else {
+		// Weekday labels under each daily bar, widening with the bars: full names
+		// when there's room (7-day view), a 3-letter abbreviation when medium, a
+		// single initial when narrow.
+		initials := [7]rune{'S', 'M', 'T', 'W', 'T', 'F', 'S'}
+		for k := 0; k < n; k++ {
+			wd := buckets[k].start.Weekday()
+			var lbl string
+			switch {
+			case m.statsRange == statsRange7Days && bw >= 9:
+				lbl = wd.String() // e.g. "Wednesday"
+			case m.statsRange == statsRange7Days && bw >= 3:
+				lbl = wd.String()[:3] // e.g. "Wed"
+			default:
+				lbl = string(initials[int(wd)])
+			}
+			start := barStart(k) + (bw-len(lbl))/2
+			if start < barStart(k) {
+				start = barStart(k)
+			}
+			for j, ch := range lbl {
+				if c := start + j; c >= 0 && c < chartW {
+					label[c] = statsCell{ch, -1}
+				}
+			}
+		}
+	}
+
+	margin := strings.Repeat(" ", leftMargin)
+	for r := 0; r < rows; r++ {
+		b.WriteString(margin + renderCellRow(grid[r]) + "\n")
+	}
 	return b.String()
+}
+
+// renderCellRow renders a histogram grid row, grouping consecutive cells that
+// share a style into one Render call and dropping trailing blanks.
+func renderCellRow(cells []statsCell) string {
+	last := -1
+	for c := range cells {
+		if cells[c].ch != ' ' {
+			last = c
+		}
+	}
+	if last < 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for c := 0; c <= last; {
+		g := cells[c].gi
+		start := c
+		for c <= last && cells[c].gi == g {
+			c++
+		}
+		seg := make([]rune, 0, c-start)
+		for _, cl := range cells[start:c] {
+			seg = append(seg, cl.ch)
+		}
+		if g < 0 {
+			sb.WriteString(dimStyle.Render(string(seg)))
+		} else {
+			sb.WriteString(statsGradient[g].Render(string(seg)))
+		}
+	}
+	return sb.String()
 }
 
 // ── Build helpers ─────────────────────────────────────────────────────────────
@@ -942,7 +1083,7 @@ func (m model) buildTagDetailLines() []string {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
-func (m model) renderTabs() string {
+func (m model) renderTabs(avail int) string {
 	activeStyles := [numTabs]lipgloss.Style{
 		tabTasksActiveStyle,
 		tabCalendarActiveStyle,
@@ -952,7 +1093,37 @@ func (m model) renderTabs() string {
 		tabStatsActiveStyle,
 		tabSettingsActiveStyle,
 	}
-	names := [numTabs]string{"1:Tasks", "2:Calendar", "3:Projects", "4:Tags", "5:Learnings", "6:Stats", "7:Settings"}
+	full := [numTabs]string{"1:Tasks", "2:Calendar", "3:Projects", "4:Tags", "5:Learnings", "6:Stats", "7:Settings"}
+	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7"}
+
+	// abbr keeps the "n:" prefix and the first 3 letters of the name ("1:Tas").
+	var abbr [numTabs]string
+	for i, n := range full {
+		colon := strings.IndexByte(n, ':')
+		word := []rune(n[colon+1:])
+		if len(word) > 3 {
+			word = word[:3]
+		}
+		abbr[i] = n[:colon+1] + string(word)
+	}
+
+	// Degrade as the window narrows: full labels → 3-letter abbreviations →
+	// only the active tab keeps its abbreviation (rest collapse to bare
+	// numbers) → numbers only.
+	names := nums
+	switch {
+	case tabsWidth(full[:]) <= avail:
+		names = full
+	case tabsWidth(abbr[:]) <= avail:
+		names = abbr
+	default:
+		mixed := nums
+		mixed[m.tab] = abbr[m.tab]
+		if tabsWidth(mixed[:]) <= avail {
+			names = mixed
+		}
+	}
+
 	var parts [numTabs]string
 	for i := range names {
 		if tab(i) == m.tab {
@@ -962,6 +1133,15 @@ func (m model) renderTabs() string {
 		}
 	}
 	return strings.Join(parts[:], " ")
+}
+
+// tabsWidth is the visible width of the tab labels joined with single spaces.
+func tabsWidth(names []string) int {
+	w := len(names) - 1 // single-space separators
+	for _, n := range names {
+		w += len([]rune(n))
+	}
+	return w
 }
 
 func (m model) renderListContent() string {

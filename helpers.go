@@ -99,18 +99,6 @@ func renderTagsPart(tags []string) string {
 	return sb.String()
 }
 
-func titleColWidth(termWidth int) int {
-	max := termWidth * titleColMaxWidthPct / 100
-	w := termWidth - titleColFixedCols
-	if w < minTitleColWidth {
-		return minTitleColWidth
-	}
-	if w > max {
-		return max
-	}
-	return w
-}
-
 // listCols decides which columns of the task/history list fit at the current
 // terminal width. Columns are dropped least-important-first as the window
 // narrows so list lines never wrap inside the panel.
@@ -121,10 +109,18 @@ type listCols struct {
 	showLast  bool // Priority (tasks) or Completed (history)
 }
 
-func taskListCols(termWidth int, isHistory bool) listCols {
+func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 	inner := termWidth - 8 // panel content width (margin + border + padding)
 	const fixed = 6        // cursor + checkbox + fold icon
 	c := listCols{showStart: true, showDue: true, showLast: true}
+
+	// Title column fits its longest entry (+gap), floored to the header label so
+	// it never truncates, capped by the shared responsive width.
+	floor := len("Task")
+	if isHistory {
+		floor = len("Completed tasks")
+	}
+	c.titleW = contentFitWidth(termWidth, contentMax, 2, floor)
 
 	colsW := func() int {
 		w := 0
@@ -145,19 +141,13 @@ func taskListCols(termWidth int, isHistory bool) listCols {
 		// History keeps the Completed column the longest.
 		drop = []*bool{&c.showStart, &c.showDue, &c.showLast}
 	}
+	// Drop date columns least-important-first until the (fixed-width) title and
+	// the remaining date columns fit the panel.
 	for _, d := range drop {
-		if inner-fixed-colsW() >= minTitleColWidth {
+		if inner-fixed-c.titleW-colsW() >= 0 {
 			break
 		}
 		*d = false
-	}
-
-	c.titleW = inner - fixed - colsW()
-	if c.titleW < minTitleColWidth {
-		c.titleW = minTitleColWidth
-	}
-	if max := termWidth * titleColMaxWidthPct / 100; c.titleW > max && max >= minTitleColWidth {
-		c.titleW = max
 	}
 	return c
 }
@@ -175,9 +165,7 @@ func renderPlainDivider(availW int) string {
 	return dimStyle.Render("  "+strings.Repeat("─", availW)) + "\n"
 }
 
-func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistory bool, sortMode taskSortMode) {
-	c := taskListCols(termWidth, isHistory)
-
+func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistory bool, sortMode taskSortMode, c listCols) {
 	startLabel := padRight("Start", 12)
 	dueLabel := padRight("Due", 12)
 	lastLabel := padRight("Priority", 12)

@@ -737,6 +737,8 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 			}
 			m.markCacheDirty()
 		}
+	case tabStats:
+		m.statsRange = (m.statsRange + 1) % statsRangeCount
 	case tabSettings:
 		return m.handleSettingsEnter()
 	}

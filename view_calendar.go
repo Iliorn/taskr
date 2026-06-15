@@ -103,10 +103,10 @@ func (m model) buildCalendarContent(w, outerH int) string {
 
 	calPanel := listPanelStyle.Width(calPanelWidth).Render(strings.Join(calLines, "\n"))
 	tlPanel := listPanelStyle.Width(tlW).Render(strings.Join(tlLines, "\n"))
-	return lipgloss.JoinHorizontal(lipgloss.Top, calPanel, tlPanel)
+	return lipgloss.JoinHorizontal(lipgloss.Top, tlPanel, calPanel)
 }
 
-// ── Month calendar (left panel) ───────────────────────────────────────────────
+// ── Month calendar (right panel) ──────────────────────────────────────────────
 
 func (m model) renderMonthCalendarLines() []string {
 	sel := m.calendar.selected

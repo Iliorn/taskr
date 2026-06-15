@@ -40,7 +40,20 @@ func (m model) renderTagList() string {
 		stats = computeTagStats(m.todos)
 	}
 
-	headerLeft := padRight("  Tag", tagLabelColWidth) + "Progress"
+	// Size the tag column to the widest tag so Progress sits close behind it.
+	// gap 4 = the 2-space cursor lead-in baked into this column + a 2-space gap.
+	labelW := 0
+	for _, tag := range tags {
+		w := len([]rune(tag)) + 1 // leading '#'
+		if tag == untaggedKey {
+			w = len("(untagged)")
+		}
+		if w > labelW {
+			labelW = w
+		}
+	}
+	nameW := contentFitWidth(m.termWidth, labelW, 4, len("  Tag"))
+	headerLeft := padRight("  Tag", nameW) + "Progress"
 	padW := m.termWidth - 6 - len([]rune(headerLeft)) - barW
 	if padW < 1 {
 		padW = 1
@@ -81,7 +94,7 @@ func (m model) renderTagList() string {
 		if i == m.tagTabCursor {
 			cur = "▶ "
 		}
-		tagLabel := padRight(truncate(label, tagLabelColWidth-4), tagLabelColWidth-2)
+		tagLabel := padRight(truncate(label, nameW-4), nameW-2)
 
 		barStr.Reset()
 		// Group consecutive cells that share a gradient color into a single
@@ -167,7 +180,6 @@ func (m model) renderLearningList() string {
 	defer putBuilder(b)
 
 	availW := m.termWidth - 8
-	dateW := 8
 	tagsW := availW / 4
 	if tagsW > 30 {
 		tagsW = 30
@@ -175,10 +187,17 @@ func (m model) renderLearningList() string {
 	if tagsW < 10 {
 		tagsW = 10
 	}
-	textW := availW - dateW - tagsW - 6
+	const dateW = 10 // "02-01-06" + gap
+	textMax := 0
+	for i := range learnings {
+		if tw := len([]rune(learnings[i].Text)); tw > textMax {
+			textMax = tw
+		}
+	}
+	textW := contentFitWidth(m.termWidth, textMax, 2, len("Learning"))
 
-	const prefix = "      "
-	headerLeft := prefix + padRight("Learning", textW) + padRight("Tags", tagsW) + "Date"
+	const prefix = "  "
+	headerLeft := prefix + padRight("Learning", textW) + padRight("Date", dateW) + "Tags"
 	padW := m.termWidth - 6 - len([]rune(headerLeft))
 	if padW < 1 {
 		padW = 1
@@ -206,20 +225,20 @@ func (m model) renderLearningList() string {
 		for _, tag := range l.Tags {
 			tagsStr += "#" + tag + " "
 		}
-		tagsCol := padRight(truncate(strings.TrimSpace(tagsStr), tagsW), tagsW)
-		dateCol := l.CreatedAt.Format("02-01-06")
+		tagsCol := truncate(strings.TrimSpace(tagsStr), tagsW)
+		dateCol := padRight(l.CreatedAt.Format("02-01-06"), dateW)
 
 		if i == m.learningCursor {
 			b.WriteString(
 				learningSelectedStyle.Render(cur+textCol) +
-					tagStyle.Render(tagsCol) +
-					learningStyle.Render(dateCol) + "\n",
+					learningStyle.Render(dateCol) +
+					tagStyle.Render(tagsCol) + "\n",
 			)
 		} else {
 			b.WriteString(
 				normalStyle.Render(cur+textCol) +
-					dimStyle.Render(tagsCol) +
-					dimStyle.Render(dateCol) + "\n",
+					dimStyle.Render(dateCol) +
+					dimStyle.Render(tagsCol) + "\n",
 			)
 		}
 	}
@@ -310,14 +329,23 @@ func (m model) renderStatsList() string {
 	availW := m.termWidth - 8
 	gradLen := len(statsGradient)
 
-	// Lay sections out in two columns when there's room, so the page stays short
-	// enough to fit a not-very-tall screen. Falls back to one column when narrow.
+	// Lay sections out in up to three columns when there's room, so the page
+	// stays short enough to fit a not-very-tall screen. minColW guarantees each
+	// column is wide enough to show the longest stat line ("vs …" trend) without
+	// truncation, so colW >= minColW always holds in multi-column mode.
 	const gap = 4
+	const minColW = 37
+	cols := (availW + gap) / (minColW + gap)
+	if cols < 1 {
+		cols = 1
+	}
+	if cols > 3 {
+		cols = 3
+	}
 	colW := availW
 	valW := statsValueWidth
-	twoCol := (availW-gap)/2 >= 36
-	if twoCol {
-		colW = (availW - gap) / 2
+	if cols > 1 {
+		colW = (availW - (cols-1)*gap) / cols
 		valW = 5
 	}
 
@@ -451,14 +479,18 @@ func (m model) renderStatsList() string {
 		}
 	})
 
-	b.WriteString(statsHeaderStyle.Render("  Productivity Stats") + "\n")
-	b.WriteString(renderPlainDivider(availW))
-
-	if twoCol {
-		left := stackSections(workload, flow, flow30)
-		right := stackSections(throughput, priority, velocity)
-		b.WriteString(zipColumns(colW, gap, left, right))
-	} else {
+	switch cols {
+	case 3:
+		// Keep the two Flow windows together in the middle column.
+		b.WriteString(zipColumns(colW, gap,
+			stackSections(workload, throughput),
+			stackSections(flow, flow30),
+			stackSections(priority, velocity)))
+	case 2:
+		b.WriteString(zipColumns(colW, gap,
+			stackSections(workload, flow, flow30),
+			stackSections(throughput, priority, velocity)))
+	default:
 		first := true
 		for _, s := range []string{workload, flow, flow30, throughput, priority, velocity} {
 			if strings.TrimSpace(s) == "" {
@@ -491,31 +523,35 @@ func stackSections(sections ...string) []string {
 	return lines
 }
 
-// zipColumns places two line slices side by side, left padded (ANSI-aware) to
-// colW with a gap between. Trailing rows in the taller column stand alone.
-func zipColumns(colW, gap int, left, right []string) string {
-	n := len(left)
-	if len(right) > n {
-		n = len(right)
+// zipColumns places line slices side by side, each padded (ANSI-aware) to colW
+// with a gap between. Every column but the last is truncated to colW so a long
+// line can never bleed into its neighbour.
+func zipColumns(colW, gap int, columns ...[]string) string {
+	maxLen := 0
+	for _, col := range columns {
+		if len(col) > maxLen {
+			maxLen = len(col)
+		}
 	}
 	var b strings.Builder
 	pad := strings.Repeat(" ", gap)
-	for i := 0; i < n; i++ {
-		var l, r string
-		if i < len(left) {
-			l = left[i]
+	for i := 0; i < maxLen; i++ {
+		for c, col := range columns {
+			line := ""
+			if i < len(col) {
+				line = col[i]
+			}
+			if c == len(columns)-1 {
+				b.WriteString(strings.TrimRight(line, " "))
+				continue
+			}
+			line = ansi.Truncate(line, colW, "")
+			if lw := ansi.StringWidth(line); lw < colW {
+				line += strings.Repeat(" ", colW-lw)
+			}
+			b.WriteString(line + pad)
 		}
-		if i < len(right) {
-			r = right[i]
-		}
-		if r == "" {
-			b.WriteString(l + "\n")
-			continue
-		}
-		if lw := ansi.StringWidth(l); lw < colW {
-			l += strings.Repeat(" ", colW-lw)
-		}
-		b.WriteString(l + pad + r + "\n")
+		b.WriteString("\n")
 	}
 	return b.String()
 }
@@ -560,9 +596,27 @@ func (m model) renderTaskList() string {
 	b := getBuilder()
 	defer putBuilder(b)
 
-	renderListHeader(b, m.termWidth, m.cursor, len(active), false, m.taskSort)
-
 	overdueSet := m.cache.overdueSet
+
+	// Size the title column to the widest displayed task (title + its indicators).
+	contentMax := 0
+	for i := range active {
+		w := len([]rune(active[i].Title))
+		if active[i].HasOverdueDependencyFast(overdueSet) {
+			w += 2 // " !"
+		}
+		if active[i].Notes != "" {
+			w += 2 // " ¶"
+		}
+		if active[i].IsTimerRunning() {
+			w += 2 // " ⏱"
+		}
+		if w > contentMax {
+			contentMax = w
+		}
+	}
+	cols := taskListCols(m.termWidth, false, contentMax)
+	renderListHeader(b, m.termWidth, m.cursor, len(active), false, m.taskSort, cols)
 
 	maxVisible := m.estimateListHeight()
 	startIdx := m.listOffset
@@ -576,14 +630,14 @@ func (m model) renderTaskList() string {
 
 	for i := startIdx; i < endIdx; i++ {
 		t := active[i]
-		b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, m.pane == paneList, overdueSet))
+		b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, m.pane == paneList, overdueSet, cols))
 		if len(t.SubtaskIDs) > 0 && m.expandedTasks[t.ID] {
 			for j, subID := range t.SubtaskIDs {
 				sub := m.findTodoByID(subID)
 				if sub == nil {
 					continue
 				}
-				b.WriteString(m.renderSubtaskLine(sub, j, len(t.SubtaskIDs)))
+				b.WriteString(m.renderSubtaskLine(sub, j, len(t.SubtaskIDs), cols))
 			}
 		}
 	}
@@ -602,7 +656,14 @@ func (m model) renderHistoryList() string {
 	b := getBuilder()
 	defer putBuilder(b)
 
-	renderListHeader(b, m.termWidth, m.cursor, len(completed), true, m.taskSort)
+	contentMax := 0
+	for i := range completed {
+		if w := len([]rune(completed[i].Title)); w > contentMax {
+			contentMax = w
+		}
+	}
+	cols := taskListCols(m.termWidth, true, contentMax)
+	renderListHeader(b, m.termWidth, m.cursor, len(completed), true, m.taskSort, cols)
 
 	maxVisible := m.estimateListHeight()
 	startIdx := m.listOffset
@@ -615,13 +676,12 @@ func (m model) renderHistoryList() string {
 	}
 
 	for i := startIdx; i < endIdx; i++ {
-		b.WriteString(m.renderHistoryLine(completed[i], i, m.cursor, m.pane == paneList))
+		b.WriteString(m.renderHistoryLine(completed[i], i, m.cursor, m.pane == paneList, cols))
 	}
 	return b.String()
 }
 
-func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) string {
-	cols := taskListCols(m.termWidth, true)
+func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, cols listCols) string {
 	titleW := cols.titleW
 	cursorStr := "  "
 	if index == cursor && active {
@@ -681,12 +741,12 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool) st
 		tagsStr + "\n"
 }
 
-func (m model) renderSubtaskLine(sub *todo.Todo, index, total int) string {
+func (m model) renderSubtaskLine(sub *todo.Todo, index, total int, cols listCols) string {
 	connector := "├"
 	if index == total-1 {
 		connector = "└"
 	}
-	titleW := taskListCols(m.termWidth, false).titleW - 4
+	titleW := cols.titleW - 4
 	if titleW < 10 {
 		titleW = 10
 	}
@@ -696,8 +756,7 @@ func (m model) renderSubtaskLine(sub *todo.Todo, index, total int) string {
 	return dimStyle.Render("     "+connector+" [ ] "+truncate(sub.Title, titleW)) + "\n"
 }
 
-func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool, overdueSet map[string]bool) string {
-	cols := taskListCols(m.termWidth, false)
+func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
 	titleW := cols.titleW
 	cursorStr := "  "
 	if index == cursor && active {
@@ -724,7 +783,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 		title += " ¶"
 	}
 	if t.IsTimerRunning() {
-		title += " ◉"
+		title += " ⏱"
 	}
 	startVal := ""
 	if !t.StartDate.IsZero() {
@@ -793,15 +852,15 @@ func (m model) renderProjectListContent(projects []string) string {
 	defer putBuilder(b)
 
 	w := m.termWidth - 8
-	projW := m.termWidth * projectColWidthPct / 100
-	if projW < minProjColWidth {
-		projW = minProjColWidth
+	nameMax := 0
+	for _, p := range projects {
+		if pw := len([]rune(p)); pw > nameMax {
+			nameMax = pw
+		}
 	}
-	if projW > maxProjColWidth {
-		projW = maxProjColWidth
-	}
+	projW := contentFitWidth(m.termWidth, nameMax, 2, len("Project"))
 
-	const prefix = "      "
+	const prefix = "  "
 	headerLeft := prefix + padRight("Project", projW) +
 		padRight("Active", projCountColWidth) +
 		padRight("Done", projDoneColWidth) + "Overdue"
@@ -810,7 +869,6 @@ func (m model) renderProjectListContent(projects []string) string {
 		padW = 1
 	}
 	b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
-	b.WriteString(renderPlainDivider(w))
 
 	for i, p := range projects {
 		tasks := m.getProjectTasks(p)
@@ -830,7 +888,7 @@ func (m model) renderProjectListContent(projects []string) string {
 			cursorStr = "▶ "
 		}
 		if m.mode == modeEditProjectInline && i == m.projectCursor {
-			b.WriteString(normalStyle.Render(cursorStr+"• ") + m.textInput.View() + "\n")
+			b.WriteString(normalStyle.Render(cursorStr) + m.textInput.View() + "\n")
 			continue
 		}
 		nameCol := padRight(truncate(p, projW-2), projW)
@@ -842,21 +900,21 @@ func (m model) renderProjectListContent(projects []string) string {
 		}
 		switch {
 		case i == m.projectCursor:
-			line := selectedStyle.Render(cursorStr + "• " + nameCol + activeStr + doneStr)
+			line := selectedStyle.Render(cursorStr + nameCol + activeStr + doneStr)
 			if overdueCnt > 0 {
 				b.WriteString(line + overdueStyle.Render(overdueStr) + "\n")
 			} else {
 				b.WriteString(line + selectedStyle.Render(overdueStr) + "\n")
 			}
 		case activeCnt == 0:
-			b.WriteString(doneCountStyle.Render(cursorStr+"• "+nameCol+activeStr+doneStr+overdueStr) + "\n")
+			b.WriteString(doneCountStyle.Render(cursorStr+nameCol+activeStr+doneStr+overdueStr) + "\n")
 		default:
 			ovdRendered := dimStyle.Render(overdueStr)
 			if overdueCnt > 0 {
 				ovdRendered = overdueCountStyle.Render(overdueStr)
 			}
 			b.WriteString(
-				normalStyle.Render(cursorStr+"• "+nameCol) +
+				normalStyle.Render(cursorStr+nameCol) +
 					activeCountStyle.Render(activeStr) +
 					doneCountStyle.Render(doneStr) +
 					ovdRendered + "\n")
