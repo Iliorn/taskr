@@ -156,6 +156,33 @@ func TestSelectLearnings(t *testing.T) {
 	}
 }
 
+func TestSubtaskDerivation(t *testing.T) {
+	now := time.Now()
+	parent := mkTodo("p", "parent", todo.Pending)
+	c1 := mkTodo("c1", "child one", todo.Pending)
+	c1.ParentID = "p"
+	c1.CreatedAt = now.Add(1 * time.Minute)
+	c2 := mkTodo("c2", "child two", todo.Pending)
+	c2.ParentID = "p"
+	c2.CreatedAt = now.Add(2 * time.Minute)
+	other := mkTodo("o", "unrelated", todo.Pending)
+
+	m := newTestModel()
+	// Slice order is deliberately scrambled to prove the derivation orders by
+	// CreatedAt (= insertion order), not slice position.
+	m.todos = []todo.Todo{c2, parent, other, c1}
+
+	if n := m.subtaskCount("p"); n != 2 {
+		t.Fatalf("subtaskCount(p) = %d, want 2", n)
+	}
+	if got := m.subtaskIDs("p"); len(got) != 2 || got[0] != "c1" || got[1] != "c2" {
+		t.Fatalf("subtaskIDs(p) = %v, want [c1 c2] (CreatedAt order)", got)
+	}
+	if m.subtaskCount("none") != 0 || len(m.subtaskIDs("none")) != 0 {
+		t.Fatalf("a parent with no children should give count 0 / no ids")
+	}
+}
+
 func TestTodoMatchesSearch(t *testing.T) {
 	x := mkTodo("a", "Buy Milk", todo.Pending)
 	x.Tags = []string{"shopping"}

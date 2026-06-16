@@ -398,9 +398,6 @@ func copyTodos(todos []todo.Todo) []todo.Todo {
 		if len(t.TimeEntries) > 0 {
 			cp[i].TimeEntries = append([]todo.TimeEntry{}, t.TimeEntries...)
 		}
-		if len(t.SubtaskIDs) > 0 {
-			cp[i].SubtaskIDs = append([]string{}, t.SubtaskIDs...)
-		}
 	}
 	return cp
 }
@@ -592,18 +589,49 @@ func (m *model) updateLearningByID(learningID, newText string) {
 
 // ── Subtask helpers ───────────────────────────────────────────────────────────
 
+// subtaskIDs returns parentID's child task IDs in creation order, derived from
+// ParentID (the single source of truth for the parent-child link). CreatedAt
+// order reproduces the order subtasks were added.
+func (m model) subtaskIDs(parentID string) []string {
+	var subs []todo.Todo
+	for i := range m.todos {
+		if m.todos[i].ParentID == parentID {
+			subs = append(subs, m.todos[i])
+		}
+	}
+	sort.SliceStable(subs, func(a, b int) bool {
+		return subs[a].CreatedAt.Before(subs[b].CreatedAt)
+	})
+	ids := make([]string, len(subs))
+	for i, s := range subs {
+		ids[i] = s.ID
+	}
+	return ids
+}
+
+// subtaskCount returns how many subtasks parentID has (order-independent, so it
+// skips the sort in subtaskIDs).
+func (m model) subtaskCount(parentID string) int {
+	n := 0
+	for i := range m.todos {
+		if m.todos[i].ParentID == parentID {
+			n++
+		}
+	}
+	return n
+}
+
 func (m *model) addSubtask(parentIdx int, title string) {
 	sub := todo.NewSubtask(title, m.todos[parentIdx].ID)
 	m.todos = append(m.todos, sub)
-	m.todos[parentIdx].AddSubtaskID(sub.ID)
 }
 
 func (m *model) deleteSubtask(parentIdx int, subtaskCursor int) {
-	if subtaskCursor >= len(m.todos[parentIdx].SubtaskIDs) {
+	ids := m.subtaskIDs(m.todos[parentIdx].ID)
+	if subtaskCursor >= len(ids) {
 		return
 	}
-	subID := m.todos[parentIdx].SubtaskIDs[subtaskCursor]
-	m.todos[parentIdx].RemoveSubtaskID(subID)
+	subID := ids[subtaskCursor]
 	for i, t := range m.todos {
 		if t.ID == subID {
 			m.todos = append(m.todos[:i], m.todos[i+1:]...)
@@ -613,10 +641,11 @@ func (m *model) deleteSubtask(parentIdx int, subtaskCursor int) {
 }
 
 func (m *model) toggleSubtask(parentIdx int, subtaskCursor int) {
-	if subtaskCursor >= len(m.todos[parentIdx].SubtaskIDs) {
+	ids := m.subtaskIDs(m.todos[parentIdx].ID)
+	if subtaskCursor >= len(ids) {
 		return
 	}
-	subID := m.todos[parentIdx].SubtaskIDs[subtaskCursor]
+	subID := ids[subtaskCursor]
 	for i := range m.todos {
 		if m.todos[i].ID == subID {
 			m.todos[i].Toggle()
@@ -813,18 +842,18 @@ func (m model) estimateDetailCursorLine() int {
 		case fieldSubtasks:
 			return line + m.detail.subtaskCursor
 		case fieldDependencies:
-			if len(t.SubtaskIDs) == 0 {
+			if m.subtaskCount(t.ID) == 0 {
 				line++
 			} else {
-				line += len(t.SubtaskIDs)
+				line += m.subtaskCount(t.ID)
 			}
 			line += 2 // blank + deps label
 			return line + m.detail.depCursor
 		default: // fieldLearnings
-			if len(t.SubtaskIDs) == 0 {
+			if m.subtaskCount(t.ID) == 0 {
 				line++
 			} else {
-				line += len(t.SubtaskIDs)
+				line += m.subtaskCount(t.ID)
 			}
 			line++
 			if len(t.Dependencies) == 0 {
@@ -956,10 +985,10 @@ func (m model) detailPage2ContentHeight() int {
 		return 1
 	}
 	lines := 3 // title + blank + subtasks label
-	if len(t.SubtaskIDs) == 0 {
+	if m.subtaskCount(t.ID) == 0 {
 		lines += 2
 	} else {
-		lines += 1 + len(t.SubtaskIDs)
+		lines += 1 + m.subtaskCount(t.ID)
 	}
 	lines++ // blank
 	if len(t.Dependencies) == 0 {

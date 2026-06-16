@@ -339,7 +339,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
 				m.cycleLang(1)
 			} else if m.tab == tabTasks && !m.showHistory {
-				if t := m.currentTodo(); t != nil && len(t.SubtaskIDs) > 0 {
+				if t := m.currentTodo(); t != nil && m.subtaskCount(t.ID) > 0 {
 					m.expandedTasks[t.ID] = true
 				}
 			}
@@ -992,7 +992,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "d":
 		if m.detail.page == 1 && m.detail.field == fieldSubtasks {
 			if idx := m.currentTodoIndex(); idx >= 0 {
-				if m.detail.subtaskCursor < len(m.todos[idx].SubtaskIDs) {
+				if m.detail.subtaskCursor < m.subtaskCount(m.todos[idx].ID) {
 					m.toggleSubtask(idx, m.detail.subtaskCursor)
 					m.markModified()
 				}
@@ -1039,8 +1039,8 @@ func (m *model) detailCursorUp() {
 				m.detail.depCursor--
 			} else {
 				m.detail.field = fieldSubtasks
-				if t != nil && len(t.SubtaskIDs) > 0 {
-					m.detail.subtaskCursor = len(t.SubtaskIDs) - 1
+				if t != nil && m.subtaskCount(t.ID) > 0 {
+					m.detail.subtaskCursor = m.subtaskCount(t.ID) - 1
 				}
 			}
 		case fieldLearnings:
@@ -1083,7 +1083,7 @@ func (m *model) detailCursorDown() {
 		t := m.currentTodo()
 		switch m.detail.field {
 		case fieldSubtasks:
-			if t != nil && m.detail.subtaskCursor < len(t.SubtaskIDs)-1 {
+			if t != nil && m.detail.subtaskCursor < m.subtaskCount(t.ID)-1 {
 				m.detail.subtaskCursor++
 			} else {
 				m.detail.field = fieldDependencies
@@ -1193,8 +1193,8 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(m.todos[idx].Learnings[m.detail.learningCursor].Text, 40))
 		}
 	case fieldSubtasks:
-		if len(m.todos[idx].SubtaskIDs) > 0 && m.detail.subtaskCursor < len(m.todos[idx].SubtaskIDs) {
-			subID := m.todos[idx].SubtaskIDs[m.detail.subtaskCursor]
+		if m.subtaskCount(m.todos[idx].ID) > 0 && m.detail.subtaskCursor < m.subtaskCount(m.todos[idx].ID) {
+			subID := m.subtaskIDs(m.todos[idx].ID)[m.detail.subtaskCursor]
 			subTitle := subID
 			if sub := m.findTodoByID(subID); sub != nil {
 				subTitle = sub.Title
@@ -1322,7 +1322,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		}
 	case fieldSubtasks:
-		if len(t.SubtaskIDs) > 0 && m.detail.subtaskCursor < len(t.SubtaskIDs) {
+		if m.subtaskCount(t.ID) > 0 && m.detail.subtaskCursor < m.subtaskCount(t.ID) {
 			m.toggleSubtask(idx, m.detail.subtaskCursor)
 			m.markModified()
 			return m, nil

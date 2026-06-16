@@ -293,37 +293,6 @@ func TestDeleteLearning(t *testing.T) {
 	task.DeleteLearning(-1)
 }
 
-// ── Subtask IDs ───────────────────────────────────────────────────────────────
-
-func TestAddSubtaskID(t *testing.T) {
-	task := New("Parent")
-
-	task.AddSubtaskID("sub-1")
-	task.AddSubtaskID("sub-2")
-	task.AddSubtaskID("sub-1") // duplicate
-
-	if len(task.SubtaskIDs) != 2 {
-		t.Fatalf("expected 2 subtask IDs, got %d", len(task.SubtaskIDs))
-	}
-}
-
-func TestRemoveSubtaskID(t *testing.T) {
-	task := New("Parent")
-	task.AddSubtaskID("sub-1")
-	task.AddSubtaskID("sub-2")
-
-	task.RemoveSubtaskID("sub-1")
-	if len(task.SubtaskIDs) != 1 || task.SubtaskIDs[0] != "sub-2" {
-		t.Fatalf("expected [sub-2], got %v", task.SubtaskIDs)
-	}
-
-	// Remove non-existent
-	task.RemoveSubtaskID("nonexistent")
-	if len(task.SubtaskIDs) != 1 {
-		t.Fatal("removing nonexistent subtask changed length")
-	}
-}
-
 // ── IsOverdue ─────────────────────────────────────────────────────────────────
 
 func TestIsOverdue(t *testing.T) {

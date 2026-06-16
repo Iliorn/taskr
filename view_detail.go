@@ -141,10 +141,10 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 		subtaskCur = "▶ "
 	}
 	b.WriteString(subtaskCur + detailLabelStyle.Render(tr("Subtasks:")) + "\n")
-	if len(t.SubtaskIDs) == 0 {
+	if m.subtaskCount(t.ID) == 0 {
 		b.WriteString("  " + detailValueStyle.Render(tr("No subtasks. Press 'a' to add one.")) + "\n")
 	} else {
-		for i, subID := range t.SubtaskIDs {
+		for i, subID := range m.subtaskIDs(t.ID) {
 			sub := m.findTodoByID(subID)
 			pfx := "  "
 			isSubSelected := isDetailFocused && m.detail.field == fieldSubtasks && i == m.detail.subtaskCursor

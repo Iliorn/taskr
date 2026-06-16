@@ -83,7 +83,7 @@ func (m model) updateAddSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if val := strings.TrimSpace(m.textInput.Value()); val != "" {
 				if idx := m.currentTodoIndex(); idx >= 0 {
 					m.addSubtask(idx, val)
-					m.detail.subtaskCursor = len(m.todos[idx].SubtaskIDs) - 1
+					m.detail.subtaskCursor = m.subtaskCount(m.todos[idx].ID) - 1
 					m.markModified()
 				}
 			}
@@ -711,10 +711,10 @@ func (m model) updateConfirmDeleteSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "y":
-			if idx := m.currentTodoIndex(); idx >= 0 && m.pendingSubtask < len(m.todos[idx].SubtaskIDs) {
+			if idx := m.currentTodoIndex(); idx >= 0 && m.pendingSubtask < m.subtaskCount(m.todos[idx].ID) {
 				m.pushUndo("delete subtask")
 				m.deleteSubtask(idx, m.pendingSubtask)
-				if m.detail.subtaskCursor >= len(m.todos[idx].SubtaskIDs) && m.detail.subtaskCursor > 0 {
+				if m.detail.subtaskCursor >= m.subtaskCount(m.todos[idx].ID) && m.detail.subtaskCursor > 0 {
 					m.detail.subtaskCursor--
 				}
 				m.markModifiedNoUndo()

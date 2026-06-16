@@ -648,13 +648,13 @@ func (m model) renderTaskList() string {
 	for i := startIdx; i < endIdx; i++ {
 		t := active[i]
 		b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, m.pane == paneList, overdueSet, cols))
-		if len(t.SubtaskIDs) > 0 && m.expandedTasks[t.ID] {
-			for j, subID := range t.SubtaskIDs {
+		if subIDs := m.subtaskIDs(t.ID); len(subIDs) > 0 && m.expandedTasks[t.ID] {
+			for j, subID := range subIDs {
 				sub := m.findTodoByID(subID)
 				if sub == nil {
 					continue
 				}
-				b.WriteString(m.renderSubtaskLine(sub, j, len(t.SubtaskIDs), cols))
+				b.WriteString(m.renderSubtaskLine(sub, j, len(subIDs), cols))
 			}
 		}
 	}
@@ -786,7 +786,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 		checkbox = "[>]"
 	}
 	foldIcon := " "
-	if len(t.SubtaskIDs) > 0 {
+	if m.subtaskCount(t.ID) > 0 {
 		if m.expandedTasks[t.ID] {
 			foldIcon = "▾"
 		} else {

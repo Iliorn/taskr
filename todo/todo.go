@@ -107,7 +107,6 @@ type Todo struct {
 	TimeEntries  []TimeEntry `json:"time_entries,omitempty"`
 	Notes        string      `json:"notes,omitempty"`
 	ParentID     string      `json:"parent_id,omitempty"`
-	SubtaskIDs   []string    `json:"subtask_ids,omitempty"`
 }
 
 func New(title string) Todo {
@@ -314,28 +313,9 @@ func (t *Todo) DeleteTimeEntry(index int) {
 	}
 }
 
-// ── Subtasks ──────────────────────────────────────────────────────────────────
-
-func (t *Todo) AddSubtaskID(id string) {
-	for _, existing := range t.SubtaskIDs {
-		if existing == id {
-			return
-		}
-	}
-	t.SubtaskIDs = append(t.SubtaskIDs, id)
-	t.ModifiedAt = time.Now()
-}
-
-func (t *Todo) RemoveSubtaskID(id string) {
-	ids := t.SubtaskIDs[:0]
-	for _, existing := range t.SubtaskIDs {
-		if existing != id {
-			ids = append(ids, existing)
-		}
-	}
-	t.SubtaskIDs = ids
-	t.ModifiedAt = time.Now()
-}
+// Subtasks: the parent→child link is stored only on the child as ParentID (the
+// single source of truth). A parent's subtask list is derived from it — see
+// model.subtaskIDs — rather than duplicated on the parent.
 
 // ── Notes ─────────────────────────────────────────────────────────────────────
 
