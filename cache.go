@@ -53,20 +53,7 @@ func (m *model) refreshCaches() {
 		}
 	}
 
-	m.cache.active = m.cache.active[:0]
-	m.cache.done = m.cache.done[:0]
-	for _, t := range m.todos {
-		if t.ParentID != "" {
-			continue
-		}
-		if t.Status == todo.Pending && m.matchesSearch(t) && m.matchesFocusFilter(t) {
-			m.cache.active = append(m.cache.active, t)
-		} else if t.Status == todo.Done && m.matchesSearch(t) {
-			m.cache.done = append(m.cache.done, t)
-		}
-	}
-	sortTodosByMode(m.cache.active, m.taskSort)
-	sortTodosByMode(m.cache.done, m.taskSort)
+	m.cache.active, m.cache.done = selectActiveDone(m.todos, m.searchQuery, m.focusFilter, m.taskSort)
 
 	m.cache.tags = computeTagStats(m.todos)
 	m.rebuildSortedTags()
@@ -107,26 +94,8 @@ func (m *model) refreshCaches() {
 // recomputed on every render; cache it alongside tagStats and invalidate it
 // the same way (on data change, and on sort-mode toggle via sortCachedTags).
 func (m *model) rebuildSortedTags() {
-	m.cache.tagsSorted = m.cache.tagsSorted[:0]
-	m.cache.untaggedTotal, m.cache.untaggedDone = 0, 0
-	seen := make(map[string]struct{}, len(m.cache.tags))
-	for i := range m.todos {
-		if len(m.todos[i].Tags) == 0 {
-			m.cache.untaggedTotal++
-			if m.todos[i].Status == todo.Done {
-				m.cache.untaggedDone++
-			}
-			continue
-		}
-		for _, tag := range m.todos[i].Tags {
-			if _, ok := seen[tag]; ok {
-				continue
-			}
-			seen[tag] = struct{}{}
-			m.cache.tagsSorted = append(m.cache.tagsSorted, tag)
-		}
-	}
-	sortTags(m.cache.tagsSorted, m.tagSort, m.cache.tags)
+	m.cache.tagsSorted, m.cache.untaggedTotal, m.cache.untaggedDone =
+		selectSortedTags(m.todos, m.tagSort, m.cache.tags)
 	m.cache.tagsSortMode = m.tagSort
 }
 
@@ -177,46 +146,7 @@ func (m *model) refreshLearnings() {
 		m.cache.learningSort == m.learningSort {
 		return
 	}
-
-	var result []todo.Learning
-	for i := range m.todos {
-		if len(m.todos[i].Learnings) > 0 {
-			result = append(result, m.todos[i].Learnings...)
-		}
-	}
-
-	if m.learningSearchQuery != "" {
-		filtered := result[:0]
-		q := strings.ToLower(m.learningSearchQuery)
-		isTagSearch := strings.HasPrefix(q, "#")
-		tagQuery := strings.TrimPrefix(q, "#")
-		for _, l := range result {
-			if isTagSearch {
-				for _, tag := range l.Tags {
-					if strings.Contains(strings.ToLower(tag), tagQuery) {
-						filtered = append(filtered, l)
-						break
-					}
-				}
-			} else if strings.Contains(strings.ToLower(l.Text), q) {
-				filtered = append(filtered, l)
-			}
-		}
-		result = filtered
-	}
-
-	switch m.learningSort {
-	case learningSortAlpha:
-		sort.SliceStable(result, func(i, j int) bool {
-			return strings.ToLower(result[i].Text) < strings.ToLower(result[j].Text)
-		})
-	default:
-		sort.SliceStable(result, func(i, j int) bool {
-			return result[i].CreatedAt.After(result[j].CreatedAt)
-		})
-	}
-
-	m.cache.learnings = result
+	m.cache.learnings = selectLearnings(m.todos, m.learningSearchQuery, m.learningSort)
 	m.cache.learningSearch = m.learningSearchQuery
 	m.cache.learningSort = m.learningSort
 }
@@ -225,25 +155,7 @@ func (m *model) refreshProjects() {
 	if m.cache.projectSearch == m.searchQuery {
 		return
 	}
-
-	projects := make([]string, 0, len(m.cache.projectTasks))
-	for p := range m.cache.projectTasks {
-		projects = append(projects, p)
-	}
-	sort.Strings(projects)
-
-	if m.searchQuery != "" {
-		q := strings.ToLower(m.searchQuery)
-		filtered := projects[:0]
-		for _, p := range projects {
-			if strings.Contains(strings.ToLower(p), q) {
-				filtered = append(filtered, p)
-			}
-		}
-		projects = filtered
-	}
-
-	m.cache.projects = projects
+	m.cache.projects = selectProjects(m.todos, m.searchQuery)
 	m.cache.projectSearch = m.searchQuery
 }
 

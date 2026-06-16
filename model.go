@@ -634,29 +634,11 @@ func (m *model) toggleSubtask(parentIdx int, subtaskCursor int) {
 // ── Search/filter helpers ─────────────────────────────────────────────────────
 
 func (m model) matchesSearch(t todo.Todo) bool {
-	if m.searchQuery == "" {
-		return true
-	}
-	if m.searchQuery == untaggedKey {
-		return len(t.Tags) == 0
-	}
-	if strings.HasPrefix(m.searchQuery, "#") {
-		tagQuery := strings.ToLower(strings.TrimPrefix(m.searchQuery, "#"))
-		for _, tag := range t.Tags {
-			if strings.Contains(strings.ToLower(tag), tagQuery) {
-				return true
-			}
-		}
-		return false
-	}
-	return strings.Contains(strings.ToLower(t.Title), strings.ToLower(m.searchQuery))
+	return todoMatchesSearch(t, m.searchQuery)
 }
 
 func (m model) matchesFocusFilter(t todo.Todo) bool {
-	if !m.focusFilter {
-		return true
-	}
-	return t.IsOverdue() || t.IsDueToday()
+	return todoMatchesFocus(t, m.focusFilter)
 }
 
 func (m model) depSearchResults() []todo.Todo {
