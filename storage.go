@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"taskr/todo"
 )
 
@@ -57,24 +56,6 @@ func ensureStorageDir() error {
 	return os.MkdirAll(dir, 0755)
 }
 
-// writeTodosData writes pre-marshalled JSON data to disk atomically.
-func writeTodosData(data []byte) error {
-	if err := ensureStorageDir(); err != nil {
-		return err
-	}
-
-	storagePath := getStoragePath()
-	tmpPath := storagePath + ".tmp"
-	backupPath := storagePath + ".bak"
-
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		return err
-	}
-
-	_ = os.Rename(storagePath, backupPath)
-	return os.Rename(tmpPath, storagePath)
-}
-
 // currentTaskFileVersion is the schema version stamped into newly written task
 // files. Bump it when the on-disk shape changes in a way migrate() must handle.
 const currentTaskFileVersion = 1
@@ -121,35 +102,6 @@ func marshalTodosPretty(todos []todo.Todo) ([]byte, error) {
 	return json.MarshalIndent(taskFile{Version: currentTaskFileVersion, Todos: todos}, "", "  ")
 }
 
-// saveTodos marshals and writes synchronously (used for initial load path).
-func saveTodos(todos []todo.Todo) error {
-	data, err := marshalTodos(todos)
-	if err != nil {
-		return err
-	}
-	return writeTodosData(data)
-}
-
-// saveDataCmd returns a tea.Cmd that writes pre-marshalled data to disk asynchronously.
-func saveDataCmd(data []byte) tea.Cmd {
-	return func() tea.Msg {
-		if err := writeTodosData(data); err != nil {
-			return saveErrMsg{err}
-		}
-		return saveDoneMsg{}
-	}
-}
-
-// prepareSave marshals todos to JSON (fast, CPU-bound) and returns a Cmd for async disk write.
-// OPTIMIZATION: uses compact JSON for speed.
-func prepareSave(todos []todo.Todo) (tea.Cmd, error) {
-	data, err := marshalTodos(todos)
-	if err != nil {
-		return nil, err
-	}
-	return saveDataCmd(data), nil
-}
-
 // loadBackup attempts to load the most recent backup file.
 func loadBackup() ([]todo.Todo, error) {
 	backupPath := getStoragePath() + ".bak"
@@ -167,7 +119,10 @@ func loadBackup() ([]todo.Todo, error) {
 	return todos, nil
 }
 
-func loadTodos() ([]todo.Todo, error) {
+// loadTodosJSON reads the legacy JSON file. It is no longer the live store —
+// SQLite (storage_sqlite.go) is — but remains the one-time import source and a
+// corruption fallback.
+func loadTodosJSON() ([]todo.Todo, error) {
 	path := getStoragePath()
 	data, err := os.ReadFile(path)
 	if err != nil {

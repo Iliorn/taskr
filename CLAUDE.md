@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`taskr` is a keyboard-driven terminal task manager built with Go and Bubble Tea (Charm). It is a standalone app with its own JSON storage — **not** a Taskwarrior frontend. Beyond tasks it provides a calendar/time-tracking view, projects (Gantt), tags, per-task "learnings", a stats dashboard, and in-app self-update.
+`taskr` is a keyboard-driven terminal task manager built with Go and Bubble Tea (Charm). It is a standalone app with its own SQLite storage (legacy JSON is imported on first run) — **not** a Taskwarrior frontend. Beyond tasks it provides a calendar/time-tracking view, projects (Gantt), tags, per-task "learnings", a stats dashboard, and in-app self-update.
 
 ## Commands
 
@@ -27,19 +27,19 @@ Self-update depends on **exact release asset names** — they are load-bearing, 
 
 Settings tab → "Update to latest release" shells out to the **GitHub CLI** (`gh`) to fetch the matching asset, so `gh` must be installed at runtime for self-update.
 
-The version lives **only in git tags + the release** — there is no version constant in the tree (`appVersion` defaults to `"dev"` and is injected at build time). So the next version = bump the latest tag from `gh release list`; don't trust local `git tag` (release tags may exist on the remote but not locally). The full publish flow:
+The version lives **only in git tags + the release** — there is no version constant in the tree (`appVersion` defaults to `"dev"` and is injected at build time). So the next version = bump the latest tag from `gh release list`; don't trust local `git tag` (release tags may exist on the remote but not locally).
+
+**Releases are automated** by `.github/workflows/release.yml`: pushing a `v*` tag cross-compiles all four targets (version baked in from the tag), creates the GitHub release, and attaches the assets under their exact names. So the publish flow is just:
 
 ```bash
-V=v1.10.0
-GOOS=linux   GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr .
-GOOS=windows GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr.exe .
-GOOS=darwin  GOARCH=arm64 go build -ldflags "-X main.appVersion=$V" -o taskr-macos-apple-silicon .
-GOOS=darwin  GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr-macos-intel .
-gh release create $V --title "..." --notes "..." \
-  taskr taskr.exe taskr-macos-apple-silicon taskr-macos-intel
+git push origin main          # land the commits first
+git tag v1.10.0               # bump from the latest release tag
+git push origin v1.10.0       # ← triggers the build + release
 ```
 
-Patch bumps are the norm for stat/layout tweaks; minor bumps for new interactive features. `gh release create` also creates the tag, so a plain `git push origin main` beforehand is enough.
+Patch bumps are the norm for stat/layout tweaks; minor bumps for new interactive features.
+
+The manual equivalent (if ever building locally) is the same four `go build -ldflags "-X main.appVersion=$V"` invocations feeding `gh release create $V ... taskr taskr.exe taskr-macos-apple-silicon taskr-macos-intel`.
 
 ## Architecture
 
@@ -50,7 +50,8 @@ Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file co
 - **`update_modes.go`** — `Update` handlers for the text-entry / search modes (`updateInput`, `updateSearch`, `updateEditTitle`, etc.). When adding a modal interaction, the handler usually lives here.
 - **`view.go`** — top-level `View` + the Tasks tab and shared rendering helpers; dispatches to `view_lists.go` (projects/tags/learnings/stats), `view_calendar.go`, `view_detail.go`.
 - **`cache.go`** — `cacheState` (see below).
-- **`storage.go`** — JSON load/save, settings, atomic write + `.bak` backup, task sorting.
+- **`storage_sqlite.go`** — the live SQLite backend: schema, `openStore`/`openStoreAt`, `loadTodos`, `prepareSave`, row encode/decode, and the first-run JSON import. Schema is *hybrid + sync-ready*: the full `todo.Todo` is a JSON blob in `data` (source of truth, reconstructed losslessly on load) while queryable fields (status/priority/project/dates) are mirrored into real columns for indexing/future filters. Deletes are **soft (tombstones)** — `prepareSave` upserts the current set and marks any vanished row `deleted=1` — so a deletion can sync (Phase 2) instead of the row reappearing. A single connection (`SetMaxOpenConns(1)`) serializes the one writer.
+- **`storage.go`** — settings load/save, the legacy JSON envelope (`taskFile`/`migrate`/`decodeTaskFile`), `loadTodosJSON` (now only the import source + corruption fallback), and task sorting.
 - **`helpers.go`** — parsing (quick-add syntax, dates, time-entry edits), formatting, column layout, editor resolution, self-update file ops.
 - **`layout.go` / `styles.go` / `constants.go`** — width/height math, theming, magic numbers.
 - **`todo/`** — the **domain package**, framework-free. `todo.Todo` and its methods (`Toggle`, `AddTag`, `StartTimer`, `IsOverdue`, subtask/learning/comment/time-entry mutations). No Bubble Tea or rendering here; keep it that way.
@@ -71,10 +72,10 @@ Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file co
 
 ### Other conventions
 
-- **Persistence is debounced** — mutations set `dirty`/`savePending` and a `saveTickMsg` (300ms) flushes via `prepareSave`. Saves are async `tea.Cmd`s; don't write `tasks.json` synchronously from `Update`.
+- **Persistence is debounced** — mutations set `dirty`/`savePending` and a `saveTickMsg` (300ms) flushes via `prepareSave`. `prepareSave` encodes the snapshot synchronously (so the async write can't race a later mutation) and returns a `tea.Cmd` that commits to SQLite; don't write the store synchronously from `Update`.
 - **Modes drive input.** `m.mode` (an `appMode`) decides which `update*`/`render*` path runs. Adding a feature with text entry or a confirm prompt means: add an `appMode` const, a handler (usually `update_modes.go`), and a render branch.
 - **Subtasks, dependencies, learnings** are all stored inside `m.todos` (subtasks are full `Todo`s with a `ParentID`, linked by `SubtaskIDs`), so global operations loop the whole slice — see `renameTagGlobally`, `deleteLearningByID`.
-- Data lives at `~/.taskr/tasks.json` (+ `.bak`), settings at `~/.taskr/settings.json`. Built binaries and `*.bak` are gitignored.
+- Data lives at `~/.taskr/tasks.db` (SQLite; WAL, so `-wal`/`-shm` sidecars), settings at `~/.taskr/settings.json`. The legacy `~/.taskr/tasks.json` (+ `.bak`) is read only to seed a fresh database, then left in place. Built binaries and `*.bak` are gitignored. **Tests must not touch real `~/.taskr`** — `TestMain` (`main_test.go`) redirects `$HOME` to a temp dir for the whole test binary, because several tests build a `model` (→ `initialModel` → `loadTodos`) which opens the store.
 
 ### Rendering conventions
 
