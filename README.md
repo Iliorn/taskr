@@ -2,6 +2,7 @@
 
 A fast, keyboard-driven task manager for the terminal — built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
+[![CI](https://github.com/Iliorn/taskr/actions/workflows/ci.yml/badge.svg)](https://github.com/Iliorn/taskr/actions/workflows/ci.yml)
 ![Go](https://img.shields.io/badge/Go-1.24-00ADD8?style=flat&logo=go)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=flat)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat)
