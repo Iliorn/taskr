@@ -20,7 +20,10 @@ func (m model) renderTagList() string {
 		if m.tagTabSearchQuery != "" {
 			return normalStyle.Render(tr("  No tags match your filter."))
 		}
-		return normalStyle.Render(tr("  No tags yet. Add tags to tasks in the detail view."))
+		return strings.Join([]string{
+			normalStyle.Render(tr("  No tags yet. Add tags to tasks in the detail view.")),
+			dimStyle.Render(tr("  Tags group related tasks; this tab shows progress per tag.")),
+		}, "\n")
 	}
 
 	b := getBuilder()
@@ -174,7 +177,10 @@ func (m model) renderLearningList() string {
 		if m.learningSearchQuery != "" {
 			return normalStyle.Render(tr("  No learnings match your search."))
 		}
-		return normalStyle.Render(tr("  No learnings yet. Add learnings from a task's detail view."))
+		return strings.Join([]string{
+			normalStyle.Render(tr("  No learnings yet. Add learnings from a task's detail view.")),
+			dimStyle.Render(tr("  A learning is a takeaway you save on a task to keep for later.")),
+		}, "\n")
 	}
 
 	b := getBuilder()
@@ -592,7 +598,16 @@ func (m model) renderTaskList() string {
 		if m.focusFilter {
 			return normalStyle.Render(tr("  No tasks due today or overdue. Nice!"))
 		}
-		return normalStyle.Render(tr("  No tasks yet. Press 'a' to add one."))
+		// First-run guidance: show the quick-add syntax (English keywords stay
+		// literal — they're parsing tokens, not display strings) plus a pointer to
+		// the full help. Width-clip the example so it honours the no-wrap contract.
+		availW := m.termWidth - 8
+		return strings.Join([]string{
+			normalStyle.Render(tr("  No tasks yet. Press 'a' to add one.")),
+			"",
+			dimStyle.Render(truncate(tr("  Try:  ")+tr("Buy milk #shopping due:friday p:high @home"), availW)),
+			dimStyle.Render(tr("  Press ? for all keyboard shortcuts.")),
+		}, "\n")
 	}
 
 	b := getBuilder()

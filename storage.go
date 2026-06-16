@@ -43,12 +43,12 @@ func loadSettings() appSettings {
 	return s
 }
 
-func saveSettings(s appSettings) {
+func saveSettings(s appSettings) error {
 	data, err := json.Marshal(s)
 	if err != nil {
-		return
+		return err
 	}
-	_ = os.WriteFile(settingsPath(), data, 0644)
+	return os.WriteFile(settingsPath(), data, 0644)
 }
 
 func ensureStorageDir() error {
@@ -75,16 +75,50 @@ func writeTodosData(data []byte) error {
 	return os.Rename(tmpPath, storagePath)
 }
 
+// currentTaskFileVersion is the schema version stamped into newly written task
+// files. Bump it when the on-disk shape changes in a way migrate() must handle.
+const currentTaskFileVersion = 1
+
+// taskFile is the versioned on-disk envelope. Older releases wrote a bare
+// []todo.Todo with no version; decodeTaskFile reads both shapes so existing
+// users' data keeps loading.
+type taskFile struct {
+	Version int         `json:"version"`
+	Todos   []todo.Todo `json:"todos"`
+}
+
+// migrate brings todos saved under an older schema version up to the current
+// one. It is a no-op today; future breaking field changes get a case here so
+// data is converted rather than silently dropped.
+func migrate(version int, todos []todo.Todo) []todo.Todo {
+	return todos
+}
+
+// decodeTaskFile unmarshals either the versioned envelope or the legacy
+// bare-array format. A bare array fails to decode into the struct, which cleanly
+// routes it to the legacy path.
+func decodeTaskFile(data []byte) ([]todo.Todo, error) {
+	var tf taskFile
+	if err := json.Unmarshal(data, &tf); err == nil && tf.Version > 0 {
+		return migrate(tf.Version, tf.Todos), nil
+	}
+	var todos []todo.Todo
+	if err := json.Unmarshal(data, &todos); err != nil {
+		return nil, err
+	}
+	return todos, nil
+}
+
 // OPTIMIZATION: use json.Marshal (no indentation) for faster serialization.
 // The file is still valid JSON, just compact. Saves ~30-40% marshalling time
 // and produces smaller files.
 func marshalTodos(todos []todo.Todo) ([]byte, error) {
-	return json.Marshal(todos)
+	return json.Marshal(taskFile{Version: currentTaskFileVersion, Todos: todos})
 }
 
 // marshalTodosPretty is used only for initial save or export if needed.
 func marshalTodosPretty(todos []todo.Todo) ([]byte, error) {
-	return json.MarshalIndent(todos, "", "  ")
+	return json.MarshalIndent(taskFile{Version: currentTaskFileVersion, Todos: todos}, "", "  ")
 }
 
 // saveTodos marshals and writes synchronously (used for initial load path).
@@ -126,8 +160,8 @@ func loadBackup() ([]todo.Todo, error) {
 		}
 		return nil, err
 	}
-	var todos []todo.Todo
-	if err := json.Unmarshal(data, &todos); err != nil {
+	todos, err := decodeTaskFile(data)
+	if err != nil {
 		return nil, fmt.Errorf("backup file is also corrupt: %w", err)
 	}
 	return todos, nil
@@ -143,8 +177,8 @@ func loadTodos() ([]todo.Todo, error) {
 		return nil, err
 	}
 
-	var todos []todo.Todo
-	if err := json.Unmarshal(data, &todos); err != nil {
+	todos, err := decodeTaskFile(data)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: tasks.json is corrupt (%v), attempting backup...\n", err)
 		return loadBackup()
 	}

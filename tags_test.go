@@ -11,9 +11,12 @@ import (
 )
 
 // newTagModel returns a model with a known, hermetic set of todos (initialModel
-// loads from disk, so we replace its todos wholesale).
+// loads from disk, so we replace its todos wholesale). initialModel also applies
+// the developer's stored language; pin English so these tests, which assert
+// English labels, are deterministic regardless of ~/.taskr/settings.json.
 func newTagModel(todos ...todo.Todo) model {
 	m := initialModel()
+	applyLang(string(langEN))
 	m.todos = todos
 	m.termWidth = 80
 	m.termHeight = 30

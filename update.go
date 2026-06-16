@@ -573,15 +573,18 @@ func (m *model) cycleSortMode() {
 	m.persistSettings()
 }
 
-// persistSettings writes all current preferences to disk.
-func (m model) persistSettings() {
-	saveSettings(appSettings{
+// persistSettings writes all current preferences to disk, surfacing any write
+// failure so a setting that silently won't stick is at least visible.
+func (m *model) persistSettings() {
+	if err := saveSettings(appSettings{
 		TaskSort:     m.taskSort,
 		TagSort:      m.tagSort,
 		LearningSort: m.learningSort,
 		Theme:        m.themeName,
 		Language:     string(activeLang),
-	})
+	}); err != nil {
+		m.err = fmt.Sprintf(tr("Error saving settings: %v"), err)
+	}
 }
 
 func (m *model) handleListEsc() {
