@@ -257,23 +257,8 @@ func TestAddLearning(t *testing.T) {
 	if task.Learnings[0].ID == "" {
 		t.Error("learning ID should not be empty")
 	}
-	// Should inherit parent task's tags
-	if len(task.Learnings[0].Tags) != 2 {
-		t.Errorf("learning tags = %v, want [go testing]", task.Learnings[0].Tags)
-	}
-	if task.Learnings[0].Tags[0] != "go" || task.Learnings[0].Tags[1] != "testing" {
-		t.Errorf("learning tags = %v", task.Learnings[0].Tags)
-	}
-}
-
-func TestAddLearningNoTags(t *testing.T) {
-	task := New("Learning no tags")
-
-	task.AddLearning("Something")
-
-	if len(task.Learnings[0].Tags) != 0 {
-		t.Errorf("expected no tags on learning, got %v", task.Learnings[0].Tags)
-	}
+	// A learning no longer stores tags — they are derived from the parent task
+	// at display time (see learningView), so AddLearning records none.
 }
 
 func TestUpdateLearning(t *testing.T) {

@@ -21,7 +21,7 @@ type cacheState struct {
 	tagsSortMode  tagSortMode
 	untaggedTotal int
 	untaggedDone  int
-	learnings     []todo.Learning
+	learnings     []learningView
 	projects      []string
 	projectTasks  map[string][]todo.Todo
 	subtaskIndex  map[string][]int
@@ -175,7 +175,7 @@ func (m model) completedTodos() []todo.Todo {
 	return m.cache.done
 }
 
-func (m *model) allLearnings() []todo.Learning {
+func (m *model) allLearnings() []learningView {
 	m.refreshLearnings()
 	return m.cache.learnings
 }

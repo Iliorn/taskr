@@ -118,13 +118,23 @@ func selectProjects(todos []todo.Todo, search string) []string {
 	return projects
 }
 
-// selectLearnings gathers every task's learnings, filters by the search query
-// (a leading '#' searches the learning's tags), and sorts by mode.
-func selectLearnings(todos []todo.Todo, search string, sortMode learningSortMode) []todo.Learning {
-	var result []todo.Learning
+// learningView pairs a learning with its parent task's current tags. The tags
+// are derived here (not stored on todo.Learning), so they always reflect the
+// task. Fields of the embedded Learning (ID, Text, CreatedAt) promote, so the
+// view is a drop-in for the old []todo.Learning at call sites.
+type learningView struct {
+	todo.Learning
+	Tags []string
+}
+
+// selectLearnings gathers every task's learnings (tagged with the parent's
+// tags), filters by the search query (a leading '#' searches those tags), and
+// sorts by mode.
+func selectLearnings(todos []todo.Todo, search string, sortMode learningSortMode) []learningView {
+	var result []learningView
 	for i := range todos {
-		if len(todos[i].Learnings) > 0 {
-			result = append(result, todos[i].Learnings...)
+		for _, l := range todos[i].Learnings {
+			result = append(result, learningView{Learning: l, Tags: todos[i].Tags})
 		}
 	}
 

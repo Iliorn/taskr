@@ -393,13 +393,7 @@ func copyTodos(todos []todo.Todo) []todo.Todo {
 			cp[i].Comments = append([]todo.Comment{}, t.Comments...)
 		}
 		if len(t.Learnings) > 0 {
-			cp[i].Learnings = make([]todo.Learning, len(t.Learnings))
-			for j, l := range t.Learnings {
-				cp[i].Learnings[j] = l
-				if len(l.Tags) > 0 {
-					cp[i].Learnings[j].Tags = append([]string{}, l.Tags...)
-				}
-			}
+			cp[i].Learnings = append([]todo.Learning{}, t.Learnings...)
 		}
 		if len(t.TimeEntries) > 0 {
 			cp[i].TimeEntries = append([]todo.TimeEntry{}, t.TimeEntries...)

@@ -22,7 +22,7 @@ func ids(ts []todo.Todo) []string {
 	return r
 }
 
-func learnIDs(ls []todo.Learning) []string {
+func learnIDs(ls []learningView) []string {
 	r := make([]string, len(ls))
 	for i, l := range ls {
 		r[i] = l.ID
@@ -116,19 +116,38 @@ func TestSelectProjects(t *testing.T) {
 
 func TestSelectLearnings(t *testing.T) {
 	now := time.Now()
-	a := mkTodo("a", "task", todo.Pending)
-	a.Learnings = []todo.Learning{
-		{ID: "l1", Text: "learned go maps", Tags: []string{"go"}, CreatedAt: now.Add(-2 * time.Hour)},
-		{ID: "l2", Text: "learned testing", Tags: []string{"go", "test"}, CreatedAt: now.Add(-1 * time.Hour)},
-	}
-	todos := []todo.Todo{a}
+	// Tags now come from the PARENT task, not the learning. Two tasks with
+	// different tags exercise the derivation and the #tag search.
+	a := mkTodo("a", "task A", todo.Pending)
+	a.Tags = []string{"go"}
+	a.Learnings = []todo.Learning{{ID: "l1", Text: "learned go maps", CreatedAt: now.Add(-2 * time.Hour)}}
+	b := mkTodo("b", "task B", todo.Pending)
+	b.Tags = []string{"go", "test"}
+	b.Learnings = []todo.Learning{{ID: "l2", Text: "learned testing", CreatedAt: now.Add(-1 * time.Hour)}}
+	todos := []todo.Todo{a, b}
 
 	if got := learnIDs(selectLearnings(todos, "", learningSortDate)); len(got) != 2 || got[0] != "l2" {
 		t.Fatalf("date sort = %v, want [l2 l1] (newest first)", got)
 	}
+
+	// Tags are derived from each learning's parent task.
+	for _, l := range selectLearnings(todos, "", learningSortDate) {
+		switch l.ID {
+		case "l1":
+			if len(l.Tags) != 1 || l.Tags[0] != "go" {
+				t.Errorf("l1 tags = %v, want [go] (from parent A)", l.Tags)
+			}
+		case "l2":
+			if len(l.Tags) != 2 {
+				t.Errorf("l2 tags = %v, want [go test] (from parent B)", l.Tags)
+			}
+		}
+	}
+
 	if got := learnIDs(selectLearnings(todos, "maps", learningSortDate)); len(got) != 1 || got[0] != "l1" {
 		t.Fatalf("text search = %v, want [l1]", got)
 	}
+	// #test matches only l2, whose parent (B) carries the 'test' tag.
 	if got := learnIDs(selectLearnings(todos, "#test", learningSortDate)); len(got) != 1 || got[0] != "l2" {
 		t.Fatalf("tag search = %v, want [l2]", got)
 	}

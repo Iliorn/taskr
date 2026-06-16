@@ -58,10 +58,13 @@ type Comment struct {
 
 // ── Learning ──────────────────────────────────────────────────────────────────
 
+// Learning is a takeaway saved on a task. It has no tags of its own — a
+// learning's tags are derived from its parent task's current tags at display
+// time (see learningView), so they always reflect the task rather than a frozen
+// snapshot.
 type Learning struct {
 	ID        string    `json:"id"`
 	Text      string    `json:"text"`
-	Tags      []string  `json:"tags,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -239,10 +242,6 @@ func (t *Todo) AddLearning(text string) {
 		ID:        uuid.New().String(),
 		Text:      text,
 		CreatedAt: time.Now(),
-	}
-	if len(t.Tags) > 0 {
-		l.Tags = make([]string, len(t.Tags))
-		copy(l.Tags, t.Tags)
 	}
 	t.Learnings = append(t.Learnings, l)
 	t.ModifiedAt = time.Now()
