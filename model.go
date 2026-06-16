@@ -172,7 +172,7 @@ type calendarState struct {
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 type model struct {
-	todos  []todo.Todo
+	Store  // embedded source of truth (todos, undo) — promotes m.todos etc.
 	repo   Repository
 	cursor int
 	tab    tab
@@ -255,9 +255,6 @@ type model struct {
 	ganttBarBuf   []rune
 	ganttColorBuf []int
 
-	// Undo
-	undoStack []undoEntry
-
 	// Caches
 	cache cacheState
 }
@@ -296,7 +293,7 @@ func initialModel(repo Repository) model {
 	applyLang(settings.Language)
 
 	m := model{
-		todos:               todos,
+		Store:               Store{todos: todos},
 		repo:                repo,
 		textInput:           ti,
 		searchInput:         si,
@@ -378,33 +375,6 @@ func scheduleSave() tea.Cmd {
 	return tea.Tick(saveDebounceDuration, func(t time.Time) tea.Msg {
 		return saveTickMsg{}
 	})
-}
-
-// ── Undo ──────────────────────────────────────────────────────────────────────
-
-const maxUndoStack = 20
-
-type undoEntry struct {
-	todos []todo.Todo
-	desc  string
-}
-
-func (m *model) pushUndo(desc string) {
-	snapshot := copyTodos(m.todos)
-	m.undoStack = append(m.undoStack, undoEntry{todos: snapshot, desc: desc})
-	if len(m.undoStack) > maxUndoStack {
-		copy(m.undoStack, m.undoStack[1:])
-		m.undoStack = m.undoStack[:maxUndoStack]
-	}
-}
-
-func (m *model) popUndo() (undoEntry, bool) {
-	if len(m.undoStack) == 0 {
-		return undoEntry{}, false
-	}
-	entry := m.undoStack[len(m.undoStack)-1]
-	m.undoStack = m.undoStack[:len(m.undoStack)-1]
-	return entry, true
 }
 
 // copyTodos creates an independent copy. Tasks without slices share memory
