@@ -32,7 +32,7 @@ func (m model) View() string {
 	w := m.termWidth - 6
 
 	// ── HEADER ───────────────────────────────────────────────────────────
-	shortcutHint := helpStyle.Render("? shortcuts")
+	shortcutHint := helpStyle.Render(tr("? shortcuts"))
 	title := titleStyle.Render("taskr")
 	// Width left for the tab bar between the title and the right-aligned hint.
 	avail := m.termWidth - ansi.StringWidth(title) - 2 - ansi.StringWidth(shortcutHint) - 4
@@ -48,12 +48,12 @@ func (m model) View() string {
 		out.WriteString(confirmStyle.Render(m.err) + "\n")
 	}
 	if m.focusFilter {
-		out.WriteString(confirmStyle.Render("⚡ FOCUS: today + overdue only (f to toggle)") + "\n")
+		out.WriteString(confirmStyle.Render(tr("⚡ FOCUS: today + overdue only (f to toggle)")) + "\n")
 	}
 	if m.searchQuery != "" {
 		label := m.searchQuery
 		if label == untaggedKey {
-			label = "(untagged)"
+			label = tr("(untagged)")
 		}
 		out.WriteString(searchStyle.Render("/ "+label) + "\n")
 	}
@@ -219,7 +219,7 @@ func (m model) buildFooterContent(w int) string {
 			}
 			timerLine := timerStyle.Render("  ◉ "+truncate(t.Title, w/2)) +
 				normalStyle.Render(" · "+elapsed) +
-				helpStyle.Render(" · t to stop")
+				helpStyle.Render(tr(" · t to stop"))
 			return ansi.Truncate(timerLine, w, "") + "\n" + hints
 		}
 		return hints
@@ -267,7 +267,7 @@ func (m model) buildFooterContent(w int) string {
 			}
 		}
 		if len(results) == 0 && m.tagSearch.query != "" {
-			b.WriteString("\n" + dimStyle.Render("  → create new tag: ") + tagStyle.Render(m.tagSearch.query))
+			b.WriteString("\n" + dimStyle.Render("  → "+tr("create new tag: ")) + tagStyle.Render(m.tagSearch.query))
 		}
 		return b.String()
 	case modeSearchProject:
@@ -286,7 +286,7 @@ func (m model) buildFooterContent(w int) string {
 			}
 		}
 		if len(results) == 0 && m.projSearch.query != "" {
-			b.WriteString("\n" + dimStyle.Render("  → create new project: ") + selectedStyle.Render(m.projSearch.query))
+			b.WriteString("\n" + dimStyle.Render("  → "+tr("create new project: ")) + selectedStyle.Render(m.projSearch.query))
 		}
 		return b.String()
 	case modeConfirmDelete, modeConfirmDeleteComment,
@@ -305,23 +305,23 @@ func (m model) renderKeyHints(w int) string {
 	var hints string
 	switch {
 	case m.tab == tabTasks && m.pane == paneDetail:
-		hints = "←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back"
+		hints = tr("←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back")
 	case m.tab == tabTasks:
-		hints = "enter detail · a add · d done · t track · p prio · r rename · x del · n notes · f focus · s sort · h history · / search"
+		hints = tr("enter detail · a add · d done · t track · p prio · r rename · x del · n notes · f focus · s sort · h history · / search")
 	case m.tab == tabProjects:
-		hints = "j/k nav · r rename · x delete · / filter"
+		hints = tr("j/k nav · r rename · x delete · / filter")
 	case m.tab == tabTags:
-		hints = "j/k nav · r rename · x delete · s sort · / filter"
+		hints = tr("j/k nav · r rename · x delete · s sort · / filter")
 	case m.tab == tabLearnings:
-		hints = "j/k nav · r edit · x delete · s sort · / search"
+		hints = tr("j/k nav · r edit · x delete · s sort · / search")
 	case m.tab == tabStats:
-		hints = "enter · cycle activity range"
+		hints = tr("enter · cycle activity range")
 	case m.tab == tabCalendar && m.calendar.focusTimeline:
-		hints = "j/k select entry · r edit times · x delete · esc back"
+		hints = tr("j/k select entry · r edit times · x delete · esc back")
 	case m.tab == tabCalendar:
-		hints = "←/→ day · ↑/↓ week · [ ] month · t today · enter entries"
+		hints = tr("←/→ day · ↑/↓ week · [ ] month · t today · enter entries")
 	case m.tab == tabSettings:
-		hints = "↑/↓ select · ←/→ change theme · enter activate"
+		hints = tr("↑/↓ select · ←/→ change theme · enter activate")
 	}
 	return helpStyle.Render("  " + truncate(hints, w))
 }
@@ -469,75 +469,75 @@ func (m model) renderHelpFullscreen() string {
 		title string
 		keys  [][2]string
 	}{
-		{"Navigation", [][2]string{
-			{"↑/↓  or  j/k", "navigate list"},
-			{"enter", "open details"},
-			{"esc", "go back"},
-			{"tab  or  1-7", "switch tabs"},
-			{"?", "close help"},
+		{tr("Navigation"), [][2]string{
+			{"↑/↓  or  j/k", tr("navigate list")},
+			{"enter", tr("open details")},
+			{"esc", tr("go back")},
+			{"tab  or  1-7", tr("switch tabs")},
+			{"?", tr("close help")},
 		}},
-		{"Tasks", [][2]string{
-			{"a", "add task (quick-add: #tag due:date p:high @proj)"},
-			{"r", "rename task"},
-			{"d", "toggle done"},
-			{"t", "start/stop time tracking"},
-			{"p", "cycle priority low/med/high"},
-			{"x", "delete"},
-			{"n", "edit notes (opens $EDITOR)"},
-			{"f", "focus: today + overdue only"},
-			{"h", "toggle history"},
-			{"s", "cycle sort order"},
-			{"←/→", "expand/collapse subtasks"},
-			{"/", "search"},
+		{tr("Tasks"), [][2]string{
+			{"a", tr("add task (quick-add: #tag due:date p:high @proj)")},
+			{"r", tr("rename task")},
+			{"d", tr("toggle done")},
+			{"t", tr("start/stop time tracking")},
+			{"p", tr("cycle priority low/med/high")},
+			{"x", tr("delete")},
+			{"n", tr("edit notes (opens $EDITOR)")},
+			{"f", tr("focus: today + overdue only")},
+			{"h", tr("toggle history")},
+			{"s", tr("cycle sort order")},
+			{"←/→", tr("expand/collapse subtasks")},
+			{"/", tr("search")},
 		}},
-		{"Detail view", [][2]string{
-			{"←/→", "switch pages"},
-			{"enter", "edit field / toggle subtask"},
-			{"n", "edit notes (opens $EDITOR)"},
-			{"a", "add tag / dep / comment / learning / subtask"},
-			{"d", "toggle subtask done"},
-			{"x", "remove field / delete subtask"},
+		{tr("Detail view"), [][2]string{
+			{"←/→", tr("switch pages")},
+			{"enter", tr("edit field / toggle subtask")},
+			{"n", tr("edit notes (opens $EDITOR)")},
+			{"a", tr("add tag / dep / comment / learning / subtask")},
+			{"d", tr("toggle subtask done")},
+			{"x", tr("remove field / delete subtask")},
 		}},
-		{"Tags & Projects", [][2]string{
-			{"r", "rename globally"},
-			{"x", "delete globally"},
-			{"s", "toggle sort"},
-			{"/", "filter"},
+		{tr("Tags & Projects"), [][2]string{
+			{"r", tr("rename globally")},
+			{"x", tr("delete globally")},
+			{"s", tr("toggle sort")},
+			{"/", tr("filter")},
 		}},
-		{"Learnings", [][2]string{
-			{"r", "edit learning"},
-			{"x", "delete learning"},
-			{"s", "sort date/alpha"},
+		{tr("Learnings"), [][2]string{
+			{"r", tr("edit learning")},
+			{"x", tr("delete learning")},
+			{"s", tr("sort date/alpha")},
 		}},
-		{"Calendar (tab 2)", [][2]string{
-			{"←/→  ↑/↓", "move by day / week"},
-			{"[ / ]", "previous / next month"},
-			{"t", "jump to today"},
-			{"enter", "focus the day's entries"},
-			{"r", "edit entry times (09:12-10:00 or 45m)"},
-			{"x", "delete selected entry"},
+		{tr("Calendar (tab 2)"), [][2]string{
+			{"←/→  ↑/↓", tr("move by day / week")},
+			{"[ / ]", tr("previous / next month")},
+			{"t", tr("jump to today")},
+			{"enter", tr("focus the day's entries")},
+			{"r", tr("edit entry times (09:12-10:00 or 45m)")},
+			{"x", tr("delete selected entry")},
 		}},
-		{"Stats (tab 6)", [][2]string{
-			{"6 or tab", "switch to stats view"},
+		{tr("Stats (tab 6)"), [][2]string{
+			{"6 or tab", tr("switch to stats view")},
 		}},
-		{"Settings (tab 7)", [][2]string{
-			{"↑/↓", "select setting"},
-			{"←/→", "change theme"},
-			{"enter", "apply theme / check for updates"},
-			{"y / n", "confirm update when one is offered"},
+		{tr("Settings (tab 7)"), [][2]string{
+			{"↑/↓", tr("select setting")},
+			{"←/→", tr("change theme")},
+			{"enter", tr("apply theme / check for updates")},
+			{"y / n", tr("confirm update when one is offered")},
 		}},
-		{"App", [][2]string{
-			{"u", "undo last change"},
-			{"q", "quit"},
+		{tr("App"), [][2]string{
+			{"u", tr("undo last change")},
+			{"q", tr("quit")},
 		}},
-		{"Date input", [][2]string{
-			{"dd-mm-yy", "exact date (e.g. 15-06-25)"},
-			{"today", "today's date"},
-			{"tomorrow", "tomorrow"},
-			{"next week", "7 days from now"},
-			{"next month", "1 month from now"},
-			{"monday..sunday", "next occurrence of weekday"},
-			{"+3d / +2w / +1m", "relative days/weeks/months"},
+		{tr("Date input"), [][2]string{
+			{"dd-mm-yy", tr("exact date (e.g. 15-06-25)")},
+			{"today", tr("today's date")},
+			{"tomorrow", tr("tomorrow")},
+			{"next week", tr("7 days from now")},
+			{"next month", tr("1 month from now")},
+			{"monday..sunday", tr("next occurrence of weekday")},
+			{"+3d / +2w / +1m", tr("relative days/weeks/months")},
 		}},
 	}
 
@@ -545,7 +545,7 @@ func (m model) renderHelpFullscreen() string {
 	defer putBuilder(b)
 
 	b.WriteString("\n")
-	b.WriteString(titleStyle.Render("  Keyboard shortcuts") + "\n")
+	b.WriteString(titleStyle.Render("  "+tr("Keyboard shortcuts")) + "\n")
 	b.WriteString("\n")
 
 	for _, section := range sections {
@@ -561,7 +561,7 @@ func (m model) renderHelpFullscreen() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("  Press ? or esc to close") + "\n")
+	b.WriteString(helpStyle.Render("  "+tr("Press ? or esc to close")) + "\n")
 
 	lines := strings.Split(b.String(), "\n")
 	target := m.termHeight - 1
@@ -607,19 +607,19 @@ func (m model) renderStatsDetail() string {
 	weekly := false
 	switch m.statsRange {
 	case statsRange30Days:
-		title = "Last 30 days"
+		title = tr("Last 30 days")
 		for d := 29; d >= 0; d-- {
 			buckets = append(buckets, bucket{start: today.AddDate(0, 0, -d)})
 		}
 	case statsRange6Months:
-		title = "Last 26 weeks"
+		title = tr("Last 26 weeks")
 		weekly = true
 		curMon := today.AddDate(0, 0, -((int(today.Weekday()) + 6) % 7))
 		for w := 25; w >= 0; w-- {
 			buckets = append(buckets, bucket{start: curMon.AddDate(0, 0, -w*7)})
 		}
 	default:
-		title = "Last 7 days"
+		title = tr("Last 7 days")
 		for d := 6; d >= 0; d-- {
 			buckets = append(buckets, bucket{start: today.AddDate(0, 0, -d)})
 		}
@@ -660,14 +660,14 @@ func (m model) renderStatsDetail() string {
 
 	// Header: "<range> · N done" on the left, the legend on the right. Folding
 	// the legend in here saves a whole row versus a separate caption line.
-	headerLeft := statsHeaderStyle.Render(title) + dimStyle.Render(fmt.Sprintf("  ·  %d done", total))
+	headerLeft := statsHeaderStyle.Render(title) + dimStyle.Render("  ·  "+fmt.Sprintf(tr("%d done"), total))
 	if total == 0 {
 		b.WriteString(headerLeft + "\n")
-		b.WriteString("  " + dimStyle.Render("No completions in this range.") + "\n")
+		b.WriteString("  " + dimStyle.Render(tr("No completions in this range.")) + "\n")
 		return b.String()
 	}
 	swatch := statsGradient[0].Render("▆") + statsGradient[gradLen/2].Render("▆") + statsGradient[gradLen-1].Render("▆")
-	legend := swatch + dimStyle.Render(": 1 block = 1 completed task")
+	legend := swatch + dimStyle.Render(tr(": 1 block = 1 completed task"))
 	spacer := innerW - ansi.StringWidth(headerLeft) - ansi.StringWidth(legend)
 	if spacer < 1 {
 		spacer = 1
@@ -765,17 +765,16 @@ func (m model) renderStatsDetail() string {
 		// Weekday labels under each daily bar, widening with the bars: full names
 		// when there's room (7-day view), a 3-letter abbreviation when medium, a
 		// single initial when narrow.
-		initials := [7]rune{'S', 'M', 'T', 'W', 'T', 'F', 'S'}
 		for k := 0; k < n; k++ {
 			wd := buckets[k].start.Weekday()
 			var lbl string
 			switch {
 			case m.statsRange == statsRange7Days && bw >= 9:
-				lbl = wd.String() // e.g. "Wednesday"
+				lbl = localizedWeekday(wd) // e.g. "Wednesday"
 			case m.statsRange == statsRange7Days && bw >= 3:
-				lbl = wd.String()[:3] // e.g. "Wed"
+				lbl = localizedWeekdayShort(wd) // e.g. "Wed"
 			default:
-				lbl = string(initials[int(wd)])
+				lbl = string(localizedWeekdayInitial(wd))
 			}
 			start := barStart(k) + (bw-len(lbl))/2
 			if start < barStart(k) {
@@ -837,7 +836,7 @@ func (m model) buildListLines() []string {
 func (m model) buildLearningDetailLines() []string {
 	learnings := m.allLearnings()
 	if len(learnings) == 0 || m.learningCursor >= len(learnings) {
-		return strings.Split(dimStyle.Render("  No learning selected."), "\n")
+		return strings.Split(dimStyle.Render(tr("  No learning selected.")), "\n")
 	}
 
 	l := learnings[m.learningCursor]
@@ -855,24 +854,24 @@ func (m model) buildLearningDetailLines() []string {
 		b.WriteString("\n")
 	}
 
-	sourceLabel := "  " + detailLabelStyle.Render("Source task:  ")
+	sourceLabel := "  " + detailLabelStyle.Render(tr("Source task:  "))
 	source := m.findLearningSource(l.ID)
 	if source != nil {
 		status := ""
 		if source.Status == todo.Done {
-			status = "  " + checkDoneStyle.Render("[done]")
+			status = "  " + checkDoneStyle.Render(tr("[done]"))
 		}
 		b.WriteString(sourceLabel + normalStyle.Render(source.Title) + status + "\n")
 	} else {
-		b.WriteString(sourceLabel + dimStyle.Render("[task removed]") + "\n")
+		b.WriteString(sourceLabel + dimStyle.Render(tr("[task removed]")) + "\n")
 	}
 
-	b.WriteString("  " + detailLabelStyle.Render("Date:         ") +
+	b.WriteString("  " + detailLabelStyle.Render(tr("Date:         ")) +
 		normalStyle.Render(l.CreatedAt.Format("02-01-06 15:04")) + "\n")
 
-	b.WriteString("  " + detailLabelStyle.Render("Tags:         "))
+	b.WriteString("  " + detailLabelStyle.Render(tr("Tags:         ")))
 	if len(l.Tags) == 0 {
-		b.WriteString(dimStyle.Render("none") + "\n")
+		b.WriteString(dimStyle.Render(tr("none")) + "\n")
 	} else {
 		b.WriteString(m.getRenderedTags(l.Tags) + "\n")
 	}
@@ -940,16 +939,17 @@ func (m model) buildTagDetailLines() []string {
 	count := len(matches)
 	title := fmt.Sprintf("  #%s", tag)
 	if untagged {
-		title = "  (untagged)"
+		title = tr("  (untagged)")
 	}
-	hint := fmt.Sprintf("(%d task", count)
+	countWord := tr("%d task")
 	if count != 1 {
-		hint += "s"
+		countWord = tr("%d tasks")
 	}
+	hint := "(" + fmt.Sprintf(countWord, count)
 	if untagged {
-		hint += " · enter: filter)"
+		hint += tr(" · enter: filter)")
 	} else {
-		hint += " · enter: filter · r: rename)"
+		hint += tr(" · enter: filter · r: rename)")
 	}
 	if len([]rune(title))+1+len([]rune(hint)) <= availW {
 		padW := availW - len([]rune(title)) - len([]rune(hint))
@@ -958,7 +958,7 @@ func (m model) buildTagDetailLines() []string {
 		b.WriteString(tagSelectedStyle.Render(truncate(title, availW)) + "\n")
 	}
 
-	summary := fmt.Sprintf("  %d active · %d done · %d overdue", active, done, overdue)
+	summary := fmt.Sprintf(tr("  %d active · %d done · %d overdue"), active, done, overdue)
 	b.WriteString(normalStyle.Render(truncate(summary, availW)) + "\n")
 
 	// Co-occurring tags, most frequent first. Only emit chips that fit so the
@@ -978,7 +978,7 @@ func (m model) buildTagDetailLines() []string {
 			}
 			return co[i].name < co[j].name
 		})
-		label := "  often with: "
+		label := tr("  often with: ")
 		budget := availW - len([]rune(label))
 		var chips []string
 		used := 0
@@ -1001,7 +1001,7 @@ func (m model) buildTagDetailLines() []string {
 	b.WriteString("\n")
 
 	if len(matches) == 0 {
-		b.WriteString(dimStyle.Render("  No tasks carry this tag.") + "\n")
+		b.WriteString(dimStyle.Render(tr("  No tasks carry this tag.")) + "\n")
 		return strings.Split(b.String(), "\n")
 	}
 
@@ -1054,7 +1054,7 @@ func (m model) buildTagDetailLines() []string {
 		}
 		dueStr := ""
 		if !t.DueDate.IsZero() {
-			dueStr = "  due: " + t.DueDate.Format("02-01-06")
+			dueStr = tr("  due: ") + t.DueDate.Format("02-01-06")
 			if t.IsOverdue() {
 				dueStr += " ⚠"
 			}
@@ -1075,7 +1075,7 @@ func (m model) buildTagDetailLines() []string {
 	}
 
 	if hidden > 0 {
-		b.WriteString(dimStyle.Render(truncate(fmt.Sprintf("  … and %d more", hidden), availW)) + "\n")
+		b.WriteString(dimStyle.Render(truncate(fmt.Sprintf(tr("  … and %d more"), hidden), availW)) + "\n")
 	}
 
 	return strings.Split(b.String(), "\n")
@@ -1093,7 +1093,7 @@ func (m model) renderTabs(avail int) string {
 		tabStatsActiveStyle,
 		tabSettingsActiveStyle,
 	}
-	full := [numTabs]string{"1:Tasks", "2:Calendar", "3:Projects", "4:Tags", "5:Learnings", "6:Stats", "7:Settings"}
+	full := [numTabs]string{tr("1:Tasks"), tr("2:Calendar"), tr("3:Projects"), tr("4:Tags"), tr("5:Learnings"), tr("6:Stats"), tr("7:Settings")}
 	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7"}
 
 	// abbr keeps the "n:" prefix and the first 3 letters of the name ("1:Tas").

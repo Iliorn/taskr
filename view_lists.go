@@ -18,9 +18,9 @@ func (m model) renderTagList() string {
 
 	if len(tags) == 0 {
 		if m.tagTabSearchQuery != "" {
-			return normalStyle.Render("  No tags match your filter.")
+			return normalStyle.Render(tr("  No tags match your filter."))
 		}
-		return normalStyle.Render("  No tags yet. Add tags to tasks in the detail view.")
+		return normalStyle.Render(tr("  No tags yet. Add tags to tasks in the detail view."))
 	}
 
 	b := getBuilder()
@@ -46,14 +46,15 @@ func (m model) renderTagList() string {
 	for _, tag := range tags {
 		w := len([]rune(tag)) + 1 // leading '#'
 		if tag == untaggedKey {
-			w = len("(untagged)")
+			w = len([]rune(tr("(untagged)")))
 		}
 		if w > labelW {
 			labelW = w
 		}
 	}
-	nameW := contentFitWidth(m.termWidth, labelW, 4, len("  Tag"))
-	headerLeft := padRight("  Tag", nameW) + "Progress"
+	tagHdr := tr("  Tag")
+	nameW := contentFitWidth(m.termWidth, labelW, 4, len([]rune(tagHdr)))
+	headerLeft := padRight(tagHdr, nameW) + tr("Progress")
 	padW := m.termWidth - 6 - len([]rune(headerLeft)) - barW
 	if padW < 1 {
 		padW = 1
@@ -79,7 +80,7 @@ func (m model) renderTagList() string {
 		label := "#" + tag
 		if tag == untaggedKey {
 			s = tagStats{total: m.cache.untaggedTotal, done: m.cache.untaggedDone}
-			label = "(untagged)"
+			label = tr("(untagged)")
 		} else {
 			s = stats[tag]
 		}
@@ -131,17 +132,17 @@ func (m model) renderTagList() string {
 			continue
 		}
 
-		pctStr := fmt.Sprintf(" %3d%% (%d done / %d total)", int(pct*100), done, total)
+		pctStr := fmt.Sprintf(tr(" %3d%% (%d done / %d total)"), int(pct*100), done, total)
 		// Extra columns (clipped first on narrow terminals): average age of open
 		// tasks, then total tracked time. Labelled inline so they're self-
 		// explanatory, dot-separated. Skipped for the virtual untagged row.
 		if tag != untaggedKey {
 			var extras []string
 			if s.openCount > 0 {
-				extras = append(extras, "avg age "+formatDaysCompact(s.ageSum/time.Duration(s.openCount)))
+				extras = append(extras, tr("avg age ")+formatDaysCompact(s.ageSum/time.Duration(s.openCount)))
 			}
 			if s.tracked > 0 {
-				extras = append(extras, "⏱ time spent "+formatDurationCompact(s.tracked))
+				extras = append(extras, tr("⏱ time spent ")+formatDurationCompact(s.tracked))
 			}
 			if len(extras) > 0 {
 				pctStr += "  " + strings.Join(extras, " · ")
@@ -171,9 +172,9 @@ func (m model) renderLearningList() string {
 
 	if len(learnings) == 0 {
 		if m.learningSearchQuery != "" {
-			return normalStyle.Render("  No learnings match your search.")
+			return normalStyle.Render(tr("  No learnings match your search."))
 		}
-		return normalStyle.Render("  No learnings yet. Add learnings from a task's detail view.")
+		return normalStyle.Render(tr("  No learnings yet. Add learnings from a task's detail view."))
 	}
 
 	b := getBuilder()
@@ -194,10 +195,11 @@ func (m model) renderLearningList() string {
 			textMax = tw
 		}
 	}
-	textW := contentFitWidth(m.termWidth, textMax, 2, len("Learning"))
+	learningHdr := tr("Learning")
+	textW := contentFitWidth(m.termWidth, textMax, 2, len([]rune(learningHdr)))
 
 	const prefix = "  "
-	headerLeft := prefix + padRight("Learning", textW) + padRight("Date", dateW) + "Tags"
+	headerLeft := prefix + padRight(learningHdr, textW) + padRight(tr("Date"), dateW) + tr("Tags")
 	padW := m.termWidth - 6 - len([]rune(headerLeft))
 	if padW < 1 {
 		padW = 1
@@ -394,16 +396,16 @@ func (m model) renderStatsList() string {
 	}
 
 	workload := section(func(sb *strings.Builder) {
-		sb.WriteString(statsHeaderStyle.Render("  Workload") + "\n")
+		sb.WriteString(statsHeaderStyle.Render(tr("  Workload")) + "\n")
 		if overdueTasks > 0 {
-			sb.WriteString(detailLabelStyle.Render(padRight("  Overdue", statsLabelWidth)) +
+			sb.WriteString(detailLabelStyle.Render(padRight("  "+tr("Overdue"), statsLabelWidth)) +
 				overdueCountStyle.Render(fmt.Sprintf("%d", overdueTasks)) + "\n")
 		} else {
-			stat(sb, "Overdue", 0, 0, false)
+			stat(sb, tr("Overdue"), 0, 0, false)
 		}
-		stat(sb, "Due today", dueToday, 0, false)
-		stat(sb, "Due this week", dueThisWeek, 0, false)
-		stat(sb, "Active total", activeTasks, 0, false)
+		stat(sb, tr("Due today"), dueToday, 0, false)
+		stat(sb, tr("Due this week"), dueThisWeek, 0, false)
+		stat(sb, tr("Active total"), activeTasks, 0, false)
 	})
 
 	// flowSection renders a created/completed/net-backlog block with a trend
@@ -411,17 +413,17 @@ func (m model) renderStatsList() string {
 	flowSection := func(title, vsLabel string, created, completed, prevCompleted int) string {
 		return section(func(sb *strings.Builder) {
 			sb.WriteString(statsHeaderStyle.Render("  "+title) + "\n")
-			stat(sb, "Created", created, 0, false)
-			stat(sb, "Completed", completed, 0, false)
+			stat(sb, tr("Created"), created, 0, false)
+			stat(sb, tr("Completed"), completed, 0, false)
 			net := created - completed
-			netLabel := detailLabelStyle.Render(padRight("  Net backlog", statsLabelWidth))
+			netLabel := detailLabelStyle.Render(padRight(tr("  Net backlog"), statsLabelWidth))
 			switch {
 			case net > 0:
-				sb.WriteString(netLabel + overdueCountStyle.Render(fmt.Sprintf("+%d ▲ growing", net)) + "\n")
+				sb.WriteString(netLabel + overdueCountStyle.Render(fmt.Sprintf(tr("+%d ▲ growing"), net)) + "\n")
 			case net < 0:
-				sb.WriteString(netLabel + activeCountStyle.Render(fmt.Sprintf("%d ▼ shrinking", net)) + "\n")
+				sb.WriteString(netLabel + activeCountStyle.Render(fmt.Sprintf(tr("%d ▼ shrinking"), net)) + "\n")
 			default:
-				sb.WriteString(netLabel + dimStyle.Render("±0 → steady") + "\n")
+				sb.WriteString(netLabel + dimStyle.Render(tr("±0 → steady")) + "\n")
 			}
 			trendArrow := "→"
 			if completed > prevCompleted {
@@ -430,29 +432,29 @@ func (m model) renderStatsList() string {
 				trendArrow = "↓"
 			}
 			sb.WriteString(detailLabelStyle.Render(padRight("  "+vsLabel, statsLabelWidth)) +
-				normalStyle.Render(fmt.Sprintf("%d done vs %d  %s", completed, prevCompleted, trendArrow)) + "\n")
+				normalStyle.Render(fmt.Sprintf(tr("%d done vs %d  %s"), completed, prevCompleted, trendArrow)) + "\n")
 		})
 	}
 
-	flow := flowSection("Flow (last 7 days)", "vs last week", createdThisWeek, doneThisWeek, doneLastWeek)
-	flow30 := flowSection("Flow (last 30 days)", "vs prior 30d", createdThisMonth, doneThisMonth, donePrevMonth)
+	flow := flowSection(tr("Flow (last 7 days)"), tr("vs last week"), createdThisWeek, doneThisWeek, doneLastWeek)
+	flow30 := flowSection(tr("Flow (last 30 days)"), tr("vs prior 30d"), createdThisMonth, doneThisMonth, donePrevMonth)
 
 	throughput := section(func(sb *strings.Builder) {
-		sb.WriteString(statsHeaderStyle.Render("  Throughput") + "\n")
-		ttdLabel := detailLabelStyle.Render(padRight("  Time to done (30d)", statsLabelWidth))
+		sb.WriteString(statsHeaderStyle.Render(tr("  Throughput")) + "\n")
+		ttdLabel := detailLabelStyle.Render(padRight(tr("  Time to done (30d)"), statsLabelWidth))
 		if len(timeToDone) > 0 {
-			sb.WriteString(ttdLabel + normalStyle.Render("median "+formatDaysCompact(medianDuration(timeToDone))) + "\n")
+			sb.WriteString(ttdLabel + normalStyle.Render(tr("median ")+formatDaysCompact(medianDuration(timeToDone))) + "\n")
 		} else {
-			sb.WriteString(ttdLabel + dimStyle.Render("none yet") + "\n")
+			sb.WriteString(ttdLabel + dimStyle.Render(tr("none yet")) + "\n")
 		}
 		if len(activeAges) > 0 {
-			sb.WriteString(detailLabelStyle.Render(padRight("  Median active age", statsLabelWidth)) +
+			sb.WriteString(detailLabelStyle.Render(padRight(tr("  Median active age"), statsLabelWidth)) +
 				normalStyle.Render(formatDaysCompact(medianDuration(activeAges))) + "\n")
 			oldestW := colW - statsLabelWidth - 12
 			if oldestW < 8 {
 				oldestW = 8
 			}
-			sb.WriteString(detailLabelStyle.Render(padRight("  Oldest active", statsLabelWidth)) +
+			sb.WriteString(detailLabelStyle.Render(padRight(tr("  Oldest active"), statsLabelWidth)) +
 				normalStyle.Render(truncate(oldestTitle, oldestW)) +
 				dimStyle.Render(" ("+formatDaysCompact(oldestAge)+")") + "\n")
 		}
@@ -461,21 +463,21 @@ func (m model) renderStatsList() string {
 	var priority string
 	if activeTasks > 0 {
 		priority = section(func(sb *strings.Builder) {
-			sb.WriteString(statsHeaderStyle.Render("  Active by priority") + "\n")
-			stat(sb, "↑ High", highPri, activeTasks, true)
-			stat(sb, "→ Medium", medPri, activeTasks, true)
-			stat(sb, "↓ Low", lowPri, activeTasks, true)
+			sb.WriteString(statsHeaderStyle.Render(tr("  Active by priority")) + "\n")
+			stat(sb, tr("↑ High"), highPri, activeTasks, true)
+			stat(sb, tr("→ Medium"), medPri, activeTasks, true)
+			stat(sb, tr("↓ Low"), lowPri, activeTasks, true)
 		})
 	}
 
 	velocity := section(func(sb *strings.Builder) {
-		sb.WriteString(statsHeaderStyle.Render("  Completion velocity") + "\n")
-		stat(sb, "Today", doneToday, 0, false)
-		stat(sb, "This week", doneThisWeek, 0, false)
-		stat(sb, "This month", doneThisMonth, 0, false)
+		sb.WriteString(statsHeaderStyle.Render(tr("  Completion velocity")) + "\n")
+		stat(sb, tr("Today"), doneToday, 0, false)
+		stat(sb, tr("This week"), doneThisWeek, 0, false)
+		stat(sb, tr("This month"), doneThisMonth, 0, false)
 		if doneThisWeek > 0 {
-			sb.WriteString(detailLabelStyle.Render(padRight("  Avg (7d)", statsLabelWidth)) +
-				normalStyle.Render(fmt.Sprintf("%.1f tasks/day", float64(doneThisWeek)/7.0)) + "\n")
+			sb.WriteString(detailLabelStyle.Render(padRight(tr("  Avg (7d)"), statsLabelWidth)) +
+				normalStyle.Render(fmt.Sprintf(tr("%.1f tasks/day"), float64(doneThisWeek)/7.0)) + "\n")
 		}
 	})
 
@@ -585,12 +587,12 @@ func (m model) renderTaskList() string {
 	active := m.activeTodos()
 	if len(active) == 0 {
 		if m.searchQuery != "" {
-			return normalStyle.Render("  No tasks match your search.")
+			return normalStyle.Render(tr("  No tasks match your search."))
 		}
 		if m.focusFilter {
-			return normalStyle.Render("  No tasks due today or overdue. Nice!")
+			return normalStyle.Render(tr("  No tasks due today or overdue. Nice!"))
 		}
-		return normalStyle.Render("  No tasks yet. Press 'a' to add one.")
+		return normalStyle.Render(tr("  No tasks yet. Press 'a' to add one."))
 	}
 
 	b := getBuilder()
@@ -648,9 +650,9 @@ func (m model) renderHistoryList() string {
 	completed := m.completedTodos()
 	if len(completed) == 0 {
 		if m.searchQuery != "" {
-			return normalStyle.Render("  No completed tasks match your search.")
+			return normalStyle.Render(tr("  No completed tasks match your search."))
 		}
-		return normalStyle.Render("  No completed tasks yet.")
+		return normalStyle.Render(tr("  No completed tasks yet."))
 	}
 
 	b := getBuilder()
@@ -765,6 +767,8 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	checkbox := "[ ]"
 	if t.Status == todo.Done {
 		checkbox = "[✓]"
+	} else if len(t.TimeEntries) > 0 {
+		checkbox = "[>]"
 	}
 	foldIcon := " "
 	if len(t.SubtaskIDs) > 0 {
@@ -783,7 +787,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 		title += " ¶"
 	}
 	if t.IsTimerRunning() {
-		title += " ⏱"
+		title = "⏱ " + title
 	}
 	startVal := ""
 	if !t.StartDate.IsZero() {
@@ -793,7 +797,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	if !t.DueDate.IsZero() {
 		dueVal = t.DueDate.Format("02-01-06")
 	}
-	titleCol := padRight(truncate(title, titleW-1), titleW-1)
+	titleCol := padRight(truncate(title, titleW), titleW)
 	tagsPart := m.getRenderedTags(t.Tags)
 	line := cursorStr + checkbox + foldIcon + titleCol
 	if cols.showStart {
@@ -803,7 +807,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 		line += padRight(dueVal, 12)
 	}
 	if cols.showLast {
-		line += padRight(t.Priority.Icon()+" "+t.Priority.String(), 12)
+		line += padRight(t.Priority.Icon()+" "+trPriority(t.Priority), 12)
 	}
 
 	// Only append tags if they fit within the inner panel content width.
@@ -843,9 +847,9 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 func (m model) renderProjectListContent(projects []string) string {
 	if len(projects) == 0 {
 		if m.searchQuery != "" {
-			return normalStyle.Render("  No projects match your search.")
+			return normalStyle.Render(tr("  No projects match your search."))
 		}
-		return normalStyle.Render("  No projects yet. Add a project to a task first.")
+		return normalStyle.Render(tr("  No projects yet. Add a project to a task first."))
 	}
 
 	b := getBuilder()
@@ -858,12 +862,13 @@ func (m model) renderProjectListContent(projects []string) string {
 			nameMax = pw
 		}
 	}
-	projW := contentFitWidth(m.termWidth, nameMax, 2, len("Project"))
+	projHdr := tr("Project")
+	projW := contentFitWidth(m.termWidth, nameMax, 2, len([]rune(projHdr)))
 
 	const prefix = "  "
-	headerLeft := prefix + padRight("Project", projW) +
-		padRight("Active", projCountColWidth) +
-		padRight("Done", projDoneColWidth) + "Overdue"
+	headerLeft := prefix + padRight(projHdr, projW) +
+		padRight(tr("Active"), projCountColWidth) +
+		padRight(tr("Done"), projDoneColWidth) + tr("Overdue")
 	padW := w - len([]rune(headerLeft))
 	if padW < 1 {
 		padW = 1
@@ -892,11 +897,11 @@ func (m model) renderProjectListContent(projects []string) string {
 			continue
 		}
 		nameCol := padRight(truncate(p, projW-2), projW)
-		activeStr := padRight(fmt.Sprintf("%d active", activeCnt), projCountColWidth)
-		doneStr := padRight(fmt.Sprintf("%d done", doneCnt), projDoneColWidth)
+		activeStr := padRight(fmt.Sprintf(tr("%d active"), activeCnt), projCountColWidth)
+		doneStr := padRight(fmt.Sprintf(tr("%d done"), doneCnt), projDoneColWidth)
 		overdueStr := "─"
 		if overdueCnt > 0 {
-			overdueStr = fmt.Sprintf("%d overdue", overdueCnt)
+			overdueStr = fmt.Sprintf(tr("%d overdue"), overdueCnt)
 		}
 		switch {
 		case i == m.projectCursor:
@@ -930,17 +935,19 @@ func (m model) renderSettingsList() string {
 	defer putBuilder(b)
 
 	labels := [numSettingsRows]string{
-		"Theme",
-		"Version",
-		"Check for updates",
+		tr("Theme"),
+		tr("Language"),
+		tr("Version"),
+		tr("Check for updates"),
 	}
 	values := [numSettingsRows]string{
 		"‹ " + m.themeName + " ›",
+		"‹ " + activeLang.displayName() + " ›",
 		appVersion,
-		"press enter to check",
+		tr("press enter to check"),
 	}
 
-	b.WriteString(headerStyle.Render("Settings") + "\n\n")
+	b.WriteString(headerStyle.Render(tr("Settings")) + "\n\n")
 	for i := 0; i < numSettingsRows; i++ {
 		cursor := "  "
 		labelStyle := normalStyle

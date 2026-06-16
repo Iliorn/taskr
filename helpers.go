@@ -116,11 +116,11 @@ func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 
 	// Title column fits its longest entry (+gap), floored to the header label so
 	// it never truncates, capped by the shared responsive width.
-	floor := len("Task")
+	floor := len([]rune(tr("Task")))
 	if isHistory {
-		floor = len("Completed tasks")
+		floor = len([]rune(tr("Completed tasks")))
 	}
-	c.titleW = contentFitWidth(termWidth, contentMax, 2, floor)
+	c.titleW = contentFitWidth(termWidth, contentMax, 4, floor)
 
 	colsW := func() int {
 		w := 0
@@ -166,26 +166,26 @@ func renderPlainDivider(availW int) string {
 }
 
 func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistory bool, sortMode taskSortMode, c listCols) {
-	startLabel := padRight("Start", 12)
-	dueLabel := padRight("Due", 12)
-	lastLabel := padRight("Priority", 12)
+	startLabel := padRight(tr("Start"), 12)
+	dueLabel := padRight(tr("Due"), 12)
+	lastLabel := padRight(tr("Priority"), 12)
 	if isHistory {
-		lastLabel = padRight("Completed", 12)
+		lastLabel = padRight(tr("Completed"), 12)
 	} else {
 		switch sortMode {
 		case taskSortDueDate:
-			dueLabel = padRight(">Due<", 12)
+			dueLabel = padRight(tr(">Due<"), 12)
 		case taskSortStartDate:
-			startLabel = padRight(">Start<", 12)
+			startLabel = padRight(tr(">Start<"), 12)
 		case taskSortPriority:
-			lastLabel = padRight(">Priority<", 12)
+			lastLabel = padRight(tr(">Priority<"), 12)
 		}
 	}
 
 	const prefix = "      "
-	title := "Task"
+	title := tr("Task")
 	if isHistory {
-		title = "Completed tasks"
+		title = tr("Completed tasks")
 	}
 	headerLeft := prefix + padRight(title, c.titleW)
 	if c.showStart {
@@ -197,10 +197,13 @@ func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistor
 	if c.showLast {
 		headerLeft += lastLabel
 	}
+	// Row tags are rendered with a leading space (see renderTaskLineWithSet), so
+	// the header label needs the same lead-in to line up with the tag content.
+	tagsLabel := " " + tr("Tags")
 	padW := termWidth - 8 - len([]rune(headerLeft))
-	if padW >= 4 {
-		headerLeft += "Tags"
-		padW -= 4
+	if padW >= len([]rune(tagsLabel)) {
+		headerLeft += tagsLabel
+		padW -= len([]rune(tagsLabel))
 	}
 	if padW < 0 {
 		padW = 0

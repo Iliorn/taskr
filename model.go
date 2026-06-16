@@ -30,6 +30,7 @@ const numTabs = 7
 // Rows in the Settings tab.
 const (
 	settingTheme = iota
+	settingLanguage
 	settingVersion
 	settingCheckUpdate
 	numSettingsRows
@@ -265,27 +266,21 @@ func initialModel() model {
 	ti.CharLimit = 500
 
 	si := textinput.New()
-	si.Placeholder = "Search... (use # to filter by tag)"
 	si.CharLimit = 100
 
 	di := textinput.New()
-	di.Placeholder = "Search for task to add as dependency..."
 	di.CharLimit = 100
 
 	tagi := textinput.New()
-	tagi.Placeholder = "Search or create tag..."
 	tagi.CharLimit = 50
 
 	proji := textinput.New()
-	proji.Placeholder = "Search or create project..."
 	proji.CharLimit = 100
 
 	tagTabSearch := textinput.New()
-	tagTabSearch.Placeholder = "Filter tags..."
 	tagTabSearch.CharLimit = 50
 
 	learningSearch := textinput.New()
-	learningSearch.Placeholder = "Search learnings... (use # to filter by tag)"
 	learningSearch.CharLimit = 100
 
 	todos, err := loadTodos()
@@ -297,6 +292,7 @@ func initialModel() model {
 	settings := loadSettings()
 	th := themeByName(settings.Theme)
 	applyTheme(th)
+	applyLang(settings.Language)
 
 	m := model{
 		todos:               todos,
@@ -331,6 +327,7 @@ func initialModel() model {
 			projectTasks: make(map[string][]todo.Todo),
 		},
 	}
+	m.applyLangPlaceholders()
 	m.refreshCaches()
 	m.calendar.selected = startOfDay(time.Now())
 	m.timerTickOn = m.runningTodoIndex() >= 0

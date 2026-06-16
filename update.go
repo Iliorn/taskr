@@ -37,26 +37,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateDoneMsg:
 		if msg.err != nil {
 			m.err = fmt.Sprintf("Update failed: %v", msg.err)
-			m.updateStatus = "Update failed"
+			m.updateStatus = tr("Update failed")
 		} else {
-			m.err = "Updated! Restart taskr to apply."
-			m.updateStatus = "Updated — restart to apply"
+			m.err = tr("Updated! Restart taskr to apply.")
+			m.updateStatus = tr("Updated — restart to apply")
 		}
 		return m, clearErrAfter()
 	case updateCheckMsg:
 		if msg.err != nil {
 			m.err = fmt.Sprintf("Update check failed: %v", msg.err)
-			m.updateStatus = "Check failed"
+			m.updateStatus = tr("Check failed")
 			return m, clearErrAfter()
 		}
 		if msg.latest == "" || msg.latest == appVersion {
-			m.updateStatus = "Up to date (" + appVersion + ")"
+			m.updateStatus = tr("Up to date (") + appVersion + ")"
 			return m, nil
 		}
 		// Newer release available — ask before pulling it.
-		m.updateStatus = "Update available: " + msg.latest
+		m.updateStatus = tr("Update available: ") + msg.latest
 		m.mode = modeConfirmUpdate
-		m.confirmMsg = msg.latest + " is available — update now? (y/n)"
+		m.confirmMsg = msg.latest + tr(" is available — update now? (y/n)")
 		return m, nil
 	case saveDoneMsg:
 		return m, nil
@@ -179,9 +179,9 @@ func (m *model) openEditorForNotes() tea.Cmd {
 	editorCmd := resolveEditorCmd()
 	if editorCmd == "" {
 		if runtime.GOOS == "windows" {
-			m.err = "No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"
+			m.err = tr("No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)")
 		} else {
-			m.err = "No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"
+			m.err = tr("No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish")
 		}
 		return clearErrAfter()
 	}
@@ -205,7 +205,7 @@ func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) 
 		// On Windows, fall back to notepad once if the configured editor failed.
 		if runtime.GOOS == "windows" && !msg.fallback {
 			if notepad, lookErr := exec.LookPath("notepad"); lookErr == nil {
-				m.err = "Editor failed — falling back to notepad"
+				m.err = tr("Editor failed — falling back to notepad")
 				return m, tea.Batch(clearErrAfter(), execEditor(notepad, msg.taskID, true))
 			}
 		}
@@ -253,12 +253,12 @@ func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) 
 func (m *model) performUndo() tea.Cmd {
 	entry, ok := m.popUndo()
 	if !ok {
-		m.err = "Nothing to undo"
+		m.err = tr("Nothing to undo")
 		return clearErrAfter()
 	}
 	m.todos = entry.todos
 	m.markModifiedNoUndo()
-	m.err = fmt.Sprintf("Undid: %s", entry.desc)
+	m.err = fmt.Sprintf(tr("Undid: %s"), entry.desc)
 	return clearErrAfter()
 }
 
@@ -332,6 +332,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.moveCalendarDay(1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(1)
+			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
+				m.cycleLang(1)
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil && len(t.SubtaskIDs) > 0 {
 					m.expandedTasks[t.ID] = true
@@ -342,6 +344,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.moveCalendarDay(-1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(-1)
+			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
+				m.cycleLang(-1)
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil {
 					delete(m.expandedTasks, t.ID)
@@ -406,7 +410,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.tab == tabTasks && !m.showHistory {
 				m.mode = modeInput
 				m.textInput.SetValue("")
-				m.textInput.Placeholder = "New task (use #tag due:date p:high @project)..."
+				m.textInput.Placeholder = tr("New task (use #tag due:date p:high @project)...")
 				m.textInput.Focus()
 				return m, textinput.Blink
 			}
@@ -497,7 +501,7 @@ func (m *model) startEditTimeEntry(taskID, entryID string) tea.Cmd {
 			m.pendingEntryID = entryID
 			m.mode = modeEditTimeEntry
 			m.textInput.SetValue(val)
-			m.textInput.Placeholder = "HH:MM-HH:MM or duration (45m, 1h30m)..."
+			m.textInput.Placeholder = tr("HH:MM-HH:MM or duration (45m, 1h30m)...")
 			m.textInput.Focus()
 			return textinput.Blink
 		}
@@ -576,6 +580,7 @@ func (m model) persistSettings() {
 		TagSort:      m.tagSort,
 		LearningSort: m.learningSort,
 		Theme:        m.themeName,
+		Language:     string(activeLang),
 	})
 }
 
@@ -751,8 +756,10 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	switch m.settingsCursor {
 	case settingTheme:
 		m.cycleTheme(1)
+	case settingLanguage:
+		m.cycleLang(1)
 	case settingCheckUpdate:
-		m.updateStatus = "Checking…"
+		m.updateStatus = tr("Checking…")
 		return m, checkForUpdate()
 	}
 	return m, nil
@@ -764,7 +771,7 @@ func (m model) updateConfirmUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "y", "enter":
 			m.mode = modeNormal
-			m.updateStatus = "Updating…"
+			m.updateStatus = tr("Updating…")
 			return m, func() tea.Msg {
 				return updateDoneMsg{err: selfUpdate()}
 			}
@@ -800,6 +807,36 @@ func (m *model) cycleTheme(dir int) {
 	m.markCacheDirty()
 }
 
+// cycleLang steps the UI language through availableLanguages. Only what the user
+// sees changes; stored data (titles, tags, dates) is untouched.
+func (m *model) cycleLang(dir int) {
+	idx := 0
+	for i, l := range availableLanguages {
+		if l == activeLang {
+			idx = i
+			break
+		}
+	}
+	idx = (idx + dir + len(availableLanguages)) % len(availableLanguages)
+	applyLang(string(availableLanguages[idx]))
+	m.applyLangPlaceholders()
+	m.persistSettings()
+	m.invalidateDetailCache()
+	m.markCacheDirty()
+}
+
+// applyLangPlaceholders sets every text-input placeholder from the active
+// language. Called at startup and whenever the language changes so the prompts
+// switch live rather than waiting for a restart.
+func (m *model) applyLangPlaceholders() {
+	m.searchInput.Placeholder = tr("Search... (use # to filter by tag)")
+	m.depSearchInput.Placeholder = tr("Search for task to add as dependency...")
+	m.tagSearchInput.Placeholder = tr("Search or create tag...")
+	m.projSearchInput.Placeholder = tr("Search or create project...")
+	m.tagTabSearchInput.Placeholder = tr("Filter tags...")
+	m.learningSearchInput.Placeholder = tr("Search learnings... (use # to filter by tag)")
+}
+
 func (m model) handleListRename() (tea.Model, tea.Cmd) {
 	switch m.tab {
 	case tabCalendar:
@@ -815,7 +852,7 @@ func (m model) handleListRename() (tea.Model, tea.Cmd) {
 			m.editingTagName = tags[m.tagTabCursor]
 			m.mode = modeEditTag
 			m.textInput.SetValue(tags[m.tagTabCursor])
-			m.textInput.Placeholder = "Edit tag name..."
+			m.textInput.Placeholder = tr("Edit tag name...")
 			m.textInput.Focus()
 			return m, textinput.Blink
 		}
@@ -824,7 +861,7 @@ func (m model) handleListRename() (tea.Model, tea.Cmd) {
 			if t := m.currentTodo(); t != nil {
 				m.mode = modeEditTitle
 				m.textInput.SetValue(t.Title)
-				m.textInput.Placeholder = "Edit task title..."
+				m.textInput.Placeholder = tr("Edit task title...")
 				m.textInput.Focus()
 				return m, textinput.Blink
 			}
@@ -844,7 +881,7 @@ func (m model) handleListRename() (tea.Model, tea.Cmd) {
 			m.pendingLearning = m.learningCursor
 			m.mode = modeEditLearning
 			m.textInput.SetValue(learnings[m.learningCursor].Text)
-			m.textInput.Placeholder = "Edit learning..."
+			m.textInput.Placeholder = tr("Edit learning...")
 			m.textInput.Focus()
 			return m, textinput.Blink
 		}
@@ -862,26 +899,26 @@ func (m model) handleListDelete() (tea.Model, tea.Cmd) {
 				m.mode = modeConfirmDeleteTimeEntry
 				m.pendingEntryTaskID = a.taskID
 				m.pendingEntryID = a.entryID
-				m.confirmMsg = fmt.Sprintf("Delete %s entry for '%s'? (y/n)",
+				m.confirmMsg = fmt.Sprintf(tr("Delete %s entry for '%s'? (y/n)"),
 					formatDuration(a.duration()), truncate(a.title, 30))
 			}
 		}
 	case tabTags:
 		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) && tags[m.tagTabCursor] != untaggedKey {
 			m.mode = modeConfirmDeleteTagGlobal
-			m.confirmMsg = fmt.Sprintf("Delete tag '#%s' from ALL tasks? (y/n)", tags[m.tagTabCursor])
+			m.confirmMsg = fmt.Sprintf(tr("Delete tag '#%s' from ALL tasks? (y/n)"), tags[m.tagTabCursor])
 		}
 	case tabTasks:
 		if t := m.currentTodo(); t != nil {
 			m.mode = modeConfirmDelete
 			m.pendingDelete = m.cursor
-			m.confirmMsg = fmt.Sprintf("Delete '%s'? (y/n)", t.Title)
+			m.confirmMsg = fmt.Sprintf(tr("Delete '%s'? (y/n)"), t.Title)
 		}
 	case tabLearnings:
 		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
 			m.mode = modeConfirmDeleteLearning
 			m.pendingLearning = m.learningCursor
-			m.confirmMsg = fmt.Sprintf("Delete learning '%s'? (y/n)", truncate(learnings[m.learningCursor].Text, 40))
+			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(learnings[m.learningCursor].Text, 40))
 		}
 	}
 	return m, nil
@@ -1066,7 +1103,7 @@ func (m model) detailAdd() (tea.Model, tea.Cmd) {
 	if m.detail.page == 2 {
 		m.mode = modeInput
 		m.textInput.SetValue("")
-		m.textInput.Placeholder = "Add comment..."
+		m.textInput.Placeholder = tr("Add comment...")
 		m.textInput.Focus()
 		return m, textinput.Blink
 	}
@@ -1092,13 +1129,13 @@ func (m model) detailAdd() (tea.Model, tea.Cmd) {
 	case fieldLearnings:
 		m.mode = modeAddLearning
 		m.textInput.SetValue("")
-		m.textInput.Placeholder = "Add learning..."
+		m.textInput.Placeholder = tr("Add learning...")
 		m.textInput.Focus()
 		return m, textinput.Blink
 	case fieldSubtasks:
 		m.mode = modeAddSubtask
 		m.textInput.SetValue("")
-		m.textInput.Placeholder = "Add subtask..."
+		m.textInput.Placeholder = tr("Add subtask...")
 		m.textInput.Focus()
 		return m, textinput.Blink
 	}
@@ -1114,7 +1151,7 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 		if len(m.todos[idx].Comments) > 0 {
 			m.mode = modeConfirmDeleteComment
 			m.pendingComment = m.detail.commentCursor
-			m.confirmMsg = "Delete this comment? (y/n)"
+			m.confirmMsg = tr("Delete this comment? (y/n)")
 		}
 		return m, nil
 	}
@@ -1122,7 +1159,7 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 	case fieldProject:
 		if m.todos[idx].Project != "" {
 			m.mode = modeConfirmDeleteProject
-			m.confirmMsg = fmt.Sprintf("Remove project '%s' from this task? (y/n)", m.todos[idx].Project)
+			m.confirmMsg = fmt.Sprintf(tr("Remove project '%s' from this task? (y/n)"), m.todos[idx].Project)
 		}
 	case fieldNotes:
 		if m.todos[idx].Notes != "" {
@@ -1134,19 +1171,19 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 		if len(m.todos[idx].Tags) > 0 && m.detail.tagCursor < len(m.todos[idx].Tags) {
 			m.mode = modeConfirmDeleteTag
 			m.pendingTag = m.detail.tagCursor
-			m.confirmMsg = fmt.Sprintf("Remove tag '#%s' from this task? (y/n)", m.todos[idx].Tags[m.detail.tagCursor])
+			m.confirmMsg = fmt.Sprintf(tr("Remove tag '#%s' from this task? (y/n)"), m.todos[idx].Tags[m.detail.tagCursor])
 		}
 	case fieldDependencies:
 		if len(m.todos[idx].Dependencies) > 0 && m.detail.depCursor < len(m.todos[idx].Dependencies) {
 			m.mode = modeConfirmDeleteDep
 			m.pendingDep = m.detail.depCursor
-			m.confirmMsg = "Remove this dependency? (y/n)"
+			m.confirmMsg = tr("Remove this dependency? (y/n)")
 		}
 	case fieldLearnings:
 		if len(m.todos[idx].Learnings) > 0 && m.detail.learningCursor < len(m.todos[idx].Learnings) {
 			m.mode = modeConfirmDeleteLearning
 			m.pendingLearning = m.detail.learningCursor
-			m.confirmMsg = fmt.Sprintf("Delete learning '%s'? (y/n)", truncate(m.todos[idx].Learnings[m.detail.learningCursor].Text, 40))
+			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(m.todos[idx].Learnings[m.detail.learningCursor].Text, 40))
 		}
 	case fieldSubtasks:
 		if len(m.todos[idx].SubtaskIDs) > 0 && m.detail.subtaskCursor < len(m.todos[idx].SubtaskIDs) {
@@ -1157,7 +1194,7 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 			}
 			m.mode = modeConfirmDeleteSubtask
 			m.pendingSubtask = m.detail.subtaskCursor
-			m.confirmMsg = fmt.Sprintf("Delete subtask '%s'? (y/n)", truncate(subTitle, 40))
+			m.confirmMsg = fmt.Sprintf(tr("Delete subtask '%s'? (y/n)"), truncate(subTitle, 40))
 		}
 	}
 	return m, nil
@@ -1179,13 +1216,13 @@ func (m model) updateLearningsDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
 			m.mode = modeConfirmDeleteLearning
 			m.pendingLearning = m.learningCursor
-			m.confirmMsg = fmt.Sprintf("Delete learning '%s'? (y/n)", truncate(learnings[m.learningCursor].Text, 40))
+			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(learnings[m.learningCursor].Text, 40))
 		}
 	case "r":
 		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
 			m.mode = modeEditLearning
 			m.textInput.SetValue(learnings[m.learningCursor].Text)
-			m.textInput.Placeholder = "Edit learning..."
+			m.textInput.Placeholder = tr("Edit learning...")
 			m.textInput.Focus()
 			return m, textinput.Blink
 		}
@@ -1205,7 +1242,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 			m.mode = modeEditComment
 			m.pendingComment = m.detail.commentCursor
 			m.textInput.SetValue(t.Comments[m.detail.commentCursor].Text)
-			m.textInput.Placeholder = "Edit comment..."
+			m.textInput.Placeholder = tr("Edit comment...")
 			m.textInput.Focus()
 		}
 		return m, textinput.Blink
@@ -1219,7 +1256,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		} else {
 			m.textInput.SetValue("")
 		}
-		m.textInput.Placeholder = "Start date (dd-mm-yy, 'today', 'next week', '+3d')..."
+		m.textInput.Placeholder = tr("Start date (dd-mm-yy, 'today', 'next week', '+3d')...")
 		m.textInput.Focus()
 	case fieldDueDate:
 		m.mode = modeInput
@@ -1228,7 +1265,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		} else {
 			m.textInput.SetValue("")
 		}
-		m.textInput.Placeholder = "Due date (dd-mm-yy, 'today', 'next week', '+3d')..."
+		m.textInput.Placeholder = tr("Due date (dd-mm-yy, 'today', 'next week', '+3d')...")
 		m.textInput.Focus()
 	case fieldPriority:
 		switch t.Priority {
@@ -1273,7 +1310,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		if len(t.Learnings) > 0 && m.detail.learningCursor < len(t.Learnings) {
 			m.mode = modeEditLearning
 			m.textInput.SetValue(t.Learnings[m.detail.learningCursor].Text)
-			m.textInput.Placeholder = "Edit learning..."
+			m.textInput.Placeholder = tr("Edit learning...")
 			m.textInput.Focus()
 			return m, textinput.Blink
 		}

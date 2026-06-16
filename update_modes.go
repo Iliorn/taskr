@@ -49,7 +49,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 						} else if d, err := parseDueDate(val); err == nil {
 							m.todos[idx].SetStartDate(d)
 						} else {
-							m.err = "Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'"
+							m.err = tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'")
 							return m, clearErrAfter()
 						}
 					case fieldDueDate:
@@ -58,7 +58,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 						} else if d, err := parseDueDate(val); err == nil {
 							m.todos[idx].SetDueDate(d)
 						} else {
-							m.err = "Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'"
+							m.err = tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'")
 							return m, clearErrAfter()
 						}
 					}

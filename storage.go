@@ -23,6 +23,7 @@ type appSettings struct {
 	TagSort      tagSortMode      `json:"tag_sort"`
 	LearningSort learningSortMode `json:"learning_sort"`
 	Theme        string           `json:"theme"`
+	Language     string           `json:"language"`
 }
 
 func settingsPath() string {

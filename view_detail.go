@@ -44,29 +44,29 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		strings.Repeat(" ", padW) +
 		pageIndicatorStyle.Render(indicator) + "\n\n")
 
-	startVal := "not set"
+	startVal := tr("not set")
 	if !t.StartDate.IsZero() {
 		startVal = t.StartDate.Format("02-01-06")
 	}
-	b.WriteString(renderField("Start date", startVal, fieldStartDate) + "\n")
+	b.WriteString(renderField(tr("Start date"), startVal, fieldStartDate) + "\n")
 
-	dueVal := "not set"
+	dueVal := tr("not set")
 	if !t.DueDate.IsZero() {
 		dueVal = t.DueDate.Format("02-01-06")
 		if t.IsOverdue() {
-			dueVal += " ⚠ overdue"
+			dueVal += tr(" ⚠ overdue")
 		}
 	}
-	b.WriteString(renderField("Due date", dueVal, fieldDueDate) + "\n")
-	b.WriteString(renderField("Priority", t.Priority.Icon()+" "+t.Priority.String(), fieldPriority) + "\n")
+	b.WriteString(renderField(tr("Due date"), dueVal, fieldDueDate) + "\n")
+	b.WriteString(renderField(tr("Priority"), t.Priority.Icon()+" "+trPriority(t.Priority), fieldPriority) + "\n")
 
-	projectVal := "not set"
+	projectVal := tr("not set")
 	if t.Project != "" {
 		projectVal = t.Project
 	}
-	b.WriteString(renderField("Project", projectVal, fieldProject) + "\n")
+	b.WriteString(renderField(tr("Project"), projectVal, fieldProject) + "\n")
 
-	notesVal := "none (press enter or 'n' to edit)"
+	notesVal := tr("none (press enter or 'n' to edit)")
 	if t.Notes != "" {
 		lines := strings.SplitN(t.Notes, "\n", 2)
 		preview := truncate(lines[0], availableW-detailLabelColWidth-6)
@@ -75,24 +75,24 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		}
 		notesVal = preview
 	}
-	b.WriteString(renderField("Notes", notesVal, fieldNotes) + "\n")
+	b.WriteString(renderField(tr("Notes"), notesVal, fieldNotes) + "\n")
 
-	b.WriteString("  " + detailLabelStyle.Render(padRight("Created:", detailLabelColWidth)) +
+	b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Created:"), detailLabelColWidth)) +
 		detailValueStyle.Render(t.CreatedAt.Format("02-01-06 15:04")) + "\n")
-	b.WriteString("  " + detailLabelStyle.Render(padRight("Modified:", detailLabelColWidth)) +
+	b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Modified:"), detailLabelColWidth)) +
 		detailValueStyle.Render(t.ModifiedAt.Format("02-01-06 15:04")) + "\n")
 
 	if len(t.TimeEntries) > 0 {
-		timeVal := fmt.Sprintf("%s (%d entries)", formatDuration(t.TotalTimeSpent()), len(t.TimeEntries))
+		timeVal := fmt.Sprintf(tr("%s (%d entries)"), formatDuration(t.TotalTimeSpent()), len(t.TimeEntries))
 		if t.IsTimerRunning() {
-			timeVal += " ◉ tracking"
+			timeVal += tr(" ◉ tracking")
 		}
-		b.WriteString("  " + detailLabelStyle.Render(padRight("Time spent:", detailLabelColWidth)) +
+		b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Time spent:"), detailLabelColWidth)) +
 			timerStyle.Render(timeVal) + "\n")
 	}
 
 	if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-		b.WriteString("  " + detailLabelStyle.Render(padRight("Completed on:", detailLabelColWidth)) +
+		b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Completed on:"), detailLabelColWidth)) +
 			checkDoneStyle.Render(t.CompletedAt.Format("02-01-06 15:04")) + "\n")
 	}
 	b.WriteString("\n")
@@ -101,9 +101,9 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	if isDetailFocused && m.detail.field == fieldTags {
 		tagCur = "▶ "
 	}
-	b.WriteString(tagCur + detailLabelStyle.Render("Tags:") + "\n")
+	b.WriteString(tagCur + detailLabelStyle.Render(tr("Tags:")) + "\n")
 	if len(t.Tags) == 0 {
-		b.WriteString("  " + detailValueStyle.Render("No tags. Press 'a' to add one.") + "\n")
+		b.WriteString("  " + detailValueStyle.Render(tr("No tags. Press 'a' to add one.")) + "\n")
 	} else {
 		for i, tag := range t.Tags {
 			pfx := "  "
@@ -140,9 +140,9 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	if isDetailFocused && m.detail.field == fieldSubtasks {
 		subtaskCur = "▶ "
 	}
-	b.WriteString(subtaskCur + detailLabelStyle.Render("Subtasks:") + "\n")
+	b.WriteString(subtaskCur + detailLabelStyle.Render(tr("Subtasks:")) + "\n")
 	if len(t.SubtaskIDs) == 0 {
-		b.WriteString("  " + detailValueStyle.Render("No subtasks. Press 'a' to add one.") + "\n")
+		b.WriteString("  " + detailValueStyle.Render(tr("No subtasks. Press 'a' to add one.")) + "\n")
 	} else {
 		for i, subID := range t.SubtaskIDs {
 			sub := m.findTodoByID(subID)
@@ -152,7 +152,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 				pfx = "▶ "
 			}
 			if sub == nil {
-				b.WriteString(dimStyle.Render(fmt.Sprintf("%s[?] unknown subtask", pfx)) + "\n")
+				b.WriteString(dimStyle.Render(fmt.Sprintf(tr("%s[?] unknown subtask"), pfx)) + "\n")
 				continue
 			}
 			if sub.Status == todo.Done {
@@ -177,9 +177,9 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	if isDetailFocused && m.detail.field == fieldDependencies {
 		depCur = "▶ "
 	}
-	b.WriteString(depCur + detailLabelStyle.Render("Dependencies:") + "\n")
+	b.WriteString(depCur + detailLabelStyle.Render(tr("Dependencies:")) + "\n")
 	if len(t.Dependencies) == 0 {
-		b.WriteString("  " + detailValueStyle.Render("No dependencies. Press 'a' to add one.") + "\n")
+		b.WriteString("  " + detailValueStyle.Render(tr("No dependencies. Press 'a' to add one.")) + "\n")
 	} else {
 		for i, depID := range t.Dependencies {
 			dep := m.findTodoByID(depID)
@@ -189,7 +189,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 				pfx = "▶ "
 			}
 			if dep == nil {
-				b.WriteString(dimStyle.Render(fmt.Sprintf("%s[?] unknown task", pfx)) + "\n")
+				b.WriteString(dimStyle.Render(fmt.Sprintf(tr("%s[?] unknown task"), pfx)) + "\n")
 				continue
 			}
 			status := "[ ]"
@@ -217,9 +217,9 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	if isDetailFocused && m.detail.field == fieldLearnings {
 		learningCur = "▶ "
 	}
-	b.WriteString(learningCur + detailLabelStyle.Render("Learnings:") + "\n")
+	b.WriteString(learningCur + detailLabelStyle.Render(tr("Learnings:")) + "\n")
 	if len(t.Learnings) == 0 {
-		b.WriteString("  " + detailValueStyle.Render("No learnings yet. Press 'a' to add one.") + "\n")
+		b.WriteString("  " + detailValueStyle.Render(tr("No learnings yet. Press 'a' to add one.")) + "\n")
 	} else {
 		for i, l := range t.Learnings {
 			pfx := "  "
@@ -262,9 +262,9 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 	if isDetailFocused {
 		commentCur = "▶ "
 	}
-	b.WriteString(commentCur + detailLabelStyle.Render("Comments:") + "\n")
+	b.WriteString(commentCur + detailLabelStyle.Render(tr("Comments:")) + "\n")
 	if len(t.Comments) == 0 {
-		b.WriteString("  " + detailValueStyle.Render("No comments yet. Press 'a' to add one.") + "\n")
+		b.WriteString("  " + detailValueStyle.Render(tr("No comments yet. Press 'a' to add one.")) + "\n")
 	} else {
 		available := innerW - commentPrefixLen
 		if available < 10 {
@@ -301,7 +301,7 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 
 func (m model) renderGantt(tasks []todo.Todo) string {
 	if len(tasks) == 0 {
-		return dimStyle.Render("  No tasks in this project.")
+		return dimStyle.Render(tr("  No tasks in this project."))
 	}
 	today := m.frameTime
 	var minDate, maxDate time.Time
@@ -355,10 +355,10 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 		innerSpaces = 1
 	}
 	timelineHeader := leftDate + strings.Repeat(" ", innerSpaces) + rightDate
-	headerLabel := padRight("  Timeline", labelW)
+	headerLabel := padRight(tr("  Timeline"), labelW)
 	b.WriteString(headerStyle.Render(headerLabel+timelineHeader) + "\n")
 
-	todayLabel := "today:" + today.Format("02-01")
+	todayLabel := tr("today:") + today.Format("02-01")
 	divider := make([]rune, chartW)
 	for i := range divider {
 		divider[i] = '─'

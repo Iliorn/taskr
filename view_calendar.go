@@ -126,13 +126,13 @@ func (m model) renderMonthCalendarLines() []string {
 	innerW := calPanelWidth - 2
 
 	var lines []string
-	title := sel.Format("January 2006")
-	pad := (innerW - len(title)) / 2
+	title := localizedMonthYear(sel)
+	pad := (innerW - len([]rune(title))) / 2
 	if pad < 0 {
 		pad = 0
 	}
 	lines = append(lines, strings.Repeat(" ", pad)+calHeaderStyle.Render(title))
-	lines = append(lines, dimStyle.Render("Mo Tu We Th Fr Sa Su"))
+	lines = append(lines, dimStyle.Render(localizedWeekdayHeader()))
 
 	// Monday-first offset of the 1st, matching the stats heatmap convention.
 	day := monthStart.AddDate(0, 0, -((int(monthStart.Weekday()) + 6) % 7))
@@ -171,7 +171,7 @@ func (m model) renderMonthCalendarLines() []string {
 	lines = append(lines, m.renderDayRollupLines(innerW)...)
 
 	lines = append(lines, "")
-	lines = append(lines, dimStyle.Render("month ")+timerStyle.Render(formatDuration(monthTotal)))
+	lines = append(lines, dimStyle.Render(tr("month "))+timerStyle.Render(formatDuration(monthTotal)))
 	return lines
 }
 
@@ -219,7 +219,7 @@ func (m model) renderDayRollupLines(innerW int) []string {
 	}
 
 	nameW := innerW - 8 // 1 indent + 7 for the right-aligned duration
-	lines := []string{"", dimStyle.Render("day ") + timerStyle.Render(formatDuration(dayTotal))}
+	lines := []string{"", dimStyle.Render(tr("day ")) + timerStyle.Render(formatDuration(dayTotal))}
 	for _, r := range top(projTotals, 3) {
 		lines = append(lines, " "+projLabelStyle.Render(padRight(truncate(r.name, nameW), nameW))+
 			timerStyle.Render(fmt.Sprintf("%7s", formatDurationCompact(r.d))))
@@ -241,11 +241,11 @@ func (m model) renderTimelineLines(innerW, innerH int) []string {
 		total += a.duration()
 	}
 
-	header := calHeaderStyle.Render(m.calendar.selected.Format("Mon 02 Jan 2006"))
-	headerText := m.calendar.selected.Format("Mon 02 Jan 2006")
-	suffix := fmt.Sprintf("%d entries · %s", len(acts), formatDuration(total))
+	headerText := localizedDayDateAbbrev(m.calendar.selected)
+	header := calHeaderStyle.Render(headerText)
+	suffix := fmt.Sprintf(tr("%d entries · %s"), len(acts), formatDuration(total))
 	if len(acts) == 1 {
-		suffix = "1 entry · " + formatDuration(total)
+		suffix = tr("1 entry · ") + formatDuration(total)
 	}
 	pad := innerW - len([]rune(headerText)) - len([]rune(suffix))
 	if pad < 1 {
@@ -254,8 +254,8 @@ func (m model) renderTimelineLines(innerW, innerH int) []string {
 	lines := []string{header + strings.Repeat(" ", pad) + dimStyle.Render(suffix), ""}
 
 	if len(acts) == 0 {
-		lines = append(lines, dimStyle.Render("  No activity on this day."))
-		lines = append(lines, dimStyle.Render("  Press t on a task (tab 1) to start tracking."))
+		lines = append(lines, dimStyle.Render(tr("  No activity on this day.")))
+		lines = append(lines, dimStyle.Render(tr("  Press t on a task (tab 1) to start tracking.")))
 		return lines
 	}
 
@@ -300,7 +300,7 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 	}
 
 	running := a.stop.IsZero()
-	endStr := " now "
+	endStr := tr(" now ")
 	if !running {
 		endStr = a.stop.Format("15:04")
 	}

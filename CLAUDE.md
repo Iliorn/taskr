@@ -67,6 +67,8 @@ Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file co
 
 **2. Global theme state.** lipgloss styles are **package-level vars** reassigned by `applyTheme(theme)` (called at startup and on theme switch). Rendering code reads these globals directly; it does not receive a style set. Switching theme = call `applyTheme` with a different palette from `themes`. `init()` in `styles.go` applies `themes[0]` so styles are never nil in tests.
 
+**3. Localization (`lang.go`).** UI strings are translated gettext-style: the English literal is the lookup key, so call sites read `tr("Settings")` and any untranslated string falls back to its English source. `activeLang` is a package-level global (like the theme), set by `applyLang(code)` at startup and on language switch (`cycleLang`); `initialModel` applies the stored language, so tests must `applyLang` **after** building the model. Adding a language = one entry in `translations` plus its date-name tables (`monthNames`, `weekdayNames`, etc. — Go's `time` has no locale support, so name-bearing date layouts go through `localized*` helpers). Only display strings are translated; stored data and quick-add/date **parsing** keywords stay English. Priority words are localized at the view layer via `trPriority` to keep the `todo` package locale-free. `TestNarrowNoWrapDanish` guards the no-wrap contract against longer Danish strings by comparing each tab/width to the English baseline.
+
 ### Other conventions
 
 - **Persistence is debounced** — mutations set `dirty`/`savePending` and a `saveTickMsg` (300ms) flushes via `prepareSave`. Saves are async `tea.Cmd`s; don't write `tasks.json` synchronously from `Update`.
