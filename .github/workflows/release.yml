@@ -1,0 +1,41 @@
+name: Release
+
+# Push a version tag to cut a release:
+#   git tag v1.10.0 && git push origin v1.10.0
+# This builds all four targets with the tag baked in as the version and
+# publishes them as a GitHub release. Asset names are load-bearing — the
+# in-app self-update fetches these exact names; do not rename them.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # required to create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build all targets
+        env:
+          V: ${{ github.ref_name }}
+        run: |
+          GOOS=linux   GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr .
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr.exe .
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "-X main.appVersion=$V" -o taskr-macos-apple-silicon .
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr-macos-intel .
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ github.ref_name }}
+        run: |
+          gh release create "$V" --title "$V" --generate-notes \
+            taskr taskr.exe taskr-macos-apple-silicon taskr-macos-intel
