@@ -15,7 +15,7 @@ import (
 // the developer's stored language; pin English so these tests, which assert
 // English labels, are deterministic regardless of ~/.taskr/settings.json.
 func newTagModel(todos ...todo.Todo) model {
-	m := initialModel()
+	m := newTestModel()
 	applyLang(string(langEN))
 	m.todos = todos
 	m.termWidth = 80

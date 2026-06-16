@@ -13,7 +13,7 @@ import (
 // which would cause ugly wrapping inside the bordered panels.
 func TestNarrowNoWrap(t *testing.T) {
 	for _, width := range []int{40, 50, 60, 70, 80, 120} {
-		m := initialModel()
+		m := newTestModel()
 		m.termWidth = width
 		m.termHeight = 30
 		for i := 0; i < 5; i++ {
@@ -46,7 +46,7 @@ func TestNarrowNoWrapDanish(t *testing.T) {
 
 	// initialModel applies the stored language, so set lang *after* building it.
 	maxLineWidth := func(width int, tb tab, lang language) int {
-		m := initialModel()
+		m := newTestModel()
 		applyLang(string(lang))
 		m.termWidth = width
 		m.termHeight = 30

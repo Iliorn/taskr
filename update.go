@@ -69,12 +69,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveScheduled = false
 		if m.savePending {
 			m.savePending = false
-			saveCmd, err := prepareSave(m.todos)
-			if err != nil {
-				m.err = fmt.Sprintf("Error marshalling tasks: %v", err)
-				return m, clearErrAfter()
+			// Snapshot synchronously (deep copy) so the async write can't race a
+			// later mutation of m.todos, then save through the repository.
+			snapshot := copyTodos(m.todos)
+			repo := m.repo
+			return m, func() tea.Msg {
+				if err := repo.Save(snapshot); err != nil {
+					return saveErrMsg{err}
+				}
+				return saveDoneMsg{}
 			}
-			return m, saveCmd
 		}
 		return m, nil
 	}

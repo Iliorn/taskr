@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"taskr/todo"
 
 	_ "modernc.org/sqlite"
@@ -264,24 +263,29 @@ func loadTodos() ([]todo.Todo, error) {
 	return todos, nil
 }
 
-// prepareSave encodes the current todos synchronously (so the async write can't
-// race a later mutation) and returns a Cmd that commits them to SQLite.
-func prepareSave(todos []todo.Todo) (tea.Cmd, error) {
+// sqliteRepo is the SQLite Repository adapter. It reuses the package-level
+// connection opened lazily by openStore.
+type sqliteRepo struct{}
+
+func newSQLiteRepo() *sqliteRepo { return &sqliteRepo{} }
+
+func (r *sqliteRepo) Load() ([]todo.Todo, error) {
+	return loadTodos()
+}
+
+// Save encodes the given snapshot and commits it. Callers pass a stable copy
+// (the async race-safety is the caller's responsibility, e.g. copyTodos).
+func (r *sqliteRepo) Save(todos []todo.Todo) error {
 	if err := openStore(); err != nil {
-		return nil, err
+		return err
 	}
 	rows := make([]todoRow, 0, len(todos))
 	for i := range todos {
-		r, err := encodeRow(&todos[i])
+		row, err := encodeRow(&todos[i])
 		if err != nil {
-			return nil, err
+			return err
 		}
-		rows = append(rows, r)
+		rows = append(rows, row)
 	}
-	return func() tea.Msg {
-		if err := syncRowsToDB(db, rows); err != nil {
-			return saveErrMsg{err}
-		}
-		return saveDoneMsg{}
-	}, nil
+	return syncRowsToDB(db, rows)
 }

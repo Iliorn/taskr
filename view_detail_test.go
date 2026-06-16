@@ -21,7 +21,7 @@ func TestRenderGanttNarrowNoPanic(t *testing.T) {
 	for _, lang := range []language{langEN, langDA} {
 		applyLang(string(lang))
 		for _, width := range []int{16, 20, 24, 30, 40, 50, 70, 80, 120} {
-			m := initialModel()
+			m := newTestModel()
 			m.termWidth = width
 			m.termHeight = 30
 			// Tasks whose start/due straddle "today" so the marker is placed.

@@ -173,6 +173,7 @@ type calendarState struct {
 
 type model struct {
 	todos  []todo.Todo
+	repo   Repository
 	cursor int
 	tab    tab
 	pane   pane
@@ -261,7 +262,7 @@ type model struct {
 	cache cacheState
 }
 
-func initialModel() model {
+func initialModel(repo Repository) model {
 	ti := textinput.New()
 	ti.CharLimit = 500
 
@@ -283,7 +284,7 @@ func initialModel() model {
 	learningSearch := textinput.New()
 	learningSearch.CharLimit = 100
 
-	todos, err := loadTodos()
+	todos, err := repo.Load()
 	errMsg := ""
 	if err != nil {
 		errMsg = fmt.Sprintf("Error loading tasks: %v", err)
@@ -296,6 +297,7 @@ func initialModel() model {
 
 	m := model{
 		todos:               todos,
+		repo:                repo,
 		textInput:           ti,
 		searchInput:         si,
 		depSearchInput:      di,
