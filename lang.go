@@ -324,6 +324,7 @@ var daTranslations = map[string]string{
 	// Tag list / detail
 	"  No tags match your filter.":                  "  Ingen mærker matcher dit filter.",
 	"  No tags yet. Add tags to tasks in the detail view.": "  Ingen mærker endnu. Tilføj mærker til opgaver i detaljevisningen.",
+	"  Tags group related tasks; this tab shows progress per tag.": "  Mærker grupperer beslægtede opgaver; denne fane viser fremskridt per mærke.",
 	"  Tag":      "  Mærke",
 	"Progress":   "Fremskridt",
 	" %3d%% (%d done / %d total)": " %3d%% (%d færdige / %d i alt)",
@@ -344,6 +345,7 @@ var daTranslations = map[string]string{
 	// Learnings list / detail
 	"  No learnings match your search.": "  Ingen læring matcher din søgning.",
 	"  No learnings yet. Add learnings from a task's detail view.": "  Ingen læring endnu. Tilføj læring fra en opgaves detaljevisning.",
+	"  A learning is a takeaway you save on a task to keep for later.": "  En læring er en indsigt du gemmer på en opgave til senere.",
 	"Learning":        "Læring",
 	"Date":            "Dato",
 	"  No learning selected.": "  Ingen læring valgt.",
@@ -358,12 +360,18 @@ var daTranslations = map[string]string{
 	"  No tasks match your search.":      "  Ingen opgaver matcher din søgning.",
 	"  No tasks due today or overdue. Nice!": "  Ingen opgaver forfalder i dag eller er forfaldne. Flot!",
 	"  No tasks yet. Press 'a' to add one.": "  Ingen opgaver endnu. Tryk 'a' for at tilføje en.",
+	"  Try:  ": "  Prøv:  ",
+	// Free text (title/tag/project) is localized; the quick-add keywords
+	// due:/friday/p:high stay English because the parser only accepts English.
+	"Buy milk #shopping due:friday p:high @home": "Køb mælk #indkøb due:friday p:high @hjem",
+	"  Press ? for all keyboard shortcuts.": "  Tryk ? for alle tastaturgenveje.",
 	"  No completed tasks match your search.": "  Ingen afsluttede opgaver matcher din søgning.",
 	"  No completed tasks yet.": "  Ingen afsluttede opgaver endnu.",
 
 	// Projects
 	"  No projects match your search.":          "  Ingen projekter matcher din søgning.",
 	"  No projects yet. Add a project to a task first.": "  Ingen projekter endnu. Tilføj et projekt til en opgave først.",
+	"  A project groups its tasks into a timeline on this tab.": "  Et projekt samler dets opgaver i en tidslinje på denne fane.",
 	"Project":      "Projekt",
 	"Active":       "Aktive",
 	"Done":         "Færdige",
@@ -419,6 +427,7 @@ var daTranslations = map[string]string{
 	// Update / status / errors
 	"Update failed":               "Opdatering mislykkedes",
 	"Updated! Restart taskr to apply.": "Opdateret! Genstart taskr for at anvende.",
+	"Error saving settings: %v": "Kunne ikke gemme indstillinger: %v",
 	"Updated — restart to apply":  "Opdateret — genstart for at anvende",
 	"Check failed":                "Søgning mislykkedes",
 	"Up to date (":                "Opdateret (",

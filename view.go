@@ -387,9 +387,10 @@ func (m model) buildListContent(w, outerH int) string {
 func (m model) buildProjectListContent(w, listH int) string {
 	projects := m.allProjectsForList()
 	if len(projects) == 0 {
-		empty := normalStyle.Render("  No projects yet. Add a project to a task first.")
+		empty := normalStyle.Render(tr("  No projects yet. Add a project to a task first.")) + "\n" +
+			dimStyle.Render(tr("  A project groups its tasks into a timeline on this tab."))
 		if m.searchQuery != "" {
-			empty = normalStyle.Render("  No projects match your search.")
+			empty = normalStyle.Render(tr("  No projects match your search."))
 		}
 		innerH := listH - 2
 		if innerH < 1 {
