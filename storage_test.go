@@ -1,11 +1,56 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"taskr/todo"
 )
+
+// ── task file (de)serialization ───────────────────────────────────────────────
+
+// TestDecodeTaskFileLegacy ensures pre-versioning files (a bare JSON array of
+// todos) still load, so existing users don't lose data after the upgrade.
+func TestDecodeTaskFileLegacy(t *testing.T) {
+	legacy, err := json.Marshal([]todo.Todo{todo.New("alpha"), todo.New("beta")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := decodeTaskFile(legacy)
+	if err != nil {
+		t.Fatalf("decodeTaskFile(legacy) error: %v", err)
+	}
+	if len(got) != 2 || got[0].Title != "alpha" || got[1].Title != "beta" {
+		t.Fatalf("legacy decode = %+v, want alpha/beta", got)
+	}
+}
+
+// TestTaskFileRoundTrip ensures the current writer produces the versioned
+// envelope and that it decodes back to the same todos.
+func TestTaskFileRoundTrip(t *testing.T) {
+	in := []todo.Todo{todo.New("one"), todo.New("two")}
+	data, err := marshalTodos(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var tf taskFile
+	if err := json.Unmarshal(data, &tf); err != nil {
+		t.Fatalf("written file is not the envelope shape: %v", err)
+	}
+	if tf.Version != currentTaskFileVersion {
+		t.Fatalf("version = %d, want %d", tf.Version, currentTaskFileVersion)
+	}
+
+	got, err := decodeTaskFile(data)
+	if err != nil {
+		t.Fatalf("decodeTaskFile(envelope) error: %v", err)
+	}
+	if len(got) != 2 || got[0].Title != "one" || got[1].Title != "two" {
+		t.Fatalf("round-trip = %+v, want one/two", got)
+	}
+}
 
 // ── parseDueDate ──────────────────────────────────────────────────────────────
 
