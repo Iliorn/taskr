@@ -3,3 +3,6 @@ taskr.exe
 *.tmp
 *.bak
 taskr-macos-*
+
+# Local architecture design notes — intentionally not published
+ARCHITECTURE.md
