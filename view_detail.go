@@ -371,7 +371,16 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 		if insertPos+len([]rune(todayLabel)) > chartW {
 			insertPos = chartW - len([]rune(todayLabel))
 		}
+		// The label can be wider than the chart on very narrow terminals (more
+		// likely with longer localized strings), which drives insertPos negative;
+		// floor it and clip writes to the divider bounds.
+		if insertPos < 0 {
+			insertPos = 0
+		}
 		for i, ch := range []rune(todayLabel) {
+			if insertPos+i >= chartW {
+				break
+			}
 			divider[insertPos+i] = ch
 		}
 	}
