@@ -11,17 +11,18 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 
 ## Features
 
-- **Tasks** — add, complete, delete, rename, set priority, due dates, start dates
+- **Tasks** — add, complete, delete, rename, set priority, size (S/M/L), due dates, start dates
+- **Sequencing engine** — a weighted score (deadline + priority + size + age) decides the next-best task automatically; cycle `s` to switch between Sequence / Due / Size sort. Tune the weights in Settings (Relaxed / Balanced / Intense for each dimension)
 - **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
 - **Projects** — group tasks, Gantt timeline view
 - **Tags** — tag tasks, filter by tag, rename/delete globally
 - **Learnings** — attach notes and learnings to tasks, browse them in a dedicated tab
 - **Stats** — productivity overview with an activity heatmap
 - **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
-- **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`)
+- **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`), plus a live score breakdown so you can see why a task ranks where it does
 - **Search** — live filter across tasks, projects, tags and learnings
 - **Undo** — multi-level undo for all mutations
-- **Settings** — switch theme, view the version, check for and install updates (tab 7)
+- **Settings** — three sequencing-bias knobs, theme, language, version, in-app self-update (tab 7)
 
 ## Installation
 
@@ -61,7 +62,7 @@ taskr
 | `n` | Edit notes in `$EDITOR` |
 | `f` | Focus mode (today + overdue) |
 | `h` | Toggle history |
-| `s` | Cycle sort order |
+| `s` | Cycle sort: Sequence → Due → Size |
 | `/` | Search / filter |
 | `enter` | Open detail view |
 | `u` | Undo |
@@ -71,10 +72,10 @@ taskr
 ### Quick-add syntax
 
 ```
-Buy groceries #shopping due:friday p:high @personal
+Buy groceries #shopping due:friday p:high size:s @personal
 ```
 
-Supports `#tag`, `due:date`, `p:high/medium/low`, `@project` inline when adding a task.
+Supports `#tag`, `due:date`, `p:high/medium/low`, `size:s/m/l`, `@project` inline when adding a task.
 
 ### Date formats
 
@@ -82,7 +83,7 @@ Supports `#tag`, `due:date`, `p:high/medium/low`, `@project` inline when adding 
 
 ## Data
 
-Tasks are stored in `~/.taskr/tasks.json`. A backup is kept at `~/.taskr/tasks.json.bak`.
+Tasks are stored in `~/.taskr/tasks.db` (SQLite, WAL mode). On first launch any legacy `~/.taskr/tasks.json` is imported into the new database and then left in place as a backup.
 
 ## License
 

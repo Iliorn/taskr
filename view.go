@@ -750,14 +750,17 @@ func (m model) renderStatsDetail() string {
 		}
 	}
 
-	// Axis labels.
+	// Axis labels. Tagged with gi=-2 so renderCellRow picks the brighter
+	// axis style (statsAxisStyle) — distinct from baseline ─ / dotted ·
+	// separators which stay dim (gi=-1) to keep the chart structural
+	// elements visually quiet.
 	label := grid[rows-1]
 	if weekly {
 		for k := 0; k < n; k += 4 {
 			_, wk := buckets[k].start.ISOWeek()
 			for j, ch := range []rune(fmt.Sprintf("w%d", wk)) {
 				if c := barStart(k) + j; c < chartW {
-					label[c] = statsCell{ch, -1}
+					label[c] = statsCell{ch, -2}
 				}
 			}
 		}
@@ -782,7 +785,7 @@ func (m model) renderStatsDetail() string {
 			}
 			for j, ch := range lbl {
 				if c := start + j; c >= 0 && c < chartW {
-					label[c] = statsCell{ch, -1}
+					label[c] = statsCell{ch, -2}
 				}
 			}
 		}
@@ -818,9 +821,12 @@ func renderCellRow(cells []statsCell) string {
 		for _, cl := range cells[start:c] {
 			seg = append(seg, cl.ch)
 		}
-		if g < 0 {
+		switch {
+		case g == -2:
+			sb.WriteString(statsAxisStyle.Render(string(seg)))
+		case g < 0:
 			sb.WriteString(dimStyle.Render(string(seg)))
-		} else {
+		default:
 			sb.WriteString(statsGradient[g].Render(string(seg)))
 		}
 	}

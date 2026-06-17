@@ -166,6 +166,7 @@ var (
 	learningSelectedStyle lipgloss.Style
 
 	statsHeaderStyle lipgloss.Style
+	statsAxisStyle   lipgloss.Style // brighter than dim — used for weekday/week labels under bars
 	timerStyle       lipgloss.Style
 
 	calHeaderStyle      lipgloss.Style
@@ -230,6 +231,10 @@ func applyTheme(t theme) {
 	learningSelectedStyle = lipgloss.NewStyle().Foreground(t.yellowLt).Bold(true)
 
 	statsHeaderStyle = lipgloss.NewStyle().Foreground(t.blue).Bold(true)
+	// Axis labels (weekday names, "w42" week numbers) need to be legible at
+	// a glance — t.fg keeps them in the palette's main foreground (whitish
+	// in TokyoNight) instead of the structural-dim grey used for the baseline.
+	statsAxisStyle = lipgloss.NewStyle().Foreground(t.fg)
 	timerStyle = lipgloss.NewStyle().Foreground(t.teal).Bold(true)
 
 	calHeaderStyle = lipgloss.NewStyle().Foreground(t.teal).Bold(true)
