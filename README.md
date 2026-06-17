@@ -81,6 +81,23 @@ Supports `#tag`, `due:date`, `p:high/medium/low`, `size:s/m/l`, `@project` inlin
 
 `today` · `tomorrow` · `next week` · `monday` · `15-06-25` · `+3d` · `+2w` · `+1m`
 
+## CLI
+
+`taskr` ships with a small command-line surface for scripting. Bare `taskr` still launches the TUI; pass a subcommand to drop into CLI mode:
+
+```sh
+taskr add "Buy milk" --size=s --due=tomorrow --p=high --tag=shopping
+taskr list                       # pending top-level tasks (table)
+taskr list --json --focus        # JSON, today + overdue only
+taskr top -n=5                   # top 5 by sequence score
+taskr done 60b9                  # mark a task done by id prefix
+taskr help
+```
+
+Flags can appear before or after the title. `taskr top --json` is the recommended hook for scripts and other tools. The CLI reads the same `~/.taskr/settings.json` as the TUI, so ranking matches your current bias personality.
+
+The TUI and CLI share the SQLite store. Concurrent reads are safe; writes serialize via SQLite's busy-timeout. A running TUI won't see CLI mutations until it restarts — keep that in mind if you script alongside an open session.
+
 ## Data
 
 Tasks are stored in `~/.taskr/tasks.db` (SQLite, WAL mode). On first launch any legacy `~/.taskr/tasks.json` is imported into the new database and then left in place as a backup.
