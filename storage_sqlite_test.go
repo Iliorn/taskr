@@ -22,25 +22,23 @@ func openTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("open: %v", err)
 	}
 	h.SetMaxOpenConns(1)
-	if _, err := h.Exec(schemaSQL); err != nil {
-		t.Fatalf("schema: %v", err)
+	if err := runMigrations(h); err != nil {
+		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(func() { h.Close() })
 	return h
 }
 
-func saveTodos(t *testing.T, h *sql.DB, todos []todo.Todo) {
+// saveTodos upserts todos and tombstones the explicit IDs in tombstones,
+// mirroring the differential adapter contract.
+func saveTodos(t *testing.T, h *sql.DB, todos []todo.Todo, tombstones ...string) {
 	t.Helper()
-	rows := make([]todoRow, 0, len(todos))
+	ptrs := make([]*todo.Todo, len(todos))
 	for i := range todos {
-		r, err := encodeRow(&todos[i])
-		if err != nil {
-			t.Fatalf("encodeRow: %v", err)
-		}
-		rows = append(rows, r)
+		ptrs[i] = &todos[i]
 	}
-	if err := syncRowsToDB(h, rows); err != nil {
-		t.Fatalf("syncRowsToDB: %v", err)
+	if err := saveNormalized(h, ptrs, tombstones); err != nil {
+		t.Fatalf("saveNormalized: %v", err)
 	}
 }
 
@@ -111,6 +109,43 @@ func TestSQLiteColumnsMirrorBlob(t *testing.T) {
 	}
 }
 
+// TestSQLiteSizeRoundTrip confirms the size column populated by migration 003
+// round-trips: a Small task saves as 1 and loads back as todo.SizeSmall, and a
+// task with no explicit size loads as the zero value (SizeMedium) so existing
+// rows are unaffected.
+func TestSQLiteSizeRoundTrip(t *testing.T) {
+	h := openTestDB(t)
+
+	small := todo.New("quick win")
+	small.SetSize(todo.SizeSmall)
+	plain := todo.New("default sized")
+
+	saveTodos(t, h, []todo.Todo{small, plain})
+
+	got, err := loadTodosFromDB(h)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	byID := map[string]todo.Todo{}
+	for _, x := range got {
+		byID[x.ID] = x
+	}
+	if byID[small.ID].Size != todo.SizeSmall {
+		t.Errorf("Small task loaded as %v, want SizeSmall", byID[small.ID].Size)
+	}
+	if byID[plain.ID].Size != todo.SizeMedium {
+		t.Errorf("default-sized task loaded as %v, want SizeMedium (zero value)", byID[plain.ID].Size)
+	}
+
+	var sizeCol int
+	if err := h.QueryRow(`SELECT size FROM todos WHERE id=?`, small.ID).Scan(&sizeCol); err != nil {
+		t.Fatalf("query size: %v", err)
+	}
+	if sizeCol != int(todo.SizeSmall) {
+		t.Errorf("size column = %d, want %d", sizeCol, int(todo.SizeSmall))
+	}
+}
+
 // TestSQLiteTombstone confirms a task dropped from the saved set is soft-deleted
 // (kept with deleted=1 for sync) rather than removed, and no longer loads.
 func TestSQLiteTombstone(t *testing.T) {
@@ -120,8 +155,8 @@ func TestSQLiteTombstone(t *testing.T) {
 	b := todo.New("delete me")
 	saveTodos(t, h, []todo.Todo{a, b})
 
-	// Re-save without b — simulates deleting it in the app.
-	saveTodos(t, h, []todo.Todo{a})
+	// Differential save: explicitly tombstone b.
+	saveTodos(t, h, []todo.Todo{a}, b.ID)
 
 	got, err := loadTodosFromDB(h)
 	if err != nil {
@@ -151,8 +186,8 @@ func TestSQLiteTombstoneRevive(t *testing.T) {
 
 	a := todo.New("on and off")
 	saveTodos(t, h, []todo.Todo{a})
-	saveTodos(t, h, []todo.Todo{})  // tombstone
-	saveTodos(t, h, []todo.Todo{a}) // revive
+	saveTodos(t, h, nil, a.ID)      // tombstone
+	saveTodos(t, h, []todo.Todo{a}) // revive (upsert clears deleted)
 
 	got, err := loadTodosFromDB(h)
 	if err != nil {
@@ -217,7 +252,7 @@ func TestFileBackedRoundTrip(t *testing.T) {
 	a := todo.New("persist me")
 	b := todo.New("delete me")
 	saveTodos(t, h1, []todo.Todo{a, b})
-	saveTodos(t, h1, []todo.Todo{a}) // tombstone b
+	saveTodos(t, h1, []todo.Todo{a}, b.ID) // tombstone b
 	h1.Close()
 
 	// Reopen: the on-disk data must come back, and b must stay tombstoned.
@@ -265,7 +300,11 @@ func TestImportGatedOnFreshDB(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("fresh import got %d, want 2", len(got))
 	}
-	saveTodos(t, h1, nil) // delete everything → all tombstoned
+	allIDs := make([]string, 0, len(got))
+	for _, td := range got {
+		allIDs = append(allIDs, td.ID)
+	}
+	saveTodos(t, h1, nil, allIDs...) // delete everything → all tombstoned
 	h1.Close()
 
 	// Reopen the existing DB: must not re-import despite tasks.json still there.

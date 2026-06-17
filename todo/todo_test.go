@@ -19,6 +19,9 @@ func TestNew(t *testing.T) {
 	if task.Priority != PriorityMedium {
 		t.Errorf("Priority = %v, want PriorityMedium", task.Priority)
 	}
+	if task.Size != SizeMedium {
+		t.Errorf("Size = %v, want SizeMedium (zero value)", task.Size)
+	}
 	if task.ID == "" {
 		t.Error("ID should not be empty")
 	}
@@ -27,6 +30,28 @@ func TestNew(t *testing.T) {
 	}
 	if task.ModifiedAt.IsZero() {
 		t.Error("ModifiedAt should be set")
+	}
+}
+
+// TestSizeStringerAndLetter covers the two display helpers and confirms the
+// zero value renders as Medium.
+func TestSizeStringerAndLetter(t *testing.T) {
+	cases := []struct {
+		size   Size
+		str    string
+		letter string
+	}{
+		{SizeMedium, "medium", "M"},
+		{SizeSmall, "small", "S"},
+		{SizeLarge, "large", "L"},
+	}
+	for _, c := range cases {
+		if c.size.String() != c.str {
+			t.Errorf("Size(%d).String() = %q, want %q", c.size, c.size.String(), c.str)
+		}
+		if c.size.Letter() != c.letter {
+			t.Errorf("Size(%d).Letter() = %q, want %q", c.size, c.size.Letter(), c.letter)
+		}
 	}
 }
 

@@ -185,6 +185,7 @@ func TestParseQuickAdd(t *testing.T) {
 		wantTags  []string
 		wantProj  string
 		wantPrio  todo.Priority
+		wantSize  todo.Size
 		wantDue   bool
 	}{
 		{
@@ -265,6 +266,27 @@ func TestParseQuickAdd(t *testing.T) {
 			wantTitle: "",
 			wantPrio:  todo.PriorityMedium,
 		},
+		{
+			name:      "size small",
+			input:     "Sweep porch size:s",
+			wantTitle: "Sweep porch",
+			wantPrio:  todo.PriorityMedium,
+			wantSize:  todo.SizeSmall,
+		},
+		{
+			name:      "size large word",
+			input:     "Rewrite scheduler size:large",
+			wantTitle: "Rewrite scheduler",
+			wantPrio:  todo.PriorityMedium,
+			wantSize:  todo.SizeLarge,
+		},
+		{
+			name:      "invalid size becomes title",
+			input:     "Task size:huge",
+			wantTitle: "Task size:huge",
+			wantPrio:  todo.PriorityMedium,
+			wantSize:  todo.SizeMedium,
+		},
 	}
 
 	for _, tt := range tests {
@@ -276,6 +298,9 @@ func TestParseQuickAdd(t *testing.T) {
 			}
 			if got.priority != tt.wantPrio {
 				t.Errorf("priority = %v, want %v", got.priority, tt.wantPrio)
+			}
+			if got.size != tt.wantSize {
+				t.Errorf("size = %v, want %v", got.size, tt.wantSize)
 			}
 			if tt.wantProj != "" && got.project != tt.wantProj {
 				t.Errorf("project = %q, want %q", got.project, tt.wantProj)

@@ -277,33 +277,18 @@ func TestSortTodosByMode(t *testing.T) {
 		}
 	})
 
-	t.Run("by priority", func(t *testing.T) {
+	t.Run("by sequence puts highest-scoring first", func(t *testing.T) {
+		// 'b' is high-priority AND due tomorrow → highest score.
+		// 'c' is medium AND due today → second.
+		// 'a' is low with no date → lowest (just age).
 		cp := make([]todo.Todo, len(todos))
 		copy(cp, todos)
-		sortTodosByMode(cp, taskSortPriority)
+		sortTodosByMode(cp, taskSortSequence)
 		if cp[0].ID != "b" {
-			t.Errorf("first should be 'b' (high), got %s", cp[0].ID)
-		}
-		if cp[1].ID != "c" {
-			t.Errorf("second should be 'c' (medium), got %s", cp[1].ID)
+			t.Errorf("first should be 'b' (high+tomorrow), got %s", cp[0].ID)
 		}
 		if cp[2].ID != "a" {
-			t.Errorf("third should be 'a' (low), got %s", cp[2].ID)
-		}
-	})
-
-	t.Run("by created", func(t *testing.T) {
-		cp := make([]todo.Todo, len(todos))
-		copy(cp, todos)
-		sortTodosByMode(cp, taskSortCreated)
-		if cp[0].ID != "a" {
-			t.Errorf("first should be 'a' (oldest), got %s", cp[0].ID)
-		}
-		if cp[1].ID != "b" {
-			t.Errorf("second should be 'b', got %s", cp[1].ID)
-		}
-		if cp[2].ID != "c" {
-			t.Errorf("third should be 'c' (newest), got %s", cp[2].ID)
+			t.Errorf("last should be 'a' (low, no date), got %s", cp[2].ID)
 		}
 	})
 
@@ -346,59 +331,7 @@ func TestSortTodosByStartDate(t *testing.T) {
 	}
 }
 
-// ── getProjects ───────────────────────────────────────────────────────────────
-
-func TestGetProjects(t *testing.T) {
-	todos := []todo.Todo{
-		{Project: "alpha"},
-		{Project: "beta"},
-		{Project: "alpha"}, // duplicate
-		{Project: ""},      // no project
-		{Project: "gamma"},
-	}
-
-	projects := getProjects(todos)
-
-	if len(projects) != 3 {
-		t.Fatalf("expected 3 projects, got %d: %v", len(projects), projects)
-	}
-	// Should be sorted alphabetically
-	if projects[0] != "alpha" || projects[1] != "beta" || projects[2] != "gamma" {
-		t.Errorf("projects = %v, want [alpha beta gamma]", projects)
-	}
-}
-
-func TestGetProjectsEmpty(t *testing.T) {
-	projects := getProjects([]todo.Todo{})
-	if len(projects) != 0 {
-		t.Errorf("expected 0 projects, got %d", len(projects))
-	}
-}
-
-// ── getTasksForProject ────────────────────────────────────────────────────────
-
-func TestGetTasksForProject(t *testing.T) {
-	now := time.Now()
-	todos := []todo.Todo{
-		{ID: "a", Project: "web", StartDate: now.AddDate(0, 0, 5), CreatedAt: now},
-		{ID: "b", Project: "api", CreatedAt: now},
-		{ID: "c", Project: "web", StartDate: now.AddDate(0, 0, 1), CreatedAt: now},
-		{ID: "d", Project: "web", CreatedAt: now.Add(-1 * time.Hour)}, // no start date
-	}
-
-	result := getTasksForProject(todos, "web")
-
-	if len(result) != 3 {
-		t.Fatalf("expected 3 tasks for 'web', got %d", len(result))
-	}
-	// Should be sorted by start date
-	if result[0].ID != "c" {
-		t.Errorf("first should be 'c' (earliest start), got %s", result[0].ID)
-	}
-
-	// Non-existent project
-	empty := getTasksForProject(todos, "nonexistent")
-	if len(empty) != 0 {
-		t.Errorf("expected 0 tasks for nonexistent project, got %d", len(empty))
-	}
-}
+// Coverage for projects/tasks-per-project now lives in selectors_test.go
+// (TestSelectProjects) and cache.go (refreshCaches builds the per-project
+// task map via sortTodosByStartDate). The old getProjects /
+// getTasksForProject helpers were removed as dead code.

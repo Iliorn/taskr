@@ -59,6 +59,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	}
 	b.WriteString(renderField(tr("Due date"), dueVal, fieldDueDate) + "\n")
 	b.WriteString(renderField(tr("Priority"), t.Priority.Icon()+" "+trPriority(t.Priority), fieldPriority) + "\n")
+	b.WriteString(renderField(tr("Size"), t.Size.Letter()+" "+trSize(t.Size), fieldSize) + "\n")
 
 	projectVal := tr("not set")
 	if t.Project != "" {
@@ -94,6 +95,17 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	if t.Status == todo.Done && !t.CompletedAt.IsZero() {
 		b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Completed on:"), detailLabelColWidth)) +
 			checkDoneStyle.Render(t.CompletedAt.Format("02-01-06 15:04")) + "\n")
+	}
+
+	// Score breakdown: surfaces *why* a task ranks where it does. Shown only
+	// on pending tasks because Done always scores 0 and the breakdown would
+	// be a row of zeros.
+	if t.Status == todo.Pending {
+		sc := sequenceComponentsFor(t)
+		breakdown := fmt.Sprintf(tr("%.1f  (D %.1f · P %.1f · M %.1f · A %.1f)"),
+			sc.Total, sc.Urgency, sc.Importance, sc.Momentum, sc.Age)
+		b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Score:"), detailLabelColWidth)) +
+			detailValueStyle.Render(breakdown) + "\n")
 	}
 	b.WriteString("\n")
 

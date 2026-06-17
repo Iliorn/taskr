@@ -159,6 +159,12 @@ func trPriority(p todo.Priority) string {
 	return tr(p.String())
 }
 
+// trSize localizes the size word for the same reason — the todo package keeps
+// only the English source word.
+func trSize(s todo.Size) string {
+	return tr(s.String())
+}
+
 // ── Translation tables ──────────────────────────────────────────────────────
 //
 // Keyed by English source string. Keep entries grouped by where they appear so

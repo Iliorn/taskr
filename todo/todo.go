@@ -48,6 +48,47 @@ func (p Priority) Icon() string {
 	}
 }
 
+// ── Size ──────────────────────────────────────────────────────────────────────
+
+// Size is the user's coarse estimate of how much effort a task will take. It
+// feeds the Momentum dimension of the sequencing score: Small tasks rank
+// highest (the "small-task floor") so a 5-minute win can outrank a large
+// project sitting at the same priority/deadline.
+//
+// SizeMedium is the zero value so existing JSON blobs and pre-migration SQLite
+// rows (added with DEFAULT 0) deserialize as Medium — a neutral default that
+// matches "no opinion".
+type Size int
+
+const (
+	SizeMedium Size = iota
+	SizeSmall
+	SizeLarge
+)
+
+func (s Size) String() string {
+	switch s {
+	case SizeSmall:
+		return "small"
+	case SizeLarge:
+		return "large"
+	default:
+		return "medium"
+	}
+}
+
+// Letter is the one-character form used in compact UI columns.
+func (s Size) Letter() string {
+	switch s {
+	case SizeSmall:
+		return "S"
+	case SizeLarge:
+		return "L"
+	default:
+		return "M"
+	}
+}
+
 // ── Comment ───────────────────────────────────────────────────────────────────
 
 type Comment struct {
@@ -94,6 +135,7 @@ type Todo struct {
 	Title        string      `json:"title"`
 	Status       Status      `json:"status"`
 	Priority     Priority    `json:"priority"`
+	Size         Size        `json:"size,omitempty"`
 	CreatedAt    time.Time   `json:"created_at"`
 	ModifiedAt   time.Time   `json:"modified_at"`
 	CompletedAt  time.Time   `json:"completed_at,omitempty"`
@@ -150,6 +192,11 @@ func (t *Todo) SetStartDate(d time.Time) {
 
 func (t *Todo) SetPriority(p Priority) {
 	t.Priority = p
+	t.ModifiedAt = time.Now()
+}
+
+func (t *Todo) SetSize(s Size) {
+	t.Size = s
 	t.ModifiedAt = time.Now()
 }
 

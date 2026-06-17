@@ -27,9 +27,14 @@ const (
 
 const numTabs = 7
 
-// Rows in the Settings tab.
+// Rows in the Settings tab. Bias rows come first because they're the
+// sequencing engine's only user-visible knob; cosmetic rows (theme, language)
+// sit below to keep the visual layout consistent.
 const (
-	settingTheme = iota
+	settingBiasDeadline = iota
+	settingBiasPriority
+	settingBiasMomentum
+	settingTheme
 	settingLanguage
 	settingVersion
 	settingCheckUpdate
@@ -49,6 +54,7 @@ const (
 	fieldStartDate detailField = iota
 	fieldDueDate
 	fieldPriority
+	fieldSize
 	fieldProject
 	fieldNotes
 	fieldTags
@@ -114,11 +120,14 @@ const (
 
 type taskSortMode int
 
+// Three sort modes survive the sequencing engine: Sequence (the score-based
+// default), DueDate (strict deadline view), and Size (Small → Medium → Large
+// for "show me the quick wins"). Each mode lines up with a visible column so
+// the >..< header marker is always meaningful.
 const (
-	taskSortDueDate taskSortMode = iota
-	taskSortPriority
-	taskSortStartDate
-	taskSortCreated
+	taskSortSequence taskSortMode = iota
+	taskSortDueDate
+	taskSortSize
 )
 
 type learningSortMode int
@@ -172,7 +181,7 @@ type calendarState struct {
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 type model struct {
-	Store  // embedded source of truth (todos, undo) — promotes m.todos etc.
+	Store  // embedded source of truth (tasks map, indexes, undo) — promotes m.tasks, m.add, m.pushUndo, etc.
 	repo   Repository
 	cursor int
 	tab    tab
@@ -256,7 +265,7 @@ type model struct {
 	ganttColorBuf []int
 
 	// Caches
-	cache cacheState
+	cache *cacheState
 }
 
 func initialModel(repo Repository) model {
@@ -291,9 +300,15 @@ func initialModel(repo Repository) model {
 	th := themeByName(settings.Theme)
 	applyTheme(th)
 	applyLang(settings.Language)
+	applyBiases(biasesFromSettings(settings))
 
+	store := Store{}
+	store.ensureTasks()
+	for i := range todos {
+		store.add(todos[i])
+	}
 	m := model{
-		Store:               Store{todos: todos},
+		Store:               store,
 		repo:                repo,
 		textInput:           ti,
 		searchInput:         si,
@@ -317,22 +332,20 @@ func initialModel(repo Repository) model {
 		frameTime:           time.Now(),
 		ganttBarBuf:         make([]rune, 256),
 		ganttColorBuf:       make([]int, 256),
-		cache: cacheState{
+		cache: &cacheState{
 			dirty:        true,
-			todoIndex:    make(map[string]int),
 			overdueSet:   make(map[string]bool),
 			tagRender:    make(map[string]string, 32),
-			subtaskIndex: make(map[string][]int),
 			projectTasks: make(map[string][]todo.Todo),
 		},
 	}
 	m.applyLangPlaceholders()
 	m.refreshCaches()
 	m.calendar.selected = startOfDay(time.Now())
-	m.timerTickOn = m.runningTodoIndex() >= 0
-	if idx := m.runningTodoIndex(); idx >= 0 {
-		if e := m.todos[idx].RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
-			m.openIdlePrompt(idx)
+	if t := m.runningTask(); t != nil {
+		m.timerTickOn = true
+		if e := t.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
+			m.openIdlePrompt(t)
 		}
 	}
 	return m
@@ -377,67 +390,88 @@ func scheduleSave() tea.Cmd {
 	})
 }
 
-// copyTodos creates an independent copy. Tasks without slices share memory
-// (safe because undo restores the whole slice, never mutates individual tasks from a snapshot).
+// copyTodo deep-copies the nested slices of a single task so the result can be
+// safely mutated (or read from another goroutine) without affecting the source.
+func copyTodo(t todo.Todo) todo.Todo {
+	cp := t
+	if len(t.Tags) > 0 {
+		cp.Tags = append([]string{}, t.Tags...)
+	}
+	if len(t.Dependencies) > 0 {
+		cp.Dependencies = append([]string{}, t.Dependencies...)
+	}
+	if len(t.Comments) > 0 {
+		cp.Comments = append([]todo.Comment{}, t.Comments...)
+	}
+	if len(t.Learnings) > 0 {
+		cp.Learnings = append([]todo.Learning{}, t.Learnings...)
+	}
+	if len(t.TimeEntries) > 0 {
+		cp.TimeEntries = append([]todo.TimeEntry{}, t.TimeEntries...)
+	}
+	return cp
+}
+
+// copyTodos creates an independent copy of a task slice. Used by the undo stack
+// (still snapshot-based until step 8 swaps it for a patch log).
 func copyTodos(todos []todo.Todo) []todo.Todo {
 	cp := make([]todo.Todo, len(todos))
-	for i, t := range todos {
-		cp[i] = t
-		if len(t.Tags) > 0 {
-			cp[i].Tags = append([]string{}, t.Tags...)
-		}
-		if len(t.Dependencies) > 0 {
-			cp[i].Dependencies = append([]string{}, t.Dependencies...)
-		}
-		if len(t.Comments) > 0 {
-			cp[i].Comments = append([]todo.Comment{}, t.Comments...)
-		}
-		if len(t.Learnings) > 0 {
-			cp[i].Learnings = append([]todo.Learning{}, t.Learnings...)
-		}
-		if len(t.TimeEntries) > 0 {
-			cp[i].TimeEntries = append([]todo.TimeEntry{}, t.TimeEntries...)
-		}
+	for i := range todos {
+		cp[i] = copyTodo(todos[i])
 	}
 	return cp
 }
 
 // ── Model mutations ───────────────────────────────────────────────────────────
 
-func (m *model) markModified() {
+// markModified records a mutation: pushes undo, marks the named IDs dirty for
+// the next save, and flags derived caches as stale. The cache is refreshed
+// lazily on the next read (via ensureCache), so several mutations within one
+// Update only pay for one refresh instead of one per mutation. With no IDs,
+// falls back to marking every task dirty — used by mass operations not yet
+// refactored to return touched IDs.
+func (m *model) markModified(ids ...string) {
 	taskID := m.currentTaskID()
-	m.pushUndo("modify")
+	m.pushUndo("modify", ids...)
+	if len(ids) == 0 {
+		m.markAllDirty()
+	} else {
+		m.markDirty(ids...)
+	}
 	m.dirty = true
 	m.cache.dirty = true
 	m.invalidateDetailCache()
-	m.refreshCaches()
+	m.ensureCache()
 	m.followTask(taskID)
 }
 
-func (m *model) markModifiedNoUndo() {
+func (m *model) markModifiedNoUndo(ids ...string) {
 	taskID := m.currentTaskID()
+	if len(ids) == 0 {
+		m.markAllDirty()
+	} else {
+		m.markDirty(ids...)
+	}
 	m.dirty = true
 	m.cache.dirty = true
 	m.invalidateDetailCache()
-	m.refreshCaches()
+	m.ensureCache()
 	m.followTask(taskID)
 }
 
 func (m *model) markCacheDirty() {
 	m.cache.dirty = true
 	m.invalidateDetailCache()
-	m.refreshCaches()
 }
 
 func (m *model) currentTaskID() string {
 	if m.pane != paneDetail || m.tab != tabTasks {
 		return ""
 	}
-	idx := m.currentTodoIndex()
-	if idx < 0 {
-		return ""
+	if t := m.currentTodo(); t != nil {
+		return t.ID
 	}
-	return m.todos[idx].ID
+	return ""
 }
 
 func (m *model) followTask(taskID string) {
@@ -460,23 +494,27 @@ func (m *model) followTask(taskID string) {
 
 // ── Time tracking helpers ─────────────────────────────────────────────────────
 
-func (m model) runningTodoIndex() int {
-	for i := range m.todos {
-		if m.todos[i].IsTimerRunning() {
-			return i
+// runningTask returns the task with the active timer, or nil. Reads from the
+// maintained runningTimers index — O(1) instead of a full map scan.
+func (m model) runningTask() *todo.Todo {
+	for id := range m.runningTimers {
+		if t := m.get(id); t != nil {
+			return t
 		}
 	}
-	return -1
+	return nil
 }
 
 func (m model) anyTimerRunning() bool {
-	return m.runningTodoIndex() >= 0
+	return len(m.runningTimers) > 0
 }
 
 // openIdlePrompt switches to the runaway-timer prompt for the task's
 // running entry.
-func (m *model) openIdlePrompt(idx int) {
-	t := &m.todos[idx]
+func (m *model) openIdlePrompt(t *todo.Todo) {
+	if t == nil {
+		return
+	}
 	e := t.RunningEntry()
 	if e == nil {
 		return
@@ -488,37 +526,35 @@ func (m *model) openIdlePrompt(idx int) {
 		truncate(t.Title, 30), formatDuration(time.Since(e.StartedAt)))
 }
 
-// toggleTimer stops the task's timer if running, otherwise stops any other
-// running timer (only one task is tracked at a time) and starts this one.
-func (m *model) toggleTimer(idx int) {
-	if m.todos[idx].IsTimerRunning() {
-		m.todos[idx].StopTimer()
+// toggleTimer stops t's timer if running, otherwise stops any other running
+// timer (only one task is tracked at a time) and starts this one. The Store's
+// runningTimers index is maintained by Store.startTimer / stopTimer.
+func (m *model) toggleTimer(t *todo.Todo) {
+	if t == nil {
 		return
 	}
-	for i := range m.todos {
-		if m.todos[i].IsTimerRunning() {
-			m.todos[i].StopTimer()
+	if t.IsTimerRunning() {
+		m.stopTimer(t.ID)
+		return
+	}
+	for otherID := range m.runningTimers {
+		if otherID != t.ID {
+			m.stopTimer(otherID)
 		}
 	}
-	m.todos[idx].StartTimer()
+	m.startTimer(t.ID)
 }
 
 // ── Lookup helpers ────────────────────────────────────────────────────────────
 
 func (m model) findTodoByID(id string) *todo.Todo {
-	if idx, ok := m.cache.todoIndex[id]; ok && idx < len(m.todos) {
-		return &m.todos[idx]
-	}
-	return nil
+	return m.get(id)
 }
 
-func (m model) currentTodoIndex() int {
-	findByID := func(id string) int {
-		if idx, ok := m.cache.todoIndex[id]; ok {
-			return idx
-		}
-		return -1
-	}
+// currentTodo returns the *Todo at the current cursor position in whichever
+// task list the user is viewing (active / done / project-tasks), or nil if the
+// cursor is past the end of that list.
+func (m model) currentTodo() *todo.Todo {
 	switch m.tab {
 	case tabTasks:
 		var list []todo.Todo
@@ -528,7 +564,7 @@ func (m model) currentTodoIndex() int {
 			list = m.cache.active
 		}
 		if m.cursor < len(list) {
-			return findByID(list[m.cursor].ID)
+			return m.get(list[m.cursor].ID)
 		}
 	case tabProjects:
 		if m.projectTaskMode {
@@ -536,122 +572,101 @@ func (m model) currentTodoIndex() int {
 			if m.projectCursor < len(projects) {
 				tasks := m.getProjectTasks(projects[m.projectCursor])
 				if m.cursor < len(tasks) {
-					return findByID(tasks[m.cursor].ID)
+					return m.get(tasks[m.cursor].ID)
 				}
-			}
-		}
-	}
-	return -1
-}
-
-func (m model) currentTodo() *todo.Todo {
-	idx := m.currentTodoIndex()
-	if idx < 0 {
-		return nil
-	}
-	return &m.todos[idx]
-}
-
-// ── Learnings helpers ─────────────────────────────────────────────────────────
-
-func (m model) findLearningSource(learningID string) *todo.Todo {
-	for i := range m.todos {
-		for _, l := range m.todos[i].Learnings {
-			if l.ID == learningID {
-				return &m.todos[i]
 			}
 		}
 	}
 	return nil
 }
 
-func (m *model) deleteLearningByID(learningID string) {
-	for i := range m.todos {
-		for j, l := range m.todos[i].Learnings {
+// ── Learnings helpers ─────────────────────────────────────────────────────────
+
+func (m model) findLearningSource(learningID string) *todo.Todo {
+	for _, t := range m.tasks {
+		for _, l := range t.Learnings {
 			if l.ID == learningID {
-				m.todos[i].DeleteLearning(j)
-				return
+				return t
 			}
 		}
 	}
+	return nil
 }
 
-func (m *model) updateLearningByID(learningID, newText string) {
-	for i := range m.todos {
-		for j, l := range m.todos[i].Learnings {
+// deleteLearningByID removes the named learning from its parent task and
+// returns the parent's ID (or "" if not found) so callers can mark it dirty.
+func (m *model) deleteLearningByID(learningID string) string {
+	for _, t := range m.tasks {
+		for j, l := range t.Learnings {
 			if l.ID == learningID {
-				m.todos[i].UpdateLearning(j, newText)
-				return
+				t.DeleteLearning(j)
+				return t.ID
 			}
 		}
 	}
+	return ""
+}
+
+// updateLearningByID rewrites a learning's text and returns its parent's ID.
+func (m *model) updateLearningByID(learningID, newText string) string {
+	for _, t := range m.tasks {
+		for j, l := range t.Learnings {
+			if l.ID == learningID {
+				t.UpdateLearning(j, newText)
+				return t.ID
+			}
+		}
+	}
+	return ""
 }
 
 // ── Subtask helpers ───────────────────────────────────────────────────────────
 
-// subtaskIDs returns parentID's child task IDs in creation order, derived from
-// ParentID (the single source of truth for the parent-child link). CreatedAt
-// order reproduces the order subtasks were added.
+// subtaskIDs returns parentID's child task IDs in CreatedAt order, read
+// directly from the maintained subtaskOf index — O(1) lookup, no rebuild.
 func (m model) subtaskIDs(parentID string) []string {
-	var subs []todo.Todo
-	for i := range m.todos {
-		if m.todos[i].ParentID == parentID {
-			subs = append(subs, m.todos[i])
-		}
-	}
-	sort.SliceStable(subs, func(a, b int) bool {
-		return subs[a].CreatedAt.Before(subs[b].CreatedAt)
-	})
-	ids := make([]string, len(subs))
-	for i, s := range subs {
-		ids[i] = s.ID
-	}
-	return ids
+	return m.subtaskOf[parentID]
 }
 
-// subtaskCount returns how many subtasks parentID has (order-independent, so it
-// skips the sort in subtaskIDs).
+// subtaskCount returns how many subtasks parentID has, via the maintained
+// subtaskOf index.
 func (m model) subtaskCount(parentID string) int {
-	n := 0
-	for i := range m.todos {
-		if m.todos[i].ParentID == parentID {
-			n++
-		}
-	}
-	return n
+	return len(m.subtaskOf[parentID])
 }
 
-func (m *model) addSubtask(parentIdx int, title string) {
-	sub := todo.NewSubtask(title, m.todos[parentIdx].ID)
-	m.todos = append(m.todos, sub)
+// addSubtask creates a child of parentID and returns the new subtask's ID so
+// the caller can mark it dirty.
+func (m *model) addSubtask(parentID, title string) string {
+	sub := todo.NewSubtask(title, parentID)
+	m.add(sub)
+	return sub.ID
 }
 
-func (m *model) deleteSubtask(parentIdx int, subtaskCursor int) {
-	ids := m.subtaskIDs(m.todos[parentIdx].ID)
+// deleteSubtask removes the child task at subtaskCursor under parentID and
+// returns the deleted subtask's ID so the caller can record it as a tombstone.
+func (m *model) deleteSubtask(parentID string, subtaskCursor int) string {
+	ids := m.subtaskIDs(parentID)
 	if subtaskCursor >= len(ids) {
-		return
+		return ""
 	}
 	subID := ids[subtaskCursor]
-	for i, t := range m.todos {
-		if t.ID == subID {
-			m.todos = append(m.todos[:i], m.todos[i+1:]...)
-			break
-		}
-	}
+	m.remove(subID)
+	return subID
 }
 
-func (m *model) toggleSubtask(parentIdx int, subtaskCursor int) {
-	ids := m.subtaskIDs(m.todos[parentIdx].ID)
+// toggleSubtask flips a child task's status and returns the toggled task's ID
+// so the caller can mark it dirty.
+func (m *model) toggleSubtask(parentID string, subtaskCursor int) string {
+	ids := m.subtaskIDs(parentID)
 	if subtaskCursor >= len(ids) {
-		return
+		return ""
 	}
 	subID := ids[subtaskCursor]
-	for i := range m.todos {
-		if m.todos[i].ID == subID {
-			m.todos[i].Toggle()
-			return
-		}
+	if t := m.get(subID); t != nil {
+		t.Toggle()
+		return subID
 	}
+	return ""
 }
 
 // ── Search/filter helpers ─────────────────────────────────────────────────────
@@ -668,12 +683,12 @@ func (m model) depSearchResults() []todo.Todo {
 	t := m.currentTodo()
 	q := strings.ToLower(m.depSearch.query)
 	result := make([]todo.Todo, 0, maxDepSearchResults*2)
-	for _, candidate := range m.todos {
+	for _, candidate := range m.tasks {
 		if t != nil && candidate.ID == t.ID {
 			continue
 		}
 		if q == "" || strings.Contains(strings.ToLower(candidate.Title), q) {
-			result = append(result, candidate)
+			result = append(result, *candidate)
 			if len(result) >= maxDepSearchResults*3 {
 				break
 			}
@@ -690,8 +705,8 @@ func (m model) getAllTagsSorted() []string {
 	// that mutate tagSort without a refresh). Rebuild without touching cache.
 	seen := make(map[string]struct{}, 16)
 	tags := make([]string, 0, 16)
-	for i := range m.todos {
-		for _, tag := range m.todos[i].Tags {
+	for _, t := range m.tasks {
+		for _, tag := range t.Tags {
 			if _, ok := seen[tag]; !ok {
 				seen[tag] = struct{}{}
 				tags = append(tags, tag)
@@ -761,14 +776,17 @@ func (m model) projSearchResults() []string {
 
 // ── Global mutations ──────────────────────────────────────────────────────────
 
-func (m *model) renameTagGlobally(oldName, newName string) {
+// renameTagGlobally rewrites every occurrence of oldName to newName and
+// returns the IDs of the tasks it touched, for dirty marking.
+func (m *model) renameTagGlobally(oldName, newName string) []string {
 	newName = todo.NormalizeTag(newName)
 	if newName == "" || newName == oldName {
-		return
+		return nil
 	}
-	for i := range m.todos {
+	var touched []string
+	for _, t := range m.tasks {
 		has := false
-		for _, tag := range m.todos[i].Tags {
+		for _, tag := range t.Tags {
 			if tag == oldName {
 				has = true
 				break
@@ -779,29 +797,42 @@ func (m *model) renameTagGlobally(oldName, newName string) {
 		}
 		// RemoveTag + AddTag merges into an existing tag (no duplicates) and
 		// normalizes, rather than blindly overwriting in place.
-		m.todos[i].RemoveTag(oldName)
-		m.todos[i].AddTag(newName)
+		t.RemoveTag(oldName)
+		t.AddTag(newName)
+		touched = append(touched, t.ID)
 	}
+	return touched
 }
 
-func (m *model) deleteTagGlobally(tagName string) {
-	for i := range m.todos {
-		tags := m.todos[i].Tags[:0]
-		for _, tag := range m.todos[i].Tags {
-			if tag != tagName {
-				tags = append(tags, tag)
+func (m *model) deleteTagGlobally(tagName string) []string {
+	var touched []string
+	for _, t := range m.tasks {
+		hadTag := false
+		tags := t.Tags[:0]
+		for _, tag := range t.Tags {
+			if tag == tagName {
+				hadTag = true
+				continue
 			}
+			tags = append(tags, tag)
 		}
-		m.todos[i].Tags = tags
+		t.Tags = tags
+		if hadTag {
+			touched = append(touched, t.ID)
+		}
 	}
+	return touched
 }
 
-func (m *model) renameProjectGlobally(oldName, newName string) {
-	for i := range m.todos {
-		if m.todos[i].Project == oldName {
-			m.todos[i].Project = newName
+func (m *model) renameProjectGlobally(oldName, newName string) []string {
+	var touched []string
+	for _, t := range m.tasks {
+		if t.Project == oldName {
+			t.Project = newName
+			touched = append(touched, t.ID)
 		}
 	}
+	return touched
 }
 
 // ── Detail scroll estimation ──────────────────────────────────────────────────
@@ -821,12 +852,14 @@ func (m model) estimateDetailCursorLine() int {
 			return line + 1
 		case fieldPriority:
 			return line + 2
-		case fieldProject:
+		case fieldSize:
 			return line + 3
-		case fieldNotes:
+		case fieldProject:
 			return line + 4
+		case fieldNotes:
+			return line + 5
 		default: // fieldTags
-			line += 7 // start, due, priority, project, notes, created, modified
+			line += 8 // start, due, priority, size, project, notes, created, modified
 			if len(t.TimeEntries) > 0 {
 				line++
 			}
@@ -964,7 +997,10 @@ func (m model) detailPage1ContentHeight() int {
 	if t == nil {
 		return 1
 	}
-	lines := 10
+	lines := 11 // 10 fixed + 1 for the Size row added with the sequencing engine
+	if t.Status == todo.Pending {
+		lines++ // Score breakdown row, rendered only for pending tasks
+	}
 	if len(t.Tags) == 0 {
 		lines += 2
 	} else {

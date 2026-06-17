@@ -102,17 +102,23 @@ func renderTagsPart(tags []string) string {
 // listCols decides which columns of the task/history list fit at the current
 // terminal width. Columns are dropped least-important-first as the window
 // narrows so list lines never wrap inside the panel.
+//
+// showSize is active-only (history doesn't expose size); showLast carries the
+// Score for active rows and the Completed date for history rows.
 type listCols struct {
-	titleW    int
-	showStart bool
-	showDue   bool
-	showLast  bool // Priority (tasks) or Completed (history)
+	titleW   int
+	showSize bool
+	showDue  bool
+	showLast bool // Score (active) or Completed (history)
 }
 
 func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 	inner := termWidth - 8 // panel content width (margin + border + padding)
 	const fixed = 6        // cursor + checkbox + fold icon
-	c := listCols{showStart: true, showDue: true, showLast: true}
+	c := listCols{showDue: true, showLast: true}
+	if !isHistory {
+		c.showSize = true
+	}
 
 	// Title column fits its longest entry (+gap), floored to the header label so
 	// it never truncates, capped by the shared responsive width.
@@ -124,7 +130,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 
 	colsW := func() int {
 		w := 0
-		if c.showStart {
+		if c.showSize {
 			w += 12
 		}
 		if c.showDue {
@@ -136,13 +142,13 @@ func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 		return w
 	}
 
-	drop := []*bool{&c.showStart, &c.showLast, &c.showDue}
+	// Drop order on narrow terminals:
+	//   active:  Size → Score → Due  (keep Due longest — it's the hard fact)
+	//   history: Due  → Completed    (Size is never shown)
+	drop := []*bool{&c.showSize, &c.showLast, &c.showDue}
 	if isHistory {
-		// History keeps the Completed column the longest.
-		drop = []*bool{&c.showStart, &c.showDue, &c.showLast}
+		drop = []*bool{&c.showDue, &c.showLast}
 	}
-	// Drop date columns least-important-first until the (fixed-width) title and
-	// the remaining date columns fit the panel.
 	for _, d := range drop {
 		if inner-fixed-c.titleW-colsW() >= 0 {
 			break
@@ -166,19 +172,21 @@ func renderPlainDivider(availW int) string {
 }
 
 func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistory bool, sortMode taskSortMode, c listCols) {
-	startLabel := padRight(tr("Start"), 12)
+	sizeLabel := padRight(tr("Size"), 12)
 	dueLabel := padRight(tr("Due"), 12)
-	lastLabel := padRight(tr("Priority"), 12)
+	lastLabel := padRight(tr("Score"), 12)
 	if isHistory {
 		lastLabel = padRight(tr("Completed"), 12)
 	} else {
+		// >..< wraps the active sort so the user always sees which header
+		// owns the ordering.
 		switch sortMode {
+		case taskSortSequence:
+			lastLabel = padRight(tr(">Score<"), 12)
 		case taskSortDueDate:
 			dueLabel = padRight(tr(">Due<"), 12)
-		case taskSortStartDate:
-			startLabel = padRight(tr(">Start<"), 12)
-		case taskSortPriority:
-			lastLabel = padRight(tr(">Priority<"), 12)
+		case taskSortSize:
+			sizeLabel = padRight(tr(">Size<"), 12)
 		}
 	}
 
@@ -188,8 +196,8 @@ func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistor
 		title = tr("Completed tasks")
 	}
 	headerLeft := prefix + padRight(title, c.titleW)
-	if c.showStart {
-		headerLeft += startLabel
+	if c.showSize {
+		headerLeft += sizeLabel
 	}
 	if c.showDue {
 		headerLeft += dueLabel
@@ -303,10 +311,11 @@ type parsedTask struct {
 	project  string
 	dueDate  time.Time
 	priority todo.Priority
+	size     todo.Size
 }
 
 func parseQuickAdd(input string) parsedTask {
-	result := parsedTask{priority: todo.PriorityMedium}
+	result := parsedTask{priority: todo.PriorityMedium, size: todo.SizeMedium}
 	words := strings.Fields(input)
 	var titleWords []string
 
@@ -335,6 +344,17 @@ func parseQuickAdd(input string) parsedTask {
 				result.priority = todo.PriorityMedium
 			case "low", "l":
 				result.priority = todo.PriorityLow
+			default:
+				titleWords = append(titleWords, word)
+			}
+		case strings.HasPrefix(lower, "size:"):
+			switch strings.TrimPrefix(lower, "size:") {
+			case "s", "small":
+				result.size = todo.SizeSmall
+			case "m", "med", "medium":
+				result.size = todo.SizeMedium
+			case "l", "large":
+				result.size = todo.SizeLarge
 			default:
 				titleWords = append(titleWords, word)
 			}

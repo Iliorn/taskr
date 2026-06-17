@@ -37,8 +37,7 @@ func dayKey(t time.Time) string {
 func (m model) activitiesForDay(day time.Time) []dayActivity {
 	key := dayKey(day)
 	var acts []dayActivity
-	for i := range m.todos {
-		t := &m.todos[i]
+	for _, t := range m.tasks {
 		for _, e := range t.TimeEntries {
 			if dayKey(e.StartedAt) != key {
 				continue
@@ -62,8 +61,8 @@ func (m model) activitiesForDay(day time.Time) []dayActivity {
 func (m model) trackedPerDay(from, to time.Time) map[string]time.Duration {
 	end := to.AddDate(0, 0, 1)
 	totals := make(map[string]time.Duration)
-	for i := range m.todos {
-		for _, e := range m.todos[i].TimeEntries {
+	for _, t := range m.tasks {
+		for _, e := range t.TimeEntries {
 			if e.StartedAt.Before(from) || !e.StartedAt.Before(end) {
 				continue
 			}

@@ -20,7 +20,7 @@ func TestNarrowNoWrap(t *testing.T) {
 			task := todo.New("A fairly long task title that could overflow easily here")
 			task.DueDate = time.Now().AddDate(0, 0, i)
 			task.Tags = []string{"alpha", "beta"}
-			m.todos = append(m.todos, task)
+			m.add(task)
 		}
 		m.refreshCaches()
 		out := m.View()
@@ -55,7 +55,7 @@ func TestNarrowNoWrapDanish(t *testing.T) {
 			task.DueDate = time.Now().AddDate(0, 0, i)
 			task.Tags = []string{"alpha", "beta"}
 			task.Project = "Demo"
-			m.todos = append(m.todos, task)
+			m.add(task)
 		}
 		m.refreshCaches()
 		m.tab = tb

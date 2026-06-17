@@ -40,7 +40,7 @@ func (m model) renderTagList() string {
 	gradLen := len(tagProgressGradient)
 	stats := m.cache.tags
 	if stats == nil {
-		stats = computeTagStats(m.todos)
+		stats = computeTagStats(m.allTodos())
 	}
 
 	// Size the tag column to the widest tag so Progress sits close behind it.
@@ -277,8 +277,7 @@ func (m model) renderStatsList() string {
 	var oldestAge time.Duration
 	oldestTitle := ""
 
-	for i := range m.todos {
-		t := &m.todos[i]
+	for _, t := range m.tasks {
 		if t.ParentID != "" {
 			continue
 		}
@@ -704,10 +703,6 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	if index == cursor && active {
 		cursorStr = "▶ "
 	}
-	startVal := ""
-	if !t.StartDate.IsZero() {
-		startVal = t.StartDate.Format("02-01-06")
-	}
 	dueVal := ""
 	if !t.DueDate.IsZero() {
 		dueVal = t.DueDate.Format("02-01-06")
@@ -718,9 +713,6 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	}
 	titleCol := padRight(truncate(t.Title, titleW), titleW)
 	dateCols := ""
-	if cols.showStart {
-		dateCols += padRight(startVal, 12)
-	}
 	if cols.showDue {
 		dateCols += padRight(dueVal, 12)
 	}
@@ -804,10 +796,6 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	if t.IsTimerRunning() {
 		title = "⏱ " + title
 	}
-	startVal := ""
-	if !t.StartDate.IsZero() {
-		startVal = t.StartDate.Format("02-01-06")
-	}
 	dueVal := ""
 	if !t.DueDate.IsZero() {
 		dueVal = t.DueDate.Format("02-01-06")
@@ -815,14 +803,16 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	titleCol := padRight(truncate(title, titleW), titleW)
 	tagsPart := m.getRenderedTags(t.Tags)
 	line := cursorStr + checkbox + foldIcon + titleCol
-	if cols.showStart {
-		line += padRight(startVal, 12)
+	if cols.showSize {
+		line += padRight(t.Size.Letter()+" "+trSize(t.Size), 12)
 	}
 	if cols.showDue {
 		line += padRight(dueVal, 12)
 	}
 	if cols.showLast {
-		line += padRight(t.Priority.Icon()+" "+trPriority(t.Priority), 12)
+		// Score column is always score now — priority lives only in the
+		// detail view, where the user can still set it.
+		line += padRight(fmt.Sprintf("%.1f", urgency(&t)), 12)
 	}
 
 	// Only append tags if they fit within the inner panel content width.
@@ -950,12 +940,18 @@ func (m model) renderSettingsList() string {
 	defer putBuilder(b)
 
 	labels := [numSettingsRows]string{
+		tr("Deadline pressure"),
+		tr("Priority focus"),
+		tr("Momentum bias"),
 		tr("Theme"),
 		tr("Language"),
 		tr("Version"),
 		tr("Check for updates"),
 	}
 	values := [numSettingsRows]string{
+		biasPickerValue(activeBiases.Deadline),
+		biasPickerValue(activeBiases.Priority),
+		biasPickerValue(activeBiases.Momentum),
 		"‹ " + m.themeName + " ›",
 		"‹ " + activeLang.displayName() + " ›",
 		appVersion,
@@ -974,8 +970,25 @@ func (m model) renderSettingsList() string {
 		b.WriteString(cursor + label + helpStyle.Render(values[i]) + "\n")
 	}
 
+	// Personality footer: a one-line summary of what the current bias mix
+	// "feels like", so a user tweaking a single bias gets immediate text
+	// feedback that their sequence has shifted.
+	name, descr := personality(activeBiases)
+	b.WriteString("\n  " + activeCountStyle.Render("Sequence: "+name) +
+		"  " + helpStyle.Render(descr) + "\n")
+
 	if m.updateStatus != "" {
 		b.WriteString("\n  " + activeCountStyle.Render(m.updateStatus) + "\n")
 	}
 	return b.String()
+}
+
+// biasPickerValue formats a bias for the Settings picker the same way the
+// theme/language pickers do: title-cased value between thin chevrons.
+func biasPickerValue(b biasLevel) string {
+	s := b.String()
+	if s == "" {
+		return "‹ - ›"
+	}
+	return "‹ " + strings.ToUpper(s[:1]) + s[1:] + " ›"
 }

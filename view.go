@@ -22,6 +22,7 @@ func truncateLines(lines []string, maxW int) {
 // ── Top-level View ────────────────────────────────────────────────────────────
 
 func (m model) View() string {
+	m.ensureCache()
 	if m.mode == modeHelp {
 		return m.renderHelpFullscreen()
 	}
@@ -211,8 +212,7 @@ func (m model) buildFooterContent(w int) string {
 	switch m.mode {
 	case modeNormal:
 		hints := m.renderKeyHints(w)
-		if idx := m.runningTodoIndex(); idx >= 0 {
-			t := &m.todos[idx]
+		if t := m.runningTask(); t != nil {
 			elapsed := ""
 			if e := t.RunningEntry(); e != nil {
 				elapsed = formatDurationLive(time.Since(e.StartedAt))
@@ -628,8 +628,7 @@ func (m model) renderStatsDetail() string {
 
 	first := buckets[0].start
 	total := 0
-	for i := range m.todos {
-		t := &m.todos[i]
+	for _, t := range m.tasks {
 		if t.Status != todo.Done || t.CompletedAt.IsZero() || t.ParentID != "" {
 			continue
 		}
@@ -901,16 +900,16 @@ func (m model) buildTagDetailLines() []string {
 	untagged := tag == untaggedKey
 
 	// One pass: split active/done/overdue, tally co-occurring tags, and collect
-	// the matching task indices to list below.
-	var matches []int
+	// the matching task IDs to list below.
+	var matches []string
 	active, done, overdue := 0, 0, 0
 	cooccur := make(map[string]int)
-	for i := range m.todos {
+	for id, t := range m.tasks {
 		match := false
 		if untagged {
-			match = len(m.todos[i].Tags) == 0
+			match = len(t.Tags) == 0
 		} else {
-			for _, tt := range m.todos[i].Tags {
+			for _, tt := range t.Tags {
 				if tt == tag {
 					match = true
 					break
@@ -920,8 +919,7 @@ func (m model) buildTagDetailLines() []string {
 		if !match {
 			continue
 		}
-		matches = append(matches, i)
-		t := &m.todos[i]
+		matches = append(matches, id)
 		if t.Status == todo.Done {
 			done++
 		} else {
@@ -1019,7 +1017,10 @@ func (m model) buildTagDetailLines() []string {
 		}
 	}
 	sort.SliceStable(matches, func(a, b int) bool {
-		ta, tb := &m.todos[matches[a]], &m.todos[matches[b]]
+		ta, tb := m.get(matches[a]), m.get(matches[b])
+		if ta == nil || tb == nil {
+			return false
+		}
 		if ca, cb := cat(ta), cat(tb); ca != cb {
 			return ca < cb
 		}
@@ -1047,8 +1048,11 @@ func (m model) buildTagDetailLines() []string {
 		matches = matches[:shown]
 	}
 
-	for _, i := range matches {
-		t := &m.todos[i]
+	for _, id := range matches {
+		t := m.get(id)
+		if t == nil {
+			continue
+		}
 		status := "[ ]"
 		if t.Status == todo.Done {
 			status = "[✓]"

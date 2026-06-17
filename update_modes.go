@@ -22,6 +22,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					parsed := parseQuickAdd(val)
 					t := todo.New(parsed.title)
 					t.Priority = parsed.priority
+					t.Size = parsed.size
 					if !parsed.dueDate.IsZero() {
 						t.DueDate = parsed.dueDate
 					}
@@ -31,38 +32,38 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					for _, tg := range parsed.tags {
 						t.AddTag(tg)
 					}
-					m.todos = append(m.todos, t)
-					m.markModified()
+					m.add(t)
+					m.markModified(t.ID)
 				}
-			} else if idx := m.currentTodoIndex(); idx >= 0 {
+			} else if t := m.currentTodo(); t != nil {
 				if m.detail.page == 2 {
 					if val != "" {
-						m.todos[idx].AddComment(val)
-						m.detail.commentCursor = len(m.todos[idx].Comments) - 1
-						m.markModified()
+						t.AddComment(val)
+						m.detail.commentCursor = len(t.Comments) - 1
+						m.markModified(t.ID)
 					}
 				} else {
 					switch m.detail.field {
 					case fieldStartDate:
 						if val == "" {
-							m.todos[idx].StartDate = time.Time{}
+							t.StartDate = time.Time{}
 						} else if d, err := parseDueDate(val); err == nil {
-							m.todos[idx].SetStartDate(d)
+							t.SetStartDate(d)
 						} else {
 							m.err = tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'")
 							return m, clearErrAfter()
 						}
 					case fieldDueDate:
 						if val == "" {
-							m.todos[idx].DueDate = time.Time{}
+							t.DueDate = time.Time{}
 						} else if d, err := parseDueDate(val); err == nil {
-							m.todos[idx].SetDueDate(d)
+							t.SetDueDate(d)
 						} else {
 							m.err = tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'")
 							return m, clearErrAfter()
 						}
 					}
-					m.markModified()
+					m.markModified(t.ID)
 				}
 			}
 			return m, nil
@@ -81,10 +82,10 @@ func (m model) updateAddSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "enter":
 			if val := strings.TrimSpace(m.textInput.Value()); val != "" {
-				if idx := m.currentTodoIndex(); idx >= 0 {
-					m.addSubtask(idx, val)
-					m.detail.subtaskCursor = m.subtaskCount(m.todos[idx].ID) - 1
-					m.markModified()
+				if t := m.currentTodo(); t != nil {
+					newID := m.addSubtask(t.ID, val)
+					m.detail.subtaskCursor = m.subtaskCount(t.ID) - 1
+					m.markModified(newID)
 				}
 			}
 			m.mode = modeNormal
@@ -104,10 +105,10 @@ func (m model) updateAddLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "enter":
 			if val := strings.TrimSpace(m.textInput.Value()); val != "" {
-				if idx := m.currentTodoIndex(); idx >= 0 {
-					m.todos[idx].AddLearning(val)
-					m.detail.learningCursor = len(m.todos[idx].Learnings) - 1
-					m.markModified()
+				if t := m.currentTodo(); t != nil {
+					t.AddLearning(val)
+					m.detail.learningCursor = len(t.Learnings) - 1
+					m.markModified(t.ID)
 				}
 			}
 			m.mode = modeNormal
@@ -129,12 +130,12 @@ func (m model) updateEditLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if newText := strings.TrimSpace(m.textInput.Value()); newText != "" {
 				if m.tab == tabLearnings {
 					if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-						m.updateLearningByID(learnings[m.learningCursor].ID, newText)
-						m.markModified()
+						parentID := m.updateLearningByID(learnings[m.learningCursor].ID, newText)
+						m.markModified(parentID)
 					}
-				} else if idx := m.currentTodoIndex(); idx >= 0 && m.detail.learningCursor < len(m.todos[idx].Learnings) {
-					m.todos[idx].UpdateLearning(m.detail.learningCursor, newText)
-					m.markModified()
+				} else if t := m.currentTodo(); t != nil && m.detail.learningCursor < len(t.Learnings) {
+					t.UpdateLearning(m.detail.learningCursor, newText)
+					m.markModified(t.ID)
 				}
 			}
 			m.mode = modeNormal
@@ -154,10 +155,10 @@ func (m model) updateEditTitle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "enter":
 			if newTitle := strings.TrimSpace(m.textInput.Value()); newTitle != "" {
-				if idx := m.currentTodoIndex(); idx >= 0 {
-					m.todos[idx].Title = newTitle
-					m.todos[idx].ModifiedAt = time.Now()
-					m.markModified()
+				if t := m.currentTodo(); t != nil {
+					t.Title = newTitle
+					t.ModifiedAt = time.Now()
+					m.markModified(t.ID)
 				}
 			}
 			m.mode = modeNormal
@@ -176,10 +177,10 @@ func (m model) updateEditComment(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "enter":
-			if idx := m.currentTodoIndex(); idx >= 0 {
+			if t := m.currentTodo(); t != nil {
 				if val := m.textInput.Value(); val != "" {
-					m.todos[idx].UpdateComment(m.pendingComment, val)
-					m.markModified()
+					t.UpdateComment(m.pendingComment, val)
+					m.markModified(t.ID)
 				}
 			}
 			m.mode = modeNormal
@@ -199,8 +200,8 @@ func (m model) updateEditTag(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "enter":
 			if newName := strings.TrimSpace(m.textInput.Value()); newName != "" && newName != m.editingTagName {
-				m.renameTagGlobally(m.editingTagName, newName)
-				m.markModified()
+				touched := m.renameTagGlobally(m.editingTagName, newName)
+				m.markModified(touched...)
 			}
 			m.mode = modeNormal
 			m.editingTagName = ""
@@ -221,8 +222,8 @@ func (m model) updateEditProjectInline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "enter":
 			if newName := strings.TrimSpace(m.textInput.Value()); newName != "" && newName != m.editingProjectName {
-				m.renameProjectGlobally(m.editingProjectName, newName)
-				m.markModified()
+				touched := m.renameProjectGlobally(m.editingProjectName, newName)
+				m.markModified(touched...)
 			}
 			m.mode = modeNormal
 			m.editingProjectName = ""
@@ -319,9 +320,9 @@ func (m model) updateSearchDep(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			results := m.depSearchResults()
 			if m.depSearch.cursor < len(results) {
-				if idx := m.currentTodoIndex(); idx >= 0 {
-					m.todos[idx].AddDependency(results[m.depSearch.cursor].ID)
-					m.markModified()
+				if t := m.currentTodo(); t != nil {
+					t.AddDependency(results[m.depSearch.cursor].ID)
+					m.markModified(t.ID)
 				}
 			}
 			m.mode = modeNormal
@@ -357,7 +358,7 @@ func (m model) updateSearchTag(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "enter":
-			if idx := m.currentTodoIndex(); idx >= 0 {
+			if t := m.currentTodo(); t != nil {
 				results := m.tagSearchResults()
 				var tagToAdd string
 				if m.tagSearch.cursor < len(results) {
@@ -366,8 +367,8 @@ func (m model) updateSearchTag(msg tea.Msg) (tea.Model, tea.Cmd) {
 					tagToAdd = m.tagSearch.query
 				}
 				if tagToAdd != "" {
-					m.todos[idx].AddTag(tagToAdd)
-					m.markModified()
+					t.AddTag(tagToAdd)
+					m.markModified(t.ID)
 				}
 			}
 			m.mode = modeNormal
@@ -403,7 +404,7 @@ func (m model) updateSearchProject(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "enter":
-			if idx := m.currentTodoIndex(); idx >= 0 {
+			if t := m.currentTodo(); t != nil {
 				results := m.projSearchResults()
 				var projToSet string
 				if m.projSearch.cursor < len(results) {
@@ -412,8 +413,8 @@ func (m model) updateSearchProject(msg tea.Msg) (tea.Model, tea.Cmd) {
 					projToSet = m.projSearch.query
 				}
 				if projToSet != "" {
-					m.todos[idx].SetProject(projToSet)
-					m.markModified()
+					t.SetProject(projToSet)
+					m.markModified(t.ID)
 				}
 			}
 			m.mode = modeNormal
@@ -458,15 +459,16 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.pendingDelete < len(list) {
 				id := list[m.pendingDelete].ID
-				m.pushUndo("delete task")
-				for i, t := range m.todos {
-					if t.ID == id {
-						m.todos = append(m.todos[:i], m.todos[i+1:]...)
-						break
-					}
-				}
+				m.pushUndo("delete task", id)
+				m.markTombstone(id)
+				m.remove(id)
 			}
-			m.markModifiedNoUndo()
+			// Tombstone already records what to persist; no other rows changed,
+			// so we only need to schedule a save and refresh derived caches.
+			m.dirty = true
+			m.cache.dirty = true
+			m.invalidateDetailCache()
+			m.refreshCaches()
 			var newLen int
 			if m.showHistory {
 				newLen = len(m.cache.done)
@@ -488,13 +490,13 @@ func (m model) updateConfirmDeleteComment(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "y":
-			if idx := m.currentTodoIndex(); idx >= 0 {
-				m.pushUndo("delete comment")
-				m.todos[idx].DeleteComment(m.pendingComment)
-				if m.detail.commentCursor >= len(m.todos[idx].Comments) && m.detail.commentCursor > 0 {
+			if t := m.currentTodo(); t != nil {
+				m.pushUndo("delete comment", t.ID)
+				t.DeleteComment(m.pendingComment)
+				if m.detail.commentCursor >= len(t.Comments) && m.detail.commentCursor > 0 {
 					m.detail.commentCursor--
 				}
-				m.markModifiedNoUndo()
+				m.markModifiedNoUndo(t.ID)
 			}
 			m.mode = modeNormal
 		case "n", "esc":
@@ -508,13 +510,13 @@ func (m model) updateConfirmDeleteDep(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "y":
-			if idx := m.currentTodoIndex(); idx >= 0 && m.pendingDep < len(m.todos[idx].Dependencies) {
-				m.pushUndo("remove dependency")
-				m.todos[idx].RemoveDependency(m.todos[idx].Dependencies[m.pendingDep])
-				if m.detail.depCursor >= len(m.todos[idx].Dependencies) && m.detail.depCursor > 0 {
+			if t := m.currentTodo(); t != nil && m.pendingDep < len(t.Dependencies) {
+				m.pushUndo("remove dependency", t.ID)
+				t.RemoveDependency(t.Dependencies[m.pendingDep])
+				if m.detail.depCursor >= len(t.Dependencies) && m.detail.depCursor > 0 {
 					m.detail.depCursor--
 				}
-				m.markModifiedNoUndo()
+				m.markModifiedNoUndo(t.ID)
 			}
 			m.mode = modeNormal
 		case "n", "esc":
@@ -542,11 +544,11 @@ func (m model) updateEditTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.err = err.Error()
 						return m, clearErrAfter()
 					}
-					m.pushUndo("edit time entry")
+					m.pushUndo("edit time entry", t.ID)
 					e.StartedAt = start
 					e.StoppedAt = stop
 					t.ModifiedAt = time.Now()
-					m.markModifiedNoUndo()
+					m.markModifiedNoUndo(t.ID)
 					break
 				}
 			}
@@ -568,9 +570,9 @@ func (m model) updateIdlePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = modeNormal
 		case "s":
 			if t := m.findTodoByID(m.pendingEntryTaskID); t != nil && t.IsTimerRunning() {
-				m.pushUndo("stop timer")
+				m.pushUndo("stop timer", t.ID)
 				t.StopTimer()
-				m.markModifiedNoUndo()
+				m.markModifiedNoUndo(t.ID)
 			}
 			m.mode = modeNormal
 		case "e":
@@ -579,9 +581,9 @@ func (m model) updateIdlePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if t := m.findTodoByID(m.pendingEntryTaskID); t != nil {
 				for i := range t.TimeEntries {
 					if t.TimeEntries[i].ID == m.pendingEntryID {
-						m.pushUndo("discard time entry")
+						m.pushUndo("discard time entry", t.ID)
 						t.DeleteTimeEntry(i)
-						m.markModifiedNoUndo()
+						m.markModifiedNoUndo(t.ID)
 						break
 					}
 				}
@@ -599,9 +601,9 @@ func (m model) updateConfirmDeleteTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if t := m.findTodoByID(m.pendingEntryTaskID); t != nil {
 				for i := range t.TimeEntries {
 					if t.TimeEntries[i].ID == m.pendingEntryID {
-						m.pushUndo("delete time entry")
+						m.pushUndo("delete time entry", t.ID)
 						t.DeleteTimeEntry(i)
-						m.markModifiedNoUndo()
+						m.markModifiedNoUndo(t.ID)
 						break
 					}
 				}
@@ -625,13 +627,13 @@ func (m model) updateConfirmDeleteTag(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "y":
-			if idx := m.currentTodoIndex(); idx >= 0 && m.pendingTag < len(m.todos[idx].Tags) {
-				m.pushUndo("remove tag")
-				m.todos[idx].RemoveTag(m.todos[idx].Tags[m.pendingTag])
-				if m.detail.tagCursor >= len(m.todos[idx].Tags) && m.detail.tagCursor > 0 {
+			if t := m.currentTodo(); t != nil && m.pendingTag < len(t.Tags) {
+				m.pushUndo("remove tag", t.ID)
+				t.RemoveTag(t.Tags[m.pendingTag])
+				if m.detail.tagCursor >= len(t.Tags) && m.detail.tagCursor > 0 {
 					m.detail.tagCursor--
 				}
-				m.markModifiedNoUndo()
+				m.markModifiedNoUndo(t.ID)
 			}
 			m.mode = modeNormal
 		case "n", "esc":
@@ -647,8 +649,8 @@ func (m model) updateConfirmDeleteTagGlobal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "y":
 			if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
 				m.pushUndo("delete tag globally")
-				m.deleteTagGlobally(tags[m.tagTabCursor])
-				m.markModifiedNoUndo()
+				touched := m.deleteTagGlobally(tags[m.tagTabCursor])
+				m.markModifiedNoUndo(touched...)
 				if remaining := m.getFilteredTagsForTab(); m.tagTabCursor >= len(remaining) && m.tagTabCursor > 0 {
 					m.tagTabCursor--
 				}
@@ -665,10 +667,10 @@ func (m model) updateConfirmDeleteProject(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "y":
-			if idx := m.currentTodoIndex(); idx >= 0 {
-				m.pushUndo("remove project")
-				m.todos[idx].SetProject("")
-				m.markModifiedNoUndo()
+			if t := m.currentTodo(); t != nil {
+				m.pushUndo("remove project", t.ID)
+				t.SetProject("")
+				m.markModifiedNoUndo(t.ID)
 			}
 			m.mode = modeNormal
 		case "n", "esc":
@@ -684,20 +686,23 @@ func (m model) updateConfirmDeleteLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "y":
 			if m.tab == tabLearnings {
 				if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
+					// We don't know the parent ID until deleteLearningByID
+					// returns it, so capture the snapshot afterwards via the
+					// no-args fallback.
 					m.pushUndo("delete learning")
-					m.deleteLearningByID(learnings[m.learningCursor].ID)
-					m.markModifiedNoUndo()
+					parentID := m.deleteLearningByID(learnings[m.learningCursor].ID)
+					m.markModifiedNoUndo(parentID)
 					if remaining := m.allLearnings(); m.learningCursor >= len(remaining) && m.learningCursor > 0 {
 						m.learningCursor--
 					}
 				}
-			} else if idx := m.currentTodoIndex(); idx >= 0 && m.detail.learningCursor < len(m.todos[idx].Learnings) {
-				m.pushUndo("delete learning")
-				m.todos[idx].DeleteLearning(m.detail.learningCursor)
-				if m.detail.learningCursor >= len(m.todos[idx].Learnings) && m.detail.learningCursor > 0 {
+			} else if t := m.currentTodo(); t != nil && m.detail.learningCursor < len(t.Learnings) {
+				m.pushUndo("delete learning", t.ID)
+				t.DeleteLearning(m.detail.learningCursor)
+				if m.detail.learningCursor >= len(t.Learnings) && m.detail.learningCursor > 0 {
 					m.detail.learningCursor--
 				}
-				m.markModifiedNoUndo()
+				m.markModifiedNoUndo(t.ID)
 			}
 			m.mode = modeNormal
 		case "n", "esc":
@@ -711,13 +716,24 @@ func (m model) updateConfirmDeleteSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "y":
-			if idx := m.currentTodoIndex(); idx >= 0 && m.pendingSubtask < m.subtaskCount(m.todos[idx].ID) {
-				m.pushUndo("delete subtask")
-				m.deleteSubtask(idx, m.pendingSubtask)
-				if m.detail.subtaskCursor >= m.subtaskCount(m.todos[idx].ID) && m.detail.subtaskCursor > 0 {
+			if t := m.currentTodo(); t != nil && m.pendingSubtask < m.subtaskCount(t.ID) {
+				// Capture both the parent (its subtask list will change) and
+				// the subtask itself (so undo can restore it).
+				subID := ""
+				if ids := m.subtaskIDs(t.ID); m.pendingSubtask < len(ids) {
+					subID = ids[m.pendingSubtask]
+				}
+				m.pushUndo("delete subtask", t.ID, subID)
+				subID = m.deleteSubtask(t.ID, m.pendingSubtask)
+				m.markTombstone(subID)
+				if m.detail.subtaskCursor >= m.subtaskCount(t.ID) && m.detail.subtaskCursor > 0 {
 					m.detail.subtaskCursor--
 				}
-				m.markModifiedNoUndo()
+				// Tombstone already records what to persist; nothing else changed.
+				m.dirty = true
+				m.cache.dirty = true
+				m.invalidateDetailCache()
+				m.refreshCaches()
 			}
 			m.mode = modeNormal
 		case "n", "esc":

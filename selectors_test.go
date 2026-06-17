@@ -168,9 +168,12 @@ func TestSubtaskDerivation(t *testing.T) {
 	other := mkTodo("o", "unrelated", todo.Pending)
 
 	m := newTestModel()
-	// Slice order is deliberately scrambled to prove the derivation orders by
-	// CreatedAt (= insertion order), not slice position.
-	m.todos = []todo.Todo{c2, parent, other, c1}
+	// Insertion order is deliberately scrambled to prove the derivation orders
+	// by CreatedAt, not map iteration order.
+	for _, t := range []todo.Todo{c2, parent, other, c1} {
+		m.add(t)
+	}
+	m.refreshCaches()
 
 	if n := m.subtaskCount("p"); n != 2 {
 		t.Fatalf("subtaskCount(p) = %d, want 2", n)

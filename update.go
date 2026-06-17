@@ -69,12 +69,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveScheduled = false
 		if m.savePending {
 			m.savePending = false
-			// Snapshot synchronously (deep copy) so the async write can't race a
-			// later mutation of m.todos, then save through the repository.
-			snapshot := copyTodos(m.todos)
+			// Drain only the dirty IDs and tombstones from the Store. Per-task
+			// deep copies in drainDirty keep the save goroutine safe from
+			// concurrent mutation. Step 5 (map[ID]*Todo) eliminates the copy
+			// once pointers become stable across slice growth.
+			dirty, tombstones := m.Store.drainDirty()
+			if len(dirty) == 0 && len(tombstones) == 0 {
+				return m, nil
+			}
 			repo := m.repo
 			return m, func() tea.Msg {
-				if err := repo.Save(snapshot); err != nil {
+				if err := repo.Save(dirty, tombstones); err != nil {
 					return saveErrMsg{err}
 				}
 				return saveDoneMsg{}
@@ -168,11 +173,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // ── Editor handling ───────────────────────────────────────────────────────────
 
 func (m *model) openEditorForNotes() tea.Cmd {
-	idx := m.currentTodoIndex()
-	if idx < 0 {
+	t := m.currentTodo()
+	if t == nil {
 		return nil
 	}
-	t := &m.todos[idx]
 	taskID := t.ID
 
 	if err := writeNotesFile(taskID, t.Notes); err != nil {
@@ -223,18 +227,16 @@ func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) 
 		return m, clearErrAfter()
 	}
 
-	for i := range m.todos {
-		if m.todos[i].ID == taskID {
-			newNotes := strings.TrimRight(content, "\n\r ")
-			if newNotes != m.todos[i].Notes {
-				m.pushUndo("edit notes")
-				m.todos[i].SetNotes(newNotes)
-				m.dirty = true
-				m.cache.dirty = true
-				m.invalidateDetailCache()
-				m.refreshCaches()
-			}
-			break
+	if t := m.get(taskID); t != nil {
+		newNotes := strings.TrimRight(content, "\n\r ")
+		if newNotes != t.Notes {
+			m.pushUndo("edit notes", t.ID)
+			t.SetNotes(newNotes)
+			m.markDirty(t.ID)
+			m.dirty = true
+			m.cache.dirty = true
+			m.invalidateDetailCache()
+			m.refreshCaches()
 		}
 	}
 
@@ -260,8 +262,49 @@ func (m *model) performUndo() tea.Cmd {
 		m.err = tr("Nothing to undo")
 		return clearErrAfter()
 	}
-	m.todos = entry.todos
-	m.markModifiedNoUndo()
+	// Partial entries name the IDs they touched. Tasks captured in the entry
+	// are restored to their prior state (mark dirty). Tasks named but not
+	// captured were newly-created — undo means delete them (mark tombstone).
+	// Any tombstones in the current save set are cleared for restored IDs.
+	if entry.partial != nil || entry.ids != nil {
+		captured := make(map[string]struct{}, len(entry.partial))
+		for i := range entry.partial {
+			captured[entry.partial[i].ID] = struct{}{}
+		}
+		var restored, removed []string
+		for _, id := range entry.ids {
+			if _, ok := captured[id]; ok {
+				restored = append(restored, id)
+				delete(m.tombstones, id) // restoration overrides any pending tombstone
+			} else {
+				removed = append(removed, id)
+			}
+		}
+		m.restoreFromUndo(entry)
+		for _, id := range removed {
+			m.markTombstone(id)
+		}
+		m.markModifiedNoUndo(restored...)
+		m.err = fmt.Sprintf(tr("Undid: %s"), entry.desc)
+		return clearErrAfter()
+	}
+
+	// Full snapshot fallback: compute the set difference and tombstone IDs
+	// that existed before the undo but vanish from the restored snapshot.
+	before := make(map[string]struct{}, len(m.tasks))
+	for id := range m.tasks {
+		before[id] = struct{}{}
+	}
+	m.restoreFromUndo(entry)
+	restoredIDs := make([]string, 0, len(m.tasks))
+	for id := range m.tasks {
+		restoredIDs = append(restoredIDs, id)
+		delete(before, id)
+	}
+	for id := range before {
+		m.markTombstone(id)
+	}
+	m.markModifiedNoUndo(restoredIDs...)
 	m.err = fmt.Sprintf(tr("Undid: %s"), entry.desc)
 	return clearErrAfter()
 }
@@ -334,6 +377,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "right":
 			if m.tab == tabCalendar {
 				m.moveCalendarDay(1)
+			} else if m.tab == tabSettings && m.isBiasSettingRow(m.settingsCursor) {
+				m.cycleBias(m.settingsCursor, +1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
@@ -346,6 +391,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "left":
 			if m.tab == tabCalendar {
 				m.moveCalendarDay(-1)
+			} else if m.tab == tabSettings && m.isBiasSettingRow(m.settingsCursor) {
+				m.cycleBias(m.settingsCursor, -1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(-1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
@@ -373,13 +420,13 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.calendar.entryCursor = 0
 				m.calendar.focusTimeline = false
 			} else if m.tab == tabTasks && !m.showHistory {
-				if idx := m.currentTodoIndex(); idx >= 0 {
-					if e := m.todos[idx].RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
-						m.openIdlePrompt(idx)
+				if t := m.currentTodo(); t != nil {
+					if e := t.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
+						m.openIdlePrompt(t)
 						return m, nil
 					}
-					m.toggleTimer(idx)
-					m.markModified()
+					m.toggleTimer(t)
+					m.markModified(t.ID)
 					if !m.timerTickOn && m.anyTimerRunning() {
 						m.timerTickOn = true
 						return m, timerTick()
@@ -421,9 +468,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "d":
 			if m.tab == tabTasks {
-				if idx := m.currentTodoIndex(); idx >= 0 {
-					m.todos[idx].Toggle()
-					m.markModified()
+				if t := m.currentTodo(); t != nil {
+					t.Toggle()
+					m.markModified(t.ID)
 					if m.cursor > 0 {
 						m.cursor--
 					}
@@ -432,16 +479,16 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "p":
 			if m.tab == tabTasks && !m.showHistory {
-				if idx := m.currentTodoIndex(); idx >= 0 {
-					switch m.todos[idx].Priority {
+				if t := m.currentTodo(); t != nil {
+					switch t.Priority {
 					case todo.PriorityLow:
-						m.todos[idx].SetPriority(todo.PriorityMedium)
+						t.SetPriority(todo.PriorityMedium)
 					case todo.PriorityMedium:
-						m.todos[idx].SetPriority(todo.PriorityHigh)
+						t.SetPriority(todo.PriorityHigh)
 					default:
-						m.todos[idx].SetPriority(todo.PriorityLow)
+						t.SetPriority(todo.PriorityLow)
 					}
-					m.markModified()
+					m.markModified(t.ID)
 				}
 			}
 		}
@@ -555,13 +602,14 @@ func (m *model) cycleSortMode() {
 		m.tagTabCursor = 0
 		m.sortCachedTags()
 	case tabTasks:
+		// Three-state cycle: Sequence → DueDate → Size → Sequence.
 		switch m.taskSort {
-		case taskSortDueDate:
-			m.taskSort = taskSortPriority
-		case taskSortPriority:
-			m.taskSort = taskSortStartDate
-		default:
+		case taskSortSequence:
 			m.taskSort = taskSortDueDate
+		case taskSortDueDate:
+			m.taskSort = taskSortSize
+		default:
+			m.taskSort = taskSortSequence
 		}
 		m.cursor = 0
 		m.listOffset = 0
@@ -577,15 +625,45 @@ func (m *model) cycleSortMode() {
 	m.persistSettings()
 }
 
+// isBiasSettingRow reports whether the given Settings cursor row is one of
+// the three sequencing-bias knobs (so ←/→ should cycle a bias rather than the
+// theme/language picker).
+func (m *model) isBiasSettingRow(row int) bool {
+	return row == settingBiasDeadline || row == settingBiasPriority || row == settingBiasMomentum
+}
+
+// cycleBias rotates the named bias by `direction` (+1 next, -1 prev), updates
+// the activeBiases global, invalidates the sort cache so the new ranking takes
+// effect on the next render, and persists the change.
+func (m *model) cycleBias(row, direction int) {
+	switch row {
+	case settingBiasDeadline:
+		activeBiases.Deadline = cycleBiasLevel(activeBiases.Deadline, direction)
+	case settingBiasPriority:
+		activeBiases.Priority = cycleBiasLevel(activeBiases.Priority, direction)
+	case settingBiasMomentum:
+		activeBiases.Momentum = cycleBiasLevel(activeBiases.Momentum, direction)
+	default:
+		return
+	}
+	// Score weights changed → every cached score / sorted list is stale. The
+	// next ensureCache will rebuild selectActiveDone with the new weights.
+	m.markCacheDirty()
+	m.persistSettings()
+}
+
 // persistSettings writes all current preferences to disk, surfacing any write
 // failure so a setting that silently won't stick is at least visible.
 func (m *model) persistSettings() {
 	if err := saveSettings(appSettings{
-		TaskSort:     m.taskSort,
-		TagSort:      m.tagSort,
-		LearningSort: m.learningSort,
-		Theme:        m.themeName,
-		Language:     string(activeLang),
+		TaskSort:        m.taskSort,
+		TagSort:         m.tagSort,
+		LearningSort:    m.learningSort,
+		Theme:           m.themeName,
+		Language:        string(activeLang),
+		SeqBiasDeadline: activeBiases.Deadline,
+		SeqBiasPriority: activeBiases.Priority,
+		SeqBiasMomentum: activeBiases.Momentum,
 	}); err != nil {
 		m.err = fmt.Sprintf(tr("Error saving settings: %v"), err)
 	}
@@ -991,10 +1069,10 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case "d":
 		if m.detail.page == 1 && m.detail.field == fieldSubtasks {
-			if idx := m.currentTodoIndex(); idx >= 0 {
-				if m.detail.subtaskCursor < m.subtaskCount(m.todos[idx].ID) {
-					m.toggleSubtask(idx, m.detail.subtaskCursor)
-					m.markModified()
+			if t := m.currentTodo(); t != nil {
+				if m.detail.subtaskCursor < m.subtaskCount(t.ID) {
+					subID := m.toggleSubtask(t.ID, m.detail.subtaskCursor)
+					m.markModified(subID)
 				}
 			}
 		}
@@ -1016,8 +1094,10 @@ func (m *model) detailCursorUp() {
 			m.detail.field = fieldStartDate
 		case fieldPriority:
 			m.detail.field = fieldDueDate
-		case fieldProject:
+		case fieldSize:
 			m.detail.field = fieldPriority
+		case fieldProject:
+			m.detail.field = fieldSize
 		case fieldNotes:
 			m.detail.field = fieldProject
 		case fieldTags:
@@ -1068,6 +1148,8 @@ func (m *model) detailCursorDown() {
 		case fieldDueDate:
 			m.detail.field = fieldPriority
 		case fieldPriority:
+			m.detail.field = fieldSize
+		case fieldSize:
 			m.detail.field = fieldProject
 		case fieldProject:
 			m.detail.field = fieldNotes
@@ -1150,12 +1232,12 @@ func (m model) detailAdd() (tea.Model, tea.Cmd) {
 }
 
 func (m model) detailDelete() (tea.Model, tea.Cmd) {
-	idx := m.currentTodoIndex()
-	if idx < 0 {
+	t := m.currentTodo()
+	if t == nil {
 		return m, nil
 	}
 	if m.detail.page == 2 {
-		if len(m.todos[idx].Comments) > 0 {
+		if len(t.Comments) > 0 {
 			m.mode = modeConfirmDeleteComment
 			m.pendingComment = m.detail.commentCursor
 			m.confirmMsg = tr("Delete this comment? (y/n)")
@@ -1164,37 +1246,37 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 	}
 	switch m.detail.field {
 	case fieldProject:
-		if m.todos[idx].Project != "" {
+		if t.Project != "" {
 			m.mode = modeConfirmDeleteProject
-			m.confirmMsg = fmt.Sprintf(tr("Remove project '%s' from this task? (y/n)"), m.todos[idx].Project)
+			m.confirmMsg = fmt.Sprintf(tr("Remove project '%s' from this task? (y/n)"), t.Project)
 		}
 	case fieldNotes:
-		if m.todos[idx].Notes != "" {
-			m.pushUndo("clear notes")
-			m.todos[idx].SetNotes("")
-			m.markModifiedNoUndo()
+		if t.Notes != "" {
+			m.pushUndo("clear notes", t.ID)
+			t.SetNotes("")
+			m.markModifiedNoUndo(t.ID)
 		}
 	case fieldTags:
-		if len(m.todos[idx].Tags) > 0 && m.detail.tagCursor < len(m.todos[idx].Tags) {
+		if len(t.Tags) > 0 && m.detail.tagCursor < len(t.Tags) {
 			m.mode = modeConfirmDeleteTag
 			m.pendingTag = m.detail.tagCursor
-			m.confirmMsg = fmt.Sprintf(tr("Remove tag '#%s' from this task? (y/n)"), m.todos[idx].Tags[m.detail.tagCursor])
+			m.confirmMsg = fmt.Sprintf(tr("Remove tag '#%s' from this task? (y/n)"), t.Tags[m.detail.tagCursor])
 		}
 	case fieldDependencies:
-		if len(m.todos[idx].Dependencies) > 0 && m.detail.depCursor < len(m.todos[idx].Dependencies) {
+		if len(t.Dependencies) > 0 && m.detail.depCursor < len(t.Dependencies) {
 			m.mode = modeConfirmDeleteDep
 			m.pendingDep = m.detail.depCursor
 			m.confirmMsg = tr("Remove this dependency? (y/n)")
 		}
 	case fieldLearnings:
-		if len(m.todos[idx].Learnings) > 0 && m.detail.learningCursor < len(m.todos[idx].Learnings) {
+		if len(t.Learnings) > 0 && m.detail.learningCursor < len(t.Learnings) {
 			m.mode = modeConfirmDeleteLearning
 			m.pendingLearning = m.detail.learningCursor
-			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(m.todos[idx].Learnings[m.detail.learningCursor].Text, 40))
+			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(t.Learnings[m.detail.learningCursor].Text, 40))
 		}
 	case fieldSubtasks:
-		if m.subtaskCount(m.todos[idx].ID) > 0 && m.detail.subtaskCursor < m.subtaskCount(m.todos[idx].ID) {
-			subID := m.subtaskIDs(m.todos[idx].ID)[m.detail.subtaskCursor]
+		if m.subtaskCount(t.ID) > 0 && m.detail.subtaskCursor < m.subtaskCount(t.ID) {
+			subID := m.subtaskIDs(t.ID)[m.detail.subtaskCursor]
 			subTitle := subID
 			if sub := m.findTodoByID(subID); sub != nil {
 				subTitle = sub.Title
@@ -1238,11 +1320,10 @@ func (m model) updateLearningsDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) startEditing() (tea.Model, tea.Cmd) {
-	idx := m.currentTodoIndex()
-	if idx < 0 {
+	t := m.currentTodo()
+	if t == nil {
 		return m, nil
 	}
-	t := &m.todos[idx]
 
 	if m.detail.page == 2 {
 		if len(t.Comments) > 0 {
@@ -1277,13 +1358,27 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 	case fieldPriority:
 		switch t.Priority {
 		case todo.PriorityLow:
-			m.todos[idx].SetPriority(todo.PriorityMedium)
+			t.SetPriority(todo.PriorityMedium)
 		case todo.PriorityMedium:
-			m.todos[idx].SetPriority(todo.PriorityHigh)
+			t.SetPriority(todo.PriorityHigh)
 		default:
-			m.todos[idx].SetPriority(todo.PriorityLow)
+			t.SetPriority(todo.PriorityLow)
 		}
-		m.markModified()
+		m.markModified(t.ID)
+		return m, nil
+	case fieldSize:
+		// Cycle Medium → Small → Large → Medium. Starts at Medium so the first
+		// press moves toward "Small" (the small-task floor) — the direction
+		// users will most often want.
+		switch t.Size {
+		case todo.SizeMedium:
+			t.SetSize(todo.SizeSmall)
+		case todo.SizeSmall:
+			t.SetSize(todo.SizeLarge)
+		default:
+			t.SetSize(todo.SizeMedium)
+		}
+		m.markModified(t.ID)
 		return m, nil
 	case fieldProject:
 		m.mode = modeSearchProject
@@ -1323,8 +1418,8 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		}
 	case fieldSubtasks:
 		if m.subtaskCount(t.ID) > 0 && m.detail.subtaskCursor < m.subtaskCount(t.ID) {
-			m.toggleSubtask(idx, m.detail.subtaskCursor)
-			m.markModified()
+			subID := m.toggleSubtask(t.ID, m.detail.subtaskCursor)
+			m.markModified(subID)
 			return m, nil
 		}
 	}

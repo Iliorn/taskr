@@ -23,6 +23,25 @@ type appSettings struct {
 	LearningSort learningSortMode `json:"learning_sort"`
 	Theme        string           `json:"theme"`
 	Language     string           `json:"language"`
+
+	// Sequencing biases: ints 0/1/2 mapping to biasBalanced/Relaxed/Intense.
+	// Stored as ints (not enum names) to match the existing convention used by
+	// TaskSort and friends. Zero value = biasBalanced, which is the neutral
+	// default so an unset settings.json keeps the engine "Balanced" out of the
+	// box without explicit migration.
+	SeqBiasDeadline biasLevel `json:"seq_bias_deadline"`
+	SeqBiasPriority biasLevel `json:"seq_bias_priority"`
+	SeqBiasMomentum biasLevel `json:"seq_bias_momentum"`
+}
+
+// biasesFromSettings is the small adapter between the persisted appSettings
+// shape and the in-memory biases the score functions read.
+func biasesFromSettings(s appSettings) biases {
+	return biases{
+		Deadline: s.SeqBiasDeadline,
+		Priority: s.SeqBiasPriority,
+		Momentum: s.SeqBiasMomentum,
+	}
 }
 
 func settingsPath() string {
@@ -97,11 +116,6 @@ func marshalTodos(todos []todo.Todo) ([]byte, error) {
 	return json.Marshal(taskFile{Version: currentTaskFileVersion, Todos: todos})
 }
 
-// marshalTodosPretty is used only for initial save or export if needed.
-func marshalTodosPretty(todos []todo.Todo) ([]byte, error) {
-	return json.MarshalIndent(taskFile{Version: currentTaskFileVersion, Todos: todos}, "", "  ")
-}
-
 // loadBackup attempts to load the most recent backup file.
 func loadBackup() ([]todo.Todo, error) {
 	backupPath := getStoragePath() + ".bak"
@@ -138,23 +152,19 @@ func loadTodosJSON() ([]todo.Todo, error) {
 		return loadBackup()
 	}
 
-	sortTodosByMode(todos, taskSortDueDate)
+	sortTodosByMode(todos, taskSortSequence)
 	return todos, nil
 }
 
-// sortTodosByMode sorts todos according to the given sort mode.
+// sortTodosByMode sorts todos by the given mode. After the sequencing engine
+// only two modes exist; any other value falls through to Sequence.
 func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 	if len(todos) <= 1 {
 		return
 	}
 	switch mode {
-	case taskSortPriority:
+	case taskSortDueDate:
 		sort.SliceStable(todos, func(i, j int) bool {
-			pi := todos[i].Priority
-			pj := todos[j].Priority
-			if pi != pj {
-				return pi > pj
-			}
 			iZero := todos[i].DueDate.IsZero()
 			jZero := todos[j].DueDate.IsZero()
 			if iZero && jZero {
@@ -168,39 +178,41 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 			}
 			return todos[i].DueDate.Before(todos[j].DueDate)
 		})
-	case taskSortStartDate:
+	case taskSortSize:
+		// Small first, then Medium, then Large — matches the Momentum axis
+		// (Small=10, Medium=5, Large=0) so "sort by Size" is the same intent
+		// as "show me the quick wins". Ties break by CreatedAt for stability.
+		sizeRank := func(s todo.Size) int {
+			switch s {
+			case todo.SizeSmall:
+				return 0
+			case todo.SizeMedium:
+				return 1
+			default: // Large
+				return 2
+			}
+		}
 		sort.SliceStable(todos, func(i, j int) bool {
-			iZero := todos[i].StartDate.IsZero()
-			jZero := todos[j].StartDate.IsZero()
-			if iZero && jZero {
-				return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+			ri, rj := sizeRank(todos[i].Size), sizeRank(todos[j].Size)
+			if ri != rj {
+				return ri < rj
 			}
-			if iZero {
-				return false
-			}
-			if jZero {
-				return true
-			}
-			return todos[i].StartDate.Before(todos[j].StartDate)
-		})
-	case taskSortCreated:
-		sort.SliceStable(todos, func(i, j int) bool {
 			return todos[i].CreatedAt.Before(todos[j].CreatedAt)
 		})
-	default: // taskSortDueDate
+	default: // taskSortSequence
+		// Precompute scores once per task — urgency() is O(1) but the sort
+		// closure runs O(N log N) times, and reading by ID from the map keeps
+		// the comparator stable across swaps.
+		scores := make(map[string]float64, len(todos))
+		for i := range todos {
+			scores[todos[i].ID] = urgency(&todos[i])
+		}
 		sort.SliceStable(todos, func(i, j int) bool {
-			iZero := todos[i].DueDate.IsZero()
-			jZero := todos[j].DueDate.IsZero()
-			if iZero && jZero {
-				return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+			si, sj := scores[todos[i].ID], scores[todos[j].ID]
+			if si != sj {
+				return si > sj
 			}
-			if iZero {
-				return false
-			}
-			if jZero {
-				return true
-			}
-			return todos[i].DueDate.Before(todos[j].DueDate)
+			return todos[i].CreatedAt.Before(todos[j].CreatedAt)
 		})
 	}
 }
@@ -225,25 +237,3 @@ func sortTodosByStartDate(todos []todo.Todo) []todo.Todo {
 	return result
 }
 
-func getProjects(todos []todo.Todo) []string {
-	seen := make(map[string]bool, len(todos)/4)
-	projects := make([]string, 0, 8)
-	for i := range todos {
-		if p := todos[i].Project; p != "" && !seen[p] {
-			seen[p] = true
-			projects = append(projects, p)
-		}
-	}
-	sort.Strings(projects)
-	return projects
-}
-
-func getTasksForProject(todos []todo.Todo, project string) []todo.Todo {
-	var result []todo.Todo
-	for i := range todos {
-		if todos[i].Project == project {
-			result = append(result, todos[i])
-		}
-	}
-	return sortTodosByStartDate(result)
-}

@@ -9,8 +9,15 @@ type fakeRepo struct{ todos []todo.Todo }
 
 func (r *fakeRepo) Load() ([]todo.Todo, error) { return r.todos, nil }
 
-func (r *fakeRepo) Save(todos []todo.Todo) error {
-	r.todos = copyTodos(todos)
+// Save mirrors the whole-snapshot semantics of the SQLite adapter at this step:
+// dirty contains the full live set, tombstones is nil. We rebuild r.todos from
+// the dirty pointers (deep-copied for test isolation).
+func (r *fakeRepo) Save(dirty []*todo.Todo, tombstones []string) error {
+	out := make([]todo.Todo, len(dirty))
+	for i, p := range dirty {
+		out[i] = *p
+	}
+	r.todos = copyTodos(out)
 	return nil
 }
 

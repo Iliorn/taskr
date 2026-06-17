@@ -11,13 +11,15 @@ import (
 )
 
 // newTagModel returns a model with a known, hermetic set of todos (initialModel
-// loads from disk, so we replace its todos wholesale). initialModel also applies
+// loads from disk, so we replace its tasks wholesale). initialModel also applies
 // the developer's stored language; pin English so these tests, which assert
 // English labels, are deterministic regardless of ~/.taskr/settings.json.
 func newTagModel(todos ...todo.Todo) model {
 	m := newTestModel()
 	applyLang(string(langEN))
-	m.todos = todos
+	for _, td := range todos {
+		m.add(td)
+	}
 	m.termWidth = 80
 	m.termHeight = 30
 	m.refreshCaches()
@@ -31,7 +33,7 @@ func TestRenameTagMerges(t *testing.T) {
 
 	m.renameTagGlobally("a", "b")
 
-	got := m.todos[0].Tags
+	got := m.get(task.ID).Tags
 	if len(got) != 1 || got[0] != "b" {
 		t.Errorf("after merge rename, tags = %v, want [b]", got)
 	}
@@ -44,7 +46,7 @@ func TestRenameTagNonColliding(t *testing.T) {
 
 	m.renameTagGlobally("a", "C") // also exercises normalization
 
-	got := m.todos[0].Tags
+	got := m.get(task.ID).Tags
 	if len(got) != 2 {
 		t.Fatalf("tags = %v, want 2 tags", got)
 	}
@@ -73,8 +75,8 @@ func TestUntaggedRowAndFilter(t *testing.T) {
 
 	m.searchQuery = untaggedKey
 	matched := 0
-	for _, td := range m.todos {
-		if m.matchesSearch(td) {
+	for _, td := range m.tasks {
+		if m.matchesSearch(*td) {
 			matched++
 		}
 	}

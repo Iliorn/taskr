@@ -10,9 +10,11 @@ import (
 
 // ── Caches ────────────────────────────────────────────────────────────────────
 
+// cacheState holds derived views recomputed by refreshCaches whenever the task
+// set changes. Structural indexes (subtaskOf, runningTimers) live on the Store
+// and are maintained incrementally — they're not rebuilt here.
 type cacheState struct {
 	dirty         bool
-	todoIndex     map[string]int
 	overdueSet    map[string]bool
 	active        []todo.Todo
 	done          []todo.Todo
@@ -24,7 +26,6 @@ type cacheState struct {
 	learnings     []learningView
 	projects      []string
 	projectTasks  map[string][]todo.Todo
-	subtaskIndex  map[string][]int
 	tagRender     map[string]string
 
 	learningSearch string
@@ -37,42 +38,31 @@ type cacheState struct {
 func (m *model) refreshCaches() {
 	m.frameTime = time.Now()
 
-	for k := range m.cache.todoIndex {
-		delete(m.cache.todoIndex, k)
-	}
-	for i := range m.todos {
-		m.cache.todoIndex[m.todos[i].ID] = i
-	}
+	all := m.allTodos()
 
 	for k := range m.cache.overdueSet {
 		delete(m.cache.overdueSet, k)
 	}
-	for i := range m.todos {
-		if m.todos[i].IsOverdue() {
-			m.cache.overdueSet[m.todos[i].ID] = true
+	for i := range all {
+		if all[i].IsOverdue() {
+			m.cache.overdueSet[all[i].ID] = true
 		}
 	}
 
-	m.cache.active, m.cache.done = selectActiveDone(m.todos, m.searchQuery, m.focusFilter, m.taskSort)
+	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort)
 
-	m.cache.tags = computeTagStats(m.todos)
-	m.rebuildSortedTags()
+	m.cache.tags = computeTagStats(all)
+	m.rebuildSortedTagsFrom(all)
 
-	for k := range m.cache.subtaskIndex {
-		delete(m.cache.subtaskIndex, k)
-	}
-	for i := range m.todos {
-		if pid := m.todos[i].ParentID; pid != "" {
-			m.cache.subtaskIndex[pid] = append(m.cache.subtaskIndex[pid], i)
-		}
-	}
+	// subtaskOf is maintained incrementally by Store.add / Store.remove, so
+	// no rebuild is needed here.
 
 	for k := range m.cache.projectTasks {
 		delete(m.cache.projectTasks, k)
 	}
-	for i := range m.todos {
-		if p := m.todos[i].Project; p != "" {
-			m.cache.projectTasks[p] = append(m.cache.projectTasks[p], m.todos[i])
+	for i := range all {
+		if p := all[i].Project; p != "" {
+			m.cache.projectTasks[p] = append(m.cache.projectTasks[p], all[i])
 		}
 	}
 	for p, tasks := range m.cache.projectTasks {
@@ -94,8 +84,12 @@ func (m *model) refreshCaches() {
 // recomputed on every render; cache it alongside tagStats and invalidate it
 // the same way (on data change, and on sort-mode toggle via sortCachedTags).
 func (m *model) rebuildSortedTags() {
+	m.rebuildSortedTagsFrom(m.allTodos())
+}
+
+func (m *model) rebuildSortedTagsFrom(todos []todo.Todo) {
 	m.cache.tagsSorted, m.cache.untaggedTotal, m.cache.untaggedDone =
-		selectSortedTags(m.todos, m.tagSort, m.cache.tags)
+		selectSortedTags(todos, m.tagSort, m.cache.tags)
 	m.cache.tagsSortMode = m.tagSort
 }
 
@@ -146,7 +140,7 @@ func (m *model) refreshLearnings() {
 		m.cache.learningSort == m.learningSort {
 		return
 	}
-	m.cache.learnings = selectLearnings(m.todos, m.learningSearchQuery, m.learningSort)
+	m.cache.learnings = selectLearnings(m.allTodos(), m.learningSearchQuery, m.learningSort)
 	m.cache.learningSearch = m.learningSearchQuery
 	m.cache.learningSort = m.learningSort
 }
@@ -155,7 +149,7 @@ func (m *model) refreshProjects() {
 	if m.cache.projectSearch == m.searchQuery {
 		return
 	}
-	m.cache.projects = selectProjects(m.todos, m.searchQuery)
+	m.cache.projects = selectProjects(m.allTodos(), m.searchQuery)
 	m.cache.projectSearch = m.searchQuery
 }
 
