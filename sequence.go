@@ -6,8 +6,8 @@ import (
 	"taskr/todo"
 )
 
-// urgency.go is the sequencing engine: the rule that decides the "Sequence"
-// sort order and the value persisted in the todos.urgency column on every save.
+// sequence.go is the sequencing engine: the rule that decides the "Sequence"
+// sort order and the value persisted in the todos.sequence column on every save.
 //
 // The score is the design's Normalized Power Scale: four dimensions, each on a
 // 0–10 axis, three of them multiplied by a user-tunable bias (Relaxed=0.5,
@@ -250,9 +250,10 @@ func sequenceComponentsFor(t *todo.Todo) sequenceComponents {
 	return sequenceComponentsAt(time.Now(), t, activeBiases)
 }
 
-// urgency is the persisted score: written into todos.urgency on every save and
-// read by the Sequence sort. Kept under the historical name so the existing
-// SQL column / index keeps its meaning across the formula swap.
-func urgency(t *todo.Todo) float64 {
+// sequenceScore is the total persisted score: written into todos.sequence on
+// every save and read by the Sequence sort. Live callers (render loop, sort)
+// invoke this directly; the per-dimension breakdown is exposed via
+// sequenceComponentsFor for the detail view.
+func sequenceScore(t *todo.Todo) float64 {
 	return sequenceComponentsAt(time.Now(), t, activeBiases).Total
 }

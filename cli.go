@@ -253,12 +253,12 @@ func cliTop(args []string) int {
 			if !rows[i].DueDate.IsZero() {
 				due = rows[i].DueDate.Format("2006-01-02")
 			}
-			out[i] = scoredOut{rows[i].ID, rows[i].Title, urgency(&rows[i]), due}
+			out[i] = scoredOut{rows[i].ID, rows[i].Title, sequenceScore(&rows[i]), due}
 		}
 		return emitJSON(out)
 	}
 	for i := range rows {
-		fmt.Printf("%-8s %5.1f  %s\n", rows[i].ID[:8], urgency(&rows[i]), truncate(rows[i].Title, 60))
+		fmt.Printf("%-8s %5.1f  %s\n", rows[i].ID[:8], sequenceScore(&rows[i]), truncate(rows[i].Title, 60))
 	}
 	return 0
 }

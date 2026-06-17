@@ -151,7 +151,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 		// rollback is no longer a concern). Write an empty string; the column
 		// is no longer the source of truth.
 		upsertTask, err := tx.Prepare(`INSERT INTO todos
-			(id,title,status,priority,size,project,parent_id,created_at,modified_at,due_date,start_date,notes,completed_at,urgency,data,deleted,deleted_at)
+			(id,title,status,priority,size,project,parent_id,created_at,modified_at,due_date,start_date,notes,completed_at,sequence,data,deleted,deleted_at)
 			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',0,'')
 			ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, status=excluded.status, priority=excluded.priority,
@@ -159,7 +159,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 				created_at=excluded.created_at, modified_at=excluded.modified_at,
 				due_date=excluded.due_date, start_date=excluded.start_date,
 				notes=excluded.notes, completed_at=excluded.completed_at,
-				urgency=excluded.urgency, deleted=0, deleted_at=''`)
+				sequence=excluded.sequence, deleted=0, deleted_at=''`)
 		if err != nil {
 			return err
 		}
@@ -224,7 +224,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 			if _, err := upsertTask.Exec(t.ID, t.Title, int(t.Status), int(t.Priority), int(t.Size),
 				t.Project, t.ParentID, fmtTime(t.CreatedAt), fmtTime(t.ModifiedAt),
 				fmtTime(t.DueDate), fmtTime(t.StartDate), t.Notes, fmtTime(t.CompletedAt),
-				urgency(t)); err != nil {
+				sequenceScore(t)); err != nil {
 				return err
 			}
 			// Replace-all-children: simple and bounded — typical tasks have
@@ -440,16 +440,80 @@ func (r *sqliteRepo) Load() ([]todo.Todo, error) {
 	return loadTodos()
 }
 
-// TopUrgent returns the top n most-urgent open tasks (status=Pending), backed
-// by the (deleted, status, urgency DESC) index. O(log N + n) at any scale —
-// the foundation for "what should I do next?" / auto-planning features.
-func (r *sqliteRepo) TopUrgent(n int) ([]string, error) {
+// ResyncScores rewrites the persisted `sequence` column for every live row
+// at the current activeBiases. See Repository.ResyncScores for the why.
+func (r *sqliteRepo) ResyncScores() error {
+	if err := openStore(); err != nil {
+		return err
+	}
+	return resyncSequenceColumn(db)
+}
+
+// resyncSequenceColumn is the worker: load the score-relevant fields of
+// every live row, compute sequenceScore in Go using the current activeBiases,
+// and write back only the score column in one transaction. Touches no
+// child tables and no other scalars — cheap even on large task sets.
+func resyncSequenceColumn(h *sql.DB) error {
+	rows, err := h.Query(`SELECT id, status, priority, size, due_date, created_at
+		FROM todos WHERE deleted = 0`)
+	if err != nil {
+		return err
+	}
+	type scored struct {
+		id    string
+		score float64
+	}
+	var updates []scored
+	for rows.Next() {
+		var t todo.Todo
+		var status, priority, size int
+		var due, created string
+		if err := rows.Scan(&t.ID, &status, &priority, &size, &due, &created); err != nil {
+			rows.Close()
+			return err
+		}
+		t.Status = todo.Status(status)
+		t.Priority = todo.Priority(priority)
+		t.Size = todo.Size(size)
+		t.DueDate = parseTime(due)
+		t.CreatedAt = parseTime(created)
+		updates = append(updates, scored{t.ID, sequenceScore(&t)})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	tx, err := h.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmt, err := tx.Prepare(`UPDATE todos SET sequence = ? WHERE id = ?`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, u := range updates {
+		if _, err := stmt.Exec(u.score, u.id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// TopBySequence returns the top n highest-scoring open tasks (status=Pending),
+// backed by the (deleted, status, sequence DESC) index. O(log N + n) at any
+// scale — the foundation for "what should I do next?" / auto-planning
+// features that want to skip loading the whole task set.
+func (r *sqliteRepo) TopBySequence(n int) ([]string, error) {
 	if err := openStore(); err != nil {
 		return nil, err
 	}
 	rows, err := db.Query(`SELECT id FROM todos
 		WHERE deleted = 0 AND status = 0
-		ORDER BY urgency DESC, due_date ASC
+		ORDER BY sequence DESC, due_date ASC
 		LIMIT ?`, n)
 	if err != nil {
 		return nil, err

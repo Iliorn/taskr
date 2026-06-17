@@ -16,4 +16,10 @@ import "taskr/todo"
 type Repository interface {
 	Load() ([]todo.Todo, error)
 	Save(dirty []*todo.Todo, tombstones []string) error
+	// ResyncScores rewrites the persisted `sequence` column for every live
+	// row at the current activeBiases. Without this, a bias change or
+	// passage of time (Age drift) leaves the column stale relative to the
+	// in-memory formula — invisible to the TUI (which sorts in memory) but
+	// a trap for any SQL consumer like TopBySequence or future sync.
+	ResyncScores() error
 }

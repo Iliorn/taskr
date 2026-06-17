@@ -200,12 +200,12 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 			return todos[i].CreatedAt.Before(todos[j].CreatedAt)
 		})
 	default: // taskSortSequence
-		// Precompute scores once per task — urgency() is O(1) but the sort
-		// closure runs O(N log N) times, and reading by ID from the map keeps
-		// the comparator stable across swaps.
+		// Precompute scores once per task — sequenceScore() is O(1) but the
+		// sort closure runs O(N log N) times, and reading by ID from the map
+		// keeps the comparator stable across swaps.
 		scores := make(map[string]float64, len(todos))
 		for i := range todos {
-			scores[todos[i].ID] = urgency(&todos[i])
+			scores[todos[i].ID] = sequenceScore(&todos[i])
 		}
 		sort.SliceStable(todos, func(i, j int) bool {
 			si, sj := scores[todos[i].ID], scores[todos[j].ID]

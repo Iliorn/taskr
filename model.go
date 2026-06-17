@@ -341,6 +341,12 @@ func initialModel(repo Repository) model {
 	}
 	m.applyLangPlaceholders()
 	m.refreshCaches()
+	// Absorb Age drift since the last open: every task's score creeps daily,
+	// so a startup resync keeps the persisted column truthful even when the
+	// user hasn't touched any task since yesterday.
+	if err := m.repo.ResyncScores(); err != nil {
+		m.err = fmt.Sprintf("Score resync failed: %v", err)
+	}
 	m.calendar.selected = startOfDay(time.Now())
 	if t := m.runningTask(); t != nil {
 		m.timerTickOn = true

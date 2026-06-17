@@ -634,7 +634,9 @@ func (m *model) isBiasSettingRow(row int) bool {
 
 // cycleBias rotates the named bias by `direction` (+1 next, -1 prev), updates
 // the activeBiases global, invalidates the sort cache so the new ranking takes
-// effect on the next render, and persists the change.
+// effect on the next render, persists the change, and resyncs the persisted
+// `sequence` column so any SQL consumer (TopBySequence, future sync) sees the
+// new weights immediately rather than waiting for the next mutation.
 func (m *model) cycleBias(row, direction int) {
 	switch row {
 	case settingBiasDeadline:
@@ -646,10 +648,11 @@ func (m *model) cycleBias(row, direction int) {
 	default:
 		return
 	}
-	// Score weights changed → every cached score / sorted list is stale. The
-	// next ensureCache will rebuild selectActiveDone with the new weights.
 	m.markCacheDirty()
 	m.persistSettings()
+	if err := m.repo.ResyncScores(); err != nil {
+		m.err = fmt.Sprintf(tr("Score resync failed: %v"), err)
+	}
 }
 
 // persistSettings writes all current preferences to disk, surfacing any write

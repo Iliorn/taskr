@@ -9,6 +9,11 @@ type fakeRepo struct{ todos []todo.Todo }
 
 func (r *fakeRepo) Load() ([]todo.Todo, error) { return r.todos, nil }
 
+// ResyncScores is a no-op for the in-memory fake — there's no persisted
+// score column to refresh. The contract ("persisted score matches the
+// formula") is vacuously satisfied when nothing is persisted.
+func (r *fakeRepo) ResyncScores() error { return nil }
+
 // Save mirrors the whole-snapshot semantics of the SQLite adapter at this step:
 // dirty contains the full live set, tombstones is nil. We rebuild r.todos from
 // the dirty pointers (deep-copied for test isolation).

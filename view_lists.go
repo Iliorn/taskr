@@ -812,7 +812,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	if cols.showLast {
 		// Score column is always score now — priority lives only in the
 		// detail view, where the user can still set it.
-		line += padRight(fmt.Sprintf("%.1f", urgency(&t)), 12)
+		line += padRight(fmt.Sprintf("%.1f", sequenceScore(&t)), 12)
 	}
 
 	// Only append tags if they fit within the inner panel content width.

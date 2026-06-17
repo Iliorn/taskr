@@ -18,7 +18,10 @@ func init() {
 // backfillNormalizedTables reads every row's JSON blob from the legacy `data`
 // column, parses it, and inserts the nested data (tags, dependencies, comments,
 // learnings, time entries) into the new child tables. It also fills in the new
-// `notes`, `completed_at`, and `urgency` columns from the parsed struct.
+// `notes`, `completed_at`, and `urgency` columns from the parsed struct
+// (the column is later renamed to `sequence` by migration 004; references
+// inside this migration use the historical name that existed at its
+// snapshot in time).
 //
 // Before any destructive work the function writes a one-shot JSON backup next
 // to the DB so the user can recover if the migration is later found to have
@@ -112,7 +115,7 @@ func backfillNormalizedTables(tx *sql.Tx) error {
 				return err
 			}
 		}
-		if _, err := updateScalars.Exec(t.Notes, fmtTime(t.CompletedAt), urgency(&t), r.id); err != nil {
+		if _, err := updateScalars.Exec(t.Notes, fmtTime(t.CompletedAt), sequenceScore(&t), r.id); err != nil {
 			return err
 		}
 	}
