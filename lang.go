@@ -193,7 +193,7 @@ var daTranslations = map[string]string{
 	"←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back":                                          "←/→ sider · enter rediger · a tilføj · d skift · x fjern · n noter · esc tilbage",
 	"enter detail · a add · d done · t track · p prio · r rename · x del · n notes · f focus · s sort · h history · / search": "enter detalje · a tilføj · d færdig · t tid · p prio · r omdøb · x slet · n noter · f fokus · s sortér · h historik · / søg",
 	"j/k nav · r rename · x delete · / filter":                                                                            "j/k navigér · r omdøb · x slet · / filtrér",
-	"j/k nav · r rename · x delete · s sort · / filter":                                                                   "j/k navigér · r omdøb · x slet · s sortér · / filtrér",
+	"j/k nav · r rename · m merge · x delete · s sort · / filter":                                                         "j/k navigér · r omdøb · m flet · x slet · s sortér · / filtrér",
 	"j/k nav · r edit · x delete · s sort · / search":                                                                     "j/k navigér · r rediger · x slet · s sortér · / søg",
 	"enter · cycle activity range":                                                                                        "enter · skift aktivitetsperiode",
 	"j/k select entry · r edit times · x delete · esc back":                                                              "j/k vælg post · r rediger tider · x slet · esc tilbage",

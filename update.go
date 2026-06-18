@@ -561,6 +561,24 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			return m.handleListRename()
 
+		case "m":
+			// Merge tag — Tags tab only. Opens the same editor as rename but
+			// with an empty input and a "Merge into…" placeholder, so the
+			// user understands they're picking a *target* tag. The save
+			// path (renameTagGlobally) is merge-aware: if the typed name
+			// matches an existing tag, all tasks switch over and the source
+			// tag disappears.
+			if m.tab == tabTags {
+				if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) && tags[m.tagTabCursor] != untaggedKey {
+					m.editingTagName = tags[m.tagTabCursor]
+					m.mode = modeEditTag
+					m.textInput.SetValue("")
+					m.textInput.Placeholder = fmt.Sprintf(tr("Merge #%s into…"), tags[m.tagTabCursor])
+					m.textInput.Focus()
+					return m, textinput.Blink
+				}
+			}
+
 		case "x", "delete":
 			return m.handleListDelete()
 

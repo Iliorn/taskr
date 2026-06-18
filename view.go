@@ -331,7 +331,7 @@ func (m model) renderKeyHints(w int) string {
 	case m.tab == tabProjects:
 		hints = tr("j/k nav · r rename · x delete · / filter")
 	case m.tab == tabTags:
-		hints = tr("j/k nav · r rename · x delete · s sort · / filter")
+		hints = tr("j/k nav · r rename · m merge · x delete · s sort · / filter")
 	case m.tab == tabLearnings:
 		hints = tr("j/k nav · r edit · x delete · s sort · / search")
 	case m.tab == tabStats:
