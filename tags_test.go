@@ -135,10 +135,10 @@ func TestTagDetailCapsAndOrders(t *testing.T) {
 	}
 	// Overdue/active come first; with a tight budget the done-NN tasks must not
 	// crowd them out.
-	if !strings.Contains(content, "alpha-overdue") {
+	if !strings.Contains(content, "Alpha-overdue") {
 		t.Errorf("overdue task should be shown, missing from:\n%s", content)
 	}
-	if strings.Contains(content, "done-00") {
+	if strings.Contains(content, "Done-00") {
 		t.Errorf("done tasks should sort after overdue/active, but a done task displaced them:\n%s", content)
 	}
 }

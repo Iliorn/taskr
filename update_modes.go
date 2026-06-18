@@ -156,7 +156,7 @@ func (m model) updateEditTitle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if newTitle := strings.TrimSpace(m.textInput.Value()); newTitle != "" {
 				if t := m.currentTodo(); t != nil {
-					t.Title = newTitle
+					t.Title = todo.CapitalizeTitle(newTitle)
 					t.ModifiedAt = time.Now()
 					m.markModified(t.ID)
 				}

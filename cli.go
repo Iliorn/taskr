@@ -852,7 +852,7 @@ func cliEdit(args []string) int {
 	}
 	changed := false
 	if *title != "" {
-		t.Title = *title
+		t.Title = todo.CapitalizeTitle(*title)
 		t.ModifiedAt = time.Now()
 		changed = true
 	}

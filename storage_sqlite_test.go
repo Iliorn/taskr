@@ -68,7 +68,7 @@ func TestSQLiteRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatalf("todo %s missing after round-trip", a.ID)
 	}
-	if ra.Title != "write tests" || ra.Priority != todo.PriorityHigh {
+	if ra.Title != "Write tests" || ra.Priority != todo.PriorityHigh {
 		t.Errorf("scalar fields lost: %+v", ra)
 	}
 	if len(ra.Tags) != 1 || ra.Tags[0] != "work" {

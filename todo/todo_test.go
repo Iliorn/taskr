@@ -158,6 +158,25 @@ func TestNormalizeTag(t *testing.T) {
 	}
 }
 
+func TestCapitalizeTitle(t *testing.T) {
+	cases := map[string]string{
+		"buy milk":   "Buy milk",
+		"Buy milk":   "Buy milk",
+		"BUY MILK":   "BUY MILK",
+		"":           "",
+		"123 do it":  "123 do it",
+		"æbleskiver": "Æbleskiver",
+		"é-trail":    "É-trail",
+		// Don't touch the rest of the string — only the first rune flips case.
+		"hELLO": "HELLO",
+	}
+	for in, want := range cases {
+		if got := CapitalizeTitle(in); got != want {
+			t.Errorf("CapitalizeTitle(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestRemoveTag(t *testing.T) {
 	task := New("Tag remove test")
 	task.AddTag("work")

@@ -21,8 +21,8 @@ func TestDecodeTaskFileLegacy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decodeTaskFile(legacy) error: %v", err)
 	}
-	if len(got) != 2 || got[0].Title != "alpha" || got[1].Title != "beta" {
-		t.Fatalf("legacy decode = %+v, want alpha/beta", got)
+	if len(got) != 2 || got[0].Title != "Alpha" || got[1].Title != "Beta" {
+		t.Fatalf("legacy decode = %+v, want Alpha/Beta (todo.New capitalizes first letter)", got)
 	}
 }
 
@@ -47,8 +47,8 @@ func TestTaskFileRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decodeTaskFile(envelope) error: %v", err)
 	}
-	if len(got) != 2 || got[0].Title != "one" || got[1].Title != "two" {
-		t.Fatalf("round-trip = %+v, want one/two", got)
+	if len(got) != 2 || got[0].Title != "One" || got[1].Title != "Two" {
+		t.Fatalf("round-trip = %+v, want One/Two (todo.New capitalizes first letter)", got)
 	}
 }
 

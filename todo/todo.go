@@ -3,9 +3,26 @@ package todo
 import (
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
+
+// CapitalizeTitle uppercases the first rune of s if it is a lowercase letter,
+// leaving the rest of s untouched. Empty strings and titles that start with a
+// non-letter (digit, emoji, punctuation) or are already uppercase are returned
+// as-is.
+func CapitalizeTitle(s string) string {
+	if s == "" {
+		return s
+	}
+	r, size := utf8.DecodeRuneInString(s)
+	if !unicode.IsLetter(r) || !unicode.IsLower(r) {
+		return s
+	}
+	return string(unicode.ToUpper(r)) + s[size:]
+}
 
 // ── Status ────────────────────────────────────────────────────────────────────
 
@@ -155,7 +172,7 @@ func New(title string) Todo {
 	now := time.Now()
 	return Todo{
 		ID:         uuid.New().String(),
-		Title:      title,
+		Title:      CapitalizeTitle(title),
 		Status:     Pending,
 		Priority:   PriorityMedium,
 		CreatedAt:  now,
