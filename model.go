@@ -732,10 +732,17 @@ func (m model) depSearchResults() []todo.Todo {
 		}
 		if q == "" || strings.Contains(strings.ToLower(candidate.Title), q) {
 			result = append(result, *candidate)
-			if len(result) >= maxDepSearchResults*3 {
-				break
-			}
 		}
+	}
+	// Range over a map gives unstable order, so the list visibly reshuffled on
+	// every redraw (cursor blink, timer tick, anything). Sort alphabetically so
+	// the picker is stable across redraws and the cursor points at the same
+	// task between frames.
+	sort.Slice(result, func(i, j int) bool {
+		return strings.ToLower(result[i].Title) < strings.ToLower(result[j].Title)
+	})
+	if len(result) > maxDepSearchResults*3 {
+		result = result[:maxDepSearchResults*3]
 	}
 	return result
 }
