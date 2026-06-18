@@ -328,12 +328,12 @@ func (m model) updateSearchDep(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = modeNormal
 			m.depSearch = searchState{}
 			return m, nil
-		case "up", "k":
+		case "up":
 			if m.depSearch.cursor > 0 {
 				m.depSearch.cursor--
 			}
 			return m, nil
-		case "down", "j":
+		case "down":
 			if results := m.depSearchResults(); m.depSearch.cursor < len(results)-1 {
 				m.depSearch.cursor++
 			}
@@ -374,12 +374,12 @@ func (m model) updateSearchTag(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = modeNormal
 			m.tagSearch = searchState{}
 			return m, nil
-		case "up", "k":
+		case "up":
 			if m.tagSearch.cursor > 0 {
 				m.tagSearch.cursor--
 			}
 			return m, nil
-		case "down", "j":
+		case "down":
 			if results := m.tagSearchResults(); m.tagSearch.cursor < len(results)-1 {
 				m.tagSearch.cursor++
 			}
@@ -420,12 +420,12 @@ func (m model) updateSearchProject(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = modeNormal
 			m.projSearch = searchState{}
 			return m, nil
-		case "up", "k":
+		case "up":
 			if m.projSearch.cursor > 0 {
 				m.projSearch.cursor--
 			}
 			return m, nil
-		case "down", "j":
+		case "down":
 			if results := m.projSearchResults(); m.projSearch.cursor < len(results)-1 {
 				m.projSearch.cursor++
 			}
