@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"taskr/todo"
 )
 
 // ── Day activities ────────────────────────────────────────────────────────────
@@ -19,9 +20,16 @@ type dayActivity struct {
 	tags    []string
 	start   time.Time
 	stop    time.Time // zero while the entry is still running
+	// completed marks this as a completion event (task was marked done on
+	// this day) rather than a time-tracking entry. start==stop==CompletedAt
+	// and duration is 0; the timeline renders it as "✓ done at HH:MM".
+	completed bool
 }
 
 func (a dayActivity) duration() time.Duration {
+	if a.completed {
+		return 0
+	}
 	if a.stop.IsZero() {
 		return time.Since(a.start)
 	}
@@ -32,8 +40,10 @@ func dayKey(t time.Time) string {
 	return t.Format("2006-01-02")
 }
 
-// activitiesForDay returns every time entry started on the given day,
-// ordered by start time.
+// activitiesForDay returns every time entry started on the given day plus
+// every completion event (a task marked done on that day) so the calendar
+// surfaces work even when the user closed the task without tracking time.
+// Result is ordered by timestamp.
 func (m model) activitiesForDay(day time.Time) []dayActivity {
 	key := dayKey(day)
 	var acts []dayActivity
@@ -51,6 +61,30 @@ func (m model) activitiesForDay(day time.Time) []dayActivity {
 				start:   e.StartedAt,
 				stop:    e.StoppedAt,
 			})
+		}
+		// Completion event: task marked done on this day. Only surfaces when
+		// the day has no tracked time for that task — otherwise the time
+		// entries already cover the work and a second "done at HH:MM" row
+		// would just be noise.
+		if t.Status == todo.Done && !t.CompletedAt.IsZero() && dayKey(t.CompletedAt) == key {
+			hasTracked := false
+			for _, e := range t.TimeEntries {
+				if dayKey(e.StartedAt) == key {
+					hasTracked = true
+					break
+				}
+			}
+			if !hasTracked {
+				acts = append(acts, dayActivity{
+					taskID:    t.ID,
+					title:     t.Title,
+					project:   t.Project,
+					tags:      t.Tags,
+					start:     t.CompletedAt,
+					stop:      t.CompletedAt,
+					completed: true,
+				})
+			}
 		}
 	}
 	sort.Slice(acts, func(i, j int) bool { return acts[i].start.Before(acts[j].start) })
@@ -298,12 +332,19 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 		cur = "▶ "
 	}
 
-	running := a.stop.IsZero()
+	running := a.stop.IsZero() && !a.completed
 	endStr := tr(" now ")
-	if !running {
+	switch {
+	case a.completed:
+		// Completion event collapses the range to "done at HH:MM"; duration is 0.
+		endStr = a.start.Format("15:04")
+	case !running:
 		endStr = a.stop.Format("15:04")
 	}
 	rangeStr := a.start.Format("15:04") + "–" + endStr
+	if a.completed {
+		rangeStr = tr("✓ done at ") + a.start.Format("15:04")
+	}
 	durStr := formatDuration(a.duration())
 
 	// Fixed right-hand block (range + duration); title/project/tags share the rest.
@@ -344,10 +385,19 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 	}
 
 	durStyled := timerStyle.Render(padRight(durStr, 8))
-	if running {
+	switch {
+	case running:
 		durStyled = calTodayStyle.Render(padRight(durStr+" ◉", 8))
+	case a.completed:
+		// No duration for a completion event; pad to keep column alignment
+		// honest across mixed rows.
+		durStyled = dimStyle.Render(strings.Repeat(" ", 8))
 	}
 
-	return cur + timerStyle.Render("●") + " " + left + " " +
+	dot := timerStyle.Render("●")
+	if a.completed {
+		dot = checkDoneStyle.Render("✓")
+	}
+	return cur + dot + " " + left + " " +
 		dimStyle.Render(rangeStr) + "  " + durStyled
 }
