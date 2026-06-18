@@ -199,6 +199,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateAddLearning(msg)
 	case modeAddSubtask:
 		return m.updateAddSubtask(msg)
+	case modeEditSubtask:
+		return m.updateEditSubtask(msg)
 	case modeSearch:
 		return m.updateSearch(msg)
 	case modeSearchDep:
@@ -1504,10 +1506,20 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		}
 	case fieldSubtasks:
+		// Enter on a subtask edits the title (matches comments + learnings).
+		// 'd' still toggles done/pending.
 		if m.subtaskCount(t.ID) > 0 && m.detail.subtaskCursor < m.subtaskCount(t.ID) {
-			subID := m.toggleSubtask(t.ID, m.detail.subtaskCursor)
-			m.markModified(subID)
-			return m, nil
+			ids := m.subtaskIDs(t.ID)
+			sub := m.findTodoByID(ids[m.detail.subtaskCursor])
+			if sub == nil {
+				return m, nil
+			}
+			m.mode = modeEditSubtask
+			m.pendingSubtask = m.detail.subtaskCursor
+			m.textInput.SetValue(sub.Title)
+			m.textInput.Placeholder = tr("Edit subtask title...")
+			m.textInput.Focus()
+			return m, textinput.Blink
 		}
 	}
 	return m, textinput.Blink

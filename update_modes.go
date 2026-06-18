@@ -99,6 +99,37 @@ func (m model) updateAddSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateEditSubtask renames the subtask whose index was captured in
+// pendingSubtask when edit started. The index is captured up front so
+// concurrent reorders/deletions can't accidentally rename a different child.
+func (m model) updateEditSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "enter":
+			if val := strings.TrimSpace(m.textInput.Value()); val != "" {
+				if t := m.currentTodo(); t != nil {
+					ids := m.subtaskIDs(t.ID)
+					if m.pendingSubtask < len(ids) {
+						if sub := m.findTodoByID(ids[m.pendingSubtask]); sub != nil {
+							sub.Title = todo.CapitalizeTitle(val)
+							sub.ModifiedAt = time.Now()
+							m.markModified(sub.ID)
+						}
+					}
+				}
+			}
+			m.mode = modeNormal
+			return m, nil
+		case "esc":
+			m.mode = modeNormal
+			return m, nil
+		}
+	}
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
 func (m model) updateAddLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if key, ok := msg.(tea.KeyMsg); ok {
