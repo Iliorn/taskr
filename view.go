@@ -240,6 +240,7 @@ func (m model) buildFooterContent(w int) string {
 		b := getBuilder()
 		defer putBuilder(b)
 		b.WriteString(searchStyle.Width(w).Render(m.depSearchInput.View()))
+		shown := 0
 		for i, r := range m.depSearchResults() {
 			if i >= maxDepSearchResults {
 				break
@@ -249,6 +250,11 @@ func (m model) buildFooterContent(w int) string {
 			} else {
 				b.WriteString("\n" + normalStyle.Render("    "+r.Title))
 			}
+			shown++
+		}
+		for shown < maxDepSearchResults {
+			b.WriteString("\n")
+			shown++
 		}
 		return b.String()
 	case modeSearchTag:
@@ -256,6 +262,7 @@ func (m model) buildFooterContent(w int) string {
 		defer putBuilder(b)
 		b.WriteString(searchStyle.Width(w).Render(m.tagSearchInput.View()))
 		results := m.tagSearchResults()
+		shown := 0
 		for i, r := range results {
 			if i >= maxTagSearchResults {
 				break
@@ -265,9 +272,15 @@ func (m model) buildFooterContent(w int) string {
 			} else {
 				b.WriteString("\n" + normalStyle.Render("    #"+r))
 			}
+			shown++
 		}
 		if len(results) == 0 && m.tagSearch.query != "" {
 			b.WriteString("\n" + dimStyle.Render("  → "+tr("create new tag: ")) + tagStyle.Render(m.tagSearch.query))
+			shown++
+		}
+		for shown < maxTagSearchResults {
+			b.WriteString("\n")
+			shown++
 		}
 		return b.String()
 	case modeSearchProject:
@@ -275,6 +288,7 @@ func (m model) buildFooterContent(w int) string {
 		defer putBuilder(b)
 		b.WriteString(searchStyle.Width(w).Render(m.projSearchInput.View()))
 		results := m.projSearchResults()
+		shown := 0
 		for i, r := range results {
 			if i >= maxProjSearchResults {
 				break
@@ -284,9 +298,15 @@ func (m model) buildFooterContent(w int) string {
 			} else {
 				b.WriteString("\n" + normalStyle.Render("    "+r))
 			}
+			shown++
 		}
 		if len(results) == 0 && m.projSearch.query != "" {
 			b.WriteString("\n" + dimStyle.Render("  → "+tr("create new project: ")) + selectedStyle.Render(m.projSearch.query))
+			shown++
+		}
+		for shown < maxProjSearchResults {
+			b.WriteString("\n")
+			shown++
 		}
 		return b.String()
 	case modeConfirmDelete, modeConfirmDeleteComment,
