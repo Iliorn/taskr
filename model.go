@@ -681,6 +681,7 @@ func (m model) subtaskCount(parentID string) int {
 // the caller can mark it dirty.
 func (m *model) addSubtask(parentID, title string) string {
 	sub := todo.NewSubtask(title, parentID)
+	sub.InheritContextFrom(m.get(parentID))
 	m.add(sub)
 	return sub.ID
 }

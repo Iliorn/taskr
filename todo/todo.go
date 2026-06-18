@@ -186,6 +186,21 @@ func NewSubtask(title string, parentID string) Todo {
 	return t
 }
 
+// InheritContextFrom copies the parent's Project and Tags into t. Callers use
+// this when creating a subtask so it picks up the same context (project board,
+// tag filters) as the parent without the user having to retype it.
+func (t *Todo) InheritContextFrom(parent *Todo) {
+	if parent == nil {
+		return
+	}
+	if parent.Project != "" {
+		t.Project = parent.Project
+	}
+	for _, tag := range parent.Tags {
+		t.AddTag(tag)
+	}
+}
+
 func (t *Todo) Toggle() {
 	if t.Status == Pending {
 		t.Status = Done

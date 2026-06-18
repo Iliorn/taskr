@@ -740,3 +740,28 @@ func TestTimeEntryRunning(t *testing.T) {
 		t.Error("entry with StoppedAt should not be running")
 	}
 }
+
+func TestInheritContextFrom(t *testing.T) {
+	parent := New("Parent")
+	parent.Project = "alpha"
+	parent.AddTag("Work")
+	parent.AddTag("urgent")
+
+	child := NewSubtask("Child", parent.ID)
+	child.InheritContextFrom(&parent)
+
+	if child.Project != "alpha" {
+		t.Errorf("project = %q, want alpha", child.Project)
+	}
+	if len(child.Tags) != 2 || child.Tags[0] != "work" || child.Tags[1] != "urgent" {
+		t.Errorf("tags = %v, want [work urgent]", child.Tags)
+	}
+
+	// Nil parent is a no-op.
+	orphan := NewSubtask("Orphan", "no-parent")
+	orphan.InheritContextFrom(nil)
+	if orphan.Project != "" || len(orphan.Tags) != 0 {
+		t.Errorf("nil parent should leave subtask untouched, got project=%q tags=%v",
+			orphan.Project, orphan.Tags)
+	}
+}

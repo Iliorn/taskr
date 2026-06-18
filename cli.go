@@ -1340,6 +1340,7 @@ func cliSubtask(args []string) int {
 			continue
 		}
 		s := todo.NewSubtask(title, parent.ID)
+		s.InheritContextFrom(parent)
 		subs = append(subs, &s)
 	}
 	if len(subs) == 0 {
