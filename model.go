@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -266,6 +268,10 @@ type model struct {
 
 	// Caches
 	cache *cacheState
+
+	// Filesystem watcher state. nil if the watcher couldn't start (in which
+	// case the TUI behaves exactly as before — no live reload, no errors).
+	watcher *watcherState
 }
 
 func initialModel(repo Repository) model {
@@ -356,6 +362,17 @@ func initialModel(repo Repository) model {
 	if err := m.repo.ResyncScores(); err != nil {
 		m.err = fmt.Sprintf("Score resync failed: %v", err)
 	}
+	// Spin up the filesystem watcher so CLI writes (and any other process
+	// touching ~/.taskr/tasks.db) refresh the TUI without a restart. If it
+	// fails to start (e.g. weird filesystem, permissions, OS limits), the
+	// TUI keeps working — live reload just isn't available.
+	if home, err := os.UserHomeDir(); err == nil {
+		watchDir := filepath.Join(home, ".taskr")
+		state := newWatcherState()
+		if _, werr := startWatcher(state, watchDir); werr == nil {
+			m.watcher = state
+		}
+	}
 	m.calendar.selected = startOfDay(time.Now())
 	if t := m.runningTask(); t != nil {
 		m.timerTickOn = true
@@ -369,10 +386,21 @@ func initialModel(repo Repository) model {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 func (m model) Init() tea.Cmd {
+	var cmds []tea.Cmd
 	if m.timerTickOn {
-		return timerTick()
+		cmds = append(cmds, timerTick())
 	}
-	return nil
+	if m.watcher != nil {
+		cmds = append(cmds, waitForDBChange(m.watcher.ch))
+	}
+	switch len(cmds) {
+	case 0:
+		return nil
+	case 1:
+		return cmds[0]
+	default:
+		return tea.Batch(cmds...)
+	}
 }
 
 // ── Error timer ───────────────────────────────────────────────────────────────

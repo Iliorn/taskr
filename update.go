@@ -15,7 +15,32 @@ import (
 
 // ── Top-level Update ──────────────────────────────────────────────────────────
 
+// Update is the Bubble Tea entry point. It delegates the real work to
+// dispatch, then layers on a single concern: if the user just left a modal
+// mode and a watcher reload was deferred while they were typing, schedule
+// the reload now so the deferred external change isn't silently lost.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.dispatch(msg)
+	n, ok := next.(model)
+	if !ok {
+		return next, cmd
+	}
+	if n.mode == modeNormal && n.watcher != nil && n.watcher.drainPending() {
+		repo := n.repo
+		reload := func() tea.Msg {
+			todos, err := repo.Load()
+			return reloadedMsg{todos: todos, err: err}
+		}
+		if cmd == nil {
+			cmd = reload
+		} else {
+			cmd = tea.Batch(cmd, reload)
+		}
+	}
+	return n, cmd
+}
+
+func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.frameTime = time.Now()
 
 	if sz, ok := msg.(tea.WindowSizeMsg); ok {
@@ -78,6 +103,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			repo := m.repo
+			if m.watcher != nil {
+				// Record the timestamp BEFORE the save so a fast fs event
+				// firing during the write is still inside the suppression
+				// window. The save goroutine doesn't need to update this.
+				m.watcher.recordSelfSave()
+			}
 			return m, func() tea.Msg {
 				if err := repo.Save(dirty, tombstones); err != nil {
 					return saveErrMsg{err}
@@ -85,6 +116,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return saveDoneMsg{}
 			}
 		}
+		return m, nil
+	case dbChangedMsg:
+		// External writer (CLI, another process) touched the DB. Decide
+		// whether to reload now or defer until the user exits a modal mode.
+		// Always re-arm the watcher channel listener.
+		var cmds []tea.Cmd
+		if m.watcher != nil {
+			cmds = append(cmds, waitForDBChange(m.watcher.ch))
+			if m.watcher.shouldReloadNow(time.Now(), m.mode) {
+				repo := m.repo
+				cmds = append(cmds, func() tea.Msg {
+					todos, err := repo.Load()
+					return reloadedMsg{todos: todos, err: err}
+				})
+			}
+		}
+		if len(cmds) == 0 {
+			return m, nil
+		}
+		return m, tea.Batch(cmds...)
+	case reloadedMsg:
+		if msg.err != nil {
+			m.err = fmt.Sprintf("External reload failed: %v", msg.err)
+			return m, clearErrAfter()
+		}
+		// Atomic swap: rebuild the Store from the freshly-loaded task set,
+		// invalidate caches, and follow the same task ID across the new
+		// ordering so the cursor stays anchored where the user expected.
+		taskID := m.currentTaskID()
+		m.Store = Store{}
+		m.Store.ensureTasks()
+		for i := range msg.todos {
+			m.Store.add(msg.todos[i])
+		}
+		m.markCacheDirty()
+		m.refreshCaches()
+		m.followTask(taskID)
 		return m, nil
 	}
 
