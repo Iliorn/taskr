@@ -209,8 +209,8 @@ func TestBiasCycleOnSettingsTab(t *testing.T) {
 	// Reset to a known starting point so prior tests' bias mutations don't
 	// leak in. applyBiases is global state — explicit reset is the safest
 	// guard for parallel-safety even with -race off.
-	applyBiases(biases{biasBalanced, biasBalanced, biasBalanced})
-	defer applyBiases(biases{biasBalanced, biasBalanced, biasBalanced})
+	applyBiases(biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true})
+	defer applyBiases(biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true})
 
 	m := modelWithTasks(t)
 	m.tab = tabSettings

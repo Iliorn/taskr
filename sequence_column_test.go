@@ -26,7 +26,7 @@ func assertSequenceColumn(t *testing.T, h *sql.DB, taskID string, live *todo.Tod
 // row's `sequence` column must equal the score the live formula produces.
 func TestSequenceColumnTracksFormulaAfterSave(t *testing.T) {
 	h := openTestDB(t)
-	applyBiases(biases{biasBalanced, biasBalanced, biasBalanced})
+	applyBiases(biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true})
 
 	task := todo.New("ranked task")
 	task.Priority = todo.PriorityHigh
@@ -42,7 +42,7 @@ func TestSequenceColumnTracksFormulaAfterSave(t *testing.T) {
 // "optimization" that removes resyncSequenceColumn fails CI.
 func TestSequenceColumnDriftsWithoutResync(t *testing.T) {
 	h := openTestDB(t)
-	applyBiases(biases{biasBalanced, biasBalanced, biasBalanced})
+	applyBiases(biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true})
 
 	task := todo.New("drift demo")
 	task.Priority = todo.PriorityHigh
@@ -57,7 +57,7 @@ func TestSequenceColumnDriftsWithoutResync(t *testing.T) {
 	// Move every bias to Intense (×2). The in-memory formula now reports a
 	// score ~roughly double; the column should *not* have changed because
 	// nothing resaved this row.
-	applyBiases(biases{biasIntense, biasIntense, biasIntense})
+	applyBiases(biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true})
 	live := sequenceScore(&task)
 
 	var after float64
@@ -77,7 +77,7 @@ func TestSequenceColumnDriftsWithoutResync(t *testing.T) {
 // current biases. This is the test the resync implementation has to satisfy.
 func TestSequenceColumnAfterResync(t *testing.T) {
 	h := openTestDB(t)
-	applyBiases(biases{biasBalanced, biasBalanced, biasBalanced})
+	applyBiases(biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true})
 
 	a := todo.New("alpha")
 	a.Priority = todo.PriorityHigh
@@ -87,7 +87,7 @@ func TestSequenceColumnAfterResync(t *testing.T) {
 	b.Size = todo.SizeLarge
 	saveTodos(t, h, []todo.Todo{a, b})
 
-	applyBiases(biases{biasIntense, biasIntense, biasIntense})
+	applyBiases(biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true})
 	if err := resyncSequenceColumn(h); err != nil {
 		t.Fatalf("resync: %v", err)
 	}

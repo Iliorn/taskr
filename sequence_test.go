@@ -125,7 +125,7 @@ func TestDoneTaskScoresZero(t *testing.T) {
 	tt.Status = todo.Done
 	tt.Priority = todo.PriorityHigh
 	tt.Size = todo.SizeSmall
-	got := sequenceComponentsAt(fixedNow, &tt, biases{biasIntense, biasIntense, biasIntense})
+	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true})
 	if got.Total != 0 {
 		t.Errorf("done task scored %v, want 0", got.Total)
 	}
@@ -136,7 +136,7 @@ func TestBalancedBiasGivesUnweightedSum(t *testing.T) {
 	tt.Priority = todo.PriorityHigh // 10
 	tt.Size = todo.SizeSmall        // 10
 	tt.CreatedAt = fixedNow.Add(-1 * 24 * time.Hour)
-	got := sequenceComponentsAt(fixedNow, &tt, biases{biasBalanced, biasBalanced, biasBalanced})
+	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true})
 	// no due, so urgency=0. importance 10 + momentum 10 + age 0.1 = 20.1
 	if !approxEq(got.Total, 20.1) {
 		t.Errorf("Balanced score = %v, want ~20.1; components=%+v", got.Total, got)
@@ -148,7 +148,7 @@ func TestIntenseBiasDoublesEachAxis(t *testing.T) {
 	tt.Priority = todo.PriorityHigh
 	tt.Size = todo.SizeSmall
 	tt.DueDate = fixedNow.Add(48 * time.Hour) // 2 days out
-	got := sequenceComponentsAt(fixedNow, &tt, biases{biasIntense, biasIntense, biasIntense})
+	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true})
 	// urgency dim = 10 - 16/7 ≈ 7.714; weighted ×2 ≈ 15.428
 	// importance dim = 10; weighted ×2 = 20
 	// momentum dim = 10; weighted ×2 = 20
@@ -163,7 +163,7 @@ func TestRelaxedBiasHalvesEachAxis(t *testing.T) {
 	tt := todo.New("relaxed")
 	tt.Priority = todo.PriorityHigh
 	tt.Size = todo.SizeLarge
-	got := sequenceComponentsAt(fixedNow, &tt, biases{biasRelaxed, biasRelaxed, biasRelaxed})
+	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasRelaxed, Priority: biasRelaxed, Momentum: biasRelaxed, Aging: true})
 	// urgency 0, importance 10 * 0.5 = 5, momentum 0, age 0
 	if !approxEq(got.Total, 5.0) {
 		t.Errorf("Relaxed score = %v, want 5.0; components=%+v", got.Total, got)
@@ -179,7 +179,7 @@ func TestSmallTaskFloorOutranksLargeProject(t *testing.T) {
 	bigProject.Size = todo.SizeLarge
 	bigProject.Priority = todo.PriorityHigh
 
-	bal := biases{biasBalanced, biasBalanced, biasBalanced}
+	bal := biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}
 	s := sequenceComponentsAt(fixedNow, &smallWin, bal).Total
 	p := sequenceComponentsAt(fixedNow, &bigProject, bal).Total
 	// small (m=10) = 10; big (i=10) = 10 — tied, neither wins by construction.
@@ -190,5 +190,32 @@ func TestSmallTaskFloorOutranksLargeProject(t *testing.T) {
 	}
 	if s == 0 {
 		t.Error("small low-priority task should not score 0")
+	}
+}
+
+// TestAgingToggle proves the Aging flag fully zeros the Age contribution.
+func TestAgingToggle(t *testing.T) {
+	tt := todo.New("aged task")
+	tt.Priority = todo.PriorityMedium
+	tt.Size = todo.SizeMedium
+	tt.CreatedAt = fixedNow.Add(-60 * 24 * time.Hour) // 60d old → 30·0.1 + 30·0.2 = 9.0 of Age
+
+	with := biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}
+	without := biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: false}
+
+	gotWith := sequenceComponentsAt(fixedNow, &tt, with)
+	gotWithout := sequenceComponentsAt(fixedNow, &tt, without)
+
+	if !approxEq(gotWith.Age, 9.0) {
+		t.Errorf("aging on: Age = %v, want ~9.0 (60d)", gotWith.Age)
+	}
+	if gotWithout.Age != 0 {
+		t.Errorf("aging off: Age = %v, want 0", gotWithout.Age)
+	}
+	// Urgency/Importance/Momentum are unaffected by the toggle.
+	if gotWith.Urgency != gotWithout.Urgency ||
+		gotWith.Importance != gotWithout.Importance ||
+		gotWith.Momentum != gotWithout.Momentum {
+		t.Errorf("non-Age dimensions diverged across toggle: with=%+v without=%+v", gotWith, gotWithout)
 	}
 }

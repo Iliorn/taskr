@@ -465,6 +465,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.moveCalendarDay(1)
 			} else if m.tab == tabSettings && m.isBiasSettingRow(m.settingsCursor) {
 				m.cycleBias(m.settingsCursor, +1)
+			} else if m.tab == tabSettings && m.settingsCursor == settingAging {
+				m.toggleAging()
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
@@ -479,6 +481,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.moveCalendarDay(-1)
 			} else if m.tab == tabSettings && m.isBiasSettingRow(m.settingsCursor) {
 				m.cycleBias(m.settingsCursor, -1)
+			} else if m.tab == tabSettings && m.settingsCursor == settingAging {
+				m.toggleAging()
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(-1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
@@ -741,18 +745,31 @@ func (m *model) cycleBias(row, direction int) {
 	}
 }
 
+// toggleAging flips the Aging contribution on/off, mirroring cycleBias's
+// invalidate-persist-resync pattern so the new ranking is visible immediately
+// and persists across restarts.
+func (m *model) toggleAging() {
+	activeBiases.Aging = !activeBiases.Aging
+	m.markCacheDirty()
+	m.persistSettings()
+	if err := m.repo.ResyncScores(); err != nil {
+		m.err = fmt.Sprintf(tr("Score resync failed: %v"), err)
+	}
+}
+
 // persistSettings writes all current preferences to disk, surfacing any write
 // failure so a setting that silently won't stick is at least visible.
 func (m *model) persistSettings() {
 	if err := saveSettings(appSettings{
-		TaskSort:        m.taskSort,
-		TagSort:         m.tagSort,
-		LearningSort:    m.learningSort,
-		Theme:           m.themeName,
-		Language:        string(activeLang),
-		SeqBiasDeadline: activeBiases.Deadline,
-		SeqBiasPriority: activeBiases.Priority,
-		SeqBiasMomentum: activeBiases.Momentum,
+		TaskSort:         m.taskSort,
+		TagSort:          m.tagSort,
+		LearningSort:     m.learningSort,
+		Theme:            m.themeName,
+		Language:         string(activeLang),
+		SeqBiasDeadline:  activeBiases.Deadline,
+		SeqBiasPriority:  activeBiases.Priority,
+		SeqBiasMomentum:  activeBiases.Momentum,
+		SeqAgingDisabled: !activeBiases.Aging,
 	}); err != nil {
 		m.err = fmt.Sprintf(tr("Error saving settings: %v"), err)
 	}
@@ -928,6 +945,8 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 
 func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	switch m.settingsCursor {
+	case settingAging:
+		m.toggleAging()
 	case settingTheme:
 		m.cycleTheme(1)
 	case settingLanguage:

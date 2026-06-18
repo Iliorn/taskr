@@ -89,14 +89,24 @@ type biases struct {
 	Deadline biasLevel
 	Priority biasLevel
 	Momentum biasLevel
+	// Aging gates the per-day Age contribution. true (default) keeps the rot
+	// guard on; toggling off zeros the Age term so a brand-new task and a
+	// year-old task with the same Deadline/Priority/Momentum score identically.
+	Aging bool
+}
+
+// defaultBiases is the all-Balanced, aging-on configuration that the engine
+// boots into before settings.json is read.
+func defaultBiases() biases {
+	return biases{Aging: true}
 }
 
 // activeBiases is the package-level setting the score functions read at the
 // time they're called. Settings.go's load/save path sets it via applyBiases on
 // startup and whenever the user cycles a bias, matching the pattern already in
-// use for themes (applyTheme) and language (applyLang). The zero value is all
-// Balanced — the neutral default exactly as the design specifies.
-var activeBiases biases
+// use for themes (applyTheme) and language (applyLang). It boots into the
+// neutral default (all Balanced, aging on); settings.json may overwrite later.
+var activeBiases = defaultBiases()
 
 func applyBiases(b biases) { activeBiases = b }
 
@@ -234,6 +244,9 @@ type sequenceComponents struct {
 // explicitly.
 func sequenceComponentsAt(now time.Time, t *todo.Todo, b biases) sequenceComponents {
 	u, i, m, age := dimensionsAt(now, t)
+	if !b.Aging {
+		age = 0
+	}
 	out := sequenceComponents{
 		Urgency:    u * b.Deadline.weight(),
 		Importance: i * b.Priority.weight(),

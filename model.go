@@ -36,6 +36,7 @@ const (
 	settingBiasDeadline = iota
 	settingBiasPriority
 	settingBiasMomentum
+	settingAging
 	settingTheme
 	settingLanguage
 	settingVersion

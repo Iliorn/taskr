@@ -946,15 +946,21 @@ func (m model) renderSettingsList() string {
 		tr("Deadline pressure"),
 		tr("Priority focus"),
 		tr("Momentum bias"),
+		tr("Aging"),
 		tr("Theme"),
 		tr("Language"),
 		tr("Version"),
 		tr("Check for updates"),
 	}
+	agingVal := tr("Off")
+	if activeBiases.Aging {
+		agingVal = tr("On")
+	}
 	values := [numSettingsRows]string{
 		biasPickerValue(activeBiases.Deadline),
 		biasPickerValue(activeBiases.Priority),
 		biasPickerValue(activeBiases.Momentum),
+		"‹ " + agingVal + " ›",
 		"‹ " + m.themeName + " ›",
 		"‹ " + activeLang.displayName() + " ›",
 		appVersion,

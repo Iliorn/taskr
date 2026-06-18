@@ -41,6 +41,12 @@ type appSettings struct {
 	SeqBiasDeadline biasLevel `json:"seq_bias_deadline"`
 	SeqBiasPriority biasLevel `json:"seq_bias_priority"`
 	SeqBiasMomentum biasLevel `json:"seq_bias_momentum"`
+
+	// SeqAgingDisabled gates the per-day Age contribution. Stored as the
+	// inverse of the user-facing "Aging" toggle so the zero value (=false)
+	// keeps aging on by default — matches pre-toggle behaviour without
+	// migration.
+	SeqAgingDisabled bool `json:"seq_aging_disabled"`
 }
 
 // migrateSettings brings settings saved under an older schema version up to
@@ -59,6 +65,7 @@ func biasesFromSettings(s appSettings) biases {
 		Deadline: s.SeqBiasDeadline,
 		Priority: s.SeqBiasPriority,
 		Momentum: s.SeqBiasMomentum,
+		Aging:    !s.SeqAgingDisabled,
 	}
 }
 
