@@ -200,7 +200,7 @@ func applyTheme(t theme) {
 	depOverdueStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
 	helpStyle = lipgloss.NewStyle().Foreground(t.help)
 
-	detailTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(t.fg)
+	detailTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent).Underline(true)
 	detailLabelStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent)
 	detailValueStyle = lipgloss.NewStyle().Foreground(t.fg)
 	detailSelectedStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
