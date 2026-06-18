@@ -59,7 +59,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	}
 	b.WriteString(renderField(tr("Due date"), dueVal, fieldDueDate) + "\n")
 	b.WriteString(renderField(tr("Priority"), t.Priority.Icon()+" "+trPriority(t.Priority), fieldPriority) + "\n")
-	b.WriteString(renderField(tr("Size"), t.Size.Letter()+" "+trSize(t.Size), fieldSize) + "\n")
+	b.WriteString(renderField(tr("Size"), trSize(t.Size), fieldSize) + "\n")
 
 	projectVal := tr("not set")
 	if t.Project != "" {

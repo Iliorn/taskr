@@ -131,7 +131,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 	colsW := func() int {
 		w := 0
 		if c.showSize {
-			w += 12
+			w += sizeColW
 		}
 		if c.showDue {
 			w += 12
@@ -172,7 +172,7 @@ func renderPlainDivider(availW int) string {
 }
 
 func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistory bool, sortMode taskSortMode, c listCols) {
-	sizeLabel := padRight(tr("Size"), 12)
+	sizeLabel := padRight(tr("Size"), sizeColW)
 	dueLabel := padRight(tr("Due"), 12)
 	lastLabel := padRight(tr("Score"), 12)
 	if isHistory {
@@ -186,7 +186,7 @@ func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistor
 		case taskSortDueDate:
 			dueLabel = padRight(tr(">Due<"), 12)
 		case taskSortSize:
-			sizeLabel = padRight(tr(">Size<"), 12)
+			sizeLabel = padRight(tr(">Size<"), sizeColW)
 		}
 	}
 

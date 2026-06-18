@@ -804,7 +804,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	tagsPart := m.getRenderedTags(t.Tags)
 	line := cursorStr + checkbox + foldIcon + titleCol
 	if cols.showSize {
-		line += padRight(t.Size.Letter()+" "+trSize(t.Size), 12)
+		line += padRight(strings.ToLower(t.Size.Letter()), sizeColW)
 	}
 	if cols.showDue {
 		line += padRight(dueVal, 12)

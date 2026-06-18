@@ -37,6 +37,12 @@ const (
 	maxTagSearchResults  = 5
 	maxProjSearchResults = 5
 
+	// sizeColW is the Size column on the Tasks list. Was 12 (held "S small" +
+	// padding) but the column now shows just a single lowercase letter, so 6
+	// (fits the ">Size<" sort indicator) is the minimum that still keeps the
+	// header readable.
+	sizeColW = 6
+
 	footerHeight      = 1
 	minHeaderLines    = 2
 	detailBorderLines = 2
