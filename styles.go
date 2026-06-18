@@ -55,8 +55,11 @@ var themes = []theme{
 		accent:     "#cba6f7",
 		green:      "#a6e3a1",
 		orange:     "#fab387",
-		purple:     "#cba6f7",
-		purpleLt:   "#dec0f7",
+		// purple is reused for tag chips, so we pick Catppuccin Pink rather
+		// than Mauve — Mauve is what `accent` already uses for titles, which
+		// made tags and titles indistinguishable.
+		purple:   "#f5c2e7",
+		purpleLt: "#fdd6ed",
 		yellow:     "#f9e2af",
 		yellowLt:   "#faf0c6",
 		blue:       "#89b4fa",
