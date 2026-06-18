@@ -99,6 +99,53 @@ func (m model) updateAddSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateAddTimeEntry parses a duration ("45m", "1h30m") or a clock range
+// ("10:00-10:30") and appends a TimeEntry to pendingEntryTaskID. Duration
+// form anchors the entry at "now"; range form anchors it on today. Letting
+// a user log time after the fact is useful for tracking work that wasn't
+// captured by the live timer — and for back-dating, the entry can later be
+// retimed via the existing modeEditTimeEntry flow.
+func (m model) updateAddTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "enter":
+			t := m.findTodoByID(m.pendingEntryTaskID)
+			if t == nil {
+				m.mode = modeNormal
+				return m, nil
+			}
+			now := time.Now()
+			input := m.textInput.Value()
+			start, stop, err := parseEntryEdit(input, now, false)
+			if err != nil {
+				m.err = err.Error()
+				return m, clearErrAfter()
+			}
+			// A bare duration ("45m") is anchored at the oldStart we passed in
+			// (now) and produces [now, now+d] — a future window. Shift it so
+			// the entry ends now instead, which is what "I just spent 45m on
+			// this" almost always means. Clock-range form (which contains '-')
+			// is left alone; the user spelled out exact times.
+			if !strings.Contains(input, "-") {
+				delta := stop.Sub(start)
+				start = now.Add(-delta)
+				stop = now
+			}
+			m.pushUndo("add time entry", t.ID)
+			t.AddTimeEntry(start, stop)
+			m.markModifiedNoUndo(t.ID)
+			m.mode = modeNormal
+			return m, nil
+		case "esc":
+			m.mode = modeNormal
+			return m, nil
+		}
+	}
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
 // updateEditSubtask renames the subtask whose index was captured in
 // pendingSubtask when edit started. The index is captured up front so
 // concurrent reorders/deletions can't accidentally rename a different child.

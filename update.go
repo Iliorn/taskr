@@ -201,6 +201,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateAddSubtask(msg)
 	case modeEditSubtask:
 		return m.updateEditSubtask(msg)
+	case modeAddTimeEntry:
+		return m.updateAddTimeEntry(msg)
 	case modeSearch:
 		return m.updateSearch(msg)
 	case modeSearchDep:
@@ -521,6 +523,21 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.timerTickOn = true
 						return m, timerTick()
 					}
+				}
+			}
+
+		case "T":
+			// Manual time entry — log work that wasn't captured by the live
+			// timer. Available on the Tasks tab so the user can backfill
+			// before marking a task done.
+			if m.tab == tabTasks && !m.showHistory {
+				if t := m.currentTodo(); t != nil {
+					m.pendingEntryTaskID = t.ID
+					m.mode = modeAddTimeEntry
+					m.textInput.SetValue("")
+					m.textInput.Placeholder = tr("Time spent (45m, 1h30m) or HH:MM-HH:MM…")
+					m.textInput.Focus()
+					return m, textinput.Blink
 				}
 			}
 
@@ -1138,6 +1155,17 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "n":
 		if m.currentTodo() != nil {
 			return m, m.openEditorForNotes()
+		}
+		return m, nil
+	case "T":
+		// Manual time entry (mirror of the list-view shortcut).
+		if t := m.currentTodo(); t != nil {
+			m.pendingEntryTaskID = t.ID
+			m.mode = modeAddTimeEntry
+			m.textInput.SetValue("")
+			m.textInput.Placeholder = tr("Time spent (45m, 1h30m) or HH:MM-HH:MM…")
+			m.textInput.Focus()
+			return m, textinput.Blink
 		}
 		return m, nil
 	case "esc":

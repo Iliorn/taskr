@@ -97,6 +97,7 @@ const (
 	modeAddLearning
 	modeAddSubtask
 	modeEditSubtask
+	modeAddTimeEntry
 )
 
 type tagSortMode int
@@ -1118,7 +1119,8 @@ func (m model) extraOverheadLines() int {
 	switch m.mode {
 	case modeInput, modeEditComment, modeEditTag, modeEditTitle,
 		modeSearch, modeAddLearning, modeEditLearning, modeAddSubtask,
-		modeEditSubtask, modeEditProjectInline, modeEditTimeEntry:
+		modeEditSubtask, modeEditProjectInline, modeEditTimeEntry,
+		modeAddTimeEntry:
 		return 3
 	case modeSearchDep, modeSearchTag, modeSearchProject:
 		return 8

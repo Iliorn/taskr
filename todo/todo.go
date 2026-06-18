@@ -350,6 +350,20 @@ func (t *Todo) StartTimer() {
 	t.ModifiedAt = time.Now()
 }
 
+// AddTimeEntry appends a completed entry for [start, stop) and returns its
+// generated ID. Used by the "manual time entry" flow when the user wants to
+// log work that wasn't captured by the live timer.
+func (t *Todo) AddTimeEntry(start, stop time.Time) string {
+	id := uuid.New().String()
+	t.TimeEntries = append(t.TimeEntries, TimeEntry{
+		ID:        id,
+		StartedAt: start,
+		StoppedAt: stop,
+	})
+	t.ModifiedAt = time.Now()
+	return id
+}
+
 func (t *Todo) StopTimer() {
 	for i := range t.TimeEntries {
 		if t.TimeEntries[i].IsRunning() {
