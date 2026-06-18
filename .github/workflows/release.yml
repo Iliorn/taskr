@@ -24,13 +24,18 @@ jobs:
           go-version-file: go.mod
 
       - name: Build all targets
+        # `-s -w` strips the symbol table and DWARF debug info, cutting
+        # ~30% off each release binary with no functional change. Local
+        # `go build .` (used during development) does NOT pass these flags
+        # so `dlv` and rich panic stack traces stay available there.
         env:
           V: ${{ github.ref_name }}
+          LDFLAGS: -s -w -X main.appVersion=${{ github.ref_name }}
         run: |
-          GOOS=linux   GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr .
-          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr.exe .
-          GOOS=darwin  GOARCH=arm64 go build -ldflags "-X main.appVersion=$V" -o taskr-macos-apple-silicon .
-          GOOS=darwin  GOARCH=amd64 go build -ldflags "-X main.appVersion=$V" -o taskr-macos-intel .
+          GOOS=linux   GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr .
+          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr.exe .
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "$LDFLAGS" -o taskr-macos-apple-silicon .
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr-macos-intel .
 
       - name: Create release
         env:

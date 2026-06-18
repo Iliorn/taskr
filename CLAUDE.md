@@ -39,7 +39,7 @@ git push origin v1.10.0       # ← triggers the build + release
 
 Patch bumps are the norm for stat/layout tweaks; minor bumps for new interactive features.
 
-The manual equivalent (if ever building locally) is the same four `go build -ldflags "-X main.appVersion=$V"` invocations feeding `gh release create $V ... taskr taskr.exe taskr-macos-apple-silicon taskr-macos-intel`.
+The manual equivalent (if ever building locally) is the same four `go build -ldflags "-s -w -X main.appVersion=$V"` invocations feeding `gh release create $V ... taskr taskr.exe taskr-macos-apple-silicon taskr-macos-intel`. `-s -w` strips the symbol table and DWARF debug info, cutting ~30% off each binary with no functional change; local dev builds (`go run .` / `go build .`) deliberately keep them so `dlv` and rich panic traces still work.
 
 ## Architecture
 
