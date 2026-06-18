@@ -425,7 +425,23 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.switchTab(tabSettings)
 
 		case "tab":
-			m.switchTab((m.tab + 1) % numTabs)
+			// In the task detail pane, Tab cycles the detail page (main →
+			// subtasks → comments → main); everywhere else it advances the
+			// main tab bar.
+			if m.pane == paneDetail && m.tab == tabTasks {
+				m.detail.page = (m.detail.page + 1) % 3
+				if m.detail.page == 0 {
+					m.detail.field = fieldStartDate
+				} else if m.detail.page == 1 {
+					m.detail.field = fieldSubtasks
+					m.detail.subtaskCursor = 0
+				} else {
+					m.detail.commentCursor = 0
+				}
+				m.invalidateDetailCache()
+			} else {
+				m.switchTab((m.tab + 1) % numTabs)
+			}
 
 		case "h":
 			if m.tab == tabTasks {
