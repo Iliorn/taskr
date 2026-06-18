@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ func isCLICommand(arg string) bool {
 	switch arg {
 	case "add", "list", "ls", "done", "top",
 		"show", "edit", "delete", "rm", "comment",
+		"stats", "start", "stop", "export", "subtask",
 		"help", "-h", "--help", "--version":
 		return true
 	}
@@ -47,6 +49,16 @@ func runCLI(args []string) int {
 		return cliDelete(rest)
 	case "comment":
 		return cliComment(rest)
+	case "stats":
+		return cliStats(rest)
+	case "start":
+		return cliStart(rest)
+	case "stop":
+		return cliStop(rest)
+	case "export":
+		return cliExport(rest)
+	case "subtask":
+		return cliSubtask(rest)
 	case "--version":
 		fmt.Println(appVersion)
 		return 0
@@ -333,7 +345,7 @@ func cliShow(args []string) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr show <id-prefix>")
+		fmt.Fprintln(os.Stderr, "usage: taskr show <ref>")
 		return 2
 	}
 	_, todos, err := loadForCLI()
@@ -341,7 +353,7 @@ func cliShow(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, err := findByPrefix(todos, fs.Arg(0))
+	t, err := findTaskByRef(todos, fs.Arg(0))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -349,11 +361,20 @@ func cliShow(args []string) int {
 	if *asJSON {
 		return emitJSON(t)
 	}
-	printTaskDetail(t)
+	// Gather subtasks from the loaded slice (parent→child via ParentID).
+	// Sorted by CreatedAt to match TUI ordering.
+	var subs []todo.Todo
+	for _, s := range todos {
+		if s.ParentID == t.ID {
+			subs = append(subs, s)
+		}
+	}
+	sort.Slice(subs, func(i, j int) bool { return subs[i].CreatedAt.Before(subs[j].CreatedAt) })
+	printTaskDetail(t, subs)
 	return 0
 }
 
-func printTaskDetail(t *todo.Todo) {
+func printTaskDetail(t *todo.Todo, subs []todo.Todo) {
 	fmt.Printf("ID:       %s\n", t.ID)
 	fmt.Printf("Title:    %s\n", t.Title)
 	status := "pending"
@@ -386,6 +407,16 @@ func printTaskDetail(t *todo.Todo) {
 		fmt.Printf("Score:    %.1f  (D %.1f · P %.1f · M %.1f · A %.1f)\n",
 			sc.Total, sc.Urgency, sc.Importance, sc.Momentum, sc.Age)
 	}
+	if len(subs) > 0 {
+		fmt.Printf("\nSubtasks (%d):\n", len(subs))
+		for _, s := range subs {
+			marker := "[ ]"
+			if s.Status == todo.Done {
+				marker = "[✓]"
+			}
+			fmt.Printf("  %s  %s  %s\n", s.ID[:8], marker, s.Title)
+		}
+	}
 	if len(t.Dependencies) > 0 {
 		fmt.Printf("\nDependencies (%d):\n", len(t.Dependencies))
 		for _, dep := range t.Dependencies {
@@ -399,9 +430,11 @@ func printTaskDetail(t *todo.Todo) {
 		}
 	}
 	if len(t.Comments) > 0 {
+		// 1-based indices so the user can pass them directly to
+		// `taskr comment <ref> --edit=N` / `--delete=N`.
 		fmt.Printf("\nComments (%d):\n", len(t.Comments))
-		for _, c := range t.Comments {
-			fmt.Printf("  - [%s] %s\n", c.CreatedAt.Format("2006-01-02"), c.Text)
+		for i, c := range t.Comments {
+			fmt.Printf("  %d. [%s] %s\n", i+1, c.CreatedAt.Format("2006-01-02"), c.Text)
 		}
 	}
 	if t.Notes != "" {
@@ -563,11 +596,22 @@ func cliDelete(args []string) int {
 func cliComment(args []string) int {
 	fs := flag.NewFlagSet("comment", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	editIdx := fs.Int("edit", 0, "1-based comment index to edit (with new text as positional)")
+	delIdx := fs.Int("delete", 0, "1-based comment index to delete")
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, `usage:
+  taskr comment <ref> "text"              append a new comment
+  taskr comment <ref> --edit=N "new text" edit comment N (1-based)
+  taskr comment <ref> --delete=N          delete comment N (1-based)`)
+	}
+	// comment supports interspersed flags so --edit / --delete can sit
+	// before or after the ref, just like other mutation commands.
+	flagArgs, positionals := splitFlagsAndPositionals(args, map[string]bool{"edit": true, "delete": true})
+	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
-	if fs.NArg() < 2 {
-		fmt.Fprintln(os.Stderr, `usage: taskr comment <id-prefix> "comment text"`)
+	if len(positionals) < 1 {
+		fs.Usage()
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -575,18 +619,310 @@ func cliComment(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, err := findByPrefix(todos, fs.Arg(0))
+	t, err := findTaskByRef(todos, positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	text := strings.Join(fs.Args()[1:], " ")
-	t.AddComment(text)
-	if err := repo.Save([]*todo.Todo{t}, nil); err != nil {
+	switch {
+	case *delIdx > 0:
+		// Delete: index is 1-based for humans, 0-based internally.
+		i := *delIdx - 1
+		if i < 0 || i >= len(t.Comments) {
+			fmt.Fprintf(os.Stderr, "comment index %d out of range (task has %d comments)\n", *delIdx, len(t.Comments))
+			return 2
+		}
+		t.DeleteComment(i)
+		if err := repo.Save([]*todo.Todo{t}, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "save: %v\n", err)
+			return 1
+		}
+		fmt.Printf("deleted comment %d on %s\n", *delIdx, t.ID[:8])
+		return 0
+	case *editIdx > 0:
+		i := *editIdx - 1
+		if i < 0 || i >= len(t.Comments) {
+			fmt.Fprintf(os.Stderr, "comment index %d out of range (task has %d comments)\n", *editIdx, len(t.Comments))
+			return 2
+		}
+		if len(positionals) < 2 {
+			fmt.Fprintln(os.Stderr, "taskr comment --edit: new comment text required")
+			return 2
+		}
+		text := strings.Join(positionals[1:], " ")
+		t.UpdateComment(i, text)
+		if err := repo.Save([]*todo.Todo{t}, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "save: %v\n", err)
+			return 1
+		}
+		fmt.Printf("edited comment %d on %s\n", *editIdx, t.ID[:8])
+		return 0
+	default:
+		// Append (default behavior).
+		if len(positionals) < 2 {
+			fs.Usage()
+			return 2
+		}
+		text := strings.Join(positionals[1:], " ")
+		t.AddComment(text)
+		if err := repo.Save([]*todo.Todo{t}, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "save: %v\n", err)
+			return 1
+		}
+		fmt.Printf("commented on %s\n", t.ID[:8])
+		return 0
+	}
+}
+
+// ── stats ────────────────────────────────────────────────────────────────────
+
+// statsSummary is the structured shape `stats --format=json` writes and that
+// the waybar formatter renders into its expected schema.
+type statsSummary struct {
+	Active       int `json:"active"`
+	Overdue      int `json:"overdue"`
+	DueToday     int `json:"due_today"`
+	DueThisWeek  int `json:"due_this_week"`
+	DoneToday    int `json:"done_today"`
+	DoneThisWeek int `json:"done_this_week"`
+}
+
+func computeStats(todos []todo.Todo, now time.Time) statsSummary {
+	today := startOfDay(now)
+	tomorrow := today.AddDate(0, 0, 1)
+	weekAhead := today.AddDate(0, 0, 7)
+	weekAgo := today.AddDate(0, 0, -7)
+	var s statsSummary
+	for _, t := range todos {
+		if t.ParentID != "" {
+			continue
+		}
+		if t.Status == todo.Done {
+			if !t.CompletedAt.IsZero() {
+				if !t.CompletedAt.Before(today) {
+					s.DoneToday++
+				}
+				if !t.CompletedAt.Before(weekAgo) {
+					s.DoneThisWeek++
+				}
+			}
+			continue
+		}
+		s.Active++
+		if t.IsOverdue() {
+			s.Overdue++
+		} else if !t.DueDate.IsZero() && t.DueDate.Before(tomorrow) {
+			s.DueToday++
+		} else if !t.DueDate.IsZero() && t.DueDate.Before(weekAhead) {
+			s.DueThisWeek++
+		}
+	}
+	return s
+}
+
+func cliStats(args []string) int {
+	fs := flag.NewFlagSet("stats", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	format := fs.String("format", "text", "output format: text | json | waybar")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	s := computeStats(todos, time.Now())
+	switch strings.ToLower(*format) {
+	case "json":
+		return emitJSON(s)
+	case "waybar":
+		// Waybar custom modules expect this JSON shape on stdout. `class`
+		// drives the CSS state — warning when there's anything overdue or
+		// due today, ok otherwise. Tooltip carries the breakdown.
+		class := "ok"
+		switch {
+		case s.Overdue > 0:
+			class = "critical"
+		case s.DueToday > 0:
+			class = "warning"
+		}
+		text := fmt.Sprintf("%d active", s.Active)
+		if s.Overdue > 0 {
+			text = fmt.Sprintf("%d overdue · %d active", s.Overdue, s.Active)
+		} else if s.DueToday > 0 {
+			text = fmt.Sprintf("%d due today · %d active", s.DueToday, s.Active)
+		}
+		tooltip := fmt.Sprintf("active %d · overdue %d · due today %d · due this week %d · done today %d",
+			s.Active, s.Overdue, s.DueToday, s.DueThisWeek, s.DoneToday)
+		return emitJSON(map[string]string{"text": text, "tooltip": tooltip, "class": class})
+	default:
+		fmt.Printf("active %d · overdue %d · due today %d · due this week %d · done today %d\n",
+			s.Active, s.Overdue, s.DueToday, s.DueThisWeek, s.DoneToday)
+		return 0
+	}
+}
+
+// ── start / stop ─────────────────────────────────────────────────────────────
+
+func cliStart(args []string) int {
+	fs := flag.NewFlagSet("start", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "usage: taskr start <ref>")
+		return 2
+	}
+	repo, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	target, err := findTaskByRef(todos, fs.Arg(0))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	// Stop any other running timer first — the TUI enforces single-task
+	// time tracking and the CLI should preserve that invariant. Collect
+	// all touched tasks so they're flushed in one Save.
+	dirty := []*todo.Todo{target}
+	for i := range todos {
+		if todos[i].ID == target.ID {
+			continue
+		}
+		if todos[i].IsTimerRunning() {
+			t := todos[i]
+			t.StopTimer()
+			dirty = append(dirty, &t)
+			fmt.Printf("stopped: %s  %s\n", t.ID[:8], t.Title)
+		}
+	}
+	target.StartTimer()
+	if err := repo.Save(dirty, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
 		return 1
 	}
-	fmt.Printf("commented on %s\n", t.ID[:8])
+	fmt.Printf("started: %s  %s\n", target.ID[:8], target.Title)
+	return 0
+}
+
+func cliStop(args []string) int {
+	fs := flag.NewFlagSet("stop", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	repo, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	var target *todo.Todo
+	if fs.NArg() == 1 {
+		// Explicit ref: stop the named task if it's actually running.
+		t, err := findTaskByRef(todos, fs.Arg(0))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		if !t.IsTimerRunning() {
+			fmt.Fprintf(os.Stderr, "task %s is not currently tracking\n", t.ID[:8])
+			return 2
+		}
+		target = t
+	} else {
+		// No ref: stop whichever task is running. Zero or two-plus is an error.
+		var running []*todo.Todo
+		for i := range todos {
+			if todos[i].IsTimerRunning() {
+				running = append(running, &todos[i])
+			}
+		}
+		switch len(running) {
+		case 0:
+			fmt.Fprintln(os.Stderr, "no task is currently tracking")
+			return 0
+		case 1:
+			target = running[0]
+		default:
+			fmt.Fprintln(os.Stderr, "multiple tasks tracking — pass a <ref> to disambiguate")
+			return 2
+		}
+	}
+	// Capture the elapsed time before StopTimer wipes the running entry's
+	// in-progress state, so we can report it.
+	var elapsed time.Duration
+	if e := target.RunningEntry(); e != nil {
+		elapsed = time.Since(e.StartedAt)
+	}
+	target.StopTimer()
+	if err := repo.Save([]*todo.Todo{target}, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "save: %v\n", err)
+		return 1
+	}
+	fmt.Printf("stopped: %s  %s  (elapsed %s)\n", target.ID[:8], target.Title, formatDuration(elapsed))
+	return 0
+}
+
+// ── export ───────────────────────────────────────────────────────────────────
+
+func cliExport(args []string) int {
+	fs := flag.NewFlagSet("export", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	includeDone := fs.Bool("include-done", false, "include completed tasks (default: only pending live tasks)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	out := make([]todo.Todo, 0, len(todos))
+	for _, t := range todos {
+		if !*includeDone && t.Status == todo.Done {
+			continue
+		}
+		out = append(out, t)
+	}
+	return emitJSON(out)
+}
+
+// ── subtask ──────────────────────────────────────────────────────────────────
+
+func cliSubtask(args []string) int {
+	fs := flag.NewFlagSet("subtask", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, `usage: taskr subtask <parent-ref> "title"`)
+	}
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() < 2 {
+		fs.Usage()
+		return 2
+	}
+	repo, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	parent, err := findTaskByRef(todos, fs.Arg(0))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	title := strings.Join(fs.Args()[1:], " ")
+	sub := todo.NewSubtask(title, parent.ID)
+	if err := repo.Save([]*todo.Todo{&sub}, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "save: %v\n", err)
+		return 1
+	}
+	fmt.Printf("subtask of %s: %s  %s\n", parent.ID[:8], sub.ID[:8], sub.Title)
 	return 0
 }
 
@@ -597,14 +933,31 @@ func cliHelp() int {
 
 Usage:
   taskr                                launch the TUI (no args)
+
+Tasks:
   taskr add "title" [flags]            add a new task
   taskr list [flags]                   list tasks (pending top-level by default)
   taskr top [-n=N] [--json]            show top-N by sequence score
-  taskr show <id-prefix> [--json]      full detail of one task (incl. score breakdown)
-  taskr edit <id-prefix> [flags]       change fields on one task
-  taskr done <id-prefix>               mark a task done
-  taskr delete <id-prefix>             soft-delete a task (alias: rm)
-  taskr comment <id-prefix> "text"     append a comment
+  taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
+  taskr edit <ref> [flags]             change fields on one task
+  taskr done <ref>                     mark a task done
+  taskr delete <ref>                   soft-delete a task (alias: rm)
+  taskr subtask <parent-ref> "title"   create a subtask
+
+Tracking:
+  taskr start <ref>                    start the time tracker (stops other running timers first)
+  taskr stop [<ref>]                   stop the tracker (no ref = whichever's running)
+
+Comments:
+  taskr comment <ref> "text"           append a comment
+  taskr comment <ref> --edit=N "text"  edit comment N (1-based)
+  taskr comment <ref> --delete=N       delete comment N
+
+Reporting / backup:
+  taskr stats [--format=text|json|waybar]   one-line health summary (default text)
+  taskr export [--include-done]             JSON snapshot of every live task to stdout
+
+Meta:
   taskr --version                      print build version
   taskr help                           this message
 

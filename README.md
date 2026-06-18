@@ -90,11 +90,19 @@ taskr add "Buy milk" --size=s --due=tomorrow --p=high --tag=shopping
 taskr list                       # pending top-level tasks (table)
 taskr list --json --focus        # JSON, today + overdue only
 taskr top -n=5                   # top 5 by sequence score
-taskr show milk                  # full detail (title substring is enough)
+taskr show milk                  # full detail (incl. score breakdown + subtask IDs)
 taskr edit milk --p=high --add-tag=urgent --due=tomorrow
 taskr done milk                  # mark a task done
-taskr comment milk "blocked on review"
 taskr delete milk                # soft delete (alias: taskr rm)
+taskr subtask milk "find receipt"   # create a subtask of "milk"
+taskr start milk                 # start the time tracker
+taskr stop                       # stop the running tracker (no ref needed)
+taskr comment milk "blocked on review"
+taskr comment milk --edit=1 "still blocked, asked Sam"
+taskr comment milk --delete=2
+taskr stats                      # one-line summary
+taskr stats --format=waybar      # Waybar-shaped JSON for a status-bar widget
+taskr export > backup.json       # JSON snapshot of every live task
 taskr help
 ```
 
