@@ -122,9 +122,11 @@ func cycleBiasLevel(b biasLevel, direction int) biasLevel {
 }
 
 // personality is the Sequence "feel" tagline shown in the Settings footer.
-// Three named personalities match the design's all-Intense / all-Relaxed /
-// all-Balanced presets; any other combination shows as "Custom" — keeps the
-// labels meaningful instead of inventing a new name per permutation.
+// All-uniform presets get their named personality. If exactly one axis
+// deviates from Balanced (e.g. Momentum=Intense while the other two stay
+// Balanced), name that axis's flavor — the user picked a single dimension to
+// emphasize and the label should reflect it, not collapse to "Custom".
+// Anything more entangled still shows as "Custom".
 func personality(b biases) (name, descr string) {
 	all := func(l biasLevel) bool {
 		return b.Deadline == l && b.Priority == l && b.Momentum == l
@@ -136,9 +138,45 @@ func personality(b biases) (name, descr string) {
 		return "Zen Garden", "Stable: tasks stay mostly in the order they were created."
 	case all(biasBalanced):
 		return "Copilot", "Balanced: equally weighs priorities, deadlines, and quick wins."
-	default:
-		return "Custom", "Mixed biases — score reflects your tuned weights."
 	}
+	if name, descr, ok := singleAxisPersonality(b); ok {
+		return name, descr
+	}
+	return "Custom", "Mixed biases — score reflects your tuned weights."
+}
+
+// singleAxisPersonality names the configuration when exactly one of the three
+// biases has been moved off Balanced. Returns ok=false otherwise so personality
+// falls back to "Custom".
+func singleAxisPersonality(b biases) (name, descr string, ok bool) {
+	count := 0
+	if b.Deadline != biasBalanced {
+		count++
+	}
+	if b.Priority != biasBalanced {
+		count++
+	}
+	if b.Momentum != biasBalanced {
+		count++
+	}
+	if count != 1 {
+		return "", "", false
+	}
+	switch {
+	case b.Deadline == biasIntense:
+		return "Deadline Hawk", "Tasks closest to their due date dominate the ranking.", true
+	case b.Deadline == biasRelaxed:
+		return "Deadline Cruise", "Due dates barely move the ranking.", true
+	case b.Priority == biasIntense:
+		return "Importance First", "High priorities outweigh everything else.", true
+	case b.Priority == biasRelaxed:
+		return "Importance Casual", "Priority is treated as a hint, not a driver.", true
+	case b.Momentum == biasIntense:
+		return "Quick Wins", "Small tasks rise to the top so you can finish things fast.", true
+	case b.Momentum == biasRelaxed:
+		return "Big Projects", "Large tasks aren't penalised as hard against small ones.", true
+	}
+	return "", "", false
 }
 
 // ── Per-dimension contributions ──────────────────────────────────────────────

@@ -219,3 +219,33 @@ func TestAgingToggle(t *testing.T) {
 		t.Errorf("non-Age dimensions diverged across toggle: with=%+v without=%+v", gotWith, gotWithout)
 	}
 }
+
+// TestPersonalityNames spans the user-visible personality matrix to keep the
+// "single axis named, multi-axis falls back to Custom" contract honest.
+func TestPersonalityNames(t *testing.T) {
+	bal := biases{Aging: true}
+	cases := []struct {
+		name string
+		b    biases
+		want string
+	}{
+		{"all balanced", bal, "Copilot"},
+		{"all intense", biases{biasIntense, biasIntense, biasIntense, true}, "Drill Sergeant"},
+		{"all relaxed", biases{biasRelaxed, biasRelaxed, biasRelaxed, true}, "Zen Garden"},
+		{"momentum intense", biases{biasBalanced, biasBalanced, biasIntense, true}, "Quick Wins"},
+		{"momentum relaxed", biases{biasBalanced, biasBalanced, biasRelaxed, true}, "Big Projects"},
+		{"deadline intense", biases{biasIntense, biasBalanced, biasBalanced, true}, "Deadline Hawk"},
+		{"deadline relaxed", biases{biasRelaxed, biasBalanced, biasBalanced, true}, "Deadline Cruise"},
+		{"priority intense", biases{biasBalanced, biasIntense, biasBalanced, true}, "Importance First"},
+		{"priority relaxed", biases{biasBalanced, biasRelaxed, biasBalanced, true}, "Importance Casual"},
+		{"two axes off", biases{biasIntense, biasBalanced, biasRelaxed, true}, "Custom"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, _ := personality(c.b)
+			if got != c.want {
+				t.Errorf("personality(%+v) = %q, want %q", c.b, got, c.want)
+			}
+		})
+	}
+}
