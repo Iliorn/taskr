@@ -1,7 +1,9 @@
 package main
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"taskr/todo"
 )
@@ -88,6 +90,14 @@ func TestSplitFlagsAndPositionals(t *testing.T) {
 			wantFlags: nil,
 			wantPos:   []string{"Just", "a", "title"},
 		},
+		{
+			// `taskr comment <ref> -` uses bare dash for stdin; if the splitter
+			// classifies it as a flag, the stdin path never fires.
+			name:      "bare dash is positional, not a flag",
+			in:        []string{"abc123", "-"},
+			wantFlags: nil,
+			wantPos:   []string{"abc123", "-"},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -173,10 +183,53 @@ func TestFindTaskByRefFallsBackToTitleSubstring(t *testing.T) {
 	})
 }
 
+// TestShowAcceptsTrailingJSONFlag locks in the fix for the bug where
+// `taskr show <ref> --json` failed because stdlib flag.Parse stops at the
+// first non-flag token, leaving --json as an unexpected second positional.
+// cliShow now routes through splitFlagsAndPositionals; this test guards that
+// path at the helper level so a future refactor can't silently revert it.
+func TestShowAcceptsTrailingJSONFlag(t *testing.T) {
+	flags, positionals := splitFlagsAndPositionals([]string{"1ecdcc90", "--json"}, nil)
+	if !sliceEq(flags, []string{"--json"}) {
+		t.Errorf("flags = %v, want [--json]", flags)
+	}
+	if !sliceEq(positionals, []string{"1ecdcc90"}) {
+		t.Errorf("positionals = %v, want [1ecdcc90]", positionals)
+	}
+}
+
+// TestStartTimerOnRunningTaskRotatesEntry pins down the underlying todo
+// behavior the cliStart guard relies on: an unguarded re-StartTimer call on
+// an already-running task closes the existing entry and opens a new zero-gap
+// one. The CLI now short-circuits before reaching this path; if todo's
+// semantics ever change, the cliStart fix can be relaxed.
+func TestStartTimerOnRunningTaskRotatesEntry(t *testing.T) {
+	x := todo.New("track")
+	x.StartTimer()
+	if len(x.TimeEntries) != 1 {
+		t.Fatalf("setup: want 1 entry, got %d", len(x.TimeEntries))
+	}
+	first := x.TimeEntries[0].ID
+	x.StartTimer()
+	if len(x.TimeEntries) != 2 {
+		t.Fatalf("want 2 entries after re-start (proves the footgun), got %d", len(x.TimeEntries))
+	}
+	if x.TimeEntries[0].ID != first {
+		t.Errorf("first entry id changed: was %s, now %s", first, x.TimeEntries[0].ID)
+	}
+	if x.TimeEntries[0].StoppedAt.IsZero() {
+		t.Error("first entry should be stopped after second StartTimer")
+	}
+	if !x.TimeEntries[1].IsRunning() {
+		t.Error("second entry should be the running one")
+	}
+}
+
 func TestIsCLICommand(t *testing.T) {
 	cases := map[string]bool{
 		"add": true, "list": true, "ls": true, "done": true, "top": true,
 		"show": true, "edit": true, "delete": true, "rm": true, "comment": true,
+		"search": true, "tags": true, "projects": true,
 		"help": true, "-h": true, "--help": true, "--version": true,
 		"foo": false, "": false, "Add": false,
 	}
@@ -184,5 +237,219 @@ func TestIsCLICommand(t *testing.T) {
 		if got := isCLICommand(in); got != want {
 			t.Errorf("isCLICommand(%q)=%v, want %v", in, got, want)
 		}
+	}
+}
+
+// TestFilterTopLevel exercises every combination of filter the list / search
+// verbs expose, so a future refactor of filterTopLevel can't silently change
+// inclusion semantics.
+func TestFilterTopLevel(t *testing.T) {
+	mk := func(title, project string, tags []string, status todo.Status, due time.Time) todo.Todo {
+		x := todo.New(title)
+		x.Project = project
+		for _, tag := range tags {
+			x.AddTag(tag)
+		}
+		x.Status = status
+		x.DueDate = due
+		if status == todo.Done {
+			x.CompletedAt = time.Now()
+		}
+		return x
+	}
+	yesterday := startOfDay(time.Now()).AddDate(0, 0, -1)
+	today := startOfDay(time.Now())
+	nextWeek := startOfDay(time.Now()).AddDate(0, 0, 7)
+
+	a := mk("Buy milk", "groceries", []string{"shop", "urgent"}, todo.Pending, time.Time{})
+	b := mk("Read RFC", "work", []string{"reading"}, todo.Pending, nextWeek)
+	c := mk("Call landlord", "", []string{"urgent"}, todo.Pending, today)
+	d := mk("Pay rent", "", []string{"urgent"}, todo.Pending, yesterday) // overdue
+	e := mk("Old shopping", "groceries", []string{"shop"}, todo.Done, time.Time{})
+	sub := mk("subtask", "", nil, todo.Pending, time.Time{})
+	sub.ParentID = a.ID
+	todos := []todo.Todo{a, b, c, d, e, sub}
+
+	titlesOf := func(rows []todo.Todo) []string {
+		out := make([]string, len(rows))
+		for i := range rows {
+			out[i] = rows[i].Title
+		}
+		return out
+	}
+
+	t.Run("default excludes done + subtasks", func(t *testing.T) {
+		got := filterTopLevel(todos, listFilterOpts{})
+		if len(got) != 4 {
+			t.Fatalf("want 4 rows (a,b,c,d), got %d: %v", len(got), titlesOf(got))
+		}
+	})
+	t.Run("includeDone surfaces completed", func(t *testing.T) {
+		got := filterTopLevel(todos, listFilterOpts{includeDone: true})
+		if len(got) != 5 {
+			t.Errorf("want 5 with done included, got %d", len(got))
+		}
+	})
+	t.Run("focus = overdue + today only", func(t *testing.T) {
+		got := filterTopLevel(todos, listFilterOpts{focus: true})
+		names := titlesOf(got)
+		want := map[string]bool{"Call landlord": true, "Pay rent": true}
+		if len(names) != len(want) {
+			t.Fatalf("want 2 focus rows, got %d: %v", len(names), names)
+		}
+		for _, n := range names {
+			if !want[n] {
+				t.Errorf("unexpected focus row: %s", n)
+			}
+		}
+	})
+	t.Run("tag filter case-insensitive", func(t *testing.T) {
+		got := filterTopLevel(todos, listFilterOpts{tag: "URGENT"})
+		if len(got) != 3 {
+			t.Errorf("want 3 urgent rows, got %d: %v", len(got), titlesOf(got))
+		}
+	})
+	t.Run("project filter case-insensitive equality", func(t *testing.T) {
+		got := filterTopLevel(todos, listFilterOpts{project: "Groceries"})
+		if len(got) != 1 || got[0].Title != "Buy milk" {
+			t.Errorf("want only 'Buy milk', got %v", titlesOf(got))
+		}
+	})
+	t.Run("search filter case-insensitive substring", func(t *testing.T) {
+		got := filterTopLevel(todos, listFilterOpts{search: "MILK"})
+		if len(got) != 1 || got[0].Title != "Buy milk" {
+			t.Errorf("want only 'Buy milk', got %v", titlesOf(got))
+		}
+	})
+	t.Run("combined filters are AND", func(t *testing.T) {
+		got := filterTopLevel(todos, listFilterOpts{tag: "urgent", project: "groceries"})
+		if len(got) != 1 || got[0].Title != "Buy milk" {
+			t.Errorf("want only 'Buy milk' (urgent ∩ groceries), got %v", titlesOf(got))
+		}
+	})
+}
+
+// TestResolveRefs covers the batch verb's ref-resolution contract: succeed on
+// all refs or fail before any mutation; collapse duplicates silently so
+// `done abc abc` is one done, not an error.
+func TestResolveRefs(t *testing.T) {
+	a := todo.New("Buy milk")
+	a.ID = "aaaa1111-aaaa"
+	b := todo.New("Call landlord")
+	b.ID = "bbbb2222-bbbb"
+	todos := []todo.Todo{a, b}
+
+	t.Run("two refs", func(t *testing.T) {
+		got, err := resolveRefs(todos, []string{"aaaa", "bbbb"})
+		if err != nil || len(got) != 2 {
+			t.Fatalf("want 2 targets, got %d err=%v", len(got), err)
+		}
+	})
+	t.Run("duplicate refs collapse", func(t *testing.T) {
+		got, err := resolveRefs(todos, []string{"aaaa", "aaaa", "milk"})
+		if err != nil || len(got) != 1 {
+			t.Fatalf("want 1 target after dedup, got %d err=%v", len(got), err)
+		}
+	})
+	t.Run("first failure aborts the batch", func(t *testing.T) {
+		if _, err := resolveRefs(todos, []string{"aaaa", "nope"}); err == nil {
+			t.Error("want error from missing ref")
+		}
+	})
+}
+
+// TestTrackedTodayDuration covers the four overlap cases the stats one-liner
+// has to get right: fully today, ends today (started yesterday), starts today
+// (still running), and entirely outside today.
+func TestTrackedTodayDuration(t *testing.T) {
+	now := time.Date(2026, 6, 18, 14, 0, 0, 0, time.UTC)
+	today := startOfDay(now)
+	yesterday := today.AddDate(0, 0, -1)
+
+	make := func(start, stop time.Time) todo.Todo {
+		x := todo.New("t")
+		x.TimeEntries = []todo.TimeEntry{{ID: "e", StartedAt: start, StoppedAt: stop}}
+		return x
+	}
+
+	cases := []struct {
+		name string
+		t    todo.Todo
+		want time.Duration
+	}{
+		{"fully today", make(today.Add(9*time.Hour), today.Add(11*time.Hour)), 2 * time.Hour},
+		{"crosses midnight into today", make(yesterday.Add(23*time.Hour), today.Add(1*time.Hour)), 1 * time.Hour},
+		{"running entry counts up to now", make(today.Add(12*time.Hour), time.Time{}), 2 * time.Hour},
+		{"entirely yesterday", make(yesterday.Add(8*time.Hour), yesterday.Add(9*time.Hour)), 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := trackedTodayDuration([]todo.Todo{c.t}, now)
+			if got != c.want {
+				t.Errorf("got %v want %v", got, c.want)
+			}
+		})
+	}
+
+	t.Run("sums across multiple todos and entries", func(t *testing.T) {
+		x := todo.New("x")
+		x.TimeEntries = []todo.TimeEntry{
+			{StartedAt: today.Add(9 * time.Hour), StoppedAt: today.Add(10 * time.Hour)},
+			{StartedAt: today.Add(13 * time.Hour), StoppedAt: time.Time{}}, // running, 1h so far
+		}
+		y := todo.New("y")
+		y.TimeEntries = []todo.TimeEntry{
+			{StartedAt: today.Add(11 * time.Hour), StoppedAt: today.Add(11*time.Hour + 30*time.Minute)},
+		}
+		got := trackedTodayDuration([]todo.Todo{x, y}, now)
+		want := 1*time.Hour + 1*time.Hour + 30*time.Minute
+		if got != want {
+			t.Errorf("got %v want %v", got, want)
+		}
+	})
+}
+
+// TestDoneCommentSplitter verifies that `done <ref>... --comment="why"` keeps
+// the refs as positionals and the comment as a flag value, with the comment
+// surviving spaces. Guards the splitFlagsAndPositionals wiring on cliDone.
+func TestDoneCommentSplitter(t *testing.T) {
+	flags, positionals := splitFlagsAndPositionals(
+		[]string{"abc", "def", "--comment=finished sprint"},
+		map[string]bool{"comment": true},
+	)
+	if !sliceEq(flags, []string{"--comment=finished sprint"}) {
+		t.Errorf("flags = %v, want [--comment=finished sprint]", flags)
+	}
+	if !sliceEq(positionals, []string{"abc", "def"}) {
+		t.Errorf("positionals = %v, want [abc def]", positionals)
+	}
+	// Spaced form: --comment "why" — value consumes next arg.
+	flags, positionals = splitFlagsAndPositionals(
+		[]string{"abc", "--comment", "finished sprint", "def"},
+		map[string]bool{"comment": true},
+	)
+	if !sliceEq(flags, []string{"--comment", "finished sprint"}) {
+		t.Errorf("spaced form flags = %v", flags)
+	}
+	if !sliceEq(positionals, []string{"abc", "def"}) {
+		t.Errorf("spaced form positionals = %v", positionals)
+	}
+}
+
+// TestCommentTextFromPositionals: literal text path joins with spaces;
+// the "-" sentinel reads stdin and trims one trailing newline (heredocs
+// typically include one).
+func TestCommentTextFromPositionals(t *testing.T) {
+	got, err := commentTextFromPositionals([]string{"hello", "world"}, strings.NewReader(""))
+	if err != nil || got != "hello world" {
+		t.Errorf("literal path: got=%q err=%v", got, err)
+	}
+	got, err = commentTextFromPositionals([]string{"-"}, strings.NewReader("piped text\n"))
+	if err != nil || got != "piped text" {
+		t.Errorf("stdin path: got=%q err=%v", got, err)
+	}
+	got, err = commentTextFromPositionals([]string{"-"}, strings.NewReader("line one\nline two\n"))
+	if err != nil || got != "line one\nline two" {
+		t.Errorf("multiline stdin: got=%q err=%v", got, err)
 	}
 }

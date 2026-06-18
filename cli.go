@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -24,6 +25,7 @@ func isCLICommand(arg string) bool {
 	case "add", "list", "ls", "done", "top",
 		"show", "edit", "delete", "rm", "comment",
 		"stats", "start", "stop", "export", "subtask",
+		"search", "tags", "projects",
 		"help", "-h", "--help", "--version":
 		return true
 	}
@@ -59,6 +61,12 @@ func runCLI(args []string) int {
 		return cliExport(rest)
 	case "subtask":
 		return cliSubtask(rest)
+	case "search":
+		return cliSearch(rest)
+	case "tags":
+		return cliTags(rest)
+	case "projects":
+		return cliProjects(rest)
 	case "--version":
 		fmt.Println(appVersion)
 		return 0
@@ -149,23 +157,126 @@ func findByPrefix(todos []todo.Todo, ref string) (*todo.Todo, error) {
 	return findTaskByRef(todos, ref)
 }
 
+// resolveRefs resolves N refs at once, failing fast on the first unresolvable
+// or ambiguous one. Used by batch verbs (`done a b c`) so we can validate the
+// whole set before mutating anything. Duplicate refs collapse to the first
+// match — `done abc abc` is a single done, not an error.
+func resolveRefs(todos []todo.Todo, refs []string) ([]*todo.Todo, error) {
+	out := make([]*todo.Todo, 0, len(refs))
+	seen := map[string]bool{}
+	for _, ref := range refs {
+		t, err := findTaskByRef(todos, ref)
+		if err != nil {
+			return nil, err
+		}
+		if seen[t.ID] {
+			continue
+		}
+		seen[t.ID] = true
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// listFilterOpts collects every filter `list` and `search` apply. Lifted into
+// a struct so the filter logic is unit-testable separately from CLI parsing.
+type listFilterOpts struct {
+	includeDone bool
+	focus       bool
+	tag         string // matched case-insensitively after NormalizeTag
+	project     string // matched case-insensitively for equality
+	search      string // case-insensitive substring of title
+}
+
+func filterTopLevel(todos []todo.Todo, opts listFilterOpts) []todo.Todo {
+	tagQ := todo.NormalizeTag(opts.tag)
+	projQ := strings.ToLower(strings.TrimSpace(opts.project))
+	searchQ := strings.ToLower(strings.TrimSpace(opts.search))
+
+	rows := make([]todo.Todo, 0, len(todos))
+	for _, t := range todos {
+		if t.ParentID != "" {
+			continue
+		}
+		if !opts.includeDone && t.Status != todo.Pending {
+			continue
+		}
+		if opts.focus && !(t.IsOverdue() || t.IsDueToday()) {
+			continue
+		}
+		if tagQ != "" {
+			found := false
+			for _, tag := range t.Tags {
+				if tag == tagQ {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+		if projQ != "" && strings.ToLower(t.Project) != projQ {
+			continue
+		}
+		if searchQ != "" && !strings.Contains(strings.ToLower(t.Title), searchQ) {
+			continue
+		}
+		rows = append(rows, t)
+	}
+	return rows
+}
+
+// trackedToday sums the portion of every TimeEntry across all todos that falls
+// within today's local window. Running entries count up to `now`. Used by the
+// stats one-liner.
+func trackedTodayDuration(todos []todo.Todo, now time.Time) time.Duration {
+	today := startOfDay(now)
+	tomorrow := today.AddDate(0, 0, 1)
+	var total time.Duration
+	for _, t := range todos {
+		for _, e := range t.TimeEntries {
+			start := e.StartedAt
+			end := e.StoppedAt
+			if end.IsZero() {
+				end = now
+			}
+			if !end.After(today) || !start.Before(tomorrow) {
+				continue
+			}
+			if start.Before(today) {
+				start = today
+			}
+			if end.After(tomorrow) {
+				end = tomorrow
+			}
+			total += end.Sub(start)
+		}
+	}
+	return total
+}
+
 // ── add ──────────────────────────────────────────────────────────────────────
 
 // addValueFlags lists the value-taking flags `add` accepts. splitFlagsAndPositionals
 // uses this to know which flags consume the next arg (vs. being self-contained
 // `--name=value`), so users can put the title in any position.
 var addValueFlags = map[string]bool{
-	"due": true, "p": true, "size": true, "project": true, "tag": true,
+	"due": true, "p": true, "size": true, "project": true, "tag": true, "like": true,
 }
 
 func cliAdd(args []string) int {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	due := fs.String("due", "", "due date (today|tomorrow|+3d|dd-mm-yy|...)")
-	priority := fs.String("p", "m", "priority: h|m|l")
-	size := fs.String("size", "m", "size: s|m|l")
+	// Defaults stay empty so --like can fill them; without --like, todo.New
+	// already sets Medium for both, so the user-visible behavior is unchanged.
+	priority := fs.String("p", "", "priority: h|m|l (default m, or copied from --like)")
+	size := fs.String("size", "", "size: s|m|l (default m, or copied from --like)")
 	project := fs.String("project", "", "project name")
 	tags := fs.String("tag", "", "comma-separated tags")
+	like := fs.String("like", "", "clone priority/size/project/tags from an existing task ref")
+	startNow := fs.Bool("start", false, "start the time tracker on the new task (stops any other running timer first)")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: taskr add \"title\" [flags]")
 		fs.PrintDefaults()
@@ -178,9 +289,40 @@ func cliAdd(args []string) int {
 		fmt.Fprintln(os.Stderr, "taskr add: title required")
 		return 2
 	}
+	settings, sErr := loadSettings()
+	if sErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
+	}
+	applyBiases(biasesFromSettings(settings))
+	repo := newSQLiteRepo()
+
 	t := todo.New(strings.Join(titleParts, " "))
-	t.Priority = parsePriorityFlag(*priority)
-	t.Size = parseSizeFlag(*size)
+	// --like is applied first so explicit flags below override the cloned
+	// values. Skipped when empty to keep the no-clone path a single Save.
+	if *like != "" {
+		existing, err := repo.Load()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "load: %v\n", err)
+			return 1
+		}
+		src, err := findTaskByRef(existing, *like)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		t.Priority = src.Priority
+		t.Size = src.Size
+		t.Project = src.Project
+		for _, tag := range src.Tags {
+			t.AddTag(tag)
+		}
+	}
+	if *priority != "" {
+		t.Priority = parsePriorityFlag(*priority)
+	}
+	if *size != "" {
+		t.Size = parseSizeFlag(*size)
+	}
 	if *due != "" {
 		d, err := parseDueDate(*due)
 		if err != nil {
@@ -197,12 +339,33 @@ func cliAdd(args []string) int {
 			t.AddTag(tag)
 		}
 	}
-	settings, sErr := loadSettings()
-	if sErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
+	// --start collapses the common "add then start tracking" two-call dance
+	// into one. We re-load to find any other running timer (the TUI's
+	// single-timer invariant applies to the CLI too), then stop those + start
+	// the new task + persist in one Save.
+	if *startNow {
+		existing, err := repo.Load()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "load: %v\n", err)
+			return 1
+		}
+		dirty := []*todo.Todo{&t}
+		for i := range existing {
+			if existing[i].IsTimerRunning() {
+				x := existing[i]
+				x.StopTimer()
+				dirty = append(dirty, &x)
+				fmt.Fprintf(os.Stderr, "stopped: %s  %s\n", x.ID[:8], x.Title)
+			}
+		}
+		t.StartTimer()
+		if err := repo.Save(dirty, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "save: %v\n", err)
+			return 1
+		}
+		fmt.Printf("added + started: %s  %s\n", t.ID[:8], t.Title)
+		return 0
 	}
-	applyBiases(biasesFromSettings(settings))
-	repo := newSQLiteRepo()
 	if err := repo.Save([]*todo.Todo{&t}, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
 		return 1
@@ -213,6 +376,10 @@ func cliAdd(args []string) int {
 
 // ── list ─────────────────────────────────────────────────────────────────────
 
+var listValueFlags = map[string]bool{
+	"limit": true, "tag": true, "project": true, "search": true,
+}
+
 func cliList(args []string) int {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -220,7 +387,11 @@ func cliList(args []string) int {
 	all := fs.Bool("all", false, "include completed tasks")
 	focus := fs.Bool("focus", false, "only today + overdue")
 	limit := fs.Int("limit", 0, "cap rows (0 = no cap)")
-	if err := fs.Parse(args); err != nil {
+	tag := fs.String("tag", "", "only tasks carrying this tag (case-insensitive)")
+	project := fs.String("project", "", "only tasks in this project")
+	search := fs.String("search", "", "only tasks whose title contains this substring")
+	flagArgs, _ := splitFlagsAndPositionals(args, listValueFlags)
+	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
 	_, todos, err := loadForCLI()
@@ -228,19 +399,13 @@ func cliList(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	rows := make([]todo.Todo, 0, len(todos))
-	for _, t := range todos {
-		if t.ParentID != "" {
-			continue
-		}
-		if !*all && t.Status != todo.Pending {
-			continue
-		}
-		if *focus && !(t.IsOverdue() || t.IsDueToday()) {
-			continue
-		}
-		rows = append(rows, t)
-	}
+	rows := filterTopLevel(todos, listFilterOpts{
+		includeDone: *all,
+		focus:       *focus,
+		tag:         *tag,
+		project:     *project,
+		search:      *search,
+	})
 	sortTodosByMode(rows, taskSortSequence)
 	if *limit > 0 && len(rows) > *limit {
 		rows = rows[:*limit]
@@ -252,16 +417,153 @@ func cliList(args []string) int {
 	return 0
 }
 
+// cliSearch is sugar for `list --all --search=...` — kept as its own verb for
+// discoverability. Includes done by default since searching is usually for
+// recall, not focus.
+func cliSearch(args []string) int {
+	fs := flag.NewFlagSet("search", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	asJSON := fs.Bool("json", false, "emit JSON instead of a table")
+	pendingOnly := fs.Bool("pending", false, "exclude completed tasks (default: include)")
+	limit := fs.Int("limit", 0, "cap rows (0 = no cap)")
+	flagArgs, positionals := splitFlagsAndPositionals(args, map[string]bool{"limit": true})
+	if err := fs.Parse(flagArgs); err != nil {
+		return 2
+	}
+	if len(positionals) == 0 {
+		fmt.Fprintln(os.Stderr, `usage: taskr search "term" [--json] [--pending] [--limit=N]`)
+		return 2
+	}
+	term := strings.Join(positionals, " ")
+	_, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	rows := filterTopLevel(todos, listFilterOpts{
+		includeDone: !*pendingOnly,
+		search:      term,
+	})
+	sortTodosByMode(rows, taskSortSequence)
+	if *limit > 0 && len(rows) > *limit {
+		rows = rows[:*limit]
+	}
+	if *asJSON {
+		return emitJSON(rows)
+	}
+	printTaskTable(rows)
+	return 0
+}
+
+// cliTags / cliProjects: discovery commands. Counts only count pending
+// top-level tasks so the listing reflects what's in flight, not historical
+// fragments. Sort by count desc, then name asc, for stable output.
+
+type nameCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+func sortNameCounts(rows []nameCount) {
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Count != rows[j].Count {
+			return rows[i].Count > rows[j].Count
+		}
+		return rows[i].Name < rows[j].Name
+	})
+}
+
+func cliTags(args []string) int {
+	fs := flag.NewFlagSet("tags", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	asJSON := fs.Bool("json", false, "emit JSON instead of a table")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	counts := map[string]int{}
+	for _, t := range todos {
+		if t.ParentID != "" || t.Status != todo.Pending {
+			continue
+		}
+		for _, tag := range t.Tags {
+			counts[tag]++
+		}
+	}
+	rows := make([]nameCount, 0, len(counts))
+	for tag, c := range counts {
+		rows = append(rows, nameCount{tag, c})
+	}
+	sortNameCounts(rows)
+	if *asJSON {
+		return emitJSON(rows)
+	}
+	if len(rows) == 0 {
+		fmt.Println("(no tags)")
+		return 0
+	}
+	for _, r := range rows {
+		fmt.Printf("%4d  %s\n", r.Count, r.Name)
+	}
+	return 0
+}
+
+func cliProjects(args []string) int {
+	fs := flag.NewFlagSet("projects", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	asJSON := fs.Bool("json", false, "emit JSON instead of a table")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	counts := map[string]int{}
+	for _, t := range todos {
+		if t.ParentID != "" || t.Status != todo.Pending {
+			continue
+		}
+		if t.Project == "" {
+			continue
+		}
+		counts[t.Project]++
+	}
+	rows := make([]nameCount, 0, len(counts))
+	for p, c := range counts {
+		rows = append(rows, nameCount{p, c})
+	}
+	sortNameCounts(rows)
+	if *asJSON {
+		return emitJSON(rows)
+	}
+	if len(rows) == 0 {
+		fmt.Println("(no projects)")
+		return 0
+	}
+	for _, r := range rows {
+		fmt.Printf("%4d  %s\n", r.Count, r.Name)
+	}
+	return 0
+}
+
 // ── done ─────────────────────────────────────────────────────────────────────
 
 func cliDone(args []string) int {
 	fs := flag.NewFlagSet("done", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	comment := fs.String("comment", "", "append this comment to each task transitioned to done")
+	flagArgs, positionals := splitFlagsAndPositionals(args, map[string]bool{"comment": true})
+	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
-	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr done <id-prefix>")
+	if len(positionals) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: taskr done <ref> [<ref>...] [--comment=\"why\"]")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -269,21 +571,39 @@ func cliDone(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, err := findByPrefix(todos, fs.Arg(0))
+	// Resolve every ref before mutating anything — that way an ambiguity in
+	// position 3 doesn't leave the first two already toggled.
+	targets, err := resolveRefs(todos, positionals)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	if t.Status == todo.Done {
+	var dirty, skipped []*todo.Todo
+	for _, t := range targets {
+		if t.Status == todo.Done {
+			skipped = append(skipped, t)
+			continue
+		}
+		// Comment lands BEFORE Toggle so the timeline reads "added the why,
+		// then closed it" — and the comment timestamp matches the close.
+		if *comment != "" {
+			t.AddComment(*comment)
+		}
+		t.Toggle()
+		dirty = append(dirty, t)
+	}
+	if len(dirty) > 0 {
+		if err := repo.Save(dirty, nil); err != nil {
+			fmt.Fprintf(os.Stderr, "save: %v\n", err)
+			return 1
+		}
+	}
+	for _, t := range dirty {
+		fmt.Printf("done  %s  %s\n", t.ID[:8], t.Title)
+	}
+	for _, t := range skipped {
 		fmt.Fprintf(os.Stderr, "already done: %s\n", t.Title)
-		return 0
 	}
-	t.Toggle()
-	if err := repo.Save([]*todo.Todo{t}, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "save: %v\n", err)
-		return 1
-	}
-	fmt.Printf("done  %s  %s\n", t.ID[:8], t.Title)
 	return 0
 }
 
@@ -294,7 +614,9 @@ func cliTop(args []string) int {
 	fs.SetOutput(os.Stderr)
 	n := fs.Int("n", 10, "rows to show")
 	asJSON := fs.Bool("json", false, "emit JSON instead of a table")
-	if err := fs.Parse(args); err != nil {
+	wide := fs.Bool("wide", false, "include priority, due date, and tags columns")
+	flagArgs, _ := splitFlagsAndPositionals(args, map[string]bool{"n": true})
+	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
 	_, todos, err := loadForCLI()
@@ -314,10 +636,12 @@ func cliTop(args []string) int {
 	}
 	if *asJSON {
 		type scoredOut struct {
-			ID    string  `json:"id"`
-			Title string  `json:"title"`
-			Score float64 `json:"score"`
-			Due   string  `json:"due,omitempty"`
+			ID       string   `json:"id"`
+			Title    string   `json:"title"`
+			Score    float64  `json:"score"`
+			Priority string   `json:"priority"`
+			Due      string   `json:"due,omitempty"`
+			Tags     []string `json:"tags,omitempty"`
 		}
 		out := make([]scoredOut, len(rows))
 		for i := range rows {
@@ -325,9 +649,38 @@ func cliTop(args []string) int {
 			if !rows[i].DueDate.IsZero() {
 				due = rows[i].DueDate.Format("2006-01-02")
 			}
-			out[i] = scoredOut{rows[i].ID, rows[i].Title, sequenceScore(&rows[i]), due}
+			out[i] = scoredOut{rows[i].ID, rows[i].Title, sequenceScore(&rows[i]), priorityLetter(rows[i].Priority), due, rows[i].Tags}
 		}
 		return emitJSON(out)
+	}
+	if *wide {
+		// Adaptive tag-column width: hug the widest tag string in the result
+		// set instead of locking to 20 chars and chopping anything over. Cap
+		// at 40 so a wildly tagged task can't push the title off the screen.
+		tagW := len("TAGS")
+		tagStrings := make([]string, len(rows))
+		for i := range rows {
+			tagStrings[i] = strings.Join(rows[i].Tags, ",")
+			if w := len(tagStrings[i]); w > tagW {
+				tagW = w
+			}
+		}
+		if tagW > 40 {
+			tagW = 40
+		}
+		fmt.Printf("%-8s  %-5s  %-3s  %-10s  %-*s  %s\n", "ID", "SCORE", "PRI", "DUE", tagW, "TAGS", "TITLE")
+		for i := range rows {
+			due := ""
+			if !rows[i].DueDate.IsZero() {
+				due = rows[i].DueDate.Format("02-01-06")
+			}
+			tags := truncate(tagStrings[i], tagW)
+			fmt.Printf("%-8s  %5.1f  %-3s  %-10s  %-*s  %s\n",
+				rows[i].ID[:8], sequenceScore(&rows[i]),
+				priorityLetter(rows[i].Priority), due, tagW, tags,
+				truncate(rows[i].Title, 60))
+		}
+		return 0
 	}
 	for i := range rows {
 		fmt.Printf("%-8s %5.1f  %s\n", rows[i].ID[:8], sequenceScore(&rows[i]), truncate(rows[i].Title, 60))
@@ -341,10 +694,15 @@ func cliShow(args []string) int {
 	fs := flag.NewFlagSet("show", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	asJSON := fs.Bool("json", false, "emit JSON instead of a formatted view")
-	if err := fs.Parse(args); err != nil {
+	// Route through splitFlagsAndPositionals so `taskr show <ref> --json` works
+	// the same as `taskr show --json <ref>`. Stdlib flag.Parse stops at the
+	// first non-flag token, which otherwise turns a trailing --json into a
+	// second positional and trips the usage check below.
+	flagArgs, positionals := splitFlagsAndPositionals(args, nil)
+	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
-	if fs.NArg() != 1 {
+	if len(positionals) != 1 {
 		fmt.Fprintln(os.Stderr, "usage: taskr show <ref>")
 		return 2
 	}
@@ -353,7 +711,7 @@ func cliShow(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, err := findTaskByRef(todos, fs.Arg(0))
+	t, err := findTaskByRef(todos, positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -404,7 +762,10 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo) {
 
 	if t.Status == todo.Pending {
 		sc := sequenceComponentsFor(t)
-		fmt.Printf("Score:    %.1f  (D %.1f · P %.1f · M %.1f · A %.1f)\n",
+		// Spelled-out component names instead of single letters — the previous
+		// `D/P/M/A` was a stat-readout cliff for anyone not already steeped in
+		// the sequencing engine's terminology.
+		fmt.Printf("Score:    %.1f  (Deadline %.1f · Priority %.1f · Momentum %.1f · Age %.1f)\n",
 			sc.Total, sc.Urgency, sc.Importance, sc.Momentum, sc.Age)
 	}
 	if len(subs) > 0 {
@@ -431,10 +792,11 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo) {
 	}
 	if len(t.Comments) > 0 {
 		// 1-based indices so the user can pass them directly to
-		// `taskr comment <ref> --edit=N` / `--delete=N`.
+		// `taskr comment <ref> --edit=N` / `--delete=N`. Timestamp includes
+		// HH:MM so multiple comments on the same day stay ordered/readable.
 		fmt.Printf("\nComments (%d):\n", len(t.Comments))
 		for i, c := range t.Comments {
-			fmt.Printf("  %d. [%s] %s\n", i+1, c.CreatedAt.Format("2006-01-02"), c.Text)
+			fmt.Printf("  %d. [%s] %s\n", i+1, c.CreatedAt.Format("2006-01-02 15:04"), c.Text)
 		}
 	}
 	if t.Notes != "" {
@@ -601,6 +963,7 @@ func cliComment(args []string) int {
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, `usage:
   taskr comment <ref> "text"              append a new comment
+  taskr comment <ref> -                   read comment text from stdin
   taskr comment <ref> --edit=N "new text" edit comment N (1-based)
   taskr comment <ref> --delete=N          delete comment N (1-based)`)
 	}
@@ -649,7 +1012,11 @@ func cliComment(args []string) int {
 			fmt.Fprintln(os.Stderr, "taskr comment --edit: new comment text required")
 			return 2
 		}
-		text := strings.Join(positionals[1:], " ")
+		text, terr := commentTextFromPositionals(positionals[1:], os.Stdin)
+		if terr != nil {
+			fmt.Fprintf(os.Stderr, "stdin: %v\n", terr)
+			return 1
+		}
 		t.UpdateComment(i, text)
 		if err := repo.Save([]*todo.Todo{t}, nil); err != nil {
 			fmt.Fprintf(os.Stderr, "save: %v\n", err)
@@ -663,7 +1030,11 @@ func cliComment(args []string) int {
 			fs.Usage()
 			return 2
 		}
-		text := strings.Join(positionals[1:], " ")
+		text, terr := commentTextFromPositionals(positionals[1:], os.Stdin)
+		if terr != nil {
+			fmt.Fprintf(os.Stderr, "stdin: %v\n", terr)
+			return 1
+		}
 		t.AddComment(text)
 		if err := repo.Save([]*todo.Todo{t}, nil); err != nil {
 			fmt.Fprintf(os.Stderr, "save: %v\n", err)
@@ -674,17 +1045,34 @@ func cliComment(args []string) int {
 	}
 }
 
+// commentTextFromPositionals resolves the user's comment text. If the single
+// positional is "-", read everything from the given reader (lets `taskr
+// comment <ref> -` accept piped or here-doc input for long comments instead
+// of forcing shell-escape gymnastics). Trailing newline trimmed so a heredoc
+// doesn't leave a blank line in the comment.
+func commentTextFromPositionals(positionals []string, r io.Reader) (string, error) {
+	if len(positionals) == 1 && positionals[0] == "-" {
+		b, err := io.ReadAll(r)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimRight(string(b), "\n"), nil
+	}
+	return strings.Join(positionals, " "), nil
+}
+
 // ── stats ────────────────────────────────────────────────────────────────────
 
 // statsSummary is the structured shape `stats --format=json` writes and that
 // the waybar formatter renders into its expected schema.
 type statsSummary struct {
-	Active       int `json:"active"`
-	Overdue      int `json:"overdue"`
-	DueToday     int `json:"due_today"`
-	DueThisWeek  int `json:"due_this_week"`
-	DoneToday    int `json:"done_today"`
-	DoneThisWeek int `json:"done_this_week"`
+	Active              int `json:"active"`
+	Overdue             int `json:"overdue"`
+	DueToday            int `json:"due_today"`
+	DueThisWeek         int `json:"due_this_week"`
+	DoneToday           int `json:"done_today"`
+	DoneThisWeek        int `json:"done_this_week"`
+	TrackedTodayMinutes int `json:"tracked_today_minutes"`
 }
 
 func computeStats(todos []todo.Todo, now time.Time) statsSummary {
@@ -717,6 +1105,11 @@ func computeStats(todos []todo.Todo, now time.Time) statsSummary {
 			s.DueThisWeek++
 		}
 	}
+	// Time tracking spans all todos (including subtasks and completed) since
+	// time entries are work that happened today regardless of the parent
+	// task's lifecycle. Minutes as an int keeps the JSON shape boring; the
+	// text renderer formats it for humans.
+	s.TrackedTodayMinutes = int(trackedTodayDuration(todos, now).Minutes())
 	return s
 }
 
@@ -753,12 +1146,14 @@ func cliStats(args []string) int {
 		} else if s.DueToday > 0 {
 			text = fmt.Sprintf("%d due today · %d active", s.DueToday, s.Active)
 		}
-		tooltip := fmt.Sprintf("active %d · overdue %d · due today %d · due this week %d · done today %d",
-			s.Active, s.Overdue, s.DueToday, s.DueThisWeek, s.DoneToday)
+		tracked := formatDurationCompact(time.Duration(s.TrackedTodayMinutes) * time.Minute)
+		tooltip := fmt.Sprintf("active %d · overdue %d · due today %d · due this week %d · done today %d · tracked today %s",
+			s.Active, s.Overdue, s.DueToday, s.DueThisWeek, s.DoneToday, tracked)
 		return emitJSON(map[string]string{"text": text, "tooltip": tooltip, "class": class})
 	default:
-		fmt.Printf("active %d · overdue %d · due today %d · due this week %d · done today %d\n",
-			s.Active, s.Overdue, s.DueToday, s.DueThisWeek, s.DoneToday)
+		tracked := formatDurationCompact(time.Duration(s.TrackedTodayMinutes) * time.Minute)
+		fmt.Printf("active %d · overdue %d · due today %d · due this week %d · done today %d · tracked today %s\n",
+			s.Active, s.Overdue, s.DueToday, s.DueThisWeek, s.DoneToday, tracked)
 		return 0
 	}
 }
@@ -784,6 +1179,15 @@ func cliStart(args []string) int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
+	}
+	// Idempotent re-start: if the target is already the running task, don't
+	// rotate the timer entry. todo.StartTimer unconditionally calls StopTimer
+	// then appends a fresh entry, so a stray repeat would split one session
+	// into two zero-gap entries — silent data drift the user would only
+	// notice on export.
+	if target.IsTimerRunning() {
+		fmt.Fprintf(os.Stderr, "already tracking: %s  %s\n", target.ID[:8], target.Title)
+		return 0
 	}
 	// Stop any other running timer first — the TUI enforces single-task
 	// time tracking and the CLI should preserve that invariant. Collect
@@ -896,13 +1300,17 @@ func cliExport(args []string) int {
 func cliSubtask(args []string) int {
 	fs := flag.NewFlagSet("subtask", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	each := fs.Bool("each", false, "treat each remaining positional as a separate subtask title")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, `usage: taskr subtask <parent-ref> "title"`)
+		fmt.Fprintln(os.Stderr, `usage:
+  taskr subtask <parent-ref> "title"                   one subtask (args after parent are joined)
+  taskr subtask <parent-ref> --each "title1" "title2"  one subtask per remaining positional`)
 	}
-	if err := fs.Parse(args); err != nil {
+	flagArgs, positionals := splitFlagsAndPositionals(args, nil)
+	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
-	if fs.NArg() < 2 {
+	if len(positionals) < 2 {
 		fs.Usage()
 		return 2
 	}
@@ -911,18 +1319,40 @@ func cliSubtask(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	parent, err := findTaskByRef(todos, fs.Arg(0))
+	parent, err := findTaskByRef(todos, positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	title := strings.Join(fs.Args()[1:], " ")
-	sub := todo.NewSubtask(title, parent.ID)
-	if err := repo.Save([]*todo.Todo{&sub}, nil); err != nil {
+	var titles []string
+	if *each {
+		titles = positionals[1:]
+	} else {
+		// Default mode preserves the historical behavior of joining everything
+		// after the parent ref into one title — that's how unquoted
+		// `subtask P Buy milk` has always worked.
+		titles = []string{strings.Join(positionals[1:], " ")}
+	}
+	subs := make([]*todo.Todo, 0, len(titles))
+	for _, title := range titles {
+		title = strings.TrimSpace(title)
+		if title == "" {
+			continue
+		}
+		s := todo.NewSubtask(title, parent.ID)
+		subs = append(subs, &s)
+	}
+	if len(subs) == 0 {
+		fmt.Fprintln(os.Stderr, "taskr subtask: no non-empty titles")
+		return 2
+	}
+	if err := repo.Save(subs, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
 		return 1
 	}
-	fmt.Printf("subtask of %s: %s  %s\n", parent.ID[:8], sub.ID[:8], sub.Title)
+	for _, s := range subs {
+		fmt.Printf("subtask of %s: %s  %s\n", parent.ID[:8], s.ID[:8], s.Title)
+	}
 	return 0
 }
 
@@ -935,21 +1365,27 @@ Usage:
   taskr                                launch the TUI (no args)
 
 Tasks:
-  taskr add "title" [flags]            add a new task
-  taskr list [flags]                   list tasks (pending top-level by default)
-  taskr top [-n=N] [--json]            show top-N by sequence score
+  taskr add "title" [flags]            add a new task (--like <ref> clones, --start tracks)
+  taskr list [flags]                   list pending top-level tasks (filters below)
+  taskr search "term" [flags]          title-substring search (includes done by default)
+  taskr top [-n=N] [--json] [--wide]   show top-N by sequence score
   taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
   taskr edit <ref> [flags]             change fields on one task
-  taskr done <ref>                     mark a task done
+  taskr done <ref>... [--comment=...]  mark one or more tasks done (optional comment per task)
   taskr delete <ref>                   soft-delete a task (alias: rm)
-  taskr subtask <parent-ref> "title"   create a subtask
+  taskr subtask <parent> "title"       create a subtask (--each for multiple titles)
+
+Discovery:
+  taskr tags [--json]                  pending tags with counts
+  taskr projects [--json]              pending projects with counts
 
 Tracking:
-  taskr start <ref>                    start the time tracker (stops other running timers first)
+  taskr start <ref>                    start the time tracker (no-op if already tracking ref)
   taskr stop [<ref>]                   stop the tracker (no ref = whichever's running)
 
 Comments:
   taskr comment <ref> "text"           append a comment
+  taskr comment <ref> -                read comment text from stdin (for long/heredoc input)
   taskr comment <ref> --edit=N "text"  edit comment N (1-based)
   taskr comment <ref> --delete=N       delete comment N
 
@@ -968,16 +1404,27 @@ list each match with its short ID.
 
 Flags (add):
   --due=DATE      today|tomorrow|+3d|dd-mm-yy|monday|...
-  --p=h|m|l       priority (default m)
-  --size=s|m|l    task size (default m)
+  --p=h|m|l       priority (default m, or copied from --like)
+  --size=s|m|l    task size (default m, or copied from --like)
   --project=NAME  project
   --tag=t1,t2     comma-separated tags
+  --like=REF      clone priority/size/project/tags from existing task (flags above override)
+  --start         start the time tracker on the new task (stops any other running timer first)
 
-Flags (list):
+Flags (list / search):
   --json          emit JSON
-  --all           include completed tasks
-  --focus         only today + overdue
+  --all           include completed tasks (list only; search includes by default)
+  --pending       exclude completed (search only; inverts default)
+  --focus         only today + overdue (list only)
+  --tag=NAME      only tasks carrying this tag
+  --project=NAME  only tasks in this project
+  --search=TERM   only tasks whose title contains TERM (list; redundant with 'search' verb)
   --limit=N       cap rows
+
+Flags (top):
+  --n=N           rows to show (default 10)
+  --json          emit JSON (includes tags, priority, due)
+  --wide          table with priority, due, tags columns
 
 Flags (edit):
   --title=...     new title
@@ -991,9 +1438,9 @@ Flags (edit):
 
 Notes:
   - Data lives at ~/.taskr/tasks.db (shared with the TUI). Concurrent CLI +
-    TUI usage is safe for reads; writes serialize via SQLite's busy-timeout,
-    but a running TUI won't see CLI changes until it restarts (a watcher is
-    planned).
+    TUI usage is safe for reads; writes serialize via SQLite's busy-timeout.
+    A running TUI live-reloads on external writes via a filesystem watcher,
+    so CLI changes appear without restarting it.
   - The sequencing engine's biases (Deadline/Priority/Momentum) are loaded
     from ~/.taskr/settings.json, so 'top' and 'list' rank the same way as
     the TUI under the user's current personality.`)
@@ -1019,6 +1466,11 @@ func splitFlagsAndPositionals(args []string, valueFlags map[string]bool) (flags,
 			// POSIX end-of-flags marker — everything after is positional.
 			positionals = append(positionals, args[i+1:]...)
 			return
+		case a == "-":
+			// Bare single dash is conventional stdin / "this position", not a
+			// flag. Without this, `taskr comment <ref> -` would route the dash
+			// into flag parsing and lose it before reaching the stdin reader.
+			positionals = append(positionals, a)
 		case strings.HasPrefix(a, "-"):
 			flags = append(flags, a)
 			name := strings.TrimLeft(a, "-")
@@ -1084,7 +1536,29 @@ func printTaskTable(rows []todo.Todo) {
 		fmt.Println("(no tasks)")
 		return
 	}
-	fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s\n", "ID", "ST", "SIZE", "PRI", "DUE", "TITLE")
+	// Adaptive PROJ column: shown only when at least one row has a project,
+	// width hugging the widest entry (capped at 15 so a long project name
+	// can't crowd out the title). Omitted entirely when nothing has a
+	// project, so the layout matches the pre-2026-06-18 output for
+	// projectless boards.
+	projW := 0
+	for _, t := range rows {
+		if w := len(t.Project); w > projW {
+			projW = w
+		}
+	}
+	if projW > 15 {
+		projW = 15
+	}
+	if projW > 0 && projW < len("PROJ") {
+		projW = len("PROJ")
+	}
+	if projW > 0 {
+		fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %-*s  %s\n",
+			"ID", "ST", "SIZE", "PRI", "DUE", projW, "PROJ", "TITLE")
+	} else {
+		fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s\n", "ID", "ST", "SIZE", "PRI", "DUE", "TITLE")
+	}
 	for _, t := range rows {
 		st := "[ ]"
 		if t.Status == todo.Done {
@@ -1094,7 +1568,12 @@ func printTaskTable(rows []todo.Todo) {
 		if !t.DueDate.IsZero() {
 			due = t.DueDate.Format("02-01-06")
 		}
-		fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s\n",
-			t.ID[:8], st, t.Size.Letter(), priorityLetter(t.Priority), due, t.Title)
+		if projW > 0 {
+			fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %-*s  %s\n",
+				t.ID[:8], st, t.Size.Letter(), priorityLetter(t.Priority), due, projW, truncate(t.Project, projW), t.Title)
+		} else {
+			fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s\n",
+				t.ID[:8], st, t.Size.Letter(), priorityLetter(t.Priority), due, t.Title)
+		}
 	}
 }
