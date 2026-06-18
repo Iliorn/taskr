@@ -43,6 +43,10 @@ const (
 	// header readable.
 	sizeColW = 6
 
+	// projectColW is the Project column on the Tasks list. Holds a short
+	// project name; longer ones truncate.
+	projectColW = 14
+
 	footerHeight      = 1
 	minHeaderLines    = 2
 	detailBorderLines = 2

@@ -106,10 +106,11 @@ func renderTagsPart(tags []string) string {
 // showSize is active-only (history doesn't expose size); showLast carries the
 // Score for active rows and the Completed date for history rows.
 type listCols struct {
-	titleW   int
-	showSize bool
-	showDue  bool
-	showLast bool // Score (active) or Completed (history)
+	titleW      int
+	showSize    bool
+	showDue     bool
+	showLast    bool // Score (active) or Completed (history)
+	showProject bool
 }
 
 func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
@@ -118,6 +119,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 	c := listCols{showDue: true, showLast: true}
 	if !isHistory {
 		c.showSize = true
+		c.showProject = true
 	}
 
 	// Title column fits its longest entry (+gap), floored to the header label so
@@ -139,13 +141,18 @@ func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 		if c.showLast {
 			w += 12
 		}
+		if c.showProject {
+			w += projectColW
+		}
 		return w
 	}
 
 	// Drop order on narrow terminals:
-	//   active:  Size → Score → Due  (keep Due longest — it's the hard fact)
-	//   history: Due  → Completed    (Size is never shown)
-	drop := []*bool{&c.showSize, &c.showLast, &c.showDue}
+	//   active:  Project → Size → Score → Due  (Project drops first since it
+	//            shows on most rows as a single short word; keep Due longest
+	//            — it's the hard fact)
+	//   history: Due  → Completed     (Size and Project never shown)
+	drop := []*bool{&c.showProject, &c.showSize, &c.showLast, &c.showDue}
 	if isHistory {
 		drop = []*bool{&c.showDue, &c.showLast}
 	}
@@ -204,6 +211,9 @@ func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistor
 	}
 	if c.showLast {
 		headerLeft += lastLabel
+	}
+	if c.showProject {
+		headerLeft += padRight(tr("Project"), projectColW)
 	}
 	// Row tags are rendered with a leading space (see renderTaskLineWithSet), so
 	// the header label needs the same lead-in to line up with the tag content.

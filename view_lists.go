@@ -814,6 +814,9 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 		// detail view, where the user can still set it.
 		line += padRight(fmt.Sprintf("%.1f", sequenceScore(&t)), 12)
 	}
+	if cols.showProject {
+		line += padRight(truncate(t.Project, projectColW-1), projectColW)
+	}
 
 	// Only append tags if they fit within the inner panel content width.
 	tagsStr := ""
