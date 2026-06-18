@@ -17,7 +17,16 @@ func getStoragePath() string {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
+// currentSettingsVersion is stamped into newly written settings.json. Bump it
+// when the on-disk shape changes in a way migrateSettings must handle.
+const currentSettingsVersion = 1
+
 type appSettings struct {
+	// Version is the schema marker for migrateSettings. Zero means "legacy
+	// pre-versioning file" (read as-is); newly saved settings always have
+	// the current version.
+	Version int `json:"version"`
+
 	TaskSort     taskSortMode     `json:"task_sort"`
 	TagSort      tagSortMode      `json:"tag_sort"`
 	LearningSort learningSortMode `json:"learning_sort"`
@@ -32,6 +41,15 @@ type appSettings struct {
 	SeqBiasDeadline biasLevel `json:"seq_bias_deadline"`
 	SeqBiasPriority biasLevel `json:"seq_bias_priority"`
 	SeqBiasMomentum biasLevel `json:"seq_bias_momentum"`
+}
+
+// migrateSettings brings settings saved under an older schema version up to
+// the current one. No-op today; future breaking field changes get a case
+// here so old files are converted rather than silently misread.
+func migrateSettings(version int, s appSettings) appSettings {
+	_ = version
+	s.Version = currentSettingsVersion
+	return s
 }
 
 // biasesFromSettings is the small adapter between the persisted appSettings
@@ -49,19 +67,31 @@ func settingsPath() string {
 	return filepath.Join(home, ".taskr", "settings.json")
 }
 
-func loadSettings() appSettings {
+// loadSettings reads ~/.taskr/settings.json and applies any schema migration.
+// Missing file is *not* an error — a brand-new install legitimately has no
+// settings yet and gets all-zero defaults. Any other failure (corrupt JSON,
+// permissions, partial write) is returned so the caller can surface it
+// instead of silently resetting the user's preferences.
+func loadSettings() (appSettings, error) {
 	data, err := os.ReadFile(settingsPath())
 	if err != nil {
-		return appSettings{}
+		if os.IsNotExist(err) {
+			return appSettings{}, nil
+		}
+		return appSettings{}, err
 	}
 	var s appSettings
 	if err := json.Unmarshal(data, &s); err != nil {
-		return appSettings{}
+		return appSettings{}, fmt.Errorf("settings.json is corrupt: %w", err)
 	}
-	return s
+	if s.Version != currentSettingsVersion {
+		s = migrateSettings(s.Version, s)
+	}
+	return s, nil
 }
 
 func saveSettings(s appSettings) error {
+	s.Version = currentSettingsVersion
 	data, err := json.Marshal(s)
 	if err != nil {
 		return err

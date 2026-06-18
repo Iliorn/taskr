@@ -296,7 +296,16 @@ func initialModel(repo Repository) model {
 		errMsg = fmt.Sprintf("Error loading tasks: %v", err)
 	}
 
-	settings := loadSettings()
+	settings, settingsErr := loadSettings()
+	if settingsErr != nil {
+		// Settings load failed in a way that *isn't* "file doesn't exist".
+		// Don't silently reset the user's preferences — surface the cause
+		// so they know what to fix. If a task-load error is also pending,
+		// keep that one (it's the more user-blocking failure).
+		if errMsg == "" {
+			errMsg = fmt.Sprintf("Settings load failed (using defaults): %v", settingsErr)
+		}
+	}
 	th := themeByName(settings.Theme)
 	applyTheme(th)
 	applyLang(settings.Language)

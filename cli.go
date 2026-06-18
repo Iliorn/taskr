@@ -47,7 +47,11 @@ func runCLI(args []string) int {
 // loadForCLI opens the store with the user's persisted biases applied so any
 // score-based output ranks the same way the TUI would.
 func loadForCLI() (Repository, []todo.Todo, error) {
-	applyBiases(biasesFromSettings(loadSettings()))
+	settings, sErr := loadSettings()
+	if sErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
+	}
+	applyBiases(biasesFromSettings(settings))
 	repo := newSQLiteRepo()
 	todos, err := repo.Load()
 	return repo, todos, err
@@ -129,7 +133,11 @@ func cliAdd(args []string) int {
 			t.AddTag(tag)
 		}
 	}
-	applyBiases(biasesFromSettings(loadSettings()))
+	settings, sErr := loadSettings()
+	if sErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
+	}
+	applyBiases(biasesFromSettings(settings))
 	repo := newSQLiteRepo()
 	if err := repo.Save([]*todo.Todo{&t}, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)

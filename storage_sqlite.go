@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -304,9 +305,9 @@ func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 			&completedAt, &t.Notes); err != nil {
 			return nil, err
 		}
-		t.Status = todo.Status(status)
-		t.Priority = todo.Priority(priority)
-		t.Size = todo.Size(size)
+		t.Status = safeStatus(status, t.ID)
+		t.Priority = safePriority(priority, t.ID)
+		t.Size = safeSize(size, t.ID)
 		t.CreatedAt = parseTime(createdAt)
 		t.ModifiedAt = parseTime(modifiedAt)
 		t.DueDate = parseTime(dueDate)
@@ -430,6 +431,47 @@ func loadTodos() ([]todo.Todo, error) {
 	return todos, nil
 }
 
+// ── Load-time enum validation ────────────────────────────────────────────────
+//
+// Enum-shaped columns (status / priority / size) are stored as raw ints and
+// can in principle hold anything (corrupt migration, manual SQL edit, future
+// sync conflict). The safe* helpers clamp out-of-range values to a safe
+// neutral default and warn to stderr with the offending task ID — quiet
+// wrong becomes loud wrong. The warning sink is a package var so tests can
+// suppress noise.
+
+var validationWarn = func(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, format, args...)
+}
+
+func safeStatus(raw int, taskID string) todo.Status {
+	if raw == int(todo.Pending) || raw == int(todo.Done) {
+		return todo.Status(raw)
+	}
+	// Pending is the safer default than Done: a corrupted task should land
+	// back in the active list rather than be silently archived.
+	validationWarn("taskr: invalid status %d on task %s — clamped to Pending\n", raw, taskID)
+	return todo.Pending
+}
+
+func safePriority(raw int, taskID string) todo.Priority {
+	if raw >= int(todo.PriorityLow) && raw <= int(todo.PriorityHigh) {
+		return todo.Priority(raw)
+	}
+	validationWarn("taskr: invalid priority %d on task %s — clamped to Medium\n", raw, taskID)
+	return todo.PriorityMedium
+}
+
+func safeSize(raw int, taskID string) todo.Size {
+	// The Size enum's three values are 0..2 (Medium=0, Small=1, Large=2) —
+	// the numeric ordering is not semantic but the range check still holds.
+	if raw >= 0 && raw <= int(todo.SizeLarge) {
+		return todo.Size(raw)
+	}
+	validationWarn("taskr: invalid size %d on task %s — clamped to Medium\n", raw, taskID)
+	return todo.SizeMedium
+}
+
 // sqliteRepo is the SQLite Repository adapter. It reuses the package-level
 // connection opened lazily by openStore.
 type sqliteRepo struct{}
@@ -472,9 +514,9 @@ func resyncSequenceColumn(h *sql.DB) error {
 			rows.Close()
 			return err
 		}
-		t.Status = todo.Status(status)
-		t.Priority = todo.Priority(priority)
-		t.Size = todo.Size(size)
+		t.Status = safeStatus(status, t.ID)
+		t.Priority = safePriority(priority, t.ID)
+		t.Size = safeSize(size, t.ID)
 		t.DueDate = parseTime(due)
 		t.CreatedAt = parseTime(created)
 		updates = append(updates, scored{t.ID, sequenceScore(&t)})
