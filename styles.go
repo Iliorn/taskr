@@ -132,6 +132,16 @@ var (
 	tabSettingsActiveStyle  lipgloss.Style
 	tabInactiveStyle        lipgloss.Style
 
+	// Per-tab label styles render the active tab's text (after the colored
+	// number block) in the tab's accent color, no background.
+	tabTasksLabelStyle     lipgloss.Style
+	tabProjectsLabelStyle  lipgloss.Style
+	tabTagsLabelStyle      lipgloss.Style
+	tabLearningsLabelStyle lipgloss.Style
+	tabStatsLabelStyle     lipgloss.Style
+	tabCalendarLabelStyle  lipgloss.Style
+	tabSettingsLabelStyle  lipgloss.Style
+
 	selectedStyle   lipgloss.Style
 	normalStyle     lipgloss.Style
 	overdueStyle    lipgloss.Style
@@ -185,6 +195,9 @@ func applyTheme(t theme) {
 	activeTab := func(c lipgloss.Color) lipgloss.Style {
 		return lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(c).Padding(0, 1)
 	}
+	activeLabel := func(c lipgloss.Color) lipgloss.Style {
+		return lipgloss.NewStyle().Bold(true).Foreground(c)
+	}
 
 	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent)
 
@@ -196,6 +209,14 @@ func applyTheme(t theme) {
 	tabCalendarActiveStyle = activeTab(t.teal)
 	tabSettingsActiveStyle = activeTab(t.accent)
 	tabInactiveStyle = lipgloss.NewStyle().Foreground(t.fg).Background(t.inactiveBg).Padding(0, 1)
+
+	tabTasksLabelStyle = activeLabel(t.green)
+	tabProjectsLabelStyle = activeLabel(t.orange)
+	tabTagsLabelStyle = activeLabel(t.purple)
+	tabLearningsLabelStyle = activeLabel(t.yellow)
+	tabStatsLabelStyle = activeLabel(t.blue)
+	tabCalendarLabelStyle = activeLabel(t.teal)
+	tabSettingsLabelStyle = activeLabel(t.accent)
 
 	selectedStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
 	normalStyle = lipgloss.NewStyle().Foreground(t.fg)

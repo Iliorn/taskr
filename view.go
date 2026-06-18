@@ -1124,18 +1124,29 @@ func (m model) renderTabs(avail int) string {
 		tabStatsActiveStyle,
 		tabSettingsActiveStyle,
 	}
-	full := [numTabs]string{tr("1:Tasks"), tr("2:Calendar"), tr("3:Projects"), tr("4:Tags"), tr("5:Learnings"), tr("6:Stats"), tr("7:Settings")}
+	activeLabels := [numTabs]lipgloss.Style{
+		tabTasksLabelStyle,
+		tabCalendarLabelStyle,
+		tabProjectsLabelStyle,
+		tabTagsLabelStyle,
+		tabLearningsLabelStyle,
+		tabStatsLabelStyle,
+		tabSettingsLabelStyle,
+	}
+	// Labels render without the legacy "N:" separator — the active number is
+	// shown in a colored block and the label follows in the tab's accent color.
+	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"), tr("4 Tags"), tr("5 Learnings"), tr("6 Stats"), tr("7 Settings")}
 	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7"}
 
-	// abbr keeps the "n:" prefix and the first 3 letters of the name ("1:Tas").
+	// abbr keeps the "N " prefix and the first 3 letters of the name ("1 Tas").
 	var abbr [numTabs]string
 	for i, n := range full {
-		colon := strings.IndexByte(n, ':')
-		word := []rune(n[colon+1:])
+		space := strings.IndexByte(n, ' ')
+		word := []rune(n[space+1:])
 		if len(word) > 3 {
 			word = word[:3]
 		}
-		abbr[i] = n[:colon+1] + string(word)
+		abbr[i] = n[:space+1] + string(word)
 	}
 
 	// Degrade as the window narrows: full labels → 3-letter abbreviations →
@@ -1157,8 +1168,15 @@ func (m model) renderTabs(avail int) string {
 
 	var parts [numTabs]string
 	for i := range names {
+		num, label, hasLabel := strings.Cut(names[i], " ")
 		if tab(i) == m.tab {
-			parts[i] = activeStyles[i].Render(names[i])
+			// Active tab: colored block around the number, label follows in
+			// the tab's color so the two read as one unit.
+			rendered := activeStyles[i].Render(num)
+			if hasLabel {
+				rendered += activeLabels[i].Render(" " + label)
+			}
+			parts[i] = rendered
 		} else {
 			parts[i] = tabInactiveStyle.Render(names[i])
 		}
