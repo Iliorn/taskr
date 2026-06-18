@@ -90,11 +90,24 @@ taskr add "Buy milk" --size=s --due=tomorrow --p=high --tag=shopping
 taskr list                       # pending top-level tasks (table)
 taskr list --json --focus        # JSON, today + overdue only
 taskr top -n=5                   # top 5 by sequence score
-taskr done 60b9                  # mark a task done by id prefix
+taskr show milk                  # full detail (title substring is enough)
+taskr edit milk --p=high --add-tag=urgent --due=tomorrow
+taskr done milk                  # mark a task done
+taskr comment milk "blocked on review"
+taskr delete milk                # soft delete (alias: taskr rm)
 taskr help
 ```
 
-Flags can appear before or after the title. `taskr top --json` is the recommended hook for scripts and other tools. The CLI reads the same `~/.taskr/settings.json` as the TUI, so ranking matches your current bias personality.
+**Task references** can be either a UUID prefix (`60b9`) or a case-insensitive substring of the title (`milk`). ID-prefix takes precedence so scripts stay deterministic. Ambiguous references fail with exit code 2 and list every match with its short ID for easy disambiguation:
+
+```
+$ taskr done milk
+title "milk" matches 2 tasks:
+    21a164e1  Buy milk
+    2ffe832a  Buy more milk
+```
+
+Flags can appear before or after the reference. `taskr top --json` and `taskr show --json` are the recommended hooks for scripts and other tools. The CLI reads the same `~/.taskr/settings.json` as the TUI, so ranking matches your current bias personality.
 
 The TUI and CLI share the SQLite store. Concurrent reads are safe; writes serialize via SQLite's busy-timeout. A running TUI won't see CLI mutations until it restarts — keep that in mind if you script alongside an open session.
 

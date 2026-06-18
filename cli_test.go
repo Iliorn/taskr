@@ -114,9 +114,69 @@ func sliceEq(a, b []string) bool {
 	return true
 }
 
+// TestFindTaskByRefFallsBackToTitleSubstring covers the new ergonomic path:
+// when no task ID matches the query, fall back to a case-insensitive title
+// substring search. Without this, every CLI mutation requires looking up
+// a UUID prefix from `taskr list` first — too much friction for daily use.
+func TestFindTaskByRefFallsBackToTitleSubstring(t *testing.T) {
+	a := todo.New("Buy milk")
+	a.ID = "1aaaaa00-aaaa"
+	b := todo.New("Call landlord")
+	b.ID = "2bbbbb00-bbbb"
+	c := todo.New("Read RFC")
+	c.ID = "3ccccc00-cccc"
+	todos := []todo.Todo{a, b, c}
+
+	t.Run("substring matches one", func(t *testing.T) {
+		got, err := findTaskByRef(todos, "milk")
+		if err != nil || got.ID != a.ID {
+			t.Fatalf("got=%v err=%v, want a", got, err)
+		}
+	})
+
+	t.Run("substring case-insensitive", func(t *testing.T) {
+		got, err := findTaskByRef(todos, "LANDLORD")
+		if err != nil || got.ID != b.ID {
+			t.Fatalf("got=%v err=%v, want b", got, err)
+		}
+	})
+
+	t.Run("substring matches multiple errors", func(t *testing.T) {
+		// Add a second task containing "milk" to force ambiguity.
+		more := append(todos, todo.New("Buy more milk"))
+		if _, err := findTaskByRef(more, "milk"); err == nil {
+			t.Error("expected ambiguity error")
+		}
+	})
+
+	t.Run("id-prefix wins over title containing same chars", func(t *testing.T) {
+		// "1aa" matches a's id prefix; if a title contained "1aa" too, the
+		// id path should still win for determinism. Construct that scenario.
+		shared := todo.New("contains 1aa in title")
+		shared.ID = "4ddddd00-dddd"
+		got, err := findTaskByRef(append(todos, shared), "1aa")
+		if err != nil || got.ID != a.ID {
+			t.Fatalf("got=%v err=%v, want a (id-prefix path wins)", got, err)
+		}
+	})
+
+	t.Run("no match anywhere", func(t *testing.T) {
+		if _, err := findTaskByRef(todos, "wombat"); err == nil {
+			t.Error("expected no-match error")
+		}
+	})
+
+	t.Run("whitespace-only ref rejected", func(t *testing.T) {
+		if _, err := findTaskByRef(todos, "   "); err == nil {
+			t.Error("expected empty-ref error")
+		}
+	})
+}
+
 func TestIsCLICommand(t *testing.T) {
 	cases := map[string]bool{
 		"add": true, "list": true, "ls": true, "done": true, "top": true,
+		"show": true, "edit": true, "delete": true, "rm": true, "comment": true,
 		"help": true, "-h": true, "--help": true, "--version": true,
 		"foo": false, "": false, "Add": false,
 	}
