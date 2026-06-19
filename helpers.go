@@ -178,7 +178,7 @@ func renderPlainDivider(availW int) string {
 	return dimStyle.Render("  "+strings.Repeat("─", availW)) + "\n"
 }
 
-func renderListHeader(b *strings.Builder, termWidth, cursor, total int, isHistory bool, sortMode taskSortMode, c listCols) {
+func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMode taskSortMode, c listCols) {
 	sizeLabel := padRight(tr("Size"), sizeColW)
 	dueLabel := padRight(tr("Due"), 12)
 	lastLabel := padRight(tr("Score"), 12)

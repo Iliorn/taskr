@@ -632,7 +632,7 @@ func (m model) renderTaskList() string {
 		}
 	}
 	cols := taskListCols(m.termWidth, false, contentMax)
-	renderListHeader(b, m.termWidth, m.cursor, len(active), false, m.taskSort, cols)
+	renderListHeader(b, m.termWidth, false, m.taskSort, cols)
 
 	visible := m.visibleActiveTasks()
 
@@ -684,7 +684,7 @@ func (m model) renderHistoryList() string {
 		}
 	}
 	cols := taskListCols(m.termWidth, true, contentMax)
-	renderListHeader(b, m.termWidth, m.cursor, len(completed), true, m.taskSort, cols)
+	renderListHeader(b, m.termWidth, true, m.taskSort, cols)
 
 	maxVisible := m.estimateListHeight()
 	startIdx := m.listOffset
