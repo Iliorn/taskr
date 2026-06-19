@@ -37,7 +37,11 @@ func (a dayActivity) duration() time.Duration {
 }
 
 func dayKey(t time.Time) string {
-	return t.Format("2006-01-02")
+	// Times come back from storage in UTC; the calendar grid is laid out
+	// in the user's local zone, so format the date in local time too —
+	// otherwise an entry started at 01:00 local (= 23:00 UTC yesterday)
+	// gets keyed to the wrong day.
+	return t.Local().Format("2006-01-02")
 }
 
 // activitiesForDay returns every time entry started on the given day plus
@@ -87,7 +91,19 @@ func (m model) activitiesForDay(day time.Time) []dayActivity {
 			}
 		}
 	}
-	sort.Slice(acts, func(i, j int) bool { return acts[i].start.Before(acts[j].start) })
+	// Total order with deterministic tiebreakers — m.tasks is a map
+	// (randomized iteration) and sort.Slice isn't stable, so without
+	// these, entries with equal start times would reshuffle on every
+	// render and appear to "jump" as the cursor moves.
+	sort.Slice(acts, func(i, j int) bool {
+		if !acts[i].start.Equal(acts[j].start) {
+			return acts[i].start.Before(acts[j].start)
+		}
+		if acts[i].taskID != acts[j].taskID {
+			return acts[i].taskID < acts[j].taskID
+		}
+		return acts[i].entryID < acts[j].entryID
+	})
 	return acts
 }
 

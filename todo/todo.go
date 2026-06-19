@@ -1,6 +1,7 @@
 package todo
 
 import (
+	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -166,6 +167,7 @@ type Todo struct {
 	TimeEntries  []TimeEntry `json:"time_entries,omitempty"`
 	Notes        string      `json:"notes,omitempty"`
 	ParentID     string      `json:"parent_id,omitempty"`
+	Recurrence   string      `json:"recurrence,omitempty"`
 }
 
 func New(title string) Todo {
@@ -415,6 +417,140 @@ func (t *Todo) DeleteTimeEntry(index int) {
 func (t *Todo) SetNotes(notes string) {
 	t.Notes = notes
 	t.ModifiedAt = time.Now()
+}
+
+// ── Recurrence ────────────────────────────────────────────────────────────────
+//
+// A task with a non-empty Recurrence respawns when marked Done: a fresh
+// pending copy with a new ID is added to the store, and the original keeps
+// its completion history. ParseRecurrence is the input validator; canonical
+// rules are: "daily", "weekly", "monthly", "yearly", "weekdays", and
+// "every:Nd|Nw|Nm|Ny" (N ≥ 1). NextRecurrenceFrom computes the next instance's
+// date given the rule and a base time (typically the previous DueDate, or
+// CompletedAt when no due date is set).
+
+func (t *Todo) IsRecurring() bool { return t.Recurrence != "" }
+
+func (t *Todo) SetRecurrence(rule string) {
+	t.Recurrence = rule
+	t.ModifiedAt = time.Now()
+}
+
+func (t *Todo) ClearRecurrence() {
+	t.Recurrence = ""
+	t.ModifiedAt = time.Now()
+}
+
+// ParseRecurrence canonicalizes a user-supplied recurrence string. Returns the
+// canonical form and true if recognized. The empty string parses as ("", true)
+// — a way to clear an existing rule via the same path.
+func ParseRecurrence(s string) (string, bool) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return "", true
+	}
+	switch s {
+	case "daily", "day":
+		return "daily", true
+	case "weekly", "week":
+		return "weekly", true
+	case "monthly", "month":
+		return "monthly", true
+	case "yearly", "year", "annual", "annually":
+		return "yearly", true
+	case "weekdays", "weekday":
+		return "weekdays", true
+	}
+	// "every:Nd|Nw|Nm|Ny" and the shorthand "Nd|Nw|Nm|Ny".
+	spec := strings.TrimPrefix(s, "every:")
+	if len(spec) >= 2 {
+		unit := spec[len(spec)-1]
+		numStr := spec[:len(spec)-1]
+		n, ok := parsePositiveInt(numStr)
+		if ok && n >= 1 {
+			switch unit {
+			case 'd', 'w', 'm', 'y':
+				if n == 1 {
+					switch unit {
+					case 'd':
+						return "daily", true
+					case 'w':
+						return "weekly", true
+					case 'm':
+						return "monthly", true
+					case 'y':
+						return "yearly", true
+					}
+				}
+				return fmt.Sprintf("every:%d%c", n, unit), true
+			}
+		}
+	}
+	return "", false
+}
+
+// NextRecurrenceFrom returns the next instance date for rule, computed from
+// base. Returns (zero, false) when rule is invalid or empty. The result keeps
+// the wall-clock time of base (so "daily" with a base at 09:00 lands on the
+// next day at 09:00). "weekdays" advances to the next Mon–Fri; if base is
+// itself a weekday, it advances by one weekday.
+func NextRecurrenceFrom(rule string, base time.Time) (time.Time, bool) {
+	if rule == "" || base.IsZero() {
+		return time.Time{}, false
+	}
+	switch rule {
+	case "daily":
+		return base.AddDate(0, 0, 1), true
+	case "weekly":
+		return base.AddDate(0, 0, 7), true
+	case "monthly":
+		return base.AddDate(0, 1, 0), true
+	case "yearly":
+		return base.AddDate(1, 0, 0), true
+	case "weekdays":
+		next := base.AddDate(0, 0, 1)
+		for {
+			wd := next.Weekday()
+			if wd != time.Saturday && wd != time.Sunday {
+				return next, true
+			}
+			next = next.AddDate(0, 0, 1)
+		}
+	}
+	if strings.HasPrefix(rule, "every:") {
+		spec := strings.TrimPrefix(rule, "every:")
+		if len(spec) >= 2 {
+			unit := spec[len(spec)-1]
+			n, ok := parsePositiveInt(spec[:len(spec)-1])
+			if ok && n >= 1 {
+				switch unit {
+				case 'd':
+					return base.AddDate(0, 0, n), true
+				case 'w':
+					return base.AddDate(0, 0, n*7), true
+				case 'm':
+					return base.AddDate(0, n, 0), true
+				case 'y':
+					return base.AddDate(n, 0, 0), true
+				}
+			}
+		}
+	}
+	return time.Time{}, false
+}
+
+func parsePositiveInt(s string) (int, bool) {
+	if s == "" {
+		return 0, false
+	}
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+		n = n*10 + int(r-'0')
+	}
+	return n, true
 }
 
 // ── Query helpers ─────────────────────────────────────────────────────────────

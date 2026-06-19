@@ -56,6 +56,7 @@ type detailField int
 const (
 	fieldStartDate detailField = iota
 	fieldDueDate
+	fieldRecurrence
 	fieldPriority
 	fieldSize
 	fieldProject
@@ -222,7 +223,7 @@ type model struct {
 
 	// UI state
 	confirmMsg          string
-	pendingDelete       int
+	pendingDeleteID     string
 	pendingComment      int
 	pendingDep          int
 	pendingTag          int
@@ -528,7 +529,7 @@ func (m *model) followTask(taskID string) {
 	if m.showHistory {
 		list = m.cache.done
 	} else {
-		list = m.cache.active
+		list = m.visibleActiveTasks()
 	}
 	for i, t := range list {
 		if t.ID == taskID {
@@ -536,6 +537,76 @@ func (m *model) followTask(taskID string) {
 			return
 		}
 	}
+}
+
+// ── Recurrence ────────────────────────────────────────────────────────────────
+
+// buildNextRecurrence constructs (but does not store) a fresh pending instance
+// for a just-completed recurring task. Returns (zero, false) if the source
+// isn't recurring or the rule is unparseable. The new instance inherits
+// identity-ish fields (title, priority, size, project, notes, tags, recurrence
+// rule) but starts clean on history (no time entries, comments, learnings,
+// dependencies, subtasks).
+//
+// The next DueDate is computed by rolling forward from the previous DueDate (or
+// CompletedAt if no due date was set) until it lands at or after today — that
+// way a long-overdue "monthly" task doesn't immediately reappear in the past.
+// StartDate, if set on the source, is shifted by the same delta the DueDate
+// moved by, so the lead time between start and due is preserved.
+func buildNextRecurrence(src todo.Todo) (todo.Todo, bool) {
+	if !src.IsRecurring() {
+		return todo.Todo{}, false
+	}
+	rule := src.Recurrence
+	base := src.DueDate
+	if base.IsZero() {
+		base = src.CompletedAt
+	}
+	if base.IsZero() {
+		base = time.Now()
+	}
+	next, ok := todo.NextRecurrenceFrom(rule, base)
+	if !ok {
+		return todo.Todo{}, false
+	}
+	today := startOfDay(time.Now())
+	for next.Before(today) {
+		advanced, ok := todo.NextRecurrenceFrom(rule, next)
+		if !ok {
+			break
+		}
+		next = advanced
+	}
+
+	clone := todo.New(src.Title)
+	clone.Priority = src.Priority
+	clone.Size = src.Size
+	clone.Project = src.Project
+	clone.Notes = src.Notes
+	clone.Recurrence = src.Recurrence
+	if len(src.Tags) > 0 {
+		clone.Tags = append([]string{}, src.Tags...)
+	}
+	clone.DueDate = next
+	if !src.StartDate.IsZero() && !src.DueDate.IsZero() {
+		clone.StartDate = next.Add(-src.DueDate.Sub(src.StartDate))
+	}
+	return clone, true
+}
+
+// spawnNextRecurrence builds the next instance and adds it to the store.
+// Returns the spawned ID, or "" when the source isn't recurring or the rule
+// is unparseable.
+func (m *model) spawnNextRecurrence(src *todo.Todo) string {
+	if src == nil {
+		return ""
+	}
+	next, ok := buildNextRecurrence(*src)
+	if !ok {
+		return ""
+	}
+	m.add(next)
+	return next.ID
 }
 
 // ── Time tracking helpers ─────────────────────────────────────────────────────
@@ -607,7 +678,7 @@ func (m model) currentTodo() *todo.Todo {
 		if m.showHistory {
 			list = m.cache.done
 		} else {
-			list = m.cache.active
+			list = m.visibleActiveTasks()
 		}
 		if m.cursor < len(list) {
 			return m.get(list[m.cursor].ID)
@@ -674,6 +745,27 @@ func (m model) subtaskIDs(parentID string) []string {
 	return m.subtaskOf[parentID]
 }
 
+// visibleActiveTasks returns the Tasks-tab active list flattened with the
+// subtasks of expanded parents interleaved in order, so the list cursor can
+// land on a subtask. Returned by value (a snapshot) like cache.active —
+// callers re-resolve by ID for mutation.
+func (m model) visibleActiveTasks() []todo.Todo {
+	active := m.cache.active
+	out := make([]todo.Todo, 0, len(active))
+	for i := range active {
+		out = append(out, active[i])
+		if !m.expandedTasks[active[i].ID] {
+			continue
+		}
+		for _, subID := range m.subtaskIDs(active[i].ID) {
+			if sub := m.get(subID); sub != nil {
+				out = append(out, *sub)
+			}
+		}
+	}
+	return out
+}
+
 // subtaskCount returns how many subtasks parentID has, via the maintained
 // subtaskOf index.
 func (m model) subtaskCount(parentID string) int {
@@ -701,19 +793,33 @@ func (m *model) deleteSubtask(parentID string, subtaskCursor int) string {
 	return subID
 }
 
-// toggleSubtask flips a child task's status and returns the toggled task's ID
-// so the caller can mark it dirty.
-func (m *model) toggleSubtask(parentID string, subtaskCursor int) string {
+// toggleSubtask flips a child task's status and returns every ID the caller
+// should mark dirty: the toggled subtask, plus the freshly-spawned next
+// instance when the subtask was a recurring task closed by this call.
+func (m *model) toggleSubtask(parentID string, subtaskCursor int) []string {
 	ids := m.subtaskIDs(parentID)
 	if subtaskCursor >= len(ids) {
-		return ""
+		return nil
 	}
 	subID := ids[subtaskCursor]
-	if t := m.get(subID); t != nil {
-		t.Toggle()
-		return subID
+	t := m.get(subID)
+	if t == nil {
+		return nil
 	}
-	return ""
+	// Don't leave a dangling open time entry when closing a subtask. Mirrors
+	// the top-level `d` handler in update.go.
+	if t.Status == todo.Pending && t.IsTimerRunning() {
+		m.stopTimer(t.ID)
+	}
+	wasPending := t.Status == todo.Pending
+	t.Toggle()
+	out := []string{subID}
+	if wasPending && t.IsRecurring() {
+		if newID := m.spawnNextRecurrence(t); newID != "" {
+			out = append(out, newID)
+		}
+	}
+	return out
 }
 
 // ── Search/filter helpers ─────────────────────────────────────────────────────

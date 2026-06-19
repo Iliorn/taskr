@@ -132,15 +132,10 @@ var (
 	tabSettingsActiveStyle  lipgloss.Style
 	tabInactiveStyle        lipgloss.Style
 
-	// Per-tab label styles render the active tab's text (after the colored
-	// number block) in the tab's accent color, no background.
-	tabTasksLabelStyle     lipgloss.Style
-	tabProjectsLabelStyle  lipgloss.Style
-	tabTagsLabelStyle      lipgloss.Style
-	tabLearningsLabelStyle lipgloss.Style
-	tabStatsLabelStyle     lipgloss.Style
-	tabCalendarLabelStyle  lipgloss.Style
-	tabSettingsLabelStyle  lipgloss.Style
+	// tabInactiveLabelStyle renders the label of an unselected tab when its
+	// number is shown as a colored block: muted background, no padding (the
+	// colored number block already supplies the left padding for the tab).
+	tabInactiveLabelStyle lipgloss.Style
 
 	selectedStyle   lipgloss.Style
 	normalStyle     lipgloss.Style
@@ -195,9 +190,6 @@ func applyTheme(t theme) {
 	activeTab := func(c lipgloss.Color) lipgloss.Style {
 		return lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(c).Padding(0, 1)
 	}
-	activeLabel := func(c lipgloss.Color) lipgloss.Style {
-		return lipgloss.NewStyle().Bold(true).Foreground(c)
-	}
 
 	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent)
 
@@ -209,14 +201,7 @@ func applyTheme(t theme) {
 	tabCalendarActiveStyle = activeTab(t.teal)
 	tabSettingsActiveStyle = activeTab(t.accent)
 	tabInactiveStyle = lipgloss.NewStyle().Foreground(t.fg).Background(t.inactiveBg).Padding(0, 1)
-
-	tabTasksLabelStyle = activeLabel(t.green)
-	tabProjectsLabelStyle = activeLabel(t.orange)
-	tabTagsLabelStyle = activeLabel(t.purple)
-	tabLearningsLabelStyle = activeLabel(t.yellow)
-	tabStatsLabelStyle = activeLabel(t.blue)
-	tabCalendarLabelStyle = activeLabel(t.teal)
-	tabSettingsLabelStyle = activeLabel(t.accent)
+	tabInactiveLabelStyle = lipgloss.NewStyle().Foreground(t.fg).Background(t.inactiveBg)
 
 	selectedStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
 	normalStyle = lipgloss.NewStyle().Foreground(t.fg)
@@ -329,12 +314,17 @@ var calGradient = []lipgloss.Style{
 	lipgloss.NewStyle().Foreground(lipgloss.Color("#5EEAD4")),
 }
 
+// 10 stops so the histogram has a unique gradient step per task when the
+// chart halves block height (chartH=5 rows × 2 tasks/row = 10 tasks).
 var statsGradient = []lipgloss.Style{
 	lipgloss.NewStyle().Foreground(lipgloss.Color("#1a3a5c")),
-	lipgloss.NewStyle().Foreground(lipgloss.Color("#2a5a8c")),
-	lipgloss.NewStyle().Foreground(lipgloss.Color("#3a7aac")),
-	lipgloss.NewStyle().Foreground(lipgloss.Color("#4a9acc")),
-	lipgloss.NewStyle().Foreground(lipgloss.Color("#5abadc")),
-	lipgloss.NewStyle().Foreground(lipgloss.Color("#6ad4ec")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#244b6e")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#2f5c80")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#396e92")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#447fa5")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#4e90b7")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#59a1c9")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#63b2db")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#6ec3ed")),
 	lipgloss.NewStyle().Foreground(lipgloss.Color("#78d4ff")),
 }

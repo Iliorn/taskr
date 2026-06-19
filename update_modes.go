@@ -32,6 +32,9 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					for _, tg := range parsed.tags {
 						t.AddTag(tg)
 					}
+					if parsed.recurrence != "" {
+						t.Recurrence = parsed.recurrence
+					}
 					m.add(t)
 					m.markModified(t.ID)
 				}
@@ -529,18 +532,12 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "y":
-			var list []todo.Todo
-			if m.showHistory {
-				list = m.cache.done
-			} else {
-				list = m.cache.active
-			}
-			if m.pendingDelete < len(list) {
-				id := list[m.pendingDelete].ID
+			if id := m.pendingDeleteID; id != "" && m.get(id) != nil {
 				m.pushUndo("delete task", id)
 				m.markTombstone(id)
 				m.remove(id)
 			}
+			m.pendingDeleteID = ""
 			// Tombstone already records what to persist; no other rows changed,
 			// so we only need to schedule a save and refresh derived caches.
 			m.dirty = true
@@ -551,13 +548,14 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showHistory {
 				newLen = len(m.cache.done)
 			} else {
-				newLen = len(m.cache.active)
+				newLen = len(m.visibleActiveTasks())
 			}
 			if m.cursor >= newLen && m.cursor > 0 {
 				m.cursor--
 			}
 			m.mode = modeNormal
 		case "n", "esc":
+			m.pendingDeleteID = ""
 			m.mode = modeNormal
 		}
 	}

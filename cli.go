@@ -262,7 +262,7 @@ func trackedTodayDuration(todos []todo.Todo, now time.Time) time.Duration {
 // uses this to know which flags consume the next arg (vs. being self-contained
 // `--name=value`), so users can put the title in any position.
 var addValueFlags = map[string]bool{
-	"due": true, "p": true, "size": true, "project": true, "tag": true, "like": true,
+	"due": true, "p": true, "size": true, "project": true, "tag": true, "like": true, "recur": true,
 }
 
 func cliAdd(args []string) int {
@@ -275,6 +275,7 @@ func cliAdd(args []string) int {
 	size := fs.String("size", "", "size: s|m|l (default m, or copied from --like)")
 	project := fs.String("project", "", "project name")
 	tags := fs.String("tag", "", "comma-separated tags")
+	recur := fs.String("recur", "", "recurrence rule: daily|weekly|monthly|yearly|weekdays|Nd|Nw|Nm|Ny")
 	like := fs.String("like", "", "clone priority/size/project/tags from an existing task ref")
 	startNow := fs.Bool("start", false, "start the time tracker on the new task (stops any other running timer first)")
 	fs.Usage = func() {
@@ -338,6 +339,14 @@ func cliAdd(args []string) int {
 		for _, tag := range strings.Split(*tags, ",") {
 			t.AddTag(tag)
 		}
+	}
+	if *recur != "" {
+		canonical, ok := todo.ParseRecurrence(*recur)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "invalid recurrence %q: use daily|weekly|monthly|yearly|weekdays|Nd|Nw|Nm|Ny\n", *recur)
+			return 2
+		}
+		t.Recurrence = canonical
 	}
 	// --start collapses the common "add then start tracking" two-call dance
 	// into one. We re-load to find any other running timer (the TUI's
@@ -578,7 +587,8 @@ func cliDone(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	var dirty, skipped []*todo.Todo
+	var dirty, skipped, stopped []*todo.Todo
+	var spawned []todo.Todo
 	for _, t := range targets {
 		if t.Status == todo.Done {
 			skipped = append(skipped, t)
@@ -589,17 +599,42 @@ func cliDone(args []string) int {
 		if *comment != "" {
 			t.AddComment(*comment)
 		}
+		// Closing a task while its timer is running would leave a dangling
+		// open entry; the TUI auto-stops, so the CLI matches.
+		if t.IsTimerRunning() {
+			t.StopTimer()
+			stopped = append(stopped, t)
+		}
 		t.Toggle()
 		dirty = append(dirty, t)
+		if t.IsRecurring() {
+			if next, ok := buildNextRecurrence(*t); ok {
+				spawned = append(spawned, next)
+			}
+		}
 	}
-	if len(dirty) > 0 {
-		if err := repo.Save(dirty, nil); err != nil {
+	saveSet := dirty
+	for i := range spawned {
+		saveSet = append(saveSet, &spawned[i])
+	}
+	if len(saveSet) > 0 {
+		if err := repo.Save(saveSet, nil); err != nil {
 			fmt.Fprintf(os.Stderr, "save: %v\n", err)
 			return 1
 		}
 	}
+	for _, t := range stopped {
+		fmt.Fprintf(os.Stderr, "stopped: %s  %s\n", t.ID[:8], t.Title)
+	}
 	for _, t := range dirty {
 		fmt.Printf("done  %s  %s\n", t.ID[:8], t.Title)
+	}
+	for _, t := range spawned {
+		due := ""
+		if !t.DueDate.IsZero() {
+			due = "  due " + t.DueDate.Format("02-01-06")
+		}
+		fmt.Printf("recur %s  %s%s\n", t.ID[:8], t.Title, due)
 	}
 	for _, t := range skipped {
 		fmt.Fprintf(os.Stderr, "already done: %s\n", t.Title)
@@ -1233,6 +1268,21 @@ func cliStop(args []string) int {
 			return 2
 		}
 		if !t.IsTimerRunning() {
+			// Distinguish "nothing is tracking anywhere" from "a different
+			// task is tracking" — the first is the common case (user just
+			// typo'd or forgot a timer wasn't running) and deserves the same
+			// message as the no-ref form.
+			anyRunning := false
+			for i := range todos {
+				if todos[i].IsTimerRunning() {
+					anyRunning = true
+					break
+				}
+			}
+			if !anyRunning {
+				fmt.Fprintln(os.Stderr, "no task is currently tracking")
+				return 0
+			}
 			fmt.Fprintf(os.Stderr, "task %s is not currently tracking\n", t.ID[:8])
 			return 2
 		}
@@ -1569,12 +1619,15 @@ func printTaskTable(rows []todo.Todo) {
 		if !t.DueDate.IsZero() {
 			due = t.DueDate.Format("02-01-06")
 		}
+		// Lowercase the size letter to match the TUI list column — uppercase
+		// "M" looked like a hotkey hint.
+		sz := strings.ToLower(t.Size.Letter())
 		if projW > 0 {
 			fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %-*s  %s\n",
-				t.ID[:8], st, t.Size.Letter(), priorityLetter(t.Priority), due, projW, truncate(t.Project, projW), t.Title)
+				t.ID[:8], st, sz, priorityLetter(t.Priority), due, projW, truncate(t.Project, projW), t.Title)
 		} else {
 			fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s\n",
-				t.ID[:8], st, t.Size.Letter(), priorityLetter(t.Priority), due, t.Title)
+				t.ID[:8], st, sz, priorityLetter(t.Priority), due, t.Title)
 		}
 	}
 }

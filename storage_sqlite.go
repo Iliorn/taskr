@@ -152,15 +152,16 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 		// rollback is no longer a concern). Write an empty string; the column
 		// is no longer the source of truth.
 		upsertTask, err := tx.Prepare(`INSERT INTO todos
-			(id,title,status,priority,size,project,parent_id,created_at,modified_at,due_date,start_date,notes,completed_at,sequence,data,deleted,deleted_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',0,'')
+			(id,title,status,priority,size,project,parent_id,created_at,modified_at,due_date,start_date,notes,completed_at,sequence,recurrence,data,deleted,deleted_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',0,'')
 			ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, status=excluded.status, priority=excluded.priority,
 				size=excluded.size, project=excluded.project, parent_id=excluded.parent_id,
 				created_at=excluded.created_at, modified_at=excluded.modified_at,
 				due_date=excluded.due_date, start_date=excluded.start_date,
 				notes=excluded.notes, completed_at=excluded.completed_at,
-				sequence=excluded.sequence, deleted=0, deleted_at=''`)
+				sequence=excluded.sequence, recurrence=excluded.recurrence,
+				deleted=0, deleted_at=''`)
 		if err != nil {
 			return err
 		}
@@ -225,7 +226,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 			if _, err := upsertTask.Exec(t.ID, t.Title, int(t.Status), int(t.Priority), int(t.Size),
 				t.Project, t.ParentID, fmtTime(t.CreatedAt), fmtTime(t.ModifiedAt),
 				fmtTime(t.DueDate), fmtTime(t.StartDate), t.Notes, fmtTime(t.CompletedAt),
-				sequenceScore(t)); err != nil {
+				sequenceScore(t), t.Recurrence); err != nil {
 				return err
 			}
 			// Replace-all-children: simple and bounded — typical tasks have
@@ -287,7 +288,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 // and merged by task_id in a single pass.
 func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 	rows, err := h.Query(`SELECT id, title, status, priority, size, project, parent_id,
-		created_at, modified_at, due_date, start_date, completed_at, notes
+		created_at, modified_at, due_date, start_date, completed_at, notes, recurrence
 		FROM todos WHERE deleted = 0`)
 	if err != nil {
 		return nil, err
@@ -302,7 +303,7 @@ func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 		var createdAt, modifiedAt, dueDate, startDate, completedAt string
 		if err := rows.Scan(&t.ID, &t.Title, &status, &priority, &size, &t.Project,
 			&t.ParentID, &createdAt, &modifiedAt, &dueDate, &startDate,
-			&completedAt, &t.Notes); err != nil {
+			&completedAt, &t.Notes, &t.Recurrence); err != nil {
 			return nil, err
 		}
 		t.Status = safeStatus(status, t.ID)

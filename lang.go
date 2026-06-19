@@ -165,6 +165,18 @@ func trSize(s todo.Size) string {
 	return tr(s.String())
 }
 
+// trRecurrence renders a recurrence rule for display. Canonical rules
+// (daily/weekly/monthly/yearly/weekdays) are translated; "every:Nd|w|m|y" is
+// kept as-is, since the prefix is a recognizable English keyword and the
+// number+unit is locale-neutral.
+func trRecurrence(rule string) string {
+	switch rule {
+	case "daily", "weekly", "monthly", "yearly", "weekdays":
+		return tr(rule)
+	}
+	return rule
+}
+
 // ── Translation tables ──────────────────────────────────────────────────────
 //
 // Keyed by English source string. Keep entries grouped by where they appear so

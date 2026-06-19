@@ -325,6 +325,32 @@ func TestParseQuickAdd(t *testing.T) {
 	}
 }
 
+func TestParseQuickAddRecurrence(t *testing.T) {
+	cases := []struct {
+		input     string
+		wantTitle string
+		wantRecur string
+	}{
+		{"Water plants r:daily", "Water plants", "daily"},
+		{"Standup r:weekly @team", "Standup", "weekly"},
+		{"Rent recur:monthly", "Rent", "monthly"},
+		{"Birthday card r:yearly", "Birthday card", "yearly"},
+		{"Run r:weekdays", "Run", "weekdays"},
+		{"Backup r:3d", "Backup", "every:3d"},
+		{"Bogus r:every-other-tuesday", "Bogus r:every-other-tuesday", ""},
+		{"Plain task", "Plain task", ""},
+	}
+	for _, c := range cases {
+		got := parseQuickAdd(c.input)
+		if got.title != c.wantTitle {
+			t.Errorf("input %q: title = %q, want %q", c.input, got.title, c.wantTitle)
+		}
+		if got.recurrence != c.wantRecur {
+			t.Errorf("input %q: recurrence = %q, want %q", c.input, got.recurrence, c.wantRecur)
+		}
+	}
+}
+
 // ── nameColWidth ──────────────────────────────────────────────────────────────
 
 func TestNameColWidth(t *testing.T) {

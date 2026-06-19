@@ -95,6 +95,38 @@ func TestSelectSortedTags(t *testing.T) {
 	}
 }
 
+// Regression: subtasks must not feed Tags-tab counts, because pressing Enter
+// on a row switches to the Tasks tab whose list (selectActiveDone) excludes
+// subtasks — counting them would leave rows pointing at empty results.
+func TestSelectSortedTagsSkipsSubtasks(t *testing.T) {
+	parent := mkTodo("p", "parent", todo.Pending)
+	parent.Tags = []string{"work"}
+	untaggedSub := mkTodo("s1", "untagged sub", todo.Pending)
+	untaggedSub.ParentID = "p"
+	subOnlyTag := mkTodo("s2", "sub-only tag", todo.Pending)
+	subOnlyTag.ParentID = "p"
+	subOnlyTag.Tags = []string{"orphan"}
+
+	sorted, ut, ud := selectSortedTags(
+		[]todo.Todo{parent, untaggedSub, subOnlyTag}, tagSortAlpha, nil)
+	if ut != 0 || ud != 0 {
+		t.Fatalf("untagged total=%d done=%d, want 0/0 (subtask must not count)", ut, ud)
+	}
+	for _, tg := range sorted {
+		if tg == "orphan" {
+			t.Fatalf("subtask-only tag surfaced in Tags tab: %v", sorted)
+		}
+	}
+
+	stats := computeTagStats([]todo.Todo{parent, untaggedSub, subOnlyTag})
+	if _, ok := stats["orphan"]; ok {
+		t.Errorf("computeTagStats included subtask-only tag: %v", stats)
+	}
+	if stats["work"].total != 1 {
+		t.Errorf("work total = %d, want 1 (subtask must not count)", stats["work"].total)
+	}
+}
+
 func TestSelectProjects(t *testing.T) {
 	a := mkTodo("a", "x", todo.Pending)
 	a.Project = "zeta"
@@ -184,6 +216,57 @@ func TestSubtaskDerivation(t *testing.T) {
 	if m.subtaskCount("none") != 0 || len(m.subtaskIDs("none")) != 0 {
 		t.Fatalf("a parent with no children should give count 0 / no ids")
 	}
+}
+
+// visibleActiveTasks interleaves the subtasks of an expanded parent inline
+// with the active list, so the Tasks-tab cursor can land on them. Collapsed
+// parents must hide their subtasks.
+func TestVisibleActiveTasksFlatten(t *testing.T) {
+	now := time.Now()
+	parent := mkTodo("p", "parent", todo.Pending)
+	parent.CreatedAt = now
+	c1 := mkTodo("c1", "child one", todo.Pending)
+	c1.ParentID = "p"
+	c1.CreatedAt = now.Add(1 * time.Minute)
+	c2 := mkTodo("c2", "child two", todo.Pending)
+	c2.ParentID = "p"
+	c2.CreatedAt = now.Add(2 * time.Minute)
+	other := mkTodo("o", "unrelated", todo.Pending)
+	other.CreatedAt = now.Add(3 * time.Minute)
+
+	m := newTestModel()
+	for _, td := range []todo.Todo{parent, c1, c2, other} {
+		m.add(td)
+	}
+	m.refreshCaches()
+
+	// Collapsed → only top-level rows.
+	got := idsOf(m.visibleActiveTasks())
+	if len(got) != 2 || got[0] != "p" || got[1] != "o" {
+		t.Fatalf("collapsed visible = %v, want [p o]", got)
+	}
+
+	// Expanded → subtasks interleaved beneath their parent.
+	m.expandedTasks["p"] = true
+	got = idsOf(m.visibleActiveTasks())
+	if len(got) != 4 || got[0] != "p" || got[1] != "c1" || got[2] != "c2" || got[3] != "o" {
+		t.Fatalf("expanded visible = %v, want [p c1 c2 o]", got)
+	}
+
+	// currentTodo follows the flat cursor onto a subtask.
+	m.tab = tabTasks
+	m.cursor = 2
+	if cur := m.currentTodo(); cur == nil || cur.ID != "c2" {
+		t.Fatalf("currentTodo at flat cursor=2 = %v, want c2", cur)
+	}
+}
+
+func idsOf(ts []todo.Todo) []string {
+	out := make([]string, len(ts))
+	for i, t := range ts {
+		out[i] = t.ID
+	}
+	return out
 }
 
 func TestTodoMatchesSearch(t *testing.T) {

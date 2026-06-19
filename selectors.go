@@ -68,6 +68,13 @@ func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode tas
 func selectSortedTags(todos []todo.Todo, mode tagSortMode, stats map[string]tagStats) (sorted []string, untaggedTotal, untaggedDone int) {
 	seen := make(map[string]struct{}, len(stats))
 	for i := range todos {
+		// The Tasks tab list excludes subtasks, so counting them here
+		// would inflate row counts (or surface a tag only present on
+		// subtasks) and leave pressing Enter on the row showing an
+		// empty list.
+		if todos[i].ParentID != "" {
+			continue
+		}
 		if len(todos[i].Tags) == 0 {
 			untaggedTotal++
 			if todos[i].Status == todo.Done {

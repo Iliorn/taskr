@@ -634,28 +634,33 @@ func (m model) renderTaskList() string {
 	cols := taskListCols(m.termWidth, false, contentMax)
 	renderListHeader(b, m.termWidth, m.cursor, len(active), false, m.taskSort, cols)
 
+	visible := m.visibleActiveTasks()
+
 	maxVisible := m.estimateListHeight()
 	startIdx := m.listOffset
 	endIdx := startIdx + maxVisible
-	if endIdx > len(active) {
-		endIdx = len(active)
+	if endIdx > len(visible) {
+		endIdx = len(visible)
 	}
-	if startIdx > len(active) {
+	if startIdx > len(visible) {
 		startIdx = 0
 	}
 
 	for i := startIdx; i < endIdx; i++ {
-		t := active[i]
-		b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, m.pane == paneList, overdueSet, cols))
-		if subIDs := m.subtaskIDs(t.ID); len(subIDs) > 0 && m.expandedTasks[t.ID] {
-			for j, subID := range subIDs {
-				sub := m.findTodoByID(subID)
-				if sub == nil {
-					continue
-				}
-				b.WriteString(m.renderSubtaskLine(sub, j, len(subIDs), cols))
+		t := visible[i]
+		if t.ParentID == "" {
+			b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, m.pane == paneList, overdueSet, cols))
+			continue
+		}
+		siblings := m.subtaskIDs(t.ParentID)
+		subIdx := 0
+		for j, id := range siblings {
+			if id == t.ID {
+				subIdx = j
+				break
 			}
 		}
+		b.WriteString(m.renderSubtaskLine(&t, subIdx, len(siblings), cols, i, m.cursor, m.pane == paneList))
 	}
 	return b.String()
 }
@@ -750,19 +755,43 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 		tagsStr + "\n"
 }
 
-func (m model) renderSubtaskLine(sub *todo.Todo, index, total int, cols listCols) string {
+func (m model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols listCols, flatIndex, cursor int, active bool) string {
 	connector := "├"
-	if index == total-1 {
+	if subIndex == subTotal-1 {
 		connector = "└"
 	}
 	titleW := cols.titleW - 4
 	if titleW < 10 {
 		titleW = 10
 	}
-	if sub.Status == todo.Done {
-		return dimStyle.Render("     "+connector+" [") + checkDoneStyle.Render("✓") + dimStyle.Render("] "+truncate(sub.Title, titleW)) + "\n"
+	title := truncate(sub.Title, titleW)
+	if sub.IsTimerRunning() {
+		title = "⏱ " + title
 	}
-	return dimStyle.Render("     "+connector+" [ ] "+truncate(sub.Title, titleW)) + "\n"
+	cursorStr := "  "
+	selected := flatIndex == cursor && active
+	if selected {
+		cursorStr = "▶ "
+	}
+	check := "[ ]"
+	if sub.Status == todo.Done {
+		check = "[✓]"
+	} else if len(sub.TimeEntries) > 0 {
+		check = "[>]"
+	}
+	body := "   " + connector + " " + check + " " + title
+
+	if selected {
+		return selectedStyle.Render(cursorStr+body) + "\n"
+	}
+	if sub.Status == todo.Done {
+		// Keep ✓ in checkDoneStyle so the done marker stays legible
+		// against the surrounding dim row.
+		return dimStyle.Render(cursorStr+"   "+connector+" [") +
+			checkDoneStyle.Render("✓") +
+			dimStyle.Render("] "+title) + "\n"
+	}
+	return dimStyle.Render(cursorStr+body) + "\n"
 }
 
 func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
@@ -792,6 +821,9 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	}
 	if t.Notes != "" {
 		title += " ¶"
+	}
+	if t.IsRecurring() {
+		title += " ↻"
 	}
 	if t.IsTimerRunning() {
 		title = "⏱ " + title
@@ -946,7 +978,7 @@ func (m model) renderSettingsList() string {
 		tr("Deadline pressure"),
 		tr("Priority focus"),
 		tr("Momentum bias"),
-		tr("Aging"),
+		tr("Aging increases score"),
 		tr("Theme"),
 		tr("Language"),
 		tr("Version"),

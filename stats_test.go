@@ -203,6 +203,92 @@ func TestStatsHistogram(t *testing.T) {
 	}
 }
 
+// When a single bucket exceeds chartH, the histogram doubles its scale so a
+// busy day collapses to half-height rather than instantly capping with `+`.
+// Odd counts render with a half-block (▄) on top so 9 stays visibly shorter
+// than 10; only past 2×chartH does `+` re-appear.
+func TestStatsHistogramScalesBeforeOverflow(t *testing.T) {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, now.Location())
+	mk := func(n int) []todo.Todo {
+		var todos []todo.Todo
+		for i := 0; i < n; i++ {
+			td := todo.New(fmt.Sprintf("done %d", i))
+			td.Status = todo.Done
+			td.CompletedAt = today
+			todos = append(todos, td)
+		}
+		return todos
+	}
+	render := func(todos []todo.Todo) string {
+		m := newTagModel(todos...)
+		m.termWidth = 100
+		m.termHeight = 30
+		m.tab = tabStats
+		m.statsRange = statsRange7Days
+		m.refreshCaches()
+		return m.renderStatsDetail()
+	}
+
+	// 9 tasks at scale=2 → 4 paired-half rows (▀) plus a ▄ cap on the 5th
+	// row (the 9th task), no `+`.
+	out := render(mk(9))
+	if !strings.Contains(out, "▄") {
+		t.Errorf("9 tasks should render ▄ for the odd top task, got:\n%s", out)
+	}
+	if !strings.Contains(out, "▀") {
+		t.Errorf("9 tasks should render ▀ for stacked-half-block rows, got:\n%s", out)
+	}
+	if strings.Contains(out, "+") {
+		t.Errorf("scale=2 should fit 9 tasks without `+`, got:\n%s", out)
+	}
+
+	// 10 tasks: 5 full ▀-rows (top/bottom both filled), still no `+`.
+	out10 := render(mk(10))
+	if strings.Contains(out10, "+") {
+		t.Errorf("10 tasks should fit without `+`, got:\n%s", out10)
+	}
+	if strings.Contains(out10, "▄") {
+		t.Errorf("10 tasks is even, no orphan ▄, got:\n%s", out10)
+	}
+
+	// 12 tasks: scale=2 still overflows chartH=5, so `+` reappears.
+	out2 := render(mk(12))
+	if !strings.Contains(out2, "+") {
+		t.Errorf("12 tasks should overflow scale=2, expected `+`, got:\n%s", out2)
+	}
+}
+
+// Regression: tasks stored UTC (as SQLite does) and rendered with a frameTime
+// in a +N timezone were being skipped from today's bucket because the bucket
+// day was reconstructed from CompletedAt's UTC date parts, putting "midnight"
+// past local midnight and tripping the `d.After(today)` guard.
+func TestStatsHistogramTimezoneBucket(t *testing.T) {
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		t.Skip("Asia/Tokyo tzdata not available: " + err.Error())
+	}
+	td := todo.New("done in Tokyo")
+	td.Status = todo.Done
+	td.CompletedAt = time.Date(2026, 6, 18, 10, 0, 0, 0, tokyo).UTC()
+
+	m := newTagModel(td)
+	m.termWidth = 100
+	m.termHeight = 44
+	m.tab = tabStats
+	m.statsRange = statsRange7Days
+	m.refreshCaches()
+	m.frameTime = time.Date(2026, 6, 18, 12, 0, 0, 0, tokyo)
+
+	out := m.renderStatsDetail()
+	if strings.Contains(out, "No completions in this range") {
+		t.Fatalf("today's completion (stored UTC) dropped from 7-day window:\n%s", out)
+	}
+	if !strings.Contains(out, "1 done") {
+		t.Errorf("expected '1 done' in header, got:\n%s", out)
+	}
+}
+
 // TestStatsHistogramOverflow checks that a bar with more tasks than the height
 // limit is capped with a "+" overflow marker.
 func TestStatsHistogramOverflow(t *testing.T) {

@@ -290,6 +290,11 @@ func computeTagStats(todos []todo.Todo) map[string]tagStats {
 	stats := make(map[string]tagStats, 16)
 	for i := range todos {
 		t := &todos[i]
+		// The Tasks tab list is top-level only, so counting subtasks
+		// here would inflate a tag row past what pressing Enter shows.
+		if t.ParentID != "" {
+			continue
+		}
 		var tracked time.Duration
 		for _, te := range t.TimeEntries {
 			tracked += te.Duration()
@@ -316,12 +321,13 @@ func computeTagStats(todos []todo.Todo) map[string]tagStats {
 // ── Quick-add parsing ─────────────────────────────────────────────────────────
 
 type parsedTask struct {
-	title    string
-	tags     []string
-	project  string
-	dueDate  time.Time
-	priority todo.Priority
-	size     todo.Size
+	title      string
+	tags       []string
+	project    string
+	dueDate    time.Time
+	priority   todo.Priority
+	size       todo.Size
+	recurrence string
 }
 
 func parseQuickAdd(input string) parsedTask {
@@ -366,6 +372,13 @@ func parseQuickAdd(input string) parsedTask {
 			case "l", "large":
 				result.size = todo.SizeLarge
 			default:
+				titleWords = append(titleWords, word)
+			}
+		case strings.HasPrefix(lower, "r:") || strings.HasPrefix(lower, "recur:"):
+			spec := strings.TrimPrefix(strings.TrimPrefix(lower, "recur:"), "r:")
+			if canonical, ok := todo.ParseRecurrence(spec); ok && canonical != "" {
+				result.recurrence = canonical
+			} else {
 				titleWords = append(titleWords, word)
 			}
 		default:

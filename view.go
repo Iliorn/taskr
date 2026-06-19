@@ -517,6 +517,7 @@ func (m model) renderHelpFullscreen() string {
 			{"n", tr("edit notes (opens $EDITOR)")},
 			{"a", tr("add tag / dep / comment / learning / subtask")},
 			{"d", tr("toggle subtask done")},
+			{"t", tr("start/stop subtask timer")},
 			{"x", tr("remove field / delete subtask")},
 		}},
 		{tr("Tags & Projects"), [][2]string{
@@ -600,9 +601,12 @@ func (m model) renderHelpFullscreen() string {
 
 // statsCell is one position in the activity histogram grid. gi is the gradient
 // index, or -1 for dim/structural glyphs (baseline, separators, labels).
+// bg is an optional second gradient index for half-block cells (▀ ▄), where
+// the cell shows two stacked colours; -1 means no background colour.
 type statsCell struct {
 	ch rune
 	gi int
+	bg int
 }
 
 func (m model) renderStatsDetail() string {
@@ -652,8 +656,12 @@ func (m model) renderStatsDetail() string {
 		if t.Status != todo.Done || t.CompletedAt.IsZero() || t.ParentID != "" {
 			continue
 		}
-		d := time.Date(t.CompletedAt.Year(), t.CompletedAt.Month(), t.CompletedAt.Day(),
-			0, 0, 0, 0, t.CompletedAt.Location())
+		// CompletedAt comes back from storage in UTC; resolve the day in
+		// the user's local zone (same zone as `today`/`first`), otherwise
+		// a task closed in the morning local-time can land in tomorrow's
+		// UTC date and get skipped as "after today".
+		ca := t.CompletedAt.In(now.Location())
+		d := time.Date(ca.Year(), ca.Month(), ca.Day(), 0, 0, 0, 0, now.Location())
 		if d.Before(first) || d.After(today) {
 			continue
 		}
@@ -685,6 +693,16 @@ func (m model) renderStatsDetail() string {
 		b.WriteString(headerLeft + "\n")
 		b.WriteString("  " + dimStyle.Render(tr("No completions in this range.")) + "\n")
 		return b.String()
+	}
+	// Stretch the vertical scale when any bucket overflows chartH, so a busy
+	// day collapses to half-height (with a ▄ cap for odd counts) instead of
+	// capping immediately with a `+`. One step (×2) keeps the chart honest.
+	blockScale := 1
+	for _, bk := range buckets {
+		if bk.count > chartH {
+			blockScale = 2
+			break
+		}
 	}
 	swatch := statsGradient[0].Render("▆") + statsGradient[gradLen/2].Render("▆") + statsGradient[gradLen-1].Render("▆")
 	legend := swatch + dimStyle.Render(tr(": 1 block = 1 completed task"))
@@ -727,35 +745,77 @@ func (m model) renderStatsDetail() string {
 	for r := range grid {
 		grid[r] = make([]statsCell, chartW)
 		for c := range grid[r] {
-			grid[r][c] = statsCell{' ', -1}
+			grid[r][c] = statsCell{' ', -1, -1}
 		}
 	}
 	barStart := func(k int) int { return k * slot }
+	gradIdx := func(task int) int {
+		if task >= gradLen {
+			return gradLen - 1
+		}
+		return task
+	}
 
-	// Each block is one completed task, stacked bottom-up; the gradient steps one
-	// colour per task. A bar taller than the limit caps with a "+" overflow row.
+	// At scale=1 each task is a full row (█). At scale=2 (any bucket > chartH)
+	// the bars halve in row-height: each row holds two tasks via ▀/▄ half
+	// blocks (fg=top task, bg=bottom task), so up to 2*chartH = 10 tasks fit
+	// before `+` kicks in.
 	for k := 0; k < n; k++ {
 		start := barStart(k)
 		cnt := buckets[k].count
-		for r := 0; r < chartH && r < cnt; r++ { // r = 0 is the bottom block
-			ch := '█'
-			gi := r
-			if cnt > chartH && r == chartH-1 {
-				ch = '+' // more tasks continue above the limit
+
+		if blockScale == 1 {
+			for r := 0; r < chartH && r < cnt; r++ {
+				ch := '█'
+				gi := gradIdx(r)
+				if cnt > chartH && r == chartH-1 {
+					ch = '+'
+				}
+				rowIdx := chartH - 1 - r
+				for c := 0; c < bw; c++ {
+					grid[rowIdx][start+c] = statsCell{ch, gi, -1}
+				}
 			}
-			if gi >= gradLen {
-				gi = gradLen - 1
-			}
+			continue
+		}
+
+		overflow := cnt > 2*chartH
+		for r := 0; r < chartH; r++ { // r = 0 is the bottom row
+			bot := 2 * r       // bottom-half task index
+			top := 2*r + 1     // top-half task index
 			rowIdx := chartH - 1 - r
+			var ch rune
+			gi, bg := -1, -1
+			switch {
+			case overflow && r == chartH-1:
+				ch = '+'
+				gi = gradIdx(top)
+			case cnt > top: // both halves present
+				botGi := gradIdx(bot)
+				topGi := gradIdx(top)
+				if botGi == topGi {
+					ch = '█'
+					gi = topGi
+				} else {
+					ch = '▀' // upper half: fg = top, bg = bottom
+					gi = topGi
+					bg = botGi
+				}
+			case cnt > bot: // only bottom half
+				ch = '▄' // lower half: fg = bottom
+				gi = gradIdx(bot)
+			default:
+				continue
+			}
 			for c := 0; c < bw; c++ {
-				grid[rowIdx][start+c] = statsCell{ch, gi}
+				grid[rowIdx][start+c] = statsCell{ch, gi, bg}
 			}
 		}
 	}
 
 	// Baseline.
 	for c := 0; c < chartW; c++ {
-		grid[chartH][c] = statsCell{'─', -1}
+		grid[chartH][c] = statsCell{'─', -1, -1}
 	}
 
 	// Dotted separators between weeks (30-day view).
@@ -764,7 +824,7 @@ func (m model) renderStatsDetail() string {
 			if buckets[k+1].start.Weekday() == time.Monday {
 				col := barStart(k) + bw // the gap column after bar k
 				for r := 0; r < rows; r++ {
-					grid[r][col] = statsCell{'·', -1}
+					grid[r][col] = statsCell{'·', -1, -1}
 				}
 			}
 		}
@@ -780,7 +840,7 @@ func (m model) renderStatsDetail() string {
 			_, wk := buckets[k].start.ISOWeek()
 			for j, ch := range []rune(fmt.Sprintf("w%d", wk)) {
 				if c := barStart(k) + j; c < chartW {
-					label[c] = statsCell{ch, -2}
+					label[c] = statsCell{ch, -2, -1}
 				}
 			}
 		}
@@ -805,7 +865,7 @@ func (m model) renderStatsDetail() string {
 			}
 			for j, ch := range lbl {
 				if c := start + j; c >= 0 && c < chartW {
-					label[c] = statsCell{ch, -2}
+					label[c] = statsCell{ch, -2, -1}
 				}
 			}
 		}
@@ -819,7 +879,10 @@ func (m model) renderStatsDetail() string {
 }
 
 // renderCellRow renders a histogram grid row, grouping consecutive cells that
-// share a style into one Render call and dropping trailing blanks.
+// share a style into one Render call and dropping trailing blanks. When a
+// cell has bg >= 0, the segment is rendered with that secondary colour as the
+// terminal background — used by ▀ half-blocks to stack two task colours in
+// the same cell.
 func renderCellRow(cells []statsCell) string {
 	last := -1
 	for c := range cells {
@@ -833,8 +896,9 @@ func renderCellRow(cells []statsCell) string {
 	var sb strings.Builder
 	for c := 0; c <= last; {
 		g := cells[c].gi
+		bg := cells[c].bg
 		start := c
-		for c <= last && cells[c].gi == g {
+		for c <= last && cells[c].gi == g && cells[c].bg == bg {
 			c++
 		}
 		seg := make([]rune, 0, c-start)
@@ -847,7 +911,14 @@ func renderCellRow(cells []statsCell) string {
 		case g < 0:
 			sb.WriteString(dimStyle.Render(string(seg)))
 		default:
-			sb.WriteString(statsGradient[g].Render(string(seg)))
+			if bg >= 0 && bg < len(statsGradient) {
+				style := lipgloss.NewStyle().
+					Foreground(statsGradient[g].GetForeground()).
+					Background(statsGradient[bg].GetForeground())
+				sb.WriteString(style.Render(string(seg)))
+			} else {
+				sb.WriteString(statsGradient[g].Render(string(seg)))
+			}
 		}
 	}
 	return sb.String()
@@ -931,6 +1002,11 @@ func (m model) buildTagDetailLines() []string {
 	active, done, overdue := 0, 0, 0
 	cooccur := make(map[string]int)
 	for id, t := range m.tasks {
+		// Mirror selectActiveDone: the Tasks tab list is top-level
+		// only, so the detail count must not include subtasks.
+		if t.ParentID != "" {
+			continue
+		}
 		match := false
 		if untagged {
 			match = len(t.Tags) == 0
@@ -1124,17 +1200,9 @@ func (m model) renderTabs(avail int) string {
 		tabStatsActiveStyle,
 		tabSettingsActiveStyle,
 	}
-	activeLabels := [numTabs]lipgloss.Style{
-		tabTasksLabelStyle,
-		tabCalendarLabelStyle,
-		tabProjectsLabelStyle,
-		tabTagsLabelStyle,
-		tabLearningsLabelStyle,
-		tabStatsLabelStyle,
-		tabSettingsLabelStyle,
-	}
-	// Labels render without the legacy "N:" separator — the active number is
-	// shown in a colored block and the label follows in the tab's accent color.
+	// The selected tab renders as a solid colored pill. Unselected tabs that
+	// have a label render the number in the same colored block and the label
+	// in muted style, so the per-tab color stays visible across the strip.
 	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"), tr("4 Tags"), tr("5 Learnings"), tr("6 Stats"), tr("7 Settings")}
 	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7"}
 
@@ -1169,16 +1237,16 @@ func (m model) renderTabs(avail int) string {
 	var parts [numTabs]string
 	for i := range names {
 		num, label, hasLabel := strings.Cut(names[i], " ")
-		if tab(i) == m.tab {
-			// Active tab: colored block around the number, label follows in
-			// the tab's color so the two read as one unit.
-			rendered := activeStyles[i].Render(num)
-			if hasLabel {
-				rendered += activeLabels[i].Render(" " + label)
-			}
-			parts[i] = rendered
-		} else {
-			parts[i] = tabInactiveStyle.Render(names[i])
+		switch {
+		case tab(i) == m.tab:
+			// Selected tab: solid colored pill over the whole name.
+			parts[i] = activeStyles[i].Render(names[i])
+		case hasLabel:
+			// Unselected with label: colored number block + muted label.
+			parts[i] = activeStyles[i].Render(num) + tabInactiveLabelStyle.Render(" "+label)
+		default:
+			// Unselected, num-only (narrow): muted block, no color noise.
+			parts[i] = tabInactiveStyle.Render(num)
 		}
 	}
 	return strings.Join(parts[:], " ")

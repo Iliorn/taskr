@@ -182,6 +182,56 @@ func TestDKeyTogglesDone(t *testing.T) {
 	}
 }
 
+// ── Recurrence: spawn on done ────────────────────────────────────────────────
+
+func TestDKeySpawnsNextRecurrence(t *testing.T) {
+	task := todo.New("daily standup")
+	task.Recurrence = "daily"
+	m := modelWithTasks(t, task)
+
+	m = sendKey(t, m, "d")
+
+	// Original should be Done and stay in the store.
+	orig := m.get(task.ID)
+	if orig == nil || orig.Status != todo.Done {
+		t.Fatalf("original: got %+v, want Done", orig)
+	}
+
+	// A second task should now exist with the same title, still pending,
+	// and carrying the same recurrence rule for the next cycle.
+	var spawned *todo.Todo
+	for id, candidate := range m.tasks {
+		if id != task.ID && candidate.Title == task.Title {
+			spawned = candidate
+			break
+		}
+	}
+	if spawned == nil {
+		t.Fatal("expected a spawned next instance, found none")
+	}
+	if spawned.Status != todo.Pending {
+		t.Errorf("spawned status = %v, want Pending", spawned.Status)
+	}
+	if spawned.Recurrence != "daily" {
+		t.Errorf("spawned recurrence = %q, want daily", spawned.Recurrence)
+	}
+	if spawned.DueDate.IsZero() {
+		t.Error("spawned task should have a due date set from the recurrence rule")
+	}
+}
+
+func TestDKeyOnNonRecurringDoesNotSpawn(t *testing.T) {
+	task := todo.New("one-shot")
+	m := modelWithTasks(t, task)
+	before := len(m.tasks)
+
+	m = sendKey(t, m, "d")
+
+	if len(m.tasks) != before {
+		t.Errorf("task count = %d, want %d (no spawn expected)", len(m.tasks), before)
+	}
+}
+
 // ── Priority cycle ───────────────────────────────────────────────────────────
 
 func TestPKeyCyclesPriority(t *testing.T) {

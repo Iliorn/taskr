@@ -765,3 +765,102 @@ func TestInheritContextFrom(t *testing.T) {
 			orphan.Project, orphan.Tags)
 	}
 }
+
+func TestParseRecurrence(t *testing.T) {
+	cases := []struct {
+		in     string
+		want   string
+		wantOK bool
+	}{
+		{"", "", true},
+		{"daily", "daily", true},
+		{"Daily ", "daily", true},
+		{"day", "daily", true},
+		{"weekly", "weekly", true},
+		{"week", "weekly", true},
+		{"monthly", "monthly", true},
+		{"yearly", "yearly", true},
+		{"annual", "yearly", true},
+		{"weekdays", "weekdays", true},
+		{"weekday", "weekdays", true},
+		{"every:3d", "every:3d", true},
+		{"every:2w", "every:2w", true},
+		{"every:6m", "every:6m", true},
+		{"every:1d", "daily", true}, // collapsed to canonical
+		{"every:1w", "weekly", true},
+		{"every:1m", "monthly", true},
+		{"every:1y", "yearly", true},
+		{"3d", "every:3d", true}, // shorthand
+		{"2w", "every:2w", true},
+		{"every:0d", "", false},
+		{"every:d", "", false},
+		{"every:3x", "", false},
+		{"nonsense", "", false},
+	}
+	for _, c := range cases {
+		got, ok := ParseRecurrence(c.in)
+		if got != c.want || ok != c.wantOK {
+			t.Errorf("ParseRecurrence(%q) = (%q,%v), want (%q,%v)",
+				c.in, got, ok, c.want, c.wantOK)
+		}
+	}
+}
+
+func TestNextRecurrenceFrom(t *testing.T) {
+	base := time.Date(2026, 6, 15, 9, 0, 0, 0, time.UTC) // Monday
+	cases := []struct {
+		rule string
+		want time.Time
+	}{
+		{"daily", time.Date(2026, 6, 16, 9, 0, 0, 0, time.UTC)},
+		{"weekly", time.Date(2026, 6, 22, 9, 0, 0, 0, time.UTC)},
+		{"monthly", time.Date(2026, 7, 15, 9, 0, 0, 0, time.UTC)},
+		{"yearly", time.Date(2027, 6, 15, 9, 0, 0, 0, time.UTC)},
+		{"every:3d", time.Date(2026, 6, 18, 9, 0, 0, 0, time.UTC)},
+		{"every:2w", time.Date(2026, 6, 29, 9, 0, 0, 0, time.UTC)},
+		{"every:2m", time.Date(2026, 8, 15, 9, 0, 0, 0, time.UTC)},
+		{"weekdays", time.Date(2026, 6, 16, 9, 0, 0, 0, time.UTC)}, // Mon → Tue
+	}
+	for _, c := range cases {
+		got, ok := NextRecurrenceFrom(c.rule, base)
+		if !ok || !got.Equal(c.want) {
+			t.Errorf("NextRecurrenceFrom(%q, base) = (%v,%v), want (%v,true)",
+				c.rule, got, ok, c.want)
+		}
+	}
+
+	// Friday → Monday for weekdays.
+	fri := time.Date(2026, 6, 19, 9, 0, 0, 0, time.UTC)
+	if got, ok := NextRecurrenceFrom("weekdays", fri); !ok ||
+		!got.Equal(time.Date(2026, 6, 22, 9, 0, 0, 0, time.UTC)) {
+		t.Errorf("weekdays from Friday = %v, want next Monday", got)
+	}
+
+	// Empty rule and zero base return false.
+	if _, ok := NextRecurrenceFrom("", base); ok {
+		t.Error("empty rule should return false")
+	}
+	if _, ok := NextRecurrenceFrom("daily", time.Time{}); ok {
+		t.Error("zero base should return false")
+	}
+	if _, ok := NextRecurrenceFrom("garbage", base); ok {
+		t.Error("garbage rule should return false")
+	}
+}
+
+func TestRecurrenceMutators(t *testing.T) {
+	td := New("recurring")
+	if td.IsRecurring() {
+		t.Error("new task should not be recurring")
+	}
+	td.SetRecurrence("daily")
+	if !td.IsRecurring() || td.Recurrence != "daily" {
+		t.Errorf("after SetRecurrence: IsRecurring=%v, Recurrence=%q",
+			td.IsRecurring(), td.Recurrence)
+	}
+	td.ClearRecurrence()
+	if td.IsRecurring() || td.Recurrence != "" {
+		t.Errorf("after ClearRecurrence: IsRecurring=%v, Recurrence=%q",
+			td.IsRecurring(), td.Recurrence)
+	}
+}

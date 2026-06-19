@@ -491,7 +491,15 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cycleLang(-1)
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil {
-					delete(m.expandedTasks, t.ID)
+					// On a subtask: collapse the containing parent and
+					// return the cursor to it, so ← always "moves out"
+					// of the unfolded region.
+					parentID := t.ID
+					if t.ParentID != "" {
+						parentID = t.ParentID
+					}
+					delete(m.expandedTasks, parentID)
+					m.followTask(parentID)
 				}
 			}
 
@@ -511,8 +519,15 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.calendar.selected = startOfDay(time.Now())
 				m.calendar.entryCursor = 0
 				m.calendar.focusTimeline = false
-			} else if m.tab == tabTasks && !m.showHistory {
+			} else if m.tab == tabTasks {
 				if t := m.currentTodo(); t != nil {
+					// History view: only allow stopping a running
+					// timer — a done task shouldn't accrue new tracked
+					// time. Recovery path for tasks marked done while
+					// the timer was still running.
+					if m.showHistory && !t.IsTimerRunning() {
+						return m, nil
+					}
 					if e := t.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
 						m.openIdlePrompt(t)
 						return m, nil
@@ -586,7 +601,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.tab == tabTasks && !m.showHistory {
 				m.mode = modeInput
 				m.textInput.SetValue("")
-				m.textInput.Placeholder = tr("New task (use #tag due:date p:high @project)...")
+				m.textInput.Placeholder = tr("New task (use #tag due:date p:high @project r:daily)...")
 				m.textInput.Focus()
 				return m, textinput.Blink
 			}
@@ -594,9 +609,29 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "d":
 			if m.tab == tabTasks {
 				if t := m.currentTodo(); t != nil {
+					// Closing a task while its timer is running would
+					// leave a dangling open entry — and the runningTimers
+					// index would go stale. Stop first, then toggle.
+					// Mirrors the CLI done path.
+					if t.Status == todo.Pending && t.IsTimerRunning() {
+						m.stopTimer(t.ID)
+					}
+					isSub := t.ParentID != ""
+					wasPending := t.Status == todo.Pending
 					t.Toggle()
-					m.markModified(t.ID)
-					if m.cursor > 0 {
+					ids := []string{t.ID}
+					if wasPending && t.IsRecurring() {
+						if newID := m.spawnNextRecurrence(t); newID != "" {
+							ids = append(ids, newID)
+						}
+					}
+					m.markModified(ids...)
+					// Subtasks stay visible after toggling (dimmed with a
+					// check), so the cursor stays on the same row. Parents
+					// disappear from active and the cursor would land on
+					// the next row — decrement so it lands on the previous
+					// one instead.
+					if !isSub && m.cursor > 0 {
 						m.cursor--
 					}
 				}
@@ -624,7 +659,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showHistory {
 			m.clampListOffset(len(m.cache.done))
 		} else {
-			m.clampListOffset(len(m.cache.active))
+			m.clampListOffset(len(m.visibleActiveTasks()))
 		}
 	case tabProjects:
 		m.clampListOffset(len(m.allProjectsForList()))
@@ -922,7 +957,7 @@ func (m *model) moveCursorDown() {
 				m.cursor++
 			}
 		} else {
-			if m.cursor < len(m.cache.active)-1 {
+			if m.cursor < len(m.visibleActiveTasks())-1 {
 				m.cursor++
 			}
 		}
@@ -1139,7 +1174,7 @@ func (m model) handleListDelete() (tea.Model, tea.Cmd) {
 	case tabTasks:
 		if t := m.currentTodo(); t != nil {
 			m.mode = modeConfirmDelete
-			m.pendingDelete = m.cursor
+			m.pendingDeleteID = t.ID
 			m.confirmMsg = fmt.Sprintf(tr("Delete '%s'? (y/n)"), t.Title)
 		}
 	case tabLearnings:
@@ -1225,8 +1260,40 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.detail.page == 1 && m.detail.field == fieldSubtasks {
 			if t := m.currentTodo(); t != nil {
 				if m.detail.subtaskCursor < m.subtaskCount(t.ID) {
-					subID := m.toggleSubtask(t.ID, m.detail.subtaskCursor)
-					m.markModified(subID)
+					ids := m.toggleSubtask(t.ID, m.detail.subtaskCursor)
+					if len(ids) > 0 {
+						m.markModified(ids...)
+					}
+				}
+			}
+		}
+
+	case "t":
+		// Toggle the timer on the selected subtask. Mirrors the
+		// top-level `t` handler: done + no running timer = no-op,
+		// idle threshold opens the runaway prompt, otherwise
+		// toggleTimer enforces single-task tracking.
+		if m.detail.page == 1 && m.detail.field == fieldSubtasks {
+			if parent := m.currentTodo(); parent != nil {
+				ids := m.subtaskIDs(parent.ID)
+				if m.detail.subtaskCursor < len(ids) {
+					sub := m.get(ids[m.detail.subtaskCursor])
+					if sub == nil {
+						return m, nil
+					}
+					if sub.Status == todo.Done && !sub.IsTimerRunning() {
+						return m, nil
+					}
+					if e := sub.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
+						m.openIdlePrompt(sub)
+						return m, nil
+					}
+					m.toggleTimer(sub)
+					m.markModified(sub.ID)
+					if !m.timerTickOn && m.anyTimerRunning() {
+						m.timerTickOn = true
+						return m, timerTick()
+					}
 				}
 			}
 		}
@@ -1246,8 +1313,10 @@ func (m *model) detailCursorUp() {
 		switch m.detail.field {
 		case fieldDueDate:
 			m.detail.field = fieldStartDate
-		case fieldPriority:
+		case fieldRecurrence:
 			m.detail.field = fieldDueDate
+		case fieldPriority:
+			m.detail.field = fieldRecurrence
 		case fieldSize:
 			m.detail.field = fieldPriority
 		case fieldProject:
@@ -1300,6 +1369,8 @@ func (m *model) detailCursorDown() {
 		case fieldStartDate:
 			m.detail.field = fieldDueDate
 		case fieldDueDate:
+			m.detail.field = fieldRecurrence
+		case fieldRecurrence:
 			m.detail.field = fieldPriority
 		case fieldPriority:
 			m.detail.field = fieldSize
@@ -1509,6 +1580,26 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		}
 		m.textInput.Placeholder = tr("Due date (dd-mm-yy, 'today', 'next week', '+3d')...")
 		m.textInput.Focus()
+	case fieldRecurrence:
+		// Cycle through canonical rules. Custom "every:Nd|w|m|y" rules are
+		// returned to "none" by the next press; users can re-enter the
+		// custom form via quick-add (r:Nd).
+		switch t.Recurrence {
+		case "":
+			t.SetRecurrence("daily")
+		case "daily":
+			t.SetRecurrence("weekly")
+		case "weekly":
+			t.SetRecurrence("monthly")
+		case "monthly":
+			t.SetRecurrence("yearly")
+		case "yearly":
+			t.SetRecurrence("weekdays")
+		default:
+			t.ClearRecurrence()
+		}
+		m.markModified(t.ID)
+		return m, nil
 	case fieldPriority:
 		switch t.Priority {
 		case todo.PriorityLow:

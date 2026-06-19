@@ -58,6 +58,13 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		}
 	}
 	b.WriteString(renderField(tr("Due date"), dueVal, fieldDueDate) + "\n")
+
+	recurVal := tr("not set")
+	if t.Recurrence != "" {
+		recurVal = "↻ " + trRecurrence(t.Recurrence)
+	}
+	b.WriteString(renderField(tr("Recurrence"), recurVal, fieldRecurrence) + "\n")
+
 	b.WriteString(renderField(tr("Priority"), t.Priority.Icon()+" "+trPriority(t.Priority), fieldPriority) + "\n")
 	b.WriteString(renderField(tr("Size"), trSize(t.Size), fieldSize) + "\n")
 
