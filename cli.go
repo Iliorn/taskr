@@ -1132,7 +1132,10 @@ func computeStats(todos []todo.Todo, now time.Time) statsSummary {
 			continue
 		}
 		s.Active++
-		if t.IsOverdue() {
+		// Bucket by DueDate against the passed-in `now` (via `today`) so
+		// stats are deterministic in tests — t.IsOverdue() reads the wall
+		// clock and would disagree once the calendar day rolls over.
+		if !t.DueDate.IsZero() && t.DueDate.Before(today) {
 			s.Overdue++
 		} else if !t.DueDate.IsZero() && t.DueDate.Before(tomorrow) {
 			s.DueToday++
