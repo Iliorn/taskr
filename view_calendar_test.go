@@ -12,22 +12,22 @@ func TestRenderTimelineSubSkipsBareEntries(t *testing.T) {
 	m := newTestModel()
 
 	bare := dayActivity{title: "bare"}
-	if got := m.renderTimelineSub(bare, 80); got != "" {
+	if got := m.renderTimelineSub(bare, 80, false); got != "" {
 		t.Errorf("bare entry: want empty sub line, got %q", got)
 	}
 
 	withProj := dayActivity{title: "x", project: "alpha"}
-	if got := m.renderTimelineSub(withProj, 80); !strings.Contains(got, "[alpha]") {
+	if got := m.renderTimelineSub(withProj, 80, false); !strings.Contains(got, "[alpha]") {
 		t.Errorf("project-only: missing [alpha] in %q", got)
 	}
 
 	withTags := dayActivity{title: "x", tags: []string{"a", "b"}}
-	if got := m.renderTimelineSub(withTags, 80); !strings.Contains(got, "#a") || !strings.Contains(got, "#b") {
+	if got := m.renderTimelineSub(withTags, 80, false); !strings.Contains(got, "#a") || !strings.Contains(got, "#b") {
 		t.Errorf("tag-only: missing tags in %q", got)
 	}
 
 	both := dayActivity{title: "x", project: "alpha", tags: []string{"a"}}
-	got := m.renderTimelineSub(both, 80)
+	got := m.renderTimelineSub(both, 80, false)
 	pIdx := strings.Index(got, "[alpha]")
 	tIdx := strings.Index(got, "#a")
 	if pIdx < 0 || tIdx < 0 || pIdx > tIdx {
@@ -45,7 +45,7 @@ func TestRenderTimelineSubDropsTagsOnNarrow(t *testing.T) {
 		project: "shorty",
 		tags:    []string{"a-very-long-tag-name-that-eats-the-width"},
 	}
-	got := m.renderTimelineSub(long, 16) // 16 - 4 indent = 12 avail
+	got := m.renderTimelineSub(long, 16, false) // 16 - 4 indent = 12 avail
 	if !strings.Contains(got, "[shorty]") {
 		t.Errorf("project should survive narrow width: %q", got)
 	}

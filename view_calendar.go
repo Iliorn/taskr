@@ -386,7 +386,8 @@ func (m model) renderTimelineLines(innerW, innerH int) []string {
 	}
 	for i := start; i < end; i++ {
 		lines = append(lines, m.renderTimelineEntry(acts[i], i, innerW))
-		if sub := m.renderTimelineSub(acts[i], innerW); sub != "" {
+		hasNext := i < end-1 || clippedBot
+		if sub := m.renderTimelineSub(acts[i], innerW, hasNext); sub != "" {
 			lines = append(lines, sub)
 		}
 		if i < end-1 {
@@ -463,12 +464,20 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 // Drops tags first, then project, if the combined plain width would overflow
 // innerW. Width is computed on the plain text and the result is styled at the
 // end, since truncating a styled string would slice into ANSI escapes.
-func (m model) renderTimelineSub(a dayActivity, innerW int) string {
+//
+// hasNext extends the vertical "│" connector into this sub-line's gutter so
+// the column doesn't visually break between an entry's body and the next
+// entry. When false (last visible entry, no clipped bot) the gutter is blank.
+func (m model) renderTimelineSub(a dayActivity, innerW int, hasNext bool) string {
 	if a.project == "" && len(a.tags) == 0 {
 		return ""
 	}
-	const indent = "    "
-	avail := innerW - len(indent)
+	const indentW = 4 // visual cells: "  │ " or "    "
+	indent := "    "
+	if hasNext {
+		indent = "  " + dimStyle.Render("│") + " "
+	}
+	avail := innerW - indentW
 	if avail < 4 {
 		return ""
 	}

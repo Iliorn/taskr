@@ -1017,6 +1017,24 @@ func cloneSubtreeResetInSlice(todos []todo.Todo, srcParentID, newParentID string
 	return out
 }
 
+// descendantIDsInSlice returns rootID followed by every transitive subtask
+// ID, walking ParentID over the loaded slice. CLI counterpart to the model's
+// descendantIDs — used by cliDelete so a CLI delete cascades like the TUI
+// instead of stranding subtasks with a parent_id pointing at a tombstone.
+func descendantIDsInSlice(todos []todo.Todo, rootID string) []string {
+	children := make(map[string][]string, len(todos))
+	for _, t := range todos {
+		if t.ParentID != "" {
+			children[t.ParentID] = append(children[t.ParentID], t.ID)
+		}
+	}
+	out := []string{rootID}
+	for i := 0; i < len(out); i++ {
+		out = append(out, children[out[i]]...)
+	}
+	return out
+}
+
 // extendAncestorsDueInSlice walks up from child via ParentID, bumping each
 // ancestor's DueDate to at least match the child's. Pure CLI counterpart to
 // the model's extendParentDueIfNeeded — needs the loaded slice because the
@@ -1070,12 +1088,23 @@ func cliDelete(args []string) int {
 		return 2
 	}
 	// Soft delete via the Repository contract — the row is tombstoned and
-	// will not load again. Matches the TUI's delete semantics.
-	if err := repo.Save(nil, []string{t.ID}); err != nil {
+	// will not load again. Matches the TUI's delete semantics: cascade to
+	// every descendant so subtasks don't get stranded with a parent_id
+	// pointing at a tombstone.
+	ids := descendantIDsInSlice(todos, t.ID)
+	if err := repo.Save(nil, ids); err != nil {
 		fmt.Fprintf(os.Stderr, "delete: %v\n", err)
 		return 1
 	}
-	fmt.Printf("deleted %s  %s\n", t.ID[:8], t.Title)
+	if extra := len(ids) - 1; extra > 0 {
+		noun := "subtask"
+		if extra != 1 {
+			noun = "subtasks"
+		}
+		fmt.Printf("deleted %s  %s  (+%d %s)\n", t.ID[:8], t.Title, extra, noun)
+	} else {
+		fmt.Printf("deleted %s  %s\n", t.ID[:8], t.Title)
+	}
 	return 0
 }
 

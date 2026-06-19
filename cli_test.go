@@ -437,6 +437,31 @@ func TestDoneCommentSplitter(t *testing.T) {
 }
 
 // TestCommentTextFromPositionals: literal text path joins with spaces;
+// descendantIDsInSlice must return rootID and every transitive subtask, so
+// cliDelete can cascade the tombstone set and not strand subtasks with a
+// parent_id pointing at a deleted parent (the DOGFOOD-child orphan bug).
+func TestDescendantIDsInSliceCascadesSubtree(t *testing.T) {
+	root := todo.New("root")
+	root.ID = "root"
+	child := todo.NewSubtask("child", "root")
+	child.ID = "child"
+	grand := todo.NewSubtask("grand", "child")
+	grand.ID = "grand"
+	sibling := todo.New("sibling") // unrelated, must not appear
+	sibling.ID = "sibling"
+
+	got := descendantIDsInSlice([]todo.Todo{root, child, grand, sibling}, "root")
+	want := map[string]bool{"root": true, "child": true, "grand": true}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want exactly %v", got, want)
+	}
+	for _, id := range got {
+		if !want[id] {
+			t.Errorf("unexpected id %q in descendants", id)
+		}
+	}
+}
+
 // the "-" sentinel reads stdin and trims one trailing newline (heredocs
 // typically include one).
 func TestCommentTextFromPositionals(t *testing.T) {
