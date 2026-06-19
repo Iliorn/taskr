@@ -6,8 +6,44 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"taskr/todo"
 )
+
+// twoColumnDetailMinWidth is the minimum *available content width* (termWidth-8)
+// at which the detail pane uses its two-column layout. Below this, each page
+// falls back to the original single-column flow so labels and values still fit.
+const twoColumnDetailMinWidth = 80
+
+// joinColumns merges two pre-rendered column streams into one block. Each left
+// line is padded to leftW cells (counting ANSI escapes correctly via
+// ansi.StringWidth) before a `gap`-wide spacer and the matching right line.
+// Short columns are padded with blank lines so the join stays aligned.
+func joinColumns(left, right string, leftW, gap int) string {
+	leftLines := strings.Split(strings.TrimRight(left, "\n"), "\n")
+	rightLines := strings.Split(strings.TrimRight(right, "\n"), "\n")
+	n := len(leftLines)
+	if len(rightLines) > n {
+		n = len(rightLines)
+	}
+	sep := strings.Repeat(" ", gap)
+	var b strings.Builder
+	for i := 0; i < n; i++ {
+		var l, r string
+		if i < len(leftLines) {
+			l = leftLines[i]
+		}
+		if i < len(rightLines) {
+			r = rightLines[i]
+		}
+		pad := leftW - ansi.StringWidth(l)
+		if pad < 0 {
+			pad = 0
+		}
+		b.WriteString(l + strings.Repeat(" ", pad) + sep + r + "\n")
+	}
+	return b.String()
+}
 
 // ── Detail pages ──────────────────────────────────────────────────────────────
 
@@ -17,6 +53,19 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 
 	availableW := m.termWidth - 8
 	isDetailFocused := m.pane == paneDetail && m.detail.page == 0
+	twoCol := availableW >= twoColumnDetailMinWidth
+
+	// Column widths: split the available width with a 4-char gap between
+	// columns. Value width per column = colW - label - cursor prefix.
+	gap := 4
+	colW := availableW
+	if twoCol {
+		colW = (availableW - gap) / 2
+	}
+	valW := colW - detailLabelColWidth - 2
+	if valW < 10 {
+		valW = 10
+	}
 
 	renderField := func(label, value string, field detailField) string {
 		cur := "  "
@@ -24,6 +73,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		if isCurrent {
 			cur = "▶ "
 		}
+		value = truncate(value, valW)
 		paddedLabel := detailLabelStyle.Render(padRight(label+":", detailLabelColWidth))
 		var v string
 		if isCurrent {
@@ -48,8 +98,6 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	if !t.StartDate.IsZero() {
 		startVal = t.StartDate.Format("02-01-06")
 	}
-	b.WriteString(renderField(tr("Start date"), startVal, fieldStartDate) + "\n")
-
 	dueVal := tr("not set")
 	if !t.DueDate.IsZero() {
 		dueVal = t.DueDate.Format("02-01-06")
@@ -57,40 +105,60 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 			dueVal += tr(" ⚠ overdue")
 		}
 	}
-	b.WriteString(renderField(tr("Due date"), dueVal, fieldDueDate) + "\n")
-
 	recurVal := tr("not set")
 	if t.Recurrence != "" {
 		recurVal = "↻ " + trRecurrence(t.Recurrence)
 	}
-	b.WriteString(renderField(tr("Recurrence"), recurVal, fieldRecurrence) + "\n")
-
-	b.WriteString(renderField(tr("Priority"), t.Priority.Icon()+" "+trPriority(t.Priority), fieldPriority) + "\n")
-	b.WriteString(renderField(tr("Size"), trSize(t.Size), fieldSize) + "\n")
-
 	projectVal := tr("not set")
 	if t.Project != "" {
 		projectVal = t.Project
 	}
-	b.WriteString(renderField(tr("Project"), projectVal, fieldProject) + "\n")
-
 	notesVal := tr("none (press enter or 'n' to edit)")
 	if t.Notes != "" {
 		lines := strings.SplitN(t.Notes, "\n", 2)
-		preview := truncate(lines[0], availableW-detailLabelColWidth-8)
+		// Reserve room for the " (…)" multi-line marker (5 cells) so the
+		// final value still fits within valW.
+		budget := valW
+		if len(lines) > 1 {
+			budget -= 5
+		}
+		if budget < 4 {
+			budget = 4
+		}
+		preview := truncate(lines[0], budget)
 		if len(lines) > 1 {
 			preview += " (…)"
 		}
 		notesVal = preview
 	}
-	b.WriteString(renderField(tr("Notes"), notesVal, fieldNotes) + "\n")
 
-	b.WriteString("  " + detailLabelStyle.Render(padRight(tr("ID:"), detailLabelColWidth)) +
-		detailValueStyle.Render(shortID(t.ID)) + "\n")
-	b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Created:"), detailLabelColWidth)) +
-		detailValueStyle.Render(t.CreatedAt.Format("02-01-06 15:04")) + "\n")
-	b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Modified:"), detailLabelColWidth)) +
-		detailValueStyle.Render(t.ModifiedAt.Format("02-01-06 15:04")) + "\n")
+	// Left column: interactive fields the user navigates through.
+	left := getBuilder()
+	defer putBuilder(left)
+	left.WriteString(renderField(tr("Start date"), startVal, fieldStartDate) + "\n")
+	left.WriteString(renderField(tr("Due date"), dueVal, fieldDueDate) + "\n")
+	left.WriteString(renderField(tr("Recurrence"), recurVal, fieldRecurrence) + "\n")
+	left.WriteString(renderField(tr("Priority"), t.Priority.Icon()+" "+trPriority(t.Priority), fieldPriority) + "\n")
+	left.WriteString(renderField(tr("Size"), trSize(t.Size), fieldSize) + "\n")
+	left.WriteString(renderField(tr("Project"), projectVal, fieldProject) + "\n")
+	left.WriteString(renderField(tr("Notes"), notesVal, fieldNotes) + "\n")
+
+	// Right column (or continuation in single-col mode): read-only metadata.
+	right := getBuilder()
+	defer putBuilder(right)
+
+	roField := func(label string, valueStyle func(string) string, value string) {
+		value = truncate(value, valW)
+		right.WriteString("  " + detailLabelStyle.Render(padRight(label, detailLabelColWidth)) +
+			valueStyle(value) + "\n")
+	}
+	plainVal := func(s string) string { return detailValueStyle.Render(s) }
+	timerVal := func(s string) string { return timerStyle.Render(s) }
+	doneVal := func(s string) string { return checkDoneStyle.Render(s) }
+
+	roField(tr("ID:"), plainVal, shortID(t.ID))
+	roField(tr("Created:"), plainVal, t.CreatedAt.Format("02-01-06 15:04"))
+	roField(tr("Modified:"), plainVal, t.ModifiedAt.Format("02-01-06 15:04"))
 
 	subTime := m.descendantTimeSpent(t.ID)
 	if len(t.TimeEntries) > 0 || subTime > 0 {
@@ -104,13 +172,11 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		if t.IsTimerRunning() {
 			timeVal += tr(" ◉ tracking")
 		}
-		b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Time spent:"), detailLabelColWidth)) +
-			timerStyle.Render(timeVal) + "\n")
+		roField(tr("Time spent:"), timerVal, timeVal)
 	}
 
 	if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-		b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Completed on:"), detailLabelColWidth)) +
-			checkDoneStyle.Render(t.CompletedAt.Format("02-01-06 15:04")) + "\n")
+		roField(tr("Completed on:"), doneVal, t.CompletedAt.Format("02-01-06 15:04"))
 	}
 
 	// Score breakdown: surfaces *why* a task ranks where it does. Shown only
@@ -120,8 +186,14 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		sc := sequenceComponentsFor(t)
 		breakdown := fmt.Sprintf(tr("%.1f  (D %.1f · P %.1f · M %.1f · A %.1f)"),
 			sc.Total, sc.Urgency, sc.Importance, sc.Momentum, sc.Age)
-		b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Score:"), detailLabelColWidth)) +
-			detailValueStyle.Render(breakdown) + "\n")
+		roField(tr("Score:"), plainVal, breakdown)
+	}
+
+	if twoCol {
+		b.WriteString(joinColumns(left.String(), right.String(), colW, gap))
+	} else {
+		b.WriteString(left.String())
+		b.WriteString(right.String())
 	}
 	b.WriteString("\n")
 
@@ -153,6 +225,18 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 
 	availableW := m.termWidth - 8
 	isDetailFocused := m.pane == paneDetail && m.detail.page == 1
+	twoCol := availableW >= twoColumnDetailMinWidth
+
+	gap := 4
+	colW := availableW
+	if twoCol {
+		colW = (availableW - gap) / 2
+	}
+	// Each row is "  [?] <title>" — 2 cursor cells + 4 bracket+space cells = 6.
+	itemW := colW - 6
+	if itemW < 4 {
+		itemW = 4
+	}
 
 	indicator := "[2/3]"
 	titleText := truncate(t.Title, availableW-len(indicator)-2)
@@ -164,13 +248,23 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 		strings.Repeat(" ", padW) +
 		pageIndicatorStyle.Render(indicator) + "\n\n")
 
+	// Left: subtasks. Right: dependencies + learnings stacked. Each section
+	// renders into its own builder so joinColumns can align them in two-col
+	// mode and we can fall through to a stacked single-column flow otherwise.
+	subB := getBuilder()
+	defer putBuilder(subB)
+	depB := getBuilder()
+	defer putBuilder(depB)
+	learnB := getBuilder()
+	defer putBuilder(learnB)
+
 	subtaskCur := "  "
 	if isDetailFocused && m.detail.field == fieldSubtasks {
 		subtaskCur = "▶ "
 	}
-	b.WriteString(subtaskCur + detailLabelStyle.Render(tr("Subtasks:")) + "\n")
+	subB.WriteString(subtaskCur + detailLabelStyle.Render(tr("Subtasks:")) + "\n")
 	if m.subtaskCount(t.ID) == 0 {
-		b.WriteString("  " + detailValueStyle.Render(tr("No subtasks. Press 'a' to add one.")) + "\n")
+		subB.WriteString("  " + detailValueStyle.Render(tr("No subtasks. Press 'a' to add one.")) + "\n")
 	} else {
 		for i, subID := range m.subtaskIDs(t.ID) {
 			sub := m.findTodoByID(subID)
@@ -180,34 +274,34 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 				pfx = "▶ "
 			}
 			if sub == nil {
-				b.WriteString(dimStyle.Render(fmt.Sprintf(tr("%s[?] unknown subtask"), pfx)) + "\n")
+				subB.WriteString(dimStyle.Render(fmt.Sprintf(tr("%s[?] unknown subtask"), pfx)) + "\n")
 				continue
 			}
+			title := truncate(sub.Title, itemW)
 			if sub.Status == todo.Done {
 				if isSubSelected {
-					b.WriteString(detailSelectedStyle.Render(pfx+"[") + checkDoneStyle.Render("✓") + detailSelectedStyle.Render("] "+truncate(sub.Title, availableW-8)) + "\n")
+					subB.WriteString(detailSelectedStyle.Render(pfx+"[") + checkDoneStyle.Render("✓") + detailSelectedStyle.Render("] "+title) + "\n")
 				} else {
-					b.WriteString(dimStyle.Render(pfx+"[") + checkDoneStyle.Render("✓") + dimStyle.Render("] "+truncate(sub.Title, availableW-8)) + "\n")
+					subB.WriteString(dimStyle.Render(pfx+"[") + checkDoneStyle.Render("✓") + dimStyle.Render("] "+title) + "\n")
 				}
 			} else {
-				line := fmt.Sprintf("%s[ ] %s", pfx, truncate(sub.Title, availableW-8))
+				line := fmt.Sprintf("%s[ ] %s", pfx, title)
 				if isSubSelected {
-					b.WriteString(detailSelectedStyle.Render(line) + "\n")
+					subB.WriteString(detailSelectedStyle.Render(line) + "\n")
 				} else {
-					b.WriteString(detailValueStyle.Render(line) + "\n")
+					subB.WriteString(detailValueStyle.Render(line) + "\n")
 				}
 			}
 		}
 	}
-	b.WriteString("\n")
 
 	depCur := "  "
 	if isDetailFocused && m.detail.field == fieldDependencies {
 		depCur = "▶ "
 	}
-	b.WriteString(depCur + detailLabelStyle.Render(tr("Dependencies:")) + "\n")
+	depB.WriteString(depCur + detailLabelStyle.Render(tr("Dependencies:")) + "\n")
 	if len(t.Dependencies) == 0 {
-		b.WriteString("  " + detailValueStyle.Render(tr("No dependencies. Press 'a' to add one.")) + "\n")
+		depB.WriteString("  " + detailValueStyle.Render(tr("No dependencies. Press 'a' to add one.")) + "\n")
 	} else {
 		for i, depID := range t.Dependencies {
 			dep := m.findTodoByID(depID)
@@ -217,7 +311,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 				pfx = "▶ "
 			}
 			if dep == nil {
-				b.WriteString(dimStyle.Render(fmt.Sprintf(tr("%s[?] unknown task"), pfx)) + "\n")
+				depB.WriteString(dimStyle.Render(fmt.Sprintf(tr("%s[?] unknown task"), pfx)) + "\n")
 				continue
 			}
 			status := "[ ]"
@@ -228,26 +322,25 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 			if dep.IsOverdue() {
 				warn = " !"
 			}
-			line := fmt.Sprintf("%s%s %s%s", pfx, status, dep.Title, warn)
+			line := fmt.Sprintf("%s%s %s%s", pfx, status, truncate(dep.Title, itemW-len(warn)), warn)
 			switch {
 			case dep.IsOverdue():
-				b.WriteString(overdueStyle.Render(line) + "\n")
+				depB.WriteString(overdueStyle.Render(line) + "\n")
 			case isDepSelected:
-				b.WriteString(detailSelectedStyle.Render(line) + "\n")
+				depB.WriteString(detailSelectedStyle.Render(line) + "\n")
 			default:
-				b.WriteString(detailValueStyle.Render(line) + "\n")
+				depB.WriteString(detailValueStyle.Render(line) + "\n")
 			}
 		}
 	}
-	b.WriteString("\n")
 
 	learningCur := "  "
 	if isDetailFocused && m.detail.field == fieldLearnings {
 		learningCur = "▶ "
 	}
-	b.WriteString(learningCur + detailLabelStyle.Render(tr("Learnings:")) + "\n")
+	learnB.WriteString(learningCur + detailLabelStyle.Render(tr("Learnings:")) + "\n")
 	if len(t.Learnings) == 0 {
-		b.WriteString("  " + detailValueStyle.Render(tr("No learnings yet. Press 'a' to add one.")) + "\n")
+		learnB.WriteString("  " + detailValueStyle.Render(tr("No learnings yet. Press 'a' to add one.")) + "\n")
 	} else {
 		for i, l := range t.Learnings {
 			pfx := "  "
@@ -255,13 +348,24 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 			if isLearningSelected {
 				pfx = "▶ "
 			}
-			line := pfx + truncate(l.Text, availableW-4)
+			line := pfx + truncate(l.Text, colW-4)
 			if isLearningSelected {
-				b.WriteString(learningSelectedStyle.Render(line) + "\n")
+				learnB.WriteString(learningSelectedStyle.Render(line) + "\n")
 			} else {
-				b.WriteString(learningStyle.Render(line) + "\n")
+				learnB.WriteString(learningStyle.Render(line) + "\n")
 			}
 		}
+	}
+
+	if twoCol {
+		right := depB.String() + "\n" + learnB.String()
+		b.WriteString(joinColumns(subB.String(), right, colW, gap))
+	} else {
+		b.WriteString(subB.String())
+		b.WriteString("\n")
+		b.WriteString(depB.String())
+		b.WriteString("\n")
+		b.WriteString(learnB.String())
 	}
 
 	return b.String()

@@ -76,3 +76,54 @@ func TestRenderDetailPage1ShowsShortID(t *testing.T) {
 		t.Errorf("detail page 1 missing 'ID:' label in output:\n%s", got)
 	}
 }
+
+// TestDetailPagesNoWrap guards the detail pane's no-wrap contract across both
+// layouts: when the available content width is twoColumnDetailMinWidth or more
+// the pane splits into two columns, below it falls back to single column. In
+// either mode no rendered line may exceed (termWidth-8) cells, in any language.
+// Long titles/values exist deliberately to exercise the value-truncation paths
+// in renderField / joinColumns.
+func TestDetailPagesNoWrap(t *testing.T) {
+	t.Cleanup(func() { applyLang(string(langEN)) })
+
+	parent := todo.New("a deliberately long parent title that would otherwise wrap on narrow terminals")
+	parent.Project = "very-long-project-name-that-could-easily-overflow"
+	parent.Notes = "first note line that should be truncated when the value column is narrow\nsecond"
+	parent.Tags = []string{"alpha", "beta", "gamma-with-a-long-suffix"}
+	parent.AddLearning("a learning that is also quite long and should be safely truncated to the column width")
+
+	sub := todo.New("a subtask title which is deliberately verbose so it must truncate")
+	sub.ParentID = parent.ID
+
+	dep := todo.New("a dependency task with another long title that the dep list must truncate")
+	parent.Dependencies = []string{dep.ID}
+
+	for _, lang := range []language{langEN, langDA} {
+		applyLang(string(lang))
+		for _, width := range []int{60, 79, 80, 100, 140} {
+			m := newTestModel()
+			m.termWidth = width
+			m.termHeight = 40
+			m.Store.add(parent)
+			m.Store.add(sub)
+			m.Store.add(dep)
+			m.ensureCache()
+			m.cursor = 0
+			m.pane = paneDetail
+
+			for page, render := range []func(*todo.Todo) string{
+				m.renderDetailPage1,
+				m.renderDetailPage2,
+			} {
+				out := render(&parent)
+				inner := width - 8
+				for _, line := range strings.Split(out, "\n") {
+					if w := ansi.StringWidth(line); w > inner {
+						t.Errorf("lang=%s width=%d page=%d: line %d cells exceeds inner %d: %q",
+							lang, width, page+1, w, inner, line)
+					}
+				}
+			}
+		}
+	}
+}

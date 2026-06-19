@@ -1199,6 +1199,7 @@ func (m model) estimateDetailCursorLine() int {
 	if t == nil {
 		return 0
 	}
+	twoCol := (m.termWidth - 8) >= twoColumnDetailMinWidth
 	switch m.detail.page {
 	case 0:
 		line := 2 // title + blank
@@ -1207,21 +1208,49 @@ func (m model) estimateDetailCursorLine() int {
 			return line
 		case fieldDueDate:
 			return line + 1
-		case fieldPriority:
+		case fieldRecurrence:
 			return line + 2
-		case fieldSize:
+		case fieldPriority:
 			return line + 3
-		case fieldProject:
+		case fieldSize:
 			return line + 4
-		case fieldNotes:
+		case fieldProject:
 			return line + 5
+		case fieldNotes:
+			return line + 6
 		default: // fieldTags
+			if twoCol {
+				// Two-col mode: left has 7 rows (start..notes); right has
+				// 3 + optional (time, completed|score) rows. Tags label sits
+				// below the longer of the two.
+				leftRows := 7
+				rightRows := 3 // id, created, modified
+				if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
+					rightRows++
+				}
+				if t.Status == todo.Done && !t.CompletedAt.IsZero() {
+					rightRows++
+				}
+				if t.Status == todo.Pending {
+					rightRows++ // score
+				}
+				rows := leftRows
+				if rightRows > rows {
+					rows = rightRows
+				}
+				line += rows + 2 // block + blank + tags label
+				return line + m.detail.tagCursor
+			}
+			// Single column: fields stack as before.
 			line += 10 // start, due, recurrence, priority, size, project, notes, id, created, modified
-			if len(t.TimeEntries) > 0 {
+			if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
 				line++
 			}
 			if t.Status == todo.Done && !t.CompletedAt.IsZero() {
 				line++
+			}
+			if t.Status == todo.Pending {
+				line++ // score
 			}
 			line += 2 // blank + tags label
 			return line + m.detail.tagCursor
@@ -1232,6 +1261,11 @@ func (m model) estimateDetailCursorLine() int {
 		case fieldSubtasks:
 			return line + m.detail.subtaskCursor
 		case fieldDependencies:
+			if twoCol {
+				// In two-col mode subtasks (left) and deps (right) share the
+				// same top, so the deps cursor sits next to its own list head.
+				return line + m.detail.depCursor
+			}
 			if m.subtaskCount(t.ID) == 0 {
 				line++
 			} else {
@@ -1240,6 +1274,17 @@ func (m model) estimateDetailCursorLine() int {
 			line += 2 // blank + deps label
 			return line + m.detail.depCursor
 		default: // fieldLearnings
+			if twoCol {
+				// Right column = deps + blank + learnings. Learnings label
+				// sits right below deps, regardless of subtasks count.
+				if len(t.Dependencies) == 0 {
+					line++
+				} else {
+					line += len(t.Dependencies)
+				}
+				line += 2 // blank + learnings label
+				return line + m.detail.learningCursor
+			}
 			if m.subtaskCount(t.ID) == 0 {
 				line++
 			} else {
