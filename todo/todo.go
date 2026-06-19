@@ -556,13 +556,20 @@ func parsePositiveInt(s string) (int, bool) {
 // ── Query helpers ─────────────────────────────────────────────────────────────
 
 func (t *Todo) IsOverdue() bool {
+	return t.IsOverdueAt(time.Now())
+}
+
+// IsOverdueAt is the clock-injectable form. Callers that need deterministic
+// behavior (stats buckets, tests, anything pinned to a specific moment)
+// should pass `now` explicitly so the result doesn't drift with the wall
+// clock between invocations.
+func (t *Todo) IsOverdueAt(now time.Time) bool {
 	if t.Status == Done {
 		return false
 	}
 	if t.DueDate.IsZero() {
 		return false
 	}
-	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	return t.DueDate.Before(today)
 }

@@ -367,6 +367,26 @@ func TestIsOverdue(t *testing.T) {
 	}
 }
 
+// IsOverdueAt is the clock-injectable form. A task should be overdue
+// relative to the passed-in `now`, not the wall clock — that's what lets
+// stats buckets stay deterministic across a day rollover.
+func TestIsOverdueAt(t *testing.T) {
+	pinned := time.Date(2026, 6, 19, 12, 0, 0, 0, time.UTC)
+	task := New("clock test")
+	task.DueDate = time.Date(2026, 6, 18, 9, 0, 0, 0, time.UTC)
+
+	if !task.IsOverdueAt(pinned) {
+		t.Error("due yesterday should be overdue at the pinned now")
+	}
+	// Roll the pinned clock back to the day before the due date — the same
+	// task is no longer overdue, proving the function used the argument
+	// rather than time.Now().
+	earlier := time.Date(2026, 6, 17, 12, 0, 0, 0, time.UTC)
+	if task.IsOverdueAt(earlier) {
+		t.Error("at an earlier `now`, the same DueDate should not be overdue")
+	}
+}
+
 // ── IsDueToday ────────────────────────────────────────────────────────────────
 
 func TestIsDueToday(t *testing.T) {
