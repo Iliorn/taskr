@@ -705,7 +705,7 @@ func (m *model) switchTab(t tab) {
 	m.projectCursor = 0
 	m.tagTabCursor = 0
 	m.learningCursor = 0
-	m.settingsCursor = 0
+	m.settingsCursor = settingsLeftCol[0]
 	m.listOffset = 0
 	m.pane = paneList
 	m.searchQuery = ""
@@ -934,9 +934,7 @@ func (m *model) moveCursorUp() {
 			m.learningCursor--
 		}
 	case tabSettings:
-		if m.settingsCursor > 0 {
-			m.settingsCursor--
-		}
+		m.settingsCursor = settingsCursorStep(m.settingsCursor, -1)
 	case tabProjects:
 		if m.projectTaskMode {
 			if m.cursor > 0 {
@@ -973,9 +971,7 @@ func (m *model) moveCursorDown() {
 			m.learningCursor++
 		}
 	case tabSettings:
-		if m.settingsCursor < numSettingsRows-1 {
-			m.settingsCursor++
-		}
+		m.settingsCursor = settingsCursorStep(m.settingsCursor, +1)
 	case tabProjects:
 		projects := m.allProjectsForList()
 		if m.projectTaskMode {

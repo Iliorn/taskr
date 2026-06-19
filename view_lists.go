@@ -1008,20 +1008,72 @@ func (m model) renderProjectListContent(projects []string) string {
 
 // ── Settings list ─────────────────────────────────────────────────────────────
 
+// Settings split into two visual columns. Right column clusters the
+// score/sequencing knobs so the bias mix reads as one tool; left column holds
+// the unrelated app-prefs and system rows.
+var settingsLeftCol = []int{
+	settingAutoCloseParent,
+	settingTheme,
+	settingLanguage,
+	settingVersion,
+	settingCheckUpdate,
+}
+var settingsRightCol = []int{
+	settingBiasDeadline,
+	settingBiasPriority,
+	settingBiasMomentum,
+	settingAging,
+}
+
+// twoColumnSettingsMinWidth is the minimum available content width at which the
+// Settings tab uses the two-column layout. Below this it falls back to a single
+// stacked column so labels and values still fit without wrapping.
+const twoColumnSettingsMinWidth = 80
+
+// settingsNavOrder returns the linear up/down traversal order across both
+// columns: left column top→bottom, then right column top→bottom.
+func settingsNavOrder() []int {
+	out := make([]int, 0, len(settingsLeftCol)+len(settingsRightCol))
+	out = append(out, settingsLeftCol...)
+	out = append(out, settingsRightCol...)
+	return out
+}
+
+// settingsCursorStep advances the settings cursor by delta along the visual
+// traversal order, clamping at the ends so up at the top / down at the bottom
+// are no-ops (matching the pre-split behaviour).
+func settingsCursorStep(cur, delta int) int {
+	order := settingsNavOrder()
+	idx := 0
+	for i, id := range order {
+		if id == cur {
+			idx = i
+			break
+		}
+	}
+	idx += delta
+	if idx < 0 {
+		idx = 0
+	} else if idx >= len(order) {
+		idx = len(order) - 1
+	}
+	return order[idx]
+}
+
 func (m model) renderSettingsList() string {
 	b := getBuilder()
 	defer putBuilder(b)
 
-	labels := [numSettingsRows]string{
-		tr("Deadline pressure"),
-		tr("Priority focus"),
-		tr("Momentum bias"),
-		tr("Aging increases score"),
-		tr("Auto-close parent"),
-		tr("Theme"),
-		tr("Language"),
-		tr("Version"),
-		tr("Check for updates"),
+	labels := map[int]string{
+		settingBiasDeadline:    tr("Deadline pressure"),
+		settingBiasPriority:    tr("Priority focus"),
+		settingBiasMomentum:    tr("Momentum bias"),
+		settingAging:           tr("Aging increases score"),
+		settingAutoCloseParent: tr("Auto-close parent"),
+		settingTheme:           tr("Theme"),
+		settingLanguage:        tr("Language"),
+		settingVersion:         tr("Version"),
+		settingCheckUpdate:     tr("Check for updates"),
 	}
 	agingVal := tr("Off")
 	if activeBiases.Aging {
@@ -1031,28 +1083,60 @@ func (m model) renderSettingsList() string {
 	if m.autoCloseParent {
 		autoCloseVal = tr("On")
 	}
-	values := [numSettingsRows]string{
-		biasPickerValue(activeBiases.Deadline),
-		biasPickerValue(activeBiases.Priority),
-		biasPickerValue(activeBiases.Momentum),
-		"‹ " + agingVal + " ›",
-		"‹ " + autoCloseVal + " ›",
-		"‹ " + m.themeName + " ›",
-		"‹ " + activeLang.displayName() + " ›",
-		appVersion,
-		tr("press enter to check"),
+	values := map[int]string{
+		settingBiasDeadline:    biasPickerValue(activeBiases.Deadline),
+		settingBiasPriority:    biasPickerValue(activeBiases.Priority),
+		settingBiasMomentum:    biasPickerValue(activeBiases.Momentum),
+		settingAging:           "‹ " + agingVal + " ›",
+		settingAutoCloseParent: "‹ " + autoCloseVal + " ›",
+		settingTheme:           "‹ " + m.themeName + " ›",
+		settingLanguage:        "‹ " + activeLang.displayName() + " ›",
+		settingVersion:         appVersion,
+		settingCheckUpdate:     tr("press enter to check"),
 	}
 
-	b.WriteString(headerStyle.Render(tr("Settings")) + "\n\n")
-	for i := 0; i < numSettingsRows; i++ {
+	maxLabelW := func(ids []int) int {
+		w := 0
+		for _, id := range ids {
+			if n := len([]rune(labels[id])); n > w {
+				w = n
+			}
+		}
+		return w + 2
+	}
+
+	renderRow := func(id, labelW int) string {
 		cursor := "  "
 		labelStyle := normalStyle
-		if i == m.settingsCursor {
+		if id == m.settingsCursor {
 			cursor = selectedStyle.Render("→ ")
 			labelStyle = selectedStyle
 		}
-		label := labelStyle.Render(fmt.Sprintf("%-26s", labels[i]))
-		b.WriteString(cursor + label + helpStyle.Render(values[i]) + "\n")
+		return cursor + labelStyle.Render(padRight(labels[id], labelW)) + helpStyle.Render(values[id])
+	}
+
+	b.WriteString(headerStyle.Render(tr("Settings")) + "\n\n")
+
+	availW := m.termWidth - 8
+	if availW >= twoColumnSettingsMinWidth {
+		gap := 4
+		leftW := (availW - gap) / 2
+		leftLabelW := maxLabelW(settingsLeftCol)
+		rightLabelW := maxLabelW(settingsRightCol)
+		var left, right strings.Builder
+		for _, id := range settingsLeftCol {
+			left.WriteString(renderRow(id, leftLabelW) + "\n")
+		}
+		for _, id := range settingsRightCol {
+			right.WriteString(renderRow(id, rightLabelW) + "\n")
+		}
+		b.WriteString(joinColumns(left.String(), right.String(), leftW, gap))
+	} else {
+		order := settingsNavOrder()
+		labelW := maxLabelW(order)
+		for _, id := range order {
+			b.WriteString(renderRow(id, labelW) + "\n")
+		}
 	}
 
 	// Personality footer: a one-line summary of what the current bias mix
