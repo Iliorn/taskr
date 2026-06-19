@@ -77,14 +77,16 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	notesVal := tr("none (press enter or 'n' to edit)")
 	if t.Notes != "" {
 		lines := strings.SplitN(t.Notes, "\n", 2)
-		preview := truncate(lines[0], availableW-detailLabelColWidth-6)
+		preview := truncate(lines[0], availableW-detailLabelColWidth-8)
 		if len(lines) > 1 {
-			preview += " …"
+			preview += " (…)"
 		}
 		notesVal = preview
 	}
 	b.WriteString(renderField(tr("Notes"), notesVal, fieldNotes) + "\n")
 
+	b.WriteString("  " + detailLabelStyle.Render(padRight(tr("ID:"), detailLabelColWidth)) +
+		detailValueStyle.Render(shortID(t.ID)) + "\n")
 	b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Created:"), detailLabelColWidth)) +
 		detailValueStyle.Render(t.CreatedAt.Format("02-01-06 15:04")) + "\n")
 	b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Modified:"), detailLabelColWidth)) +
@@ -422,7 +424,7 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 	barColors := bufs.color[:chartW]
 
 	for i, t := range tasks {
-		isSelected := i == m.cursor && m.pane == paneList && m.projectTaskMode
+		isSelected := i == m.cursor && m.projectTaskMode
 		checkbox := "[ ]"
 		if t.Status == todo.Done {
 			checkbox = "[✓]"

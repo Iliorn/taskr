@@ -69,6 +69,9 @@ func TestNewSubtask(t *testing.T) {
 	if sub.ID == "" {
 		t.Error("subtask ID should not be empty")
 	}
+	if sub.Size != SizeSmall {
+		t.Errorf("Size = %v, want SizeSmall (subtasks default small)", sub.Size)
+	}
 }
 
 // ── Toggle ────────────────────────────────────────────────────────────────────
@@ -766,6 +769,7 @@ func TestInheritContextFrom(t *testing.T) {
 	parent.Project = "alpha"
 	parent.AddTag("Work")
 	parent.AddTag("urgent")
+	parent.DueDate = time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 
 	child := NewSubtask("Child", parent.ID)
 	child.InheritContextFrom(&parent)
@@ -776,6 +780,9 @@ func TestInheritContextFrom(t *testing.T) {
 	if len(child.Tags) != 2 || child.Tags[0] != "work" || child.Tags[1] != "urgent" {
 		t.Errorf("tags = %v, want [work urgent]", child.Tags)
 	}
+	if !child.DueDate.Equal(parent.DueDate) {
+		t.Errorf("due date = %v, want %v (inherited)", child.DueDate, parent.DueDate)
+	}
 
 	// Nil parent is a no-op.
 	orphan := NewSubtask("Orphan", "no-parent")
@@ -783,6 +790,14 @@ func TestInheritContextFrom(t *testing.T) {
 	if orphan.Project != "" || len(orphan.Tags) != 0 {
 		t.Errorf("nil parent should leave subtask untouched, got project=%q tags=%v",
 			orphan.Project, orphan.Tags)
+	}
+
+	// Parent with no due date leaves child undated.
+	undatedParent := New("Undated parent")
+	undatedChild := NewSubtask("Child", undatedParent.ID)
+	undatedChild.InheritContextFrom(&undatedParent)
+	if !undatedChild.DueDate.IsZero() {
+		t.Errorf("undated parent should leave subtask undated, got %v", undatedChild.DueDate)
 	}
 }
 

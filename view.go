@@ -203,10 +203,10 @@ func (m model) applyDetailScroll(content string) string {
 	copy(visible, lines[scrollStart:end])
 
 	if scrollStart > 0 {
-		visible[0] = dimStyle.Render("  (...)")
+		visible[0] = dimStyle.Render("  (…)")
 	}
 	if end < len(lines) {
-		visible[len(visible)-1] = dimStyle.Render("  (...)")
+		visible[len(visible)-1] = dimStyle.Render("  (…)")
 	}
 
 	return strings.Join(visible, "\n")
@@ -223,7 +223,7 @@ func (m model) buildFooterContent(w int) string {
 			if e := t.RunningEntry(); e != nil {
 				elapsed = formatDurationLive(time.Since(e.StartedAt))
 			}
-			timerLine := timerStyle.Render("  ◉ "+truncate(t.Title, w/2)) +
+			timerLine := timerStyle.Render("    ◉ "+truncate(t.Title, w/2)) +
 				normalStyle.Render(" · "+elapsed) +
 				helpStyle.Render(tr(" · t to stop"))
 			return ansi.Truncate(timerLine, w, "") + "\n" + hints
@@ -349,7 +349,9 @@ func (m model) renderKeyHints(w int) string {
 	case m.tab == tabSettings:
 		hints = tr("↑/↓ select · ←/→ change theme · enter activate")
 	}
-	return helpStyle.Render("  " + truncate(hints, w))
+	// 4-space indent aligns the hint under the box's inner content (margin 2 +
+	// border 1 + padding 1) — so it begins at the same column as the task rows.
+	return helpStyle.Render("    " + truncate(hints, w))
 }
 
 // ── Detail content ────────────────────────────────────────────────────────────
@@ -504,7 +506,7 @@ func (m model) renderHelpFullscreen() string {
 			{"?", tr("close help")},
 		}},
 		{tr("Tasks"), [][2]string{
-			{"a", tr("add task (quick-add: #tag due:date p:high @proj)")},
+			{"a", tr("add task (quick-add: #tag due:date p:high @proj s:M)")},
 			{"r", tr("rename task")},
 			{"d", tr("toggle done")},
 			{"t", tr("start/stop time tracking")},

@@ -363,7 +363,7 @@ func (m *model) performUndo() tea.Cmd {
 		for _, id := range removed {
 			m.markTombstone(id)
 		}
-		m.markModifiedNoUndo(restored...)
+		m.markModified(restored...)
 		m.err = fmt.Sprintf(tr("Undid: %s"), entry.desc)
 		return clearErrAfter()
 	}
@@ -383,7 +383,7 @@ func (m *model) performUndo() tea.Cmd {
 	for id := range before {
 		m.markTombstone(id)
 	}
-	m.markModifiedNoUndo(restoredIDs...)
+	m.markModified(restoredIDs...)
 	m.err = fmt.Sprintf(tr("Undid: %s"), entry.desc)
 	return clearErrAfter()
 }
@@ -528,6 +528,18 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.openIdlePrompt(t)
 						return m, nil
 					}
+					// Capture t plus any currently-running other task
+					// (toggleTimer stops it when starting a new one) so undo
+					// can restore both sides.
+					undoIDs := []string{t.ID}
+					if !t.IsTimerRunning() {
+						for otherID := range m.runningTimers {
+							if otherID != t.ID {
+								undoIDs = append(undoIDs, otherID)
+							}
+						}
+					}
+					m.pushUndo("toggle timer", undoIDs...)
 					m.toggleTimer(t)
 					m.markModified(t.ID)
 					if !m.timerTickOn && m.anyTimerRunning() {
@@ -624,6 +636,14 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 							return m, nil
 						}
 					}
+					// Full snapshot: ancestor cascade + recurrence spawn can
+					// touch arbitrary IDs not knowable until mid-mutation, so
+					// capture all state for a clean undo.
+					if wasPending && (isSub || t.IsRecurring()) {
+						m.pushUndo("close task")
+					} else {
+						m.pushUndo("toggle done", t.ID)
+					}
 					t.Toggle()
 					ids := []string{t.ID}
 					if wasPending && t.IsRecurring() {
@@ -649,6 +669,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "p":
 			if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil {
+					m.pushUndo("cycle priority", t.ID)
 					switch t.Priority {
 					case todo.PriorityLow:
 						t.SetPriority(todo.PriorityMedium)
@@ -1288,6 +1309,10 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.detail.page == 1 && m.detail.field == fieldSubtasks {
 			if t := m.currentTodo(); t != nil {
 				if m.detail.subtaskCursor < m.subtaskCount(t.ID) {
+					// Full snapshot: toggleSubtask cascades up through
+					// ancestors and may spawn new recurrence tasks —
+					// neither is knowable until after the call.
+					m.pushUndo("toggle subtask")
 					ids := m.toggleSubtask(t.ID, m.detail.subtaskCursor)
 					if len(ids) > 0 {
 						m.markModified(ids...)
@@ -1316,6 +1341,15 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.openIdlePrompt(sub)
 						return m, nil
 					}
+					undoIDs := []string{sub.ID}
+					if !sub.IsTimerRunning() {
+						for otherID := range m.runningTimers {
+							if otherID != sub.ID {
+								undoIDs = append(undoIDs, otherID)
+							}
+						}
+					}
+					m.pushUndo("toggle timer", undoIDs...)
 					m.toggleTimer(sub)
 					m.markModified(sub.ID)
 					if !m.timerTickOn && m.anyTimerRunning() {
@@ -1338,7 +1372,16 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) detailCursorUp() {
 	m.invalidateDetailCache()
 	if m.detail.page == 0 {
+		t := m.currentTodo()
 		switch m.detail.field {
+		case fieldStartDate:
+			// Wrap to the bottom of the page: last tag, or fieldTags
+			// itself if there are no tags.
+			m.detail.field = fieldTags
+			m.detail.tagCursor = 0
+			if t != nil && len(t.Tags) > 0 {
+				m.detail.tagCursor = len(t.Tags) - 1
+			}
 		case fieldDueDate:
 			m.detail.field = fieldStartDate
 		case fieldRecurrence:
@@ -1364,6 +1407,13 @@ func (m *model) detailCursorUp() {
 		case fieldSubtasks:
 			if m.detail.subtaskCursor > 0 {
 				m.detail.subtaskCursor--
+			} else {
+				// Wrap to the last learning on this page.
+				m.detail.field = fieldLearnings
+				m.detail.learningCursor = 0
+				if t != nil && len(t.Learnings) > 0 {
+					m.detail.learningCursor = len(t.Learnings) - 1
+				}
 			}
 		case fieldDependencies:
 			if m.detail.depCursor > 0 {
@@ -1386,6 +1436,9 @@ func (m *model) detailCursorUp() {
 		}
 	} else if m.detail.commentCursor > 0 {
 		m.detail.commentCursor--
+	} else if t := m.currentTodo(); t != nil && len(t.Comments) > 0 {
+		// Wrap to the last comment.
+		m.detail.commentCursor = len(t.Comments) - 1
 	}
 }
 
@@ -1412,6 +1465,10 @@ func (m *model) detailCursorDown() {
 		case fieldTags:
 			if t != nil && m.detail.tagCursor < len(t.Tags)-1 {
 				m.detail.tagCursor++
+			} else {
+				// Wrap to the top of the page.
+				m.detail.field = fieldStartDate
+				m.detail.tagCursor = 0
 			}
 		}
 	} else if m.detail.page == 1 {
@@ -1434,10 +1491,17 @@ func (m *model) detailCursorDown() {
 		case fieldLearnings:
 			if t != nil && m.detail.learningCursor < len(t.Learnings)-1 {
 				m.detail.learningCursor++
+			} else {
+				// Wrap to the top of the page.
+				m.detail.field = fieldSubtasks
+				m.detail.subtaskCursor = 0
 			}
 		}
 	} else if t := m.currentTodo(); t != nil && m.detail.commentCursor < len(t.Comments)-1 {
 		m.detail.commentCursor++
+	} else {
+		// Wrap to the first comment.
+		m.detail.commentCursor = 0
 	}
 }
 
@@ -1507,7 +1571,7 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 		if t.Notes != "" {
 			m.pushUndo("clear notes", t.ID)
 			t.SetNotes("")
-			m.markModifiedNoUndo(t.ID)
+			m.markModified(t.ID)
 		}
 	case fieldTags:
 		if len(t.Tags) > 0 && m.detail.tagCursor < len(t.Tags) {
@@ -1614,6 +1678,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		// Cycle through canonical rules. Custom "every:Nd|w|m|y" rules are
 		// returned to "none" by the next press; users can re-enter the
 		// custom form via quick-add (r:Nd).
+		m.pushUndo("cycle recurrence", t.ID)
 		switch t.Recurrence {
 		case "":
 			t.SetRecurrence("daily")
@@ -1631,6 +1696,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		m.markModified(t.ID)
 		return m, nil
 	case fieldPriority:
+		m.pushUndo("cycle priority", t.ID)
 		switch t.Priority {
 		case todo.PriorityLow:
 			t.SetPriority(todo.PriorityMedium)
@@ -1645,6 +1711,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		// Cycle Medium → Small → Large → Medium. Starts at Medium so the first
 		// press moves toward "Small" (the small-task floor) — the direction
 		// users will most often want.
+		m.pushUndo("cycle size", t.ID)
 		switch t.Size {
 		case todo.SizeMedium:
 			t.SetSize(todo.SizeSmall)

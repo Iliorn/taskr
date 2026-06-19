@@ -615,6 +615,8 @@ func (m model) renderTaskList() string {
 	overdueSet := m.cache.overdueSet
 
 	// Size the title column to the widest displayed task (title + its indicators).
+	// Must mirror every suffix/prefix renderTaskLineWithSet appends to the title,
+	// otherwise the longest row eats into the gap before the Score column.
 	contentMax := 0
 	for i := range active {
 		w := len([]rune(active[i].Title))
@@ -624,8 +626,17 @@ func (m model) renderTaskList() string {
 		if active[i].Notes != "" {
 			w += 2 // " ¶"
 		}
+		if active[i].IsRecurring() {
+			w += 2 // " ↻"
+		}
+		if subDone, subTotal := m.subtaskProgress(active[i].ID); subTotal > 0 {
+			w += len([]rune(fmt.Sprintf(" (%d/%d)", subDone, subTotal)))
+			if m.hasOverdueDescendant(active[i].ID, overdueSet) {
+				w++ // "‼"
+			}
+		}
 		if active[i].IsTimerRunning() {
-			w += 2 // " ⏱"
+			w += 2 // "⏱ " prefix
 		}
 		if w > contentMax {
 			contentMax = w
@@ -649,7 +660,7 @@ func (m model) renderTaskList() string {
 	for i := startIdx; i < endIdx; i++ {
 		t := visible[i]
 		if t.ParentID == "" {
-			b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, m.pane == paneList, overdueSet, cols))
+			b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, true, overdueSet, cols))
 			continue
 		}
 		siblings := m.subtaskIDs(t.ParentID)
@@ -660,7 +671,7 @@ func (m model) renderTaskList() string {
 				break
 			}
 		}
-		b.WriteString(m.renderSubtaskLine(&t, subIdx, len(siblings), cols, i, m.cursor, m.pane == paneList))
+		b.WriteString(m.renderSubtaskLine(&t, subIdx, len(siblings), cols, i, m.cursor, true))
 	}
 	return b.String()
 }
@@ -697,7 +708,7 @@ func (m model) renderHistoryList() string {
 	}
 
 	for i := startIdx; i < endIdx; i++ {
-		b.WriteString(m.renderHistoryLine(completed[i], i, m.cursor, m.pane == paneList, cols))
+		b.WriteString(m.renderHistoryLine(completed[i], i, m.cursor, true, cols))
 	}
 	return b.String()
 }
@@ -716,7 +727,7 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	if !t.CompletedAt.IsZero() {
 		completedVal = t.CompletedAt.Format("02-01-06")
 	}
-	titleCol := padRight(truncate(t.Title, titleW), titleW)
+	titleCol := padRight(truncate(t.Title, titleW-1), titleW)
 	dateCols := ""
 	if cols.showDue {
 		dateCols += padRight(dueVal, 12)
@@ -735,10 +746,10 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 		if mainW+1+tagsW <= m.termWidth-8 {
 			tagsStr = " " + tagsPart
 		} else {
-			// Trim last 5 chars of titleCol to make room for (...).
+			// Trim last 3 chars of titleCol to make room for (…).
 			r := []rune(titleCol)
-			if len(r) > 5 {
-				titleCol = string(r[:len(r)-5]) + dimStyle.Render("(...)")
+			if len(r) > 3 {
+				titleCol = string(r[:len(r)-3]) + dimStyle.Render("(…)")
 			}
 		}
 	}
@@ -842,22 +853,30 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	if !t.DueDate.IsZero() {
 		dueVal = t.DueDate.Format("02-01-06")
 	}
-	titleCol := padRight(truncate(title, titleW), titleW)
+	// Reserve one trailing space inside the column so a truncated title (ending
+	// in "(…)") never butts up against the Score column that follows.
+	titleCol := padRight(truncate(title, titleW-1), titleW)
 	tagsPart := m.getRenderedTags(t.Tags)
 	line := cursorStr + checkbox + foldIcon + titleCol
-	if cols.showSize {
-		line += padRight(strings.ToLower(t.Size.Letter()), sizeColW)
-	}
-	if cols.showDue {
-		line += padRight(dueVal, 12)
-	}
 	if cols.showLast {
 		// Score column is always score now — priority lives only in the
 		// detail view, where the user can still set it.
-		line += padRight(fmt.Sprintf("%.1f", sequenceScore(&t)), 12)
+		line += padRight(fmt.Sprintf("%.1f", sequenceScore(&t)), scoreColW)
+	}
+	if cols.showDue {
+		line += padRight(dueVal, dueColW)
+	}
+	if cols.showSize {
+		// Asymmetric pad (2 left + letter + 5 right) so the gap from Due to the
+		// letter matches the gap from the letter to the Project column — both 5
+		// chars, matching the Score→Due rhythm.
+		line += "  " + padRight(strings.ToLower(t.Size.Letter()), sizeColW-2)
 	}
 	if cols.showProject {
-		line += padRight(truncate(t.Project, projectColW-1), projectColW)
+		// Truncate at projectColW-4 so the column always leaves ≥4 trailing
+		// spaces; combined with the 1-space prefix on tags below that's a 5-char
+		// minimum gap between project text and the first tag.
+		line += padRight(truncate(t.Project, projectColW-4), projectColW)
 	}
 
 	// Only append tags if they fit within the inner panel content width.
@@ -870,10 +889,10 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 		if len([]rune(line))+1+tagsW <= m.termWidth-8 {
 			tagsStr = " " + tagsPart
 		} else {
-			// Overwrite the last 5 chars of the line with (...) so it always fits.
+			// Overwrite the last 3 chars of the line with (…) so it always fits.
 			runes := []rune(line)
-			if len(runes) > 5 {
-				line = string(runes[:len(runes)-5]) + dimStyle.Render("(...)")
+			if len(runes) > 3 {
+				line = string(runes[:len(runes)-3]) + dimStyle.Render("(…)")
 			}
 		}
 	}
@@ -913,7 +932,13 @@ func (m model) renderProjectListContent(projects []string) string {
 		}
 	}
 	projHdr := tr("Project")
-	projW := contentFitWidth(m.termWidth, nameMax, 2, len([]rune(projHdr)))
+	// gap=4 matches the Tasks tab title column so non-truncated names leave a
+	// 4-char visible gap before the Active column, mirroring the title→score gap.
+	// Floor bakes the gap into the header label too — Tasks tab gets away with a
+	// bare-header floor because real titles dwarf the "Task" label, but project
+	// names are often as short as "Project", so the floor has to enforce the gap
+	// or the "Project" / "Active" headers butt up against each other.
+	projW := contentFitWidth(m.termWidth, nameMax, 4, len([]rune(projHdr))+4)
 
 	const prefix = "  "
 	headerLeft := prefix + padRight(projHdr, projW) +
@@ -946,7 +971,10 @@ func (m model) renderProjectListContent(projects []string) string {
 			b.WriteString(normalStyle.Render(cursorStr) + m.textInput.View() + "\n")
 			continue
 		}
-		nameCol := padRight(truncate(p, projW-2), projW)
+		// truncate at projW-1 so a truncated name (ending in "(…)") still leaves
+		// 1 trailing space before the Active column — same rule as the title col
+		// on the Tasks tab.
+		nameCol := padRight(truncate(p, projW-1), projW)
 		activeStr := padRight(fmt.Sprintf(tr("%d active"), activeCnt), projCountColWidth)
 		doneStr := padRight(fmt.Sprintf(tr("%d done"), doneCnt), projDoneColWidth)
 		overdueStr := "─"
@@ -989,7 +1017,7 @@ func (m model) renderSettingsList() string {
 		tr("Priority focus"),
 		tr("Momentum bias"),
 		tr("Aging increases score"),
-		tr("Auto-close parent w/ all subtasks done"),
+		tr("Auto-close parent"),
 		tr("Theme"),
 		tr("Language"),
 		tr("Version"),

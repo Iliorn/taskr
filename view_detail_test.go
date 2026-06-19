@@ -54,3 +54,25 @@ func TestRenderGanttNarrowNoPanic(t *testing.T) {
 	}
 	applyLang(string(langEN))
 }
+
+// Backlog item ceea44fe: detail page 1 must surface the task's short ID so
+// the user can read it (and pass it to the CLI) without leaving the TUI.
+func TestRenderDetailPage1ShowsShortID(t *testing.T) {
+	task := todo.New("show me my id")
+	m := newTestModel()
+	m.termWidth = 120
+	m.termHeight = 40
+	m.Store.add(task)
+	m.ensureCache()
+	m.cursor = 0
+	m.pane = paneDetail
+
+	got := m.renderDetailPage1(&task)
+	short := shortID(task.ID)
+	if !strings.Contains(got, short) {
+		t.Errorf("detail page 1 missing short ID %q in output:\n%s", short, got)
+	}
+	if !strings.Contains(got, "ID:") {
+		t.Errorf("detail page 1 missing 'ID:' label in output:\n%s", got)
+	}
+}

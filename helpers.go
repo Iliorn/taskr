@@ -34,7 +34,16 @@ func truncate(s string, max int) string {
 	if max <= 3 {
 		return string(r[:max])
 	}
-	return string(r[:max-3]) + "..."
+	return string(r[:max-3]) + "(…)"
+}
+
+// shortID returns the first 8 chars of a task ID — the same prefix the CLI
+// shows and accepts in commands like `taskr show <prefix>`.
+func shortID(id string) string {
+	if len(id) <= 8 {
+		return id
+	}
+	return id[:8]
 }
 
 func padRight(s string, width int) string {
@@ -43,6 +52,17 @@ func padRight(s string, width int) string {
 		return string(r[:width])
 	}
 	return s + strings.Repeat(" ", width-len(r))
+}
+
+func padCenter(s string, width int) string {
+	r := []rune(s)
+	if len(r) >= width {
+		return string(r[:width])
+	}
+	pad := width - len(r)
+	left := pad / 2
+	right := pad - left
+	return strings.Repeat(" ", left) + s + strings.Repeat(" ", right)
 }
 
 func wrapText(s string, width int) []string {
@@ -130,16 +150,22 @@ func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 	}
 	c.titleW = contentFitWidth(termWidth, contentMax, 4, floor)
 
+	lastW := scoreColW
+	dueW := dueColW
+	if isHistory {
+		lastW = 12
+		dueW = 12
+	}
 	colsW := func() int {
 		w := 0
 		if c.showSize {
 			w += sizeColW
 		}
 		if c.showDue {
-			w += 12
+			w += dueW
 		}
 		if c.showLast {
-			w += 12
+			w += lastW
 		}
 		if c.showProject {
 			w += projectColW
@@ -179,9 +205,13 @@ func renderPlainDivider(availW int) string {
 }
 
 func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMode taskSortMode, c listCols) {
-	sizeLabel := padRight(tr("Size"), sizeColW)
-	dueLabel := padRight(tr("Due"), 12)
-	lastLabel := padRight(tr("Score"), 12)
+	dueW := dueColW
+	if isHistory {
+		dueW = 12
+	}
+	sizeLabel := padCenter(tr("Size"), sizeColW)
+	dueLabel := padRight(tr("Due"), dueW)
+	lastLabel := padRight(tr("Score"), scoreColW)
 	if isHistory {
 		lastLabel = padRight(tr("Completed"), 12)
 	} else {
@@ -189,11 +219,11 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMod
 		// owns the ordering.
 		switch sortMode {
 		case taskSortSequence:
-			lastLabel = padRight(tr(">Score<"), 12)
+			lastLabel = padRight(tr(">Score<"), scoreColW)
 		case taskSortDueDate:
-			dueLabel = padRight(tr(">Due<"), 12)
+			dueLabel = padRight(tr(">Due<"), dueW)
 		case taskSortSize:
-			sizeLabel = padRight(tr(">Size<"), sizeColW)
+			sizeLabel = padCenter(tr(">Size<"), sizeColW)
 		}
 	}
 
@@ -203,13 +233,19 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMod
 		title = tr("Completed tasks")
 	}
 	headerLeft := prefix + padRight(title, c.titleW)
-	if c.showSize {
-		headerLeft += sizeLabel
+	// Active view: Score sits right after the title. History keeps the
+	// historical Due → Completed order so the completion date stays next
+	// to the due date.
+	if c.showLast && !isHistory {
+		headerLeft += lastLabel
 	}
 	if c.showDue {
 		headerLeft += dueLabel
 	}
-	if c.showLast {
+	if c.showSize {
+		headerLeft += sizeLabel
+	}
+	if c.showLast && isHistory {
 		headerLeft += lastLabel
 	}
 	if c.showProject {
@@ -363,8 +399,9 @@ func parseQuickAdd(input string) parsedTask {
 			default:
 				titleWords = append(titleWords, word)
 			}
-		case strings.HasPrefix(lower, "size:"):
-			switch strings.TrimPrefix(lower, "size:") {
+		case strings.HasPrefix(lower, "size:") || strings.HasPrefix(lower, "s:"):
+			spec := strings.TrimPrefix(strings.TrimPrefix(lower, "size:"), "s:")
+			switch spec {
 			case "s", "small":
 				result.size = todo.SizeSmall
 			case "m", "med", "medium":

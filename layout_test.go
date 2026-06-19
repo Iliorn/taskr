@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"taskr/todo"
+)
 
 func TestComputeLayout(t *testing.T) {
 	tests := []struct {
@@ -116,5 +120,31 @@ func TestComputeLayoutHeaderGrows(t *testing.T) {
 	}
 	if withAll.headerH <= withErr.headerH {
 		t.Error("search+focus should further increase header height")
+	}
+}
+
+// When the detail pane is hidden (pane != paneDetail on tabs that can hide
+// it), estimateListHeight and listVisible must no longer reserve the 12-line
+// detail block — otherwise the task list silently caps at termH-12 instead of
+// filling the window. Backlog item bbd963df.
+func TestListHeightFillsWhenDetailHidden(t *testing.T) {
+	m := modelWithTasks(t, todo.New("a"), todo.New("b"))
+	m.termHeight = 40
+
+	m.pane = paneDetail
+	withDetail := m.estimateListHeight()
+	withDetailVisible := m.listVisible()
+
+	m.pane = paneList
+	withoutDetail := m.estimateListHeight()
+	withoutDetailVisible := m.listVisible()
+
+	if withoutDetail <= withDetail {
+		t.Errorf("estimateListHeight: hiding the pane did not grow the list: with=%d without=%d",
+			withDetail, withoutDetail)
+	}
+	if withoutDetailVisible <= withDetailVisible {
+		t.Errorf("listVisible: hiding the pane did not grow the list: with=%d without=%d",
+			withDetailVisible, withoutDetailVisible)
 	}
 }

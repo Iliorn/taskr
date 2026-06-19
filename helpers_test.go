@@ -46,9 +46,9 @@ func TestTruncate(t *testing.T) {
 	}{
 		{"short unchanged", "hi", 10, "hi"},
 		{"exact length", "hello", 5, "hello"},
-		{"needs truncation", "hello world", 8, "hello..."},
+		{"needs truncation", "hello world", 8, "hello(…)"},
 		{"max 3 no ellipsis", "hello", 3, "hel"},
-		{"max 4 with ellipsis", "hello", 4, "h..."},
+		{"max 4 with ellipsis", "hello", 4, "h(…)"},
 		{"empty string", "", 5, ""},
 		{"max 1", "hello", 1, "h"},
 	}
@@ -272,6 +272,13 @@ func TestParseQuickAdd(t *testing.T) {
 			wantTitle: "Sweep porch",
 			wantPrio:  todo.PriorityMedium,
 			wantSize:  todo.SizeSmall,
+		},
+		{
+			name:      "size shortcut s:l",
+			input:     "Rewrite scheduler s:l",
+			wantTitle: "Rewrite scheduler",
+			wantPrio:  todo.PriorityMedium,
+			wantSize:  todo.SizeLarge,
 		},
 		{
 			name:      "size large word",

@@ -497,28 +497,15 @@ func copyTodos(todos []todo.Todo) []todo.Todo {
 
 // ── Model mutations ───────────────────────────────────────────────────────────
 
-// markModified records a mutation: pushes undo, marks the named IDs dirty for
-// the next save, and flags derived caches as stale. The cache is refreshed
-// lazily on the next read (via ensureCache), so several mutations within one
-// Update only pay for one refresh instead of one per mutation. With no IDs,
-// falls back to marking every task dirty — used by mass operations not yet
-// refactored to return touched IDs.
+// markModified marks the named IDs dirty for the next save and flags derived
+// caches as stale. The cache is refreshed lazily on the next read (via
+// ensureCache), so several mutations within one Update only pay for one
+// refresh instead of one per mutation. With no IDs, falls back to marking
+// every task dirty — used by mass operations not yet refactored to return
+// touched IDs. Undo is NOT pushed here: callers that want undo must call
+// m.pushUndo(desc, ids...) BEFORE mutating, so the snapshot captures the
+// pre-mutation state.
 func (m *model) markModified(ids ...string) {
-	taskID := m.currentTaskID()
-	m.pushUndo("modify", ids...)
-	if len(ids) == 0 {
-		m.markAllDirty()
-	} else {
-		m.markDirty(ids...)
-	}
-	m.dirty = true
-	m.cache.dirty = true
-	m.invalidateDetailCache()
-	m.ensureCache()
-	m.followTask(taskID)
-}
-
-func (m *model) markModifiedNoUndo(ids ...string) {
 	taskID := m.currentTaskID()
 	if len(ids) == 0 {
 		m.markAllDirty()
@@ -1229,7 +1216,7 @@ func (m model) estimateDetailCursorLine() int {
 		case fieldNotes:
 			return line + 5
 		default: // fieldTags
-			line += 8 // start, due, priority, size, project, notes, created, modified
+			line += 10 // start, due, recurrence, priority, size, project, notes, id, created, modified
 			if len(t.TimeEntries) > 0 {
 				line++
 			}
@@ -1295,20 +1282,39 @@ func (m *model) clampListOffset(listLen int) {
 	}
 }
 
+// detailVisible reports whether the detail pane will be rendered for the
+// current tab/mode/pane. Mirrors the showDetail decision in view.View so the
+// list-height math matches what the renderer actually emits.
+func (m model) detailVisible() bool {
+	if m.mode != modeNormal {
+		return false
+	}
+	switch m.tab {
+	case tabTasks, tabProjects, tabLearnings:
+		return m.pane == paneDetail
+	case tabSettings:
+		return false
+	}
+	return true
+}
+
 func (m model) listVisible() int {
-	var contentH int
-	switch m.detail.page {
-	case 1:
-		contentH = m.detailPage2ContentHeight()
-	case 2:
-		contentH = m.detailPage3ContentHeight()
-	default:
-		contentH = m.detailPage1ContentHeight()
+	detailTotal := 0
+	if m.detailVisible() {
+		var contentH int
+		switch m.detail.page {
+		case 1:
+			contentH = m.detailPage2ContentHeight()
+		case 2:
+			contentH = m.detailPage3ContentHeight()
+		default:
+			contentH = m.detailPage1ContentHeight()
+		}
+		if maxH := m.maxDetailHeight(); contentH > maxH {
+			contentH = maxH
+		}
+		detailTotal = contentH + 4
 	}
-	if maxH := m.maxDetailHeight(); contentH > maxH {
-		contentH = maxH
-	}
-	detailTotal := contentH + 4
 	fixedLines := 4
 	if m.err != "" {
 		fixedLines++
@@ -1344,7 +1350,7 @@ func (m model) estimateListHeight() int {
 		headerH++ // live timer line above the key hints
 	}
 	detailH := 0
-	if m.mode == modeNormal && m.tab != tabStats {
+	if m.detailVisible() && m.tab != tabStats {
 		detailH = 12
 	}
 	available := m.termHeight - headerH - footerHeight - detailH - 2
@@ -1367,7 +1373,7 @@ func (m model) detailPage1ContentHeight() int {
 	if t == nil {
 		return 1
 	}
-	lines := 11 // 10 fixed + 1 for the Size row added with the sequencing engine
+	lines := 12 // 10 fixed + Size row + ID row
 	if t.Status == todo.Pending {
 		lines++ // Score breakdown row, rendered only for pending tasks
 	}

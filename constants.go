@@ -26,10 +26,16 @@ const (
 	maxTagBarWidth     = 60
 	minInnerWidth      = 20
 
-	ganttSuffixWidth    = 16
-	ganttChartPadding   = 8
-	projCountColWidth   = 10
-	projDoneColWidth    = 10
+	ganttSuffixWidth = 16
+	ganttChartPadding = 8
+
+	// Projects tab count columns. Sized so the typical 1-2-digit count leaves a
+	// ~5-char visible gap before the next column, matching the Tasks tab's
+	// score→due→size rhythm. Active column holds "N active" (max 10 chars for
+	// "999 active"); Done column holds "N done" (max 8 chars for "999 done").
+	projCountColWidth = 13
+	projDoneColWidth  = 11
+
 	commentPrefixLen    = 22
 	detailLabelColWidth = 14
 
@@ -37,15 +43,29 @@ const (
 	maxTagSearchResults  = 5
 	maxProjSearchResults = 5
 
-	// sizeColW is the Size column on the Tasks list. Was 12 (held "S small" +
-	// padding) but the column now shows just a single lowercase letter, so 6
-	// (fits the ">Size<" sort indicator) is the minimum that still keeps the
-	// header readable.
-	sizeColW = 6
+	// sizeColW is the Size column on the Tasks list. Rendered as 2-left + letter
+	// + 5-right asymmetric pad: the 2 left spaces extend the Due column's
+	// 3-trailing into the 5-char inter-column gap; the 5 right spaces form the
+	// same gap on the way to the Project column. Header uses padCenter at this
+	// width so "Size" / ">Size<" stay centered.
+	sizeColW = 8
 
 	// projectColW is the Project column on the Tasks list. Holds a short
 	// project name; longer ones truncate.
 	projectColW = 14
+
+	// scoreColW is the Score column on the active Tasks list. Wide enough for
+	// the ">Score<" sort indicator (7 runes) plus a one-char buffer so it never
+	// butts up against the Due column. The history view keeps the wider 12-col
+	// width since its "Completed" header is longer.
+	scoreColW = 8
+
+	// dueColW is the Due column on the active Tasks list. Sized so that the
+	// 3-trailing-space gap after "DD-MM-YY", plus the 2-space left pad of the
+	// centered Size column, equals the 5-space gap a typical "X.X" score leaves
+	// before Due. History keeps the wider 12-col width to match its Completed
+	// column.
+	dueColW = 11
 
 	footerHeight      = 1
 	minHeaderLines    = 2

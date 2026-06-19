@@ -227,7 +227,7 @@ var daTranslations = map[string]string{
 	"switch tabs":            "skift faneblade",
 	"close help":             "luk hjælp",
 	"Tasks":                  "Opgaver",
-	"add task (quick-add: #tag due:date p:high @proj)": "tilføj opgave (hurtig: #mærke due:dato p:high @proj)",
+	"add task (quick-add: #tag due:date p:high @proj s:M)": "tilføj opgave (hurtig: #mærke due:dato p:high @proj s:M)",
 	"rename task":            "omdøb opgave",
 	"toggle done":            "skift færdig",
 	"start/stop time tracking": "start/stop tidsregistrering",
