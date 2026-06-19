@@ -156,73 +156,78 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	switch m.mode {
-	case modeHelp:
-		return m.updateHelp(msg)
-	case modeConfirmDelete:
-		return m.updateConfirmDelete(msg)
-	case modeConfirmDeleteComment:
-		return m.updateConfirmDeleteComment(msg)
-	case modeConfirmDeleteDep:
-		return m.updateConfirmDeleteDep(msg)
-	case modeConfirmDeleteTag:
-		return m.updateConfirmDeleteTag(msg)
-	case modeConfirmDeleteTagGlobal:
-		return m.updateConfirmDeleteTagGlobal(msg)
-	case modeConfirmDeleteProject:
-		return m.updateConfirmDeleteProject(msg)
-	case modeConfirmDeleteLearning:
-		return m.updateConfirmDeleteLearning(msg)
-	case modeConfirmDeleteSubtask:
-		return m.updateConfirmDeleteSubtask(msg)
-	case modeConfirmDeleteTimeEntry:
-		return m.updateConfirmDeleteTimeEntry(msg)
-	case modeConfirmCloseParent:
-		return m.updateConfirmCloseParent(msg)
-	case modeConfirmUpdate:
-		return m.updateConfirmUpdate(msg)
-	case modeEditTimeEntry:
-		return m.updateEditTimeEntry(msg)
-	case modeIdlePrompt:
-		return m.updateIdlePrompt(msg)
-	case modeInput:
-		return m.updateInput(msg)
-	case modeEditComment:
-		return m.updateEditComment(msg)
-	case modeEditTag:
-		return m.updateEditTag(msg)
-	case modeEditTitle:
-		return m.updateEditTitle(msg)
-	case modeEditProjectInline:
-		return m.updateEditProjectInline(msg)
-	case modeEditLearning:
-		return m.updateEditLearning(msg)
-	case modeAddLearning:
-		return m.updateAddLearning(msg)
-	case modeAddSubtask:
-		return m.updateAddSubtask(msg)
-	case modeEditSubtask:
-		return m.updateEditSubtask(msg)
-	case modeAddTimeEntry:
-		return m.updateAddTimeEntry(msg)
-	case modeSearch:
-		return m.updateSearch(msg)
-	case modeSearchDep:
-		return m.updateSearchDep(msg)
-	case modeSearchTag:
-		return m.updateSearchTag(msg)
-	case modeSearchProject:
-		return m.updateSearchProject(msg)
-	case modeSearchTagTab:
-		return m.updateSearchTagTab(msg)
-	}
-
+	// All handler paths feed through the common tail below so the dirty
+	// flag set by a modal mutation (add task, confirm delete, edit title,
+	// etc.) schedules the 300ms save immediately — not on the next
+	// keystroke, which previously left a window where quitting between
+	// the modal Enter and any subsequent key would lose the change.
 	var newModel tea.Model
 	var cmd tea.Cmd
-	if m.pane == paneList {
-		newModel, cmd = m.updateList(msg)
-	} else {
-		newModel, cmd = m.updateDetail(msg)
+	switch m.mode {
+	case modeHelp:
+		newModel, cmd = m.updateHelp(msg)
+	case modeConfirmDelete:
+		newModel, cmd = m.updateConfirmDelete(msg)
+	case modeConfirmDeleteComment:
+		newModel, cmd = m.updateConfirmDeleteComment(msg)
+	case modeConfirmDeleteDep:
+		newModel, cmd = m.updateConfirmDeleteDep(msg)
+	case modeConfirmDeleteTag:
+		newModel, cmd = m.updateConfirmDeleteTag(msg)
+	case modeConfirmDeleteTagGlobal:
+		newModel, cmd = m.updateConfirmDeleteTagGlobal(msg)
+	case modeConfirmDeleteProject:
+		newModel, cmd = m.updateConfirmDeleteProject(msg)
+	case modeConfirmDeleteLearning:
+		newModel, cmd = m.updateConfirmDeleteLearning(msg)
+	case modeConfirmDeleteSubtask:
+		newModel, cmd = m.updateConfirmDeleteSubtask(msg)
+	case modeConfirmDeleteTimeEntry:
+		newModel, cmd = m.updateConfirmDeleteTimeEntry(msg)
+	case modeConfirmCloseParent:
+		newModel, cmd = m.updateConfirmCloseParent(msg)
+	case modeConfirmUpdate:
+		newModel, cmd = m.updateConfirmUpdate(msg)
+	case modeEditTimeEntry:
+		newModel, cmd = m.updateEditTimeEntry(msg)
+	case modeIdlePrompt:
+		newModel, cmd = m.updateIdlePrompt(msg)
+	case modeInput:
+		newModel, cmd = m.updateInput(msg)
+	case modeEditComment:
+		newModel, cmd = m.updateEditComment(msg)
+	case modeEditTag:
+		newModel, cmd = m.updateEditTag(msg)
+	case modeEditTitle:
+		newModel, cmd = m.updateEditTitle(msg)
+	case modeEditProjectInline:
+		newModel, cmd = m.updateEditProjectInline(msg)
+	case modeEditLearning:
+		newModel, cmd = m.updateEditLearning(msg)
+	case modeAddLearning:
+		newModel, cmd = m.updateAddLearning(msg)
+	case modeAddSubtask:
+		newModel, cmd = m.updateAddSubtask(msg)
+	case modeEditSubtask:
+		newModel, cmd = m.updateEditSubtask(msg)
+	case modeAddTimeEntry:
+		newModel, cmd = m.updateAddTimeEntry(msg)
+	case modeSearch:
+		newModel, cmd = m.updateSearch(msg)
+	case modeSearchDep:
+		newModel, cmd = m.updateSearchDep(msg)
+	case modeSearchTag:
+		newModel, cmd = m.updateSearchTag(msg)
+	case modeSearchProject:
+		newModel, cmd = m.updateSearchProject(msg)
+	case modeSearchTagTab:
+		newModel, cmd = m.updateSearchTagTab(msg)
+	default:
+		if m.pane == paneList {
+			newModel, cmd = m.updateList(msg)
+		} else {
+			newModel, cmd = m.updateDetail(msg)
+		}
 	}
 
 	if nm, ok := newModel.(model); ok {
@@ -401,6 +406,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "q", "ctrl+c":
+			m.flushPendingWrites()
 			return m, tea.Quit
 		case "?":
 			m.mode = modeHelp
@@ -431,23 +437,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.switchTab(tabSettings)
 
 		case "tab":
-			// In the task detail pane, Tab cycles the detail page (main →
-			// subtasks → comments → main); everywhere else it advances the
-			// main tab bar.
-			if m.pane == paneDetail && m.tab == tabTasks {
-				m.detail.page = (m.detail.page + 1) % 3
-				if m.detail.page == 0 {
-					m.detail.field = fieldStartDate
-				} else if m.detail.page == 1 {
-					m.detail.field = fieldSubtasks
-					m.detail.subtaskCursor = 0
-				} else {
-					m.detail.commentCursor = 0
-				}
-				m.invalidateDetailCache()
-			} else {
-				m.switchTab((m.tab + 1) % numTabs)
-			}
+			m.switchTab((m.tab + 1) % numTabs)
 
 		case "h":
 			if m.tab == tabTasks {
@@ -1258,6 +1248,18 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.pane = paneList
 		m.detail = detailState{field: fieldStartDate}
+		m.invalidateDetailCache()
+
+	case "tab":
+		m.detail.page = (m.detail.page + 1) % 3
+		if m.detail.page == 0 {
+			m.detail.field = fieldStartDate
+		} else if m.detail.page == 1 {
+			m.detail.field = fieldSubtasks
+			m.detail.subtaskCursor = 0
+		} else {
+			m.detail.commentCursor = 0
+		}
 		m.invalidateDetailCache()
 
 	case "left":

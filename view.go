@@ -1200,9 +1200,18 @@ func (m model) renderTabs(avail int) string {
 		tabStatsActiveStyle,
 		tabSettingsActiveStyle,
 	}
-	// The selected tab renders as a solid colored pill. Unselected tabs that
-	// have a label render the number in the same colored block and the label
-	// in muted style, so the per-tab color stays visible across the strip.
+	inactiveStyles := [numTabs]lipgloss.Style{
+		tabTasksInactiveStyle,
+		tabCalendarInactiveStyle,
+		tabProjectsInactiveStyle,
+		tabTagsInactiveStyle,
+		tabLearningsInactiveStyle,
+		tabStatsInactiveStyle,
+		tabSettingsInactiveStyle,
+	}
+	// The selected tab renders as a solid colored pill. Unselected tabs use
+	// the per-tab color as the foreground so each tab keeps its identity
+	// without a background block.
 	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"), tr("4 Tags"), tr("5 Learnings"), tr("6 Stats"), tr("7 Settings")}
 	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7"}
 
@@ -1236,17 +1245,10 @@ func (m model) renderTabs(avail int) string {
 
 	var parts [numTabs]string
 	for i := range names {
-		num, label, hasLabel := strings.Cut(names[i], " ")
-		switch {
-		case tab(i) == m.tab:
-			// Selected tab: solid colored pill over the whole name.
+		if tab(i) == m.tab {
 			parts[i] = activeStyles[i].Render(names[i])
-		case hasLabel:
-			// Unselected with label: colored number block + muted label.
-			parts[i] = activeStyles[i].Render(num) + tabInactiveLabelStyle.Render(" "+label)
-		default:
-			// Unselected, num-only (narrow): muted block, no color noise.
-			parts[i] = tabInactiveStyle.Render(num)
+		} else {
+			parts[i] = inactiveStyles[i].Render(names[i])
 		}
 	}
 	return strings.Join(parts[:], " ")

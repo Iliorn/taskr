@@ -23,11 +23,10 @@ type theme struct {
 	teal     lipgloss.Color
 	red      lipgloss.Color
 
-	fg         lipgloss.Color // primary text
-	dim        lipgloss.Color // borders, completed/muted text
-	help       lipgloss.Color // hint text
-	bg         lipgloss.Color // dark base — used as fg on colored backgrounds
-	inactiveBg lipgloss.Color // inactive tab background
+	fg   lipgloss.Color // primary text
+	dim  lipgloss.Color // borders, completed/muted text
+	help lipgloss.Color // hint text
+	bg   lipgloss.Color // dark base — used as fg on colored backgrounds
 }
 
 // themes holds the built-in palettes. The first entry is the default.
@@ -44,11 +43,10 @@ var themes = []theme{
 		blue:       "#78D4FF",
 		teal:       "#5EEAD4",
 		red:        "#FF0000",
-		fg:         "#FFFFFF",
-		dim:        "#555555",
-		help:       "#888888",
-		bg:         "#1a1a1a",
-		inactiveBg: "#333333",
+		fg:   "#FFFFFF",
+		dim:  "#555555",
+		help: "#888888",
+		bg:   "#1a1a1a",
 	},
 	{
 		name:       "Catppuccin",
@@ -65,11 +63,10 @@ var themes = []theme{
 		blue:       "#89b4fa",
 		teal:       "#94e2d5",
 		red:        "#f38ba8",
-		fg:         "#cdd6f4",
-		dim:        "#585b70",
-		help:       "#6c7086",
-		bg:         "#1e1e2e",
-		inactiveBg: "#313244",
+		fg:   "#cdd6f4",
+		dim:  "#585b70",
+		help: "#6c7086",
+		bg:   "#1e1e2e",
 	},
 	{
 		name:       "Gruvbox",
@@ -83,11 +80,10 @@ var themes = []theme{
 		blue:       "#83a598",
 		teal:       "#8ec07c",
 		red:        "#fb4934",
-		fg:         "#ebdbb2",
-		dim:        "#665c54",
-		help:       "#928374",
-		bg:         "#1d2021",
-		inactiveBg: "#3c3836",
+		fg:   "#ebdbb2",
+		dim:  "#665c54",
+		help: "#928374",
+		bg:   "#1d2021",
 	},
 	{
 		name:       "Nord",
@@ -101,11 +97,10 @@ var themes = []theme{
 		blue:       "#81a1c1",
 		teal:       "#8fbcbb",
 		red:        "#bf616a",
-		fg:         "#eceff4",
-		dim:        "#4c566a",
-		help:       "#616e88",
-		bg:         "#2e3440",
-		inactiveBg: "#3b4252",
+		fg:   "#eceff4",
+		dim:  "#4c566a",
+		help: "#616e88",
+		bg:   "#2e3440",
 	},
 }
 
@@ -130,12 +125,14 @@ var (
 	tabStatsActiveStyle     lipgloss.Style
 	tabCalendarActiveStyle  lipgloss.Style
 	tabSettingsActiveStyle  lipgloss.Style
-	tabInactiveStyle        lipgloss.Style
 
-	// tabInactiveLabelStyle renders the label of an unselected tab when its
-	// number is shown as a colored block: muted background, no padding (the
-	// colored number block already supplies the left padding for the tab).
-	tabInactiveLabelStyle lipgloss.Style
+	tabTasksInactiveStyle     lipgloss.Style
+	tabProjectsInactiveStyle  lipgloss.Style
+	tabTagsInactiveStyle      lipgloss.Style
+	tabLearningsInactiveStyle lipgloss.Style
+	tabStatsInactiveStyle     lipgloss.Style
+	tabCalendarInactiveStyle  lipgloss.Style
+	tabSettingsInactiveStyle  lipgloss.Style
 
 	selectedStyle   lipgloss.Style
 	normalStyle     lipgloss.Style
@@ -190,6 +187,9 @@ func applyTheme(t theme) {
 	activeTab := func(c lipgloss.Color) lipgloss.Style {
 		return lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(c).Padding(0, 1)
 	}
+	inactiveTab := func(c lipgloss.Color) lipgloss.Style {
+		return lipgloss.NewStyle().Foreground(c).Padding(0, 1)
+	}
 
 	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent)
 
@@ -200,8 +200,14 @@ func applyTheme(t theme) {
 	tabStatsActiveStyle = activeTab(t.blue)
 	tabCalendarActiveStyle = activeTab(t.teal)
 	tabSettingsActiveStyle = activeTab(t.accent)
-	tabInactiveStyle = lipgloss.NewStyle().Foreground(t.fg).Background(t.inactiveBg).Padding(0, 1)
-	tabInactiveLabelStyle = lipgloss.NewStyle().Foreground(t.fg).Background(t.inactiveBg)
+
+	tabTasksInactiveStyle = inactiveTab(t.green)
+	tabProjectsInactiveStyle = inactiveTab(t.orange)
+	tabTagsInactiveStyle = inactiveTab(t.purple)
+	tabLearningsInactiveStyle = inactiveTab(t.yellow)
+	tabStatsInactiveStyle = inactiveTab(t.blue)
+	tabCalendarInactiveStyle = inactiveTab(t.teal)
+	tabSettingsInactiveStyle = inactiveTab(t.accent)
 
 	selectedStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
 	normalStyle = lipgloss.NewStyle().Foreground(t.fg)

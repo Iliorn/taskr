@@ -442,6 +442,27 @@ func scheduleSave() tea.Cmd {
 	})
 }
 
+// flushPendingWrites synchronously persists any dirty tasks / tombstones. The
+// debounced save returns a tea.Tick command — batched with tea.Quit it races
+// the program shutdown and loses the most recent mutation (e.g. add a task,
+// hit q within 300ms, the task is gone on next launch). Calling this from the
+// quit path closes that window. Best-effort: a save error here can't be shown
+// in the TUI anymore, so we surface it on stderr.
+func (m *model) flushPendingWrites() {
+	dirty, tombstones := m.Store.drainDirty()
+	if len(dirty) == 0 && len(tombstones) == 0 {
+		return
+	}
+	if m.watcher != nil {
+		m.watcher.recordSelfSave()
+	}
+	if err := m.repo.Save(dirty, tombstones); err != nil {
+		fmt.Fprintf(os.Stderr, "Error saving tasks on quit: %v\n", err)
+	}
+	m.dirty = false
+	m.savePending = false
+}
+
 // copyTodo deep-copies the nested slices of a single task so the result can be
 // safely mutated (or read from another goroutine) without affecting the source.
 func copyTodo(t todo.Todo) todo.Todo {

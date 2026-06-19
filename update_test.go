@@ -338,3 +338,69 @@ func TestBiasCycleOnSettingsTab(t *testing.T) {
 		t.Errorf("after right on Momentum row: %v, want Intense", activeBiases.Momentum)
 	}
 }
+
+// ── Quit flushes pending writes ───────────────────────────────────────────────
+
+// Regression: pressing q within the 300ms save-debounce window used to drop
+// the most recent mutation. tea.Quit fires immediately, tea.Tick(300ms) loses
+// the race, and the user comes back to find their just-added task gone.
+// flushPendingWrites on the q/ctrl+c handler closes the window.
+func TestQuitFlushesPendingWrites(t *testing.T) {
+	repo := &fakeRepo{}
+	m := initialModel(repo)
+	m.termWidth = 120
+	m.termHeight = 40
+	m.ensureCache()
+
+	// Mimic the user's flow: 'a' opens the input, type a title, Enter adds.
+	m = sendKey(t, m, "a")
+	if m.mode != modeInput {
+		t.Fatalf("after 'a': mode = %v, want modeInput", m.mode)
+	}
+	m.textInput.SetValue("Buy milk")
+	m = sendKey(t, m, "enter")
+	if m.mode != modeNormal {
+		t.Fatalf("after enter: mode = %v, want modeNormal", m.mode)
+	}
+	if m.Store.len() != 1 {
+		t.Fatalf("after enter: store has %d tasks, want 1", m.Store.len())
+	}
+
+	// Press q. The flush must persist the task before tea.Quit takes the
+	// program down, otherwise the next launch loads an empty repo.
+	m = sendKey(t, m, "q")
+	if len(repo.todos) != 1 {
+		t.Fatalf("after q: repo has %d tasks, want 1 — pending write was dropped",
+			len(repo.todos))
+	}
+	if repo.todos[0].Title != "Buy milk" {
+		t.Errorf("saved title = %q, want %q", repo.todos[0].Title, "Buy milk")
+	}
+}
+
+// Regression: modal handlers (add, edit-title, confirm-delete, …) used to
+// return from dispatch before the common dirty-check tail, so the save tick
+// wasn't armed until the next keystroke. A panic / SIGKILL between the modal
+// Enter and any subsequent key would lose the mutation. Now every handler
+// flows through the tail, so savePending + saveScheduled flip immediately.
+func TestModalMutationSchedulesSaveImmediately(t *testing.T) {
+	repo := &fakeRepo{}
+	m := initialModel(repo)
+	m.termWidth = 120
+	m.termHeight = 40
+	m.ensureCache()
+
+	m = sendKey(t, m, "a")
+	m.textInput.SetValue("Buy milk")
+	m = sendKey(t, m, "enter")
+
+	if !m.savePending {
+		t.Errorf("savePending = false after modal enter, want true")
+	}
+	if !m.saveScheduled {
+		t.Errorf("saveScheduled = false after modal enter, want true")
+	}
+	if m.dirty {
+		t.Errorf("dirty still set after dispatch tail, want false")
+	}
+}
