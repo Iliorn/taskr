@@ -177,6 +177,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateConfirmDeleteSubtask(msg)
 	case modeConfirmDeleteTimeEntry:
 		return m.updateConfirmDeleteTimeEntry(msg)
+	case modeConfirmCloseParent:
+		return m.updateConfirmCloseParent(msg)
 	case modeConfirmUpdate:
 		return m.updateConfirmUpdate(msg)
 	case modeEditTimeEntry:
@@ -469,6 +471,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cycleBias(m.settingsCursor, +1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingAging {
 				m.toggleAging()
+			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseParent {
+				m.toggleAutoCloseParent()
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
@@ -485,6 +489,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cycleBias(m.settingsCursor, -1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingAging {
 				m.toggleAging()
+			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseParent {
+				m.toggleAutoCloseParent()
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(-1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
@@ -618,12 +624,25 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					isSub := t.ParentID != ""
 					wasPending := t.Status == todo.Pending
+					// Pending parent with open subtasks: stage a confirm
+					// rather than silently close (and hide) open work.
+					if wasPending && !isSub {
+						if done, total := m.subtaskProgress(t.ID); total > 0 && done < total {
+							m.pendingCloseParentID = t.ID
+							m.mode = modeConfirmCloseParent
+							m.confirmMsg = fmt.Sprintf(tr("Close '%s' with %d open subtask(s)? (y/n)"), truncate(t.Title, 40), total-done)
+							return m, nil
+						}
+					}
 					t.Toggle()
 					ids := []string{t.ID}
 					if wasPending && t.IsRecurring() {
 						if newID := m.spawnNextRecurrence(t); newID != "" {
 							ids = append(ids, newID)
 						}
+					}
+					if wasPending && isSub {
+						ids = append(ids, m.autoCloseAncestorsIfAllDone(t.ID)...)
 					}
 					m.markModified(ids...)
 					// Subtasks stay visible after toggling (dimmed with a
@@ -827,6 +846,14 @@ func (m *model) toggleAging() {
 	}
 }
 
+// toggleAutoCloseParent flips the "close parent when all subtasks done"
+// preference. Doesn't retroactively close already-complete subtrees — only
+// future subtask transitions trigger the auto-close.
+func (m *model) toggleAutoCloseParent() {
+	m.autoCloseParent = !m.autoCloseParent
+	m.persistSettings()
+}
+
 // persistSettings writes all current preferences to disk, surfacing any write
 // failure so a setting that silently won't stick is at least visible.
 func (m *model) persistSettings() {
@@ -840,6 +867,7 @@ func (m *model) persistSettings() {
 		SeqBiasPriority:  activeBiases.Priority,
 		SeqBiasMomentum:  activeBiases.Momentum,
 		SeqAgingDisabled: !activeBiases.Aging,
+		AutoCloseParent:  m.autoCloseParent,
 	}); err != nil {
 		m.err = fmt.Sprintf(tr("Error saving settings: %v"), err)
 	}
@@ -1017,6 +1045,8 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	switch m.settingsCursor {
 	case settingAging:
 		m.toggleAging()
+	case settingAutoCloseParent:
+		m.toggleAutoCloseParent()
 	case settingTheme:
 		m.cycleTheme(1)
 	case settingLanguage:

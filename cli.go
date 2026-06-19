@@ -610,6 +610,14 @@ func cliDone(args []string) int {
 		if t.IsRecurring() {
 			if next, ok := buildNextRecurrence(*t); ok {
 				spawned = append(spawned, next)
+				// Clone the subtree onto the new parent so a recurring
+				// "weekly review" keeps its checklist on each spawn. Same
+				// delta-shifted semantics as the TUI path.
+				var delta time.Duration
+				if !t.DueDate.IsZero() && !next.DueDate.IsZero() {
+					delta = next.DueDate.Sub(t.DueDate)
+				}
+				spawned = append(spawned, cloneSubtreeResetInSlice(todos, t.ID, next.ID, delta)...)
 			}
 		}
 	}
@@ -948,12 +956,95 @@ func cliEdit(args []string) int {
 		fmt.Fprintln(os.Stderr, "taskr edit: no fields changed (nothing to save)")
 		return 0
 	}
-	if err := repo.Save([]*todo.Todo{t}, nil); err != nil {
+	saveSet := []*todo.Todo{t}
+	// If a subtask's due moved later, walk up and extend every ancestor
+	// whose due falls short of the child's — mirrors the TUI flow.
+	if *due != "" && t.ParentID != "" {
+		saveSet = append(saveSet, extendAncestorsDueInSlice(todos, t)...)
+	}
+	if err := repo.Save(saveSet, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
 		return 1
 	}
 	fmt.Printf("edited  %s  %s\n", t.ID[:8], t.Title)
+	for _, a := range saveSet[1:] {
+		fmt.Printf("bumped  %s  %s  due → %s\n", a.ID[:8], a.Title, a.DueDate.Format("02-01-06"))
+	}
 	return 0
+}
+
+// cloneSubtreeResetInSlice is the CLI counterpart to model.cloneSubtreeReset:
+// builds a fresh Pending copy of every descendant of srcParentID, reparented
+// under newParentID, with DueDate/StartDate shifted by `delta`. Pure: walks
+// the loaded slice once to build a parent→children index, then BFS-clones.
+func cloneSubtreeResetInSlice(todos []todo.Todo, srcParentID, newParentID string, delta time.Duration) []todo.Todo {
+	children := make(map[string][]int, len(todos))
+	for i := range todos {
+		if pid := todos[i].ParentID; pid != "" {
+			children[pid] = append(children[pid], i)
+		}
+	}
+	var out []todo.Todo
+	// queue holds (srcID, newParentID) pairs to clone next, so nested
+	// grandchildren land under their freshly-cloned parent rather than the
+	// recurring root.
+	type pair struct{ srcID, newPID string }
+	queue := []pair{{srcParentID, newParentID}}
+	for len(queue) > 0 {
+		p := queue[0]
+		queue = queue[1:]
+		for _, idx := range children[p.srcID] {
+			c := todos[idx]
+			clone := todo.NewSubtask(c.Title, p.newPID)
+			clone.Priority = c.Priority
+			clone.Size = c.Size
+			clone.Project = c.Project
+			clone.Notes = c.Notes
+			clone.Recurrence = c.Recurrence
+			if len(c.Tags) > 0 {
+				clone.Tags = append([]string{}, c.Tags...)
+			}
+			if !c.DueDate.IsZero() {
+				clone.DueDate = c.DueDate.Add(delta)
+			}
+			if !c.StartDate.IsZero() {
+				clone.StartDate = c.StartDate.Add(delta)
+			}
+			out = append(out, clone)
+			queue = append(queue, pair{c.ID, clone.ID})
+		}
+	}
+	return out
+}
+
+// extendAncestorsDueInSlice walks up from child via ParentID, bumping each
+// ancestor's DueDate to at least match the child's. Pure CLI counterpart to
+// the model's extendParentDueIfNeeded — needs the loaded slice because the
+// CLI doesn't carry a subtaskOf index. Returns the ancestors that changed
+// so the caller can include them in the save set.
+func extendAncestorsDueInSlice(todos []todo.Todo, child *todo.Todo) []*todo.Todo {
+	idx := make(map[string]*todo.Todo, len(todos))
+	for i := range todos {
+		idx[todos[i].ID] = &todos[i]
+	}
+	var bumped []*todo.Todo
+	cur := child
+	for cur != nil && cur.ParentID != "" {
+		parent := idx[cur.ParentID]
+		if parent == nil {
+			break
+		}
+		if cur.DueDate.IsZero() {
+			break
+		}
+		if !parent.DueDate.IsZero() && !parent.DueDate.Before(cur.DueDate) {
+			break
+		}
+		parent.SetDueDate(cur.DueDate)
+		bumped = append(bumped, parent)
+		cur = parent
+	}
+	return bumped
 }
 
 // ── delete ───────────────────────────────────────────────────────────────────

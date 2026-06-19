@@ -66,7 +66,11 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 							return m, clearErrAfter()
 						}
 					}
-					m.markModified(t.ID)
+					ids := []string{t.ID}
+					if m.detail.field == fieldDueDate && t.ParentID != "" {
+						ids = append(ids, m.extendParentDueIfNeeded(t.ID)...)
+					}
+					m.markModified(ids...)
 				}
 			}
 			return m, nil
@@ -559,6 +563,42 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = modeNormal
 		case "n", "esc":
 			m.pendingDeleteID = ""
+			m.mode = modeNormal
+		}
+	}
+	return m, nil
+}
+
+// updateConfirmCloseParent handles the "close parent with open subtasks?"
+// prompt staged by the Tasks-tab 'd' handler. "y" closes the parent (and
+// spawns next recurrence if the parent was recurring) but does NOT touch
+// the open subtasks — the user opted to close just the parent, not cascade.
+func (m model) updateConfirmCloseParent(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "y":
+			if id := m.pendingCloseParentID; id != "" {
+				if t := m.get(id); t != nil && t.Status == todo.Pending {
+					if t.IsTimerRunning() {
+						m.stopTimer(t.ID)
+					}
+					t.Toggle()
+					ids := []string{t.ID}
+					if t.IsRecurring() {
+						if newID := m.spawnNextRecurrence(t); newID != "" {
+							ids = append(ids, newID)
+						}
+					}
+					m.markModified(ids...)
+					if m.cursor > 0 {
+						m.cursor--
+					}
+				}
+			}
+			m.pendingCloseParentID = ""
+			m.mode = modeNormal
+		case "n", "esc":
+			m.pendingCloseParentID = ""
 			m.mode = modeNormal
 		}
 	}

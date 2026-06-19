@@ -313,7 +313,7 @@ func (m model) buildFooterContent(w int) string {
 		modeConfirmDeleteDep, modeConfirmDeleteTag,
 		modeConfirmDeleteTagGlobal, modeConfirmDeleteProject,
 		modeConfirmDeleteLearning, modeConfirmDeleteSubtask,
-		modeConfirmDeleteTimeEntry:
+		modeConfirmDeleteTimeEntry, modeConfirmCloseParent:
 		return confirmStyle.Render(m.confirmMsg)
 	}
 	return ""

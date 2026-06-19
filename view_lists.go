@@ -825,6 +825,16 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	if t.IsRecurring() {
 		title += " ↻"
 	}
+	if subDone, subTotal := m.subtaskProgress(t.ID); subTotal > 0 {
+		// Trailing ‼ marks "something in the subtree is overdue" — distinct
+		// from the leading dep-overdue ! so the user can tell which side is
+		// on fire.
+		badge := fmt.Sprintf(" (%d/%d)", subDone, subTotal)
+		if m.hasOverdueDescendant(t.ID, overdueSet) {
+			badge += "‼"
+		}
+		title += badge
+	}
 	if t.IsTimerRunning() {
 		title = "⏱ " + title
 	}
@@ -979,6 +989,7 @@ func (m model) renderSettingsList() string {
 		tr("Priority focus"),
 		tr("Momentum bias"),
 		tr("Aging increases score"),
+		tr("Auto-close parent w/ all subtasks done"),
 		tr("Theme"),
 		tr("Language"),
 		tr("Version"),
@@ -988,11 +999,16 @@ func (m model) renderSettingsList() string {
 	if activeBiases.Aging {
 		agingVal = tr("On")
 	}
+	autoCloseVal := tr("Off")
+	if m.autoCloseParent {
+		autoCloseVal = tr("On")
+	}
 	values := [numSettingsRows]string{
 		biasPickerValue(activeBiases.Deadline),
 		biasPickerValue(activeBiases.Priority),
 		biasPickerValue(activeBiases.Momentum),
 		"‹ " + agingVal + " ›",
+		"‹ " + autoCloseVal + " ›",
 		"‹ " + m.themeName + " ›",
 		"‹ " + activeLang.displayName() + " ›",
 		appVersion,

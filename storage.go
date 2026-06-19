@@ -47,6 +47,12 @@ type appSettings struct {
 	// keeps aging on by default — matches pre-toggle behaviour without
 	// migration.
 	SeqAgingDisabled bool `json:"seq_aging_disabled"`
+
+	// AutoCloseParent: when on, a parent task is auto-marked Done the moment
+	// its last open subtask closes. Off by default because the parent often
+	// represents review/sign-off work that survives the children. Opt-in
+	// for users who prefer parents as folders.
+	AutoCloseParent bool `json:"auto_close_parent"`
 }
 
 // migrateSettings brings settings saved under an older schema version up to
@@ -237,21 +243,38 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 			return todos[i].CreatedAt.Before(todos[j].CreatedAt)
 		})
 	default: // taskSortSequence
-		// Precompute scores once per task — sequenceScore() is O(1) but the
-		// sort closure runs O(N log N) times, and reading by ID from the map
-		// keeps the comparator stable across swaps.
-		scores := make(map[string]float64, len(todos))
-		for i := range todos {
-			scores[todos[i].ID] = sequenceScore(&todos[i])
-		}
-		sort.SliceStable(todos, func(i, j int) bool {
-			si, sj := scores[todos[i].ID], scores[todos[j].ID]
-			if si != sj {
-				return si > sj
-			}
-			return todos[i].CreatedAt.Before(todos[j].CreatedAt)
-		})
+		sortTodosBySequenceWithRollup(todos, nil)
 	}
+}
+
+// sortTodosBySequenceWithRollup is the sequence-mode sort, with an optional
+// per-ID rollup map that boosts each task's effective score to
+// max(own, rollup[id]). The boost is how a parent inherits the urgency of
+// its highest-priority subtask — so a "high" subtask buried under a "low"
+// parent doesn't disappear into the bottom of the list. Passing nil
+// preserves the original behaviour (used by callers that don't have the
+// child set on hand, e.g. on-disk loads).
+func sortTodosBySequenceWithRollup(todos []todo.Todo, rollup map[string]float64) {
+	if len(todos) <= 1 {
+		return
+	}
+	scores := make(map[string]float64, len(todos))
+	for i := range todos {
+		s := sequenceScore(&todos[i])
+		if rollup != nil {
+			if boost, ok := rollup[todos[i].ID]; ok && boost > s {
+				s = boost
+			}
+		}
+		scores[todos[i].ID] = s
+	}
+	sort.SliceStable(todos, func(i, j int) bool {
+		si, sj := scores[todos[i].ID], scores[todos[j].ID]
+		if si != sj {
+			return si > sj
+		}
+		return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+	})
 }
 
 func sortTodosByStartDate(todos []todo.Todo) []todo.Todo {

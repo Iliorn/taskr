@@ -37,6 +37,7 @@ const (
 	settingBiasPriority
 	settingBiasMomentum
 	settingAging
+	settingAutoCloseParent
 	settingTheme
 	settingLanguage
 	settingVersion
@@ -87,6 +88,7 @@ const (
 	modeConfirmDeleteLearning
 	modeConfirmDeleteSubtask
 	modeConfirmDeleteTimeEntry
+	modeConfirmCloseParent
 	modeConfirmUpdate
 	modeEditTimeEntry
 	modeIdlePrompt
@@ -229,6 +231,7 @@ type model struct {
 	pendingTag          int
 	pendingLearning     int
 	pendingSubtask      int
+	pendingCloseParentID string
 	pendingEntryTaskID  string
 	pendingEntryID      string
 	termWidth           int
@@ -255,6 +258,7 @@ type model struct {
 	themeName           string
 	updateStatus        string
 	searchCursor        int
+	autoCloseParent     bool
 
 	// Persistence
 	dirty         bool
@@ -345,6 +349,7 @@ func initialModel(repo Repository) model {
 		tagSort:             settings.TagSort,
 		taskSort:            settings.TaskSort,
 		learningSort:        settings.LearningSort,
+		autoCloseParent:     settings.AutoCloseParent,
 		themeName:           th.name,
 		expandedTasks:       make(map[string]bool),
 		editorCmd:           resolveEditorCmd(),
@@ -596,7 +601,9 @@ func buildNextRecurrence(src todo.Todo) (todo.Todo, bool) {
 
 // spawnNextRecurrence builds the next instance and adds it to the store.
 // Returns the spawned ID, or "" when the source isn't recurring or the rule
-// is unparseable.
+// is unparseable. Also clones the source's subtree onto the new parent with
+// every child reset to Pending, so a recurring "weekly review" keeps its
+// checklist on each spawn instead of losing it.
 func (m *model) spawnNextRecurrence(src *todo.Todo) string {
 	if src == nil {
 		return ""
@@ -606,7 +613,46 @@ func (m *model) spawnNextRecurrence(src *todo.Todo) string {
 		return ""
 	}
 	m.add(next)
+	// The whole-parent due-date delta shifts child dates by the same amount,
+	// so a "due 2 days before parent" child stays "due 2 days before parent"
+	// on the next instance. Zero when either end has no due date.
+	var delta time.Duration
+	if !src.DueDate.IsZero() && !next.DueDate.IsZero() {
+		delta = next.DueDate.Sub(src.DueDate)
+	}
+	m.cloneSubtreeReset(src.ID, next.ID, delta)
 	return next.ID
+}
+
+// cloneSubtreeReset clones every descendant of srcParentID, reparented under
+// newParentID, with each clone reset to Pending and history wiped
+// (CompletedAt, TimeEntries, Comments, Learnings cleared). DueDate and
+// StartDate are shifted by `delta` so the subtree's internal scheduling is
+// preserved relative to the new parent. Recurses to preserve nested shape.
+func (m *model) cloneSubtreeReset(srcParentID, newParentID string, delta time.Duration) {
+	for _, childID := range m.subtaskIDs(srcParentID) {
+		child := m.get(childID)
+		if child == nil {
+			continue
+		}
+		clone := todo.NewSubtask(child.Title, newParentID)
+		clone.Priority = child.Priority
+		clone.Size = child.Size
+		clone.Project = child.Project
+		clone.Notes = child.Notes
+		clone.Recurrence = child.Recurrence
+		if len(child.Tags) > 0 {
+			clone.Tags = append([]string{}, child.Tags...)
+		}
+		if !child.DueDate.IsZero() {
+			clone.DueDate = child.DueDate.Add(delta)
+		}
+		if !child.StartDate.IsZero() {
+			clone.StartDate = child.StartDate.Add(delta)
+		}
+		m.add(clone)
+		m.cloneSubtreeReset(child.ID, clone.ID, delta)
+	}
 }
 
 // ── Time tracking helpers ─────────────────────────────────────────────────────
@@ -784,6 +830,145 @@ func (m model) descendantIDs(rootID string) []string {
 	return out
 }
 
+// subtaskProgress reports the (done, total) count of parentID's direct
+// children. The Tasks-tab badge `(2/5)` reads this — direct children match
+// the visible tree better than counting transitive descendants.
+func (m model) subtaskProgress(parentID string) (done, total int) {
+	ids := m.subtaskIDs(parentID)
+	total = len(ids)
+	for _, id := range ids {
+		if c := m.get(id); c != nil && c.Status == todo.Done {
+			done++
+		}
+	}
+	return done, total
+}
+
+// hasOverdueDescendant returns true if any task in parentID's subtree (any
+// depth) is currently overdue. Recursive so a deeply-nested overdue child
+// still surfaces on the root row.
+func (m model) hasOverdueDescendant(parentID string, overdueSet map[string]bool) bool {
+	for _, id := range m.subtaskIDs(parentID) {
+		if overdueSet[id] {
+			return true
+		}
+		if m.hasOverdueDescendant(id, overdueSet) {
+			return true
+		}
+	}
+	return false
+}
+
+// descendantTimeSpent sums TotalTimeSpent across parentID's full subtree (not
+// including parentID itself). Used by the detail view to roll subtask time
+// up onto the parent's display.
+func (m model) descendantTimeSpent(parentID string) time.Duration {
+	var sum time.Duration
+	for _, id := range m.subtaskIDs(parentID) {
+		if c := m.get(id); c != nil {
+			sum += c.TotalTimeSpent()
+		}
+		sum += m.descendantTimeSpent(id)
+	}
+	return sum
+}
+
+// allDescendantsDone reports whether parentID has at least one subtask AND
+// every transitive descendant is Done. Used by the auto-close setting: a
+// parent with no subtasks never auto-closes.
+func (m model) allDescendantsDone(parentID string) bool {
+	ids := m.subtaskIDs(parentID)
+	if len(ids) == 0 {
+		return false
+	}
+	for _, id := range ids {
+		c := m.get(id)
+		if c == nil || c.Status != todo.Done {
+			return false
+		}
+		if !m.allDescendantsDoneOrEmpty(id) {
+			return false
+		}
+	}
+	return true
+}
+
+// allDescendantsDoneOrEmpty: like allDescendantsDone but returns true when
+// parentID has no children. Used recursively so a leaf doesn't fail the
+// "all done" check just by lacking subtasks.
+func (m model) allDescendantsDoneOrEmpty(parentID string) bool {
+	for _, id := range m.subtaskIDs(parentID) {
+		c := m.get(id)
+		if c == nil || c.Status != todo.Done {
+			return false
+		}
+		if !m.allDescendantsDoneOrEmpty(id) {
+			return false
+		}
+	}
+	return true
+}
+
+// autoCloseAncestorsIfAllDone walks up from childID and, while the setting
+// is enabled, closes every ancestor whose subtree is now fully done. Returns
+// the closed ancestor IDs (plus any recurring-spawn IDs) so the caller can
+// mark them dirty. No-op when the setting is off or childID itself isn't
+// Done. Open ancestors with sibling work pending naturally stop the walk
+// because allDescendantsDoneOrEmpty returns false.
+func (m *model) autoCloseAncestorsIfAllDone(childID string) []string {
+	if !m.autoCloseParent {
+		return nil
+	}
+	var closed []string
+	cur := m.get(childID)
+	for cur != nil && cur.ParentID != "" {
+		parent := m.get(cur.ParentID)
+		if parent == nil || parent.Status == todo.Done {
+			break
+		}
+		if !m.allDescendantsDoneOrEmpty(parent.ID) {
+			break
+		}
+		if parent.IsTimerRunning() {
+			m.stopTimer(parent.ID)
+		}
+		parent.Toggle()
+		closed = append(closed, parent.ID)
+		if parent.IsRecurring() {
+			if newID := m.spawnNextRecurrence(parent); newID != "" {
+				closed = append(closed, newID)
+			}
+		}
+		cur = parent
+	}
+	return closed
+}
+
+// extendParentDueIfNeeded walks up from subID and bumps each ancestor's
+// DueDate forward to at least match the child's, recursively. Only extends
+// — never shrinks an ancestor's date. Returns the ancestor IDs that were
+// modified so the caller can mark them dirty.
+func (m *model) extendParentDueIfNeeded(subID string) []string {
+	var bumped []string
+	cur := m.get(subID)
+	for cur != nil && cur.ParentID != "" {
+		parent := m.get(cur.ParentID)
+		if parent == nil {
+			break
+		}
+		if cur.DueDate.IsZero() {
+			break
+		}
+		if !parent.DueDate.IsZero() && !parent.DueDate.Before(cur.DueDate) {
+			break
+		}
+		parent.SetDueDate(cur.DueDate)
+		bumped = append(bumped, parent.ID)
+		cur = parent
+	}
+	return bumped
+}
+
 // addSubtask creates a child of parentID and returns the new subtask's ID so
 // the caller can mark it dirty.
 func (m *model) addSubtask(parentID, title string) string {
@@ -795,7 +980,8 @@ func (m *model) addSubtask(parentID, title string) string {
 
 // toggleSubtask flips a child task's status and returns every ID the caller
 // should mark dirty: the toggled subtask, plus the freshly-spawned next
-// instance when the subtask was a recurring task closed by this call.
+// instance when the subtask was a recurring task closed by this call, plus
+// any ancestors auto-closed because their subtree is now fully done.
 func (m *model) toggleSubtask(parentID string, subtaskCursor int) []string {
 	ids := m.subtaskIDs(parentID)
 	if subtaskCursor >= len(ids) {
@@ -818,6 +1004,9 @@ func (m *model) toggleSubtask(parentID string, subtaskCursor int) []string {
 		if newID := m.spawnNextRecurrence(t); newID != "" {
 			out = append(out, newID)
 		}
+	}
+	if wasPending {
+		out = append(out, m.autoCloseAncestorsIfAllDone(subID)...)
 	}
 	return out
 }

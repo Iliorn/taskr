@@ -90,8 +90,15 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	b.WriteString("  " + detailLabelStyle.Render(padRight(tr("Modified:"), detailLabelColWidth)) +
 		detailValueStyle.Render(t.ModifiedAt.Format("02-01-06 15:04")) + "\n")
 
-	if len(t.TimeEntries) > 0 {
-		timeVal := fmt.Sprintf(tr("%s (%d entries)"), formatDuration(t.TotalTimeSpent()), len(t.TimeEntries))
+	subTime := m.descendantTimeSpent(t.ID)
+	if len(t.TimeEntries) > 0 || subTime > 0 {
+		own := t.TotalTimeSpent()
+		timeVal := fmt.Sprintf(tr("%s (%d entries)"), formatDuration(own), len(t.TimeEntries))
+		if subTime > 0 {
+			// Show the rolled-up total separately so the user can see what
+			// their own logged time was vs. what subtasks added.
+			timeVal += fmt.Sprintf(tr("  +%s subtasks = %s"), formatDuration(subTime), formatDuration(own+subTime))
+		}
 		if t.IsTimerRunning() {
 			timeVal += tr(" ◉ tracking")
 		}

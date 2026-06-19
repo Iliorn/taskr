@@ -45,7 +45,10 @@ func todoMatchesFocus(t todo.Todo, focus bool) bool {
 
 // selectActiveDone splits the top-level (non-subtask) tasks into the active and
 // done lists, applying the search filter to both and the focus filter to active
-// only, then sorts each by the given mode.
+// only, then sorts each by the given mode. In Sequence mode, parents inherit
+// the max score of their descendants for ranking only — the displayed score
+// stays the parent's own — so a high-priority subtask pulls its parent up
+// rather than hiding beneath a calmer one.
 func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode taskSortMode) (active, done []todo.Todo) {
 	for _, t := range todos {
 		if t.ParentID != "" {
@@ -58,9 +61,51 @@ func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode tas
 			done = append(done, t)
 		}
 	}
-	sortTodosByMode(active, sortMode)
-	sortTodosByMode(done, sortMode)
+	if sortMode == taskSortSequence {
+		rollup := descendantScoreRollup(todos)
+		sortTodosBySequenceWithRollup(active, rollup)
+		sortTodosBySequenceWithRollup(done, rollup)
+	} else {
+		sortTodosByMode(active, sortMode)
+		sortTodosByMode(done, sortMode)
+	}
 	return active, done
+}
+
+// descendantScoreRollup walks the full task slice and returns, per top-level
+// ID, the max sequenceScore observed across all of its transitive subtasks.
+// Pure: builds its own parent index in one pass and follows ParentID chains
+// instead of relying on the model's subtaskOf cache. Tasks without subtasks
+// don't appear in the map.
+func descendantScoreRollup(todos []todo.Todo) map[string]float64 {
+	if len(todos) == 0 {
+		return nil
+	}
+	idx := make(map[string]int, len(todos))
+	for i := range todos {
+		idx[todos[i].ID] = i
+	}
+	rollup := make(map[string]float64, len(todos))
+	for i := range todos {
+		if todos[i].ParentID == "" {
+			continue
+		}
+		// Walk up to the top-level ancestor, lifting the boost at every
+		// level so a deeply-nested high-pri grandchild reaches the root.
+		score := sequenceScore(&todos[i])
+		cur := todos[i].ParentID
+		for cur != "" {
+			if rollup[cur] < score {
+				rollup[cur] = score
+			}
+			pi, ok := idx[cur]
+			if !ok {
+				break
+			}
+			cur = todos[pi].ParentID
+		}
+	}
+	return rollup
 }
 
 // selectSortedTags returns the unique tags across all tasks (sorted by mode)
