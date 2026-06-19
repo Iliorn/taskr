@@ -76,6 +76,12 @@ func (m model) View() string {
 	var detailContent string
 	detailLineCount := 0
 	showDetail := m.mode == modeNormal
+	// For tabs that open the detail on enter / close on esc, the detail
+	// panel is hidden until the user explicitly opens it.
+	switch m.tab {
+	case tabTasks, tabProjects, tabLearnings:
+		showDetail = showDetail && m.pane == paneDetail
+	}
 
 	if showDetail {
 		switch {

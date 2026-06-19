@@ -1251,16 +1251,8 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.invalidateDetailCache()
 
 	case "tab":
-		m.detail.page = (m.detail.page + 1) % 3
-		if m.detail.page == 0 {
-			m.detail.field = fieldStartDate
-		} else if m.detail.page == 1 {
-			m.detail.field = fieldSubtasks
-			m.detail.subtaskCursor = 0
-		} else {
-			m.detail.commentCursor = 0
-		}
-		m.invalidateDetailCache()
+		m.switchTab((m.tab + 1) % numTabs)
+		return m, nil
 
 	case "left":
 		if m.detail.page > 0 {
@@ -1562,6 +1554,8 @@ func (m model) updateLearningsDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.performUndo()
 	case "esc":
 		m.pane = paneList
+	case "tab":
+		m.switchTab((m.tab + 1) % numTabs)
 	case "x", "delete":
 		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
 			m.mode = modeConfirmDeleteLearning
