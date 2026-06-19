@@ -211,7 +211,10 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 			iZero := todos[i].DueDate.IsZero()
 			jZero := todos[j].DueDate.IsZero()
 			if iZero && jZero {
-				return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+				if !todos[i].CreatedAt.Equal(todos[j].CreatedAt) {
+					return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+				}
+				return todos[i].ID < todos[j].ID
 			}
 			if iZero {
 				return false
@@ -219,7 +222,13 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 			if jZero {
 				return true
 			}
-			return todos[i].DueDate.Before(todos[j].DueDate)
+			if !todos[i].DueDate.Equal(todos[j].DueDate) {
+				return todos[i].DueDate.Before(todos[j].DueDate)
+			}
+			if !todos[i].CreatedAt.Equal(todos[j].CreatedAt) {
+				return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+			}
+			return todos[i].ID < todos[j].ID
 		})
 	case taskSortSize:
 		// Small first, then Medium, then Large — matches the Momentum axis
@@ -240,7 +249,10 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 			if ri != rj {
 				return ri < rj
 			}
-			return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+			if !todos[i].CreatedAt.Equal(todos[j].CreatedAt) {
+				return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+			}
+			return todos[i].ID < todos[j].ID
 		})
 	default: // taskSortSequence
 		sortTodosBySequenceWithRollup(todos, nil)
@@ -273,7 +285,16 @@ func sortTodosBySequenceWithRollup(todos []todo.Todo, rollup map[string]float64)
 		if si != sj {
 			return si > sj
 		}
-		return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+		// Tie on score → CreatedAt → ID. ID is the absolute backstop so
+		// tasks with identical scores AND identical CreatedAt (common in
+		// the Done list, where score is uniformly 0) don't inherit the
+		// random order they came out of Store.allTodos() in — which would
+		// otherwise reshuffle them on every cache rebuild (e.g. while the
+		// search-input cursor blinks).
+		if !todos[i].CreatedAt.Equal(todos[j].CreatedAt) {
+			return todos[i].CreatedAt.Before(todos[j].CreatedAt)
+		}
+		return todos[i].ID < todos[j].ID
 	})
 }
 

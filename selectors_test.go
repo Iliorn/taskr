@@ -59,6 +59,48 @@ func TestSelectActiveDoneSearch(t *testing.T) {
 	}
 }
 
+// TestSelectActiveDoneStableUnderShuffle guards the no-shuffle contract:
+// done tasks sharing identical sort keys (score 0 + CreatedAt) must come out
+// in the same order regardless of the input slice order. The underlying bug
+// was that Store.allTodos() returns map-iteration order, so the search-input
+// cursor blink would dirty the cache, rebuild, and reshuffle tied done tasks
+// on every frame. The fix uses ID as the absolute final sort tiebreaker.
+func TestSelectActiveDoneStableUnderShuffle(t *testing.T) {
+	mkDone := func(id string) todo.Todo {
+		d := mkTodo(id, "task-"+id, todo.Done)
+		// All ties on CreatedAt — the shape of the bug.
+		d.CreatedAt = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+		return d
+	}
+	base := []todo.Todo{mkDone("a"), mkDone("b"), mkDone("c"), mkDone("d")}
+
+	for _, mode := range []taskSortMode{taskSortSequence, taskSortDueDate, taskSortSize} {
+		_, want := selectActiveDone(base, "", false, mode)
+		for shuffle, perm := range [][]int{{3, 2, 1, 0}, {1, 3, 0, 2}, {2, 0, 3, 1}} {
+			in := make([]todo.Todo, len(base))
+			for i, p := range perm {
+				in[i] = base[p]
+			}
+			_, got := selectActiveDone(in, "", false, mode)
+			if w, g := ids(want), ids(got); !equalStrings(w, g) {
+				t.Errorf("mode=%v shuffle=%d: got %v, want %v", mode, shuffle, g, w)
+			}
+		}
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestSelectActiveDoneFocusFilter(t *testing.T) {
 	now := time.Now()
 	overdue := mkTodo("o", "overdue", todo.Pending)

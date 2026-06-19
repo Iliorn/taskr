@@ -330,6 +330,16 @@ func initialModel(repo Repository) model {
 	for i := range todos {
 		store.add(todos[i])
 	}
+	// Restore persisted delete-undo entries so a user can `u` a task they
+	// removed in a prior session. A corrupt file surfaces in errMsg; the
+	// model still builds normally with an empty stack.
+	if persisted, err := loadPersistedUndoEntries(); err != nil {
+		if errMsg == "" {
+			errMsg = fmt.Sprintf("Undo history corrupt (ignored): %v", err)
+		}
+	} else {
+		store.undoStack = append(store.undoStack, persisted...)
+	}
 	m := model{
 		Store:               store,
 		repo:                repo,

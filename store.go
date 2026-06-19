@@ -275,6 +275,14 @@ func (s *Store) pushUndo(desc string, ids ...string) {
 		copy(s.undoStack, s.undoStack[1:])
 		s.undoStack = s.undoStack[:maxUndoStack]
 	}
+	// Persist the last few task/subtask deletions so they survive a restart —
+	// the user expects deletions to be reversible even after closing taskr,
+	// since they're the destructive op with no in-app fallback. Other undo
+	// kinds stay in-memory only. A persist failure is swallowed; the worst
+	// case is losing the cross-restart safety net, never blocking the delete.
+	if isPersistedDelete(entry.desc) {
+		_ = savePersistedUndoEntries(s.undoStack)
+	}
 }
 
 func (s *Store) popUndo() (undoEntry, bool) {
@@ -283,6 +291,11 @@ func (s *Store) popUndo() (undoEntry, bool) {
 	}
 	entry := s.undoStack[len(s.undoStack)-1]
 	s.undoStack = s.undoStack[:len(s.undoStack)-1]
+	// Keep the sidecar in sync when a persisted delete entry is consumed —
+	// otherwise a popped delete could resurrect on next start.
+	if isPersistedDelete(entry.desc) {
+		_ = savePersistedUndoEntries(s.undoStack)
+	}
 	return entry, true
 }
 

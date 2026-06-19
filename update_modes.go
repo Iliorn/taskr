@@ -394,15 +394,25 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if m.tab == tabLearnings {
 		m.learningSearchInput, cmd = m.learningSearchInput.Update(msg)
-		m.learningSearchQuery = m.learningSearchInput.Value()
-		m.learningCursor = 0
+		newQuery := m.learningSearchInput.Value()
+		if newQuery != m.learningSearchQuery {
+			m.learningSearchQuery = newQuery
+			m.learningCursor = 0
+		}
 	} else {
 		m.searchInput, cmd = m.searchInput.Update(msg)
-		m.searchQuery = m.searchInput.Value()
-		m.cursor = 0
-		m.projectCursor = 0
-		m.listOffset = 0
-		m.markCacheDirty()
+		newQuery := m.searchInput.Value()
+		if newQuery != m.searchQuery {
+			// Only invalidate caches and reset cursor when the query
+			// actually changed. Otherwise cursor-blink ticks would
+			// rebuild caches on every frame, reshuffling tied done
+			// tasks (see sortTodosBySequenceWithRollup tiebreakers).
+			m.searchQuery = newQuery
+			m.cursor = 0
+			m.projectCursor = 0
+			m.listOffset = 0
+			m.markCacheDirty()
+		}
 	}
 	return m, cmd
 }

@@ -308,34 +308,92 @@ func (m model) renderTimelineLines(innerW, innerH int) []string {
 		return lines
 	}
 
-	// Each entry takes 2 lines (dot + connector), the last one takes 1.
+	// Per-entry height is 1 line for bare entries and 2 lines for entries
+	// with project/tags. Precompute heights so pagination is honest.
+	heights := make([]int, len(acts))
+	for i := range acts {
+		heights[i] = 1
+		if acts[i].project != "" || len(acts[i].tags) > 0 {
+			heights[i] = 2
+		}
+	}
+
 	bodyH := innerH - 2
 	if bodyH < 1 {
 		bodyH = 1
 	}
-	maxEntries := (bodyH + 1) / 2
-	start, end := 0, len(acts)
-	clipped := len(acts) > maxEntries
-	if clipped {
-		maxEntries = (bodyH - 1) / 2 // reserve lines for the ⋮ markers
-		if maxEntries < 1 {
-			maxEntries = 1
+
+	// Pick a [start, end) window centered on the cursor that fits in bodyH,
+	// counting each entry's height + 1 connector between entries. Reserves
+	// one line for a leading/trailing "⋮" marker when entries are clipped.
+	fit := func(reserveTop, reserveBot int) (int, int) {
+		budget := bodyH - reserveTop - reserveBot
+		if budget < 1 {
+			budget = 1
 		}
-		start = m.calendar.entryCursor - maxEntries/2
-		start = clamp(start, 0, len(acts)-maxEntries)
-		end = start + maxEntries
+		cur := m.calendar.entryCursor
+		if cur < 0 {
+			cur = 0
+		} else if cur >= len(acts) {
+			cur = len(acts) - 1
+		}
+		used := heights[cur]
+		start, end := cur, cur+1
+		for {
+			grew := false
+			if end < len(acts) {
+				extra := heights[end] + 1 // entry + connector above it
+				if used+extra <= budget {
+					used += extra
+					end++
+					grew = true
+				}
+			}
+			if start > 0 {
+				extra := heights[start-1] + 1
+				if used+extra <= budget {
+					used += extra
+					start--
+					grew = true
+				}
+			}
+			if !grew {
+				break
+			}
+		}
+		return start, end
 	}
 
-	if start > 0 {
+	start, end := fit(0, 0)
+	clippedTop := start > 0
+	clippedBot := end < len(acts)
+	if clippedTop || clippedBot {
+		// Re-fit reserving room for the ⋮ markers we're about to emit.
+		top, bot := 0, 0
+		if clippedTop {
+			top = 1
+		}
+		if clippedBot {
+			bot = 1
+		}
+		start, end = fit(top, bot)
+		clippedTop = start > 0
+		clippedBot = end < len(acts)
+	}
+
+	if clippedTop {
 		lines = append(lines, dimStyle.Render("  ⋮"))
 	}
 	for i := start; i < end; i++ {
 		lines = append(lines, m.renderTimelineEntry(acts[i], i, innerW))
+		if sub := m.renderTimelineSub(acts[i], innerW); sub != "" {
+			lines = append(lines, sub)
+		}
 		if i < end-1 {
 			lines = append(lines, dimStyle.Render("  │"))
 		}
 	}
-	if end < len(acts) {
+	if clippedBot {
 		lines = append(lines, dimStyle.Render("  ⋮"))
 	}
 	return lines
@@ -376,26 +434,6 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 	if focused {
 		left = selectedStyle.Render(title)
 	}
-
-	// Project and tags are appended only when the whole block fits,
-	// mirroring the task list behavior.
-	if a.project != "" {
-		projPart := " [" + a.project + "]"
-		if used+len([]rune(projPart)) <= leftW {
-			left += projLabelStyle.Render(projPart)
-			used += len([]rune(projPart))
-		}
-	}
-	if len(a.tags) > 0 {
-		tagsW := 1
-		for _, tag := range a.tags {
-			tagsW += len([]rune(tag)) + 4
-		}
-		if used+tagsW <= leftW {
-			left += " " + m.getRenderedTags(a.tags)
-			used += tagsW
-		}
-	}
 	if pad := leftW - used; pad > 0 {
 		left += strings.Repeat(" ", pad)
 	}
@@ -416,4 +454,63 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 	}
 	return cur + dot + " " + left + " " +
 		dimStyle.Render(rangeStr) + "  " + durStyled
+}
+
+// renderTimelineSub renders the second line of a calendar entry: project (if
+// set) followed by the entry's tags. Returns "" when the entry has neither —
+// in which case the caller skips the line so bare entries stay 1-line.
+//
+// Drops tags first, then project, if the combined plain width would overflow
+// innerW. Width is computed on the plain text and the result is styled at the
+// end, since truncating a styled string would slice into ANSI escapes.
+func (m model) renderTimelineSub(a dayActivity, innerW int) string {
+	if a.project == "" && len(a.tags) == 0 {
+		return ""
+	}
+	const indent = "    "
+	avail := innerW - len(indent)
+	if avail < 4 {
+		return ""
+	}
+
+	projPlain := ""
+	if a.project != "" {
+		projPlain = "[" + a.project + "]"
+	}
+	tagsPlainW := 0
+	for _, tag := range a.tags {
+		// "⟨#tag⟩ " = 4 cells of decoration + tag width.
+		tagsPlainW += len([]rune(tag)) + 4
+	}
+	projW := len([]rune(projPlain))
+
+	showProj := projW > 0
+	showTags := len(a.tags) > 0
+	sep := 0
+	if showProj && showTags {
+		sep = 1
+	}
+	if showProj && showTags && projW+sep+tagsPlainW > avail {
+		showTags = false
+		sep = 0
+	}
+	if showProj && projW > avail {
+		showProj = false
+	}
+	if !showProj && !showTags {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString(indent)
+	if showProj {
+		b.WriteString(projLabelStyle.Render(projPlain))
+	}
+	if showProj && showTags {
+		b.WriteString(" ")
+	}
+	if showTags {
+		b.WriteString(m.getRenderedTags(a.tags))
+	}
+	return b.String()
 }
