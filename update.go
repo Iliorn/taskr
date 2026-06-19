@@ -1175,7 +1175,11 @@ func (m model) handleListDelete() (tea.Model, tea.Cmd) {
 		if t := m.currentTodo(); t != nil {
 			m.mode = modeConfirmDelete
 			m.pendingDeleteID = t.ID
-			m.confirmMsg = fmt.Sprintf(tr("Delete '%s'? (y/n)"), t.Title)
+			if n := len(m.descendantIDs(t.ID)) - 1; n > 0 {
+				m.confirmMsg = fmt.Sprintf(tr("Delete '%s' and %d subtask(s)? (y/n)"), t.Title, n)
+			} else {
+				m.confirmMsg = fmt.Sprintf(tr("Delete '%s'? (y/n)"), t.Title)
+			}
 		}
 	case tabLearnings:
 		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {

@@ -218,6 +218,46 @@ func TestSubtaskDerivation(t *testing.T) {
 	}
 }
 
+// descendantIDs walks the subtask tree depth-first so cascade-delete can
+// tombstone every node under a root in one pass.
+func TestDescendantIDsCollectsTransitiveSubtasks(t *testing.T) {
+	now := time.Now()
+	parent := mkTodo("p", "parent", todo.Pending)
+	parent.CreatedAt = now
+	c1 := mkTodo("c1", "child one", todo.Pending)
+	c1.ParentID = "p"
+	c1.CreatedAt = now.Add(1 * time.Minute)
+	c2 := mkTodo("c2", "child two", todo.Pending)
+	c2.ParentID = "p"
+	c2.CreatedAt = now.Add(2 * time.Minute)
+	g1 := mkTodo("g1", "grandchild", todo.Pending)
+	g1.ParentID = "c1"
+	g1.CreatedAt = now.Add(3 * time.Minute)
+	other := mkTodo("o", "unrelated", todo.Pending)
+
+	m := newTestModel()
+	for _, td := range []todo.Todo{parent, c1, c2, g1, other} {
+		m.add(td)
+	}
+
+	got := m.descendantIDs("p")
+	want := map[string]bool{"p": true, "c1": true, "c2": true, "g1": true}
+	if len(got) != len(want) {
+		t.Fatalf("descendantIDs(p) = %v, want 4 ids", got)
+	}
+	for _, id := range got {
+		if !want[id] {
+			t.Errorf("unexpected id %q in descendantIDs(p) = %v", id, got)
+		}
+	}
+	if got[0] != "p" {
+		t.Errorf("descendantIDs should put the root first; got %v", got)
+	}
+	if leaf := m.descendantIDs("o"); len(leaf) != 1 || leaf[0] != "o" {
+		t.Errorf("descendantIDs on a leaf should be [self]; got %v", leaf)
+	}
+}
+
 // visibleActiveTasks interleaves the subtasks of an expanded parent inline
 // with the active list, so the Tasks-tab cursor can land on them. Collapsed
 // parents must hide their subtasks.

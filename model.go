@@ -772,6 +772,18 @@ func (m model) subtaskCount(parentID string) int {
 	return len(m.subtaskOf[parentID])
 }
 
+// descendantIDs returns rootID followed by every transitive subtask ID in
+// BFS order. Used by cascade-delete: every descendant must be tombstoned and
+// removed alongside the root, otherwise children stay in the store with a
+// ParentID pointing at a deleted task.
+func (m model) descendantIDs(rootID string) []string {
+	out := []string{rootID}
+	for i := 0; i < len(out); i++ {
+		out = append(out, m.subtaskIDs(out[i])...)
+	}
+	return out
+}
+
 // addSubtask creates a child of parentID and returns the new subtask's ID so
 // the caller can mark it dirty.
 func (m *model) addSubtask(parentID, title string) string {
@@ -779,18 +791,6 @@ func (m *model) addSubtask(parentID, title string) string {
 	sub.InheritContextFrom(m.get(parentID))
 	m.add(sub)
 	return sub.ID
-}
-
-// deleteSubtask removes the child task at subtaskCursor under parentID and
-// returns the deleted subtask's ID so the caller can record it as a tombstone.
-func (m *model) deleteSubtask(parentID string, subtaskCursor int) string {
-	ids := m.subtaskIDs(parentID)
-	if subtaskCursor >= len(ids) {
-		return ""
-	}
-	subID := ids[subtaskCursor]
-	m.remove(subID)
-	return subID
 }
 
 // toggleSubtask flips a child task's status and returns every ID the caller

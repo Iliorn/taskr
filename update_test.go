@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"taskr/todo"
@@ -163,6 +164,55 @@ func TestCursorClampsToListBounds(t *testing.T) {
 	m = sendKey(t, m, "j") // would go to 3, but only 2 items
 	if m.cursor != 1 {
 		t.Errorf("j past bottom: cursor = %d, want 1 (clamped)", m.cursor)
+	}
+}
+
+// ── Cascade delete ───────────────────────────────────────────────────────────
+
+// Deleting a parent must also delete its subtasks (and their subtasks).
+// Without the cascade the children stayed in storage with a dangling ParentID,
+// so they reappeared as headless rows on the next reload.
+func TestDeleteCascadesToSubtasks(t *testing.T) {
+	now := time.Now()
+	parent := todo.New("parent")
+	parent.ID = "p"
+	parent.CreatedAt = now
+	c1 := todo.New("c1")
+	c1.ID = "c1"
+	c1.ParentID = "p"
+	c1.CreatedAt = now.Add(time.Second)
+	g1 := todo.New("g1")
+	g1.ID = "g1"
+	g1.ParentID = "c1"
+	g1.CreatedAt = now.Add(2 * time.Second)
+	other := todo.New("other")
+	other.ID = "o"
+	other.CreatedAt = now.Add(3 * time.Second)
+
+	m := modelWithTasks(t, parent, c1, g1, other)
+	for i, vt := range m.visibleActiveTasks() {
+		if vt.ID == "p" {
+			m.cursor = i
+			break
+		}
+	}
+
+	m = sendKey(t, m, "x")
+	if m.mode != modeConfirmDelete {
+		t.Fatalf("x should open the delete-confirm prompt; got mode %v", m.mode)
+	}
+	m = sendKey(t, m, "y")
+
+	for _, id := range []string{"p", "c1", "g1"} {
+		if m.get(id) != nil {
+			t.Errorf("%s should be removed from the store after cascade-delete", id)
+		}
+		if _, ok := m.tombstones[id]; !ok {
+			t.Errorf("%s should be tombstoned so the deletion persists", id)
+		}
+	}
+	if m.get("o") == nil {
+		t.Errorf("unrelated task should survive the cascade")
 	}
 }
 

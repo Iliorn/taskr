@@ -533,9 +533,12 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "y":
 			if id := m.pendingDeleteID; id != "" && m.get(id) != nil {
-				m.pushUndo("delete task", id)
-				m.markTombstone(id)
-				m.remove(id)
+				ids := m.descendantIDs(id)
+				m.pushUndo("delete task", ids...)
+				for _, deleteID := range ids {
+					m.markTombstone(deleteID)
+					m.remove(deleteID)
+				}
 			}
 			m.pendingDeleteID = ""
 			// Tombstone already records what to persist; no other rows changed,
@@ -793,15 +796,20 @@ func (m model) updateConfirmDeleteSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "y":
 			if t := m.currentTodo(); t != nil && m.pendingSubtask < m.subtaskCount(t.ID) {
-				// Capture both the parent (its subtask list will change) and
-				// the subtask itself (so undo can restore it).
+				// Capture the parent (its subtask list will change) plus the
+				// subtask + every transitive descendant (so undo can restore
+				// the whole tree).
 				subID := ""
 				if ids := m.subtaskIDs(t.ID); m.pendingSubtask < len(ids) {
 					subID = ids[m.pendingSubtask]
 				}
-				m.pushUndo("delete subtask", t.ID, subID)
-				subID = m.deleteSubtask(t.ID, m.pendingSubtask)
-				m.markTombstone(subID)
+				toDelete := m.descendantIDs(subID)
+				undoIDs := append([]string{t.ID}, toDelete...)
+				m.pushUndo("delete subtask", undoIDs...)
+				for _, id := range toDelete {
+					m.markTombstone(id)
+					m.remove(id)
+				}
 				if m.detail.subtaskCursor >= m.subtaskCount(t.ID) && m.detail.subtaskCursor > 0 {
 					m.detail.subtaskCursor--
 				}
