@@ -119,7 +119,11 @@ func fmtTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.UTC().Format(time.RFC3339)
+	// RFC3339Nano (not RFC3339) so modified_at keeps sub-second precision: the
+	// sync merge orders concurrent edits by ModifiedAt, and second precision
+	// would make same-second edits on two devices indistinguishable. parseTime
+	// reads both old (second) and new (nano) values.
+	return t.UTC().Format(time.RFC3339Nano)
 }
 
 func parseTime(s string) time.Time {
@@ -131,6 +135,13 @@ func parseTime(s string) time.Time {
 		return time.Time{}
 	}
 	return t
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // saveNormalized writes the dirty tasks and tombstones to the normalized
@@ -153,7 +164,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 		// is no longer the source of truth.
 		upsertTask, err := tx.Prepare(`INSERT INTO todos
 			(id,title,status,priority,size,project,parent_id,created_at,modified_at,due_date,start_date,notes,completed_at,sequence,recurrence,data,deleted,deleted_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',0,'')
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,?)
 			ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, status=excluded.status, priority=excluded.priority,
 				size=excluded.size, project=excluded.project, parent_id=excluded.parent_id,
@@ -161,7 +172,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 				due_date=excluded.due_date, start_date=excluded.start_date,
 				notes=excluded.notes, completed_at=excluded.completed_at,
 				sequence=excluded.sequence, recurrence=excluded.recurrence,
-				deleted=0, deleted_at=''`)
+				deleted=excluded.deleted, deleted_at=excluded.deleted_at`)
 		if err != nil {
 			return err
 		}
@@ -180,22 +191,6 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 			return err
 		}
 		defer delDeps.Close()
-		delComments, err := deleteChildren("task_comments")
-		if err != nil {
-			return err
-		}
-		defer delComments.Close()
-		delLearnings, err := deleteChildren("task_learnings")
-		if err != nil {
-			return err
-		}
-		defer delLearnings.Close()
-		delEntries, err := deleteChildren("task_time_entries")
-		if err != nil {
-			return err
-		}
-		defer delEntries.Close()
-
 		insTag, err := tx.Prepare(`INSERT INTO task_tags (task_id, tag) VALUES (?, ?)`)
 		if err != nil {
 			return err
@@ -206,35 +201,45 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 			return err
 		}
 		defer insDep.Close()
-		insComment, err := tx.Prepare(`INSERT INTO task_comments (id, task_id, text, created_at) VALUES (?, ?, ?, ?)`)
+		// Comments, learnings and time entries carry their own IDs plus a
+		// deleted_at tombstone column, so they are upserted (not replace-all)
+		// and any child that vanished from the task is tombstoned rather than
+		// hard-deleted — see saveChildren. That is what lets a child deletion
+		// propagate during sync instead of resurfacing from another device.
+		upComment, err := tx.Prepare(`INSERT INTO task_comments (id, task_id, text, created_at, deleted_at)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET text=excluded.text, created_at=excluded.created_at, deleted_at=excluded.deleted_at`)
 		if err != nil {
 			return err
 		}
-		defer insComment.Close()
-		insLearning, err := tx.Prepare(`INSERT INTO task_learnings (id, task_id, text, created_at) VALUES (?, ?, ?, ?)`)
+		defer upComment.Close()
+		upLearning, err := tx.Prepare(`INSERT INTO task_learnings (id, task_id, text, created_at, deleted_at)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET text=excluded.text, created_at=excluded.created_at, deleted_at=excluded.deleted_at`)
 		if err != nil {
 			return err
 		}
-		defer insLearning.Close()
-		insEntry, err := tx.Prepare(`INSERT INTO task_time_entries (id, task_id, started_at, stopped_at) VALUES (?, ?, ?, ?)`)
+		defer upLearning.Close()
+		upEntry, err := tx.Prepare(`INSERT INTO task_time_entries (id, task_id, started_at, stopped_at, deleted_at)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at, stopped_at=excluded.stopped_at, deleted_at=excluded.deleted_at`)
 		if err != nil {
 			return err
 		}
-		defer insEntry.Close()
+		defer upEntry.Close()
 
 		for _, t := range dirty {
 			if _, err := upsertTask.Exec(t.ID, t.Title, int(t.Status), int(t.Priority), int(t.Size),
 				t.Project, t.ParentID, fmtTime(t.CreatedAt), fmtTime(t.ModifiedAt),
 				fmtTime(t.DueDate), fmtTime(t.StartDate), t.Notes, fmtTime(t.CompletedAt),
-				sequenceScore(t), t.Recurrence); err != nil {
+				sequenceScore(t), t.Recurrence, boolToInt(t.Deleted), fmtTime(t.DeletedAt)); err != nil {
 				return err
 			}
-			// Replace-all-children: simple and bounded — typical tasks have
-			// <10 entries per child kind, so the cost is tens of writes per
-			// dirty task even on rich tasks. A future field-level diff
-			// optimization can replace this when scale demands.
-			for _, table := range []*sql.Stmt{delTags, delDeps, delComments, delLearnings, delEntries} {
-				if _, err := table.Exec(t.ID); err != nil {
+			// Tags and dependencies are value-sets (no per-row identity), so
+			// they are replaced wholesale — matching their whole-set
+			// last-writer-wins resolution during sync.
+			for _, del := range []*sql.Stmt{delTags, delDeps} {
+				if _, err := del.Exec(t.ID); err != nil {
 					return err
 				}
 			}
@@ -248,20 +253,29 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 					return err
 				}
 			}
-			for _, c := range t.Comments {
-				if _, err := insComment.Exec(c.ID, t.ID, c.Text, fmtTime(c.CreatedAt)); err != nil {
-					return err
-				}
+			// Identified children: upsert the present set and tombstone any that
+			// vanished, so deletions become propagating tombstones.
+			now := fmtTime(time.Now())
+			if err := saveChildren(tx, t.ID, now, "task_comments", t.Comments,
+				func(c todo.Comment) string { return c.ID },
+				upComment, func(c todo.Comment) []any {
+					return []any{c.ID, t.ID, c.Text, fmtTime(c.CreatedAt), fmtTime(c.DeletedAt)}
+				}); err != nil {
+				return err
 			}
-			for _, l := range t.Learnings {
-				if _, err := insLearning.Exec(l.ID, t.ID, l.Text, fmtTime(l.CreatedAt)); err != nil {
-					return err
-				}
+			if err := saveChildren(tx, t.ID, now, "task_learnings", t.Learnings,
+				func(l todo.Learning) string { return l.ID },
+				upLearning, func(l todo.Learning) []any {
+					return []any{l.ID, t.ID, l.Text, fmtTime(l.CreatedAt), fmtTime(l.DeletedAt)}
+				}); err != nil {
+				return err
 			}
-			for _, e := range t.TimeEntries {
-				if _, err := insEntry.Exec(e.ID, t.ID, fmtTime(e.StartedAt), fmtTime(e.StoppedAt)); err != nil {
-					return err
-				}
+			if err := saveChildren(tx, t.ID, now, "task_time_entries", t.TimeEntries,
+				func(e todo.TimeEntry) string { return e.ID },
+				upEntry, func(e todo.TimeEntry) []any {
+					return []any{e.ID, t.ID, fmtTime(e.StartedAt), fmtTime(e.StoppedAt), fmtTime(e.DeletedAt)}
+				}); err != nil {
+				return err
 			}
 		}
 	}
@@ -283,13 +297,76 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 	return tx.Commit()
 }
 
-// loadTodosFromDB reads every live row plus its children, assembling them
-// into the in-memory todo.Todo shape. Children are read with one query each
-// and merged by task_id in a single pass.
+// saveChildren upserts a task's identified child records (comments, learnings
+// or time entries) and tombstones any live DB child of that task that is no
+// longer present in the slice. Because a removal becomes a deleted_at tombstone
+// rather than a hard delete, a child deleted on one device propagates during
+// sync instead of being resurrected from another device's copy. A slice item
+// that is itself a tombstone (deleted_at set, e.g. a merged result) is upserted
+// with its tombstone intact; pre-existing tombstones in the DB are left alone.
+func saveChildren[T any](tx *sql.Tx, taskID, now, table string, items []T,
+	id func(T) string, upsert *sql.Stmt, args func(T) []any,
+) error {
+	present := make(map[string]bool, len(items))
+	for _, it := range items {
+		if _, err := upsert.Exec(args(it)...); err != nil {
+			return err
+		}
+		present[id(it)] = true
+	}
+	rows, err := tx.Query(`SELECT id FROM `+table+` WHERE task_id = ? AND deleted_at = ''`, taskID)
+	if err != nil {
+		return err
+	}
+	var vanished []string
+	for rows.Next() {
+		var cid string
+		if err := rows.Scan(&cid); err != nil {
+			rows.Close()
+			return err
+		}
+		if !present[cid] {
+			vanished = append(vanished, cid)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, cid := range vanished {
+		if _, err := tx.Exec(`UPDATE `+table+` SET deleted_at = ? WHERE id = ?`, now, cid); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// loadTodosFromDB reads every live task plus its live children. loadTodosForSync
+// is the sibling that also returns tombstones (deleted tasks, deleted children)
+// with their timestamps, which the sync merge needs to propagate deletions.
 func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
+	return loadTodosCore(h, false)
+}
+
+// loadTodosForSync returns the full task set including tombstones — Deleted /
+// DeletedAt populated on tasks, DeletedAt on child records — so Merge can
+// resolve deletions. Order is unspecified; Merge sorts the result.
+func loadTodosForSync(h *sql.DB) ([]todo.Todo, error) {
+	return loadTodosCore(h, true)
+}
+
+// loadTodosCore assembles tasks and their children. When includeDeleted is
+// false (the live TUI/CLI path) tombstoned tasks and children are filtered out;
+// when true (the sync path) they are returned with their tombstone timestamps.
+func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
+	taskWhere, childWhere := "WHERE deleted = 0", "WHERE deleted_at = ''"
+	if includeDeleted {
+		taskWhere, childWhere = "", ""
+	}
 	rows, err := h.Query(`SELECT id, title, status, priority, size, project, parent_id,
-		created_at, modified_at, due_date, start_date, completed_at, notes, recurrence
-		FROM todos WHERE deleted = 0`)
+		created_at, modified_at, due_date, start_date, completed_at, notes, recurrence,
+		deleted, deleted_at
+		FROM todos ` + taskWhere)
 	if err != nil {
 		return nil, err
 	}
@@ -299,11 +376,11 @@ func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 	var ordered []string
 	for rows.Next() {
 		var t todo.Todo
-		var status, priority, size int
-		var createdAt, modifiedAt, dueDate, startDate, completedAt string
+		var status, priority, size, deleted int
+		var createdAt, modifiedAt, dueDate, startDate, completedAt, deletedAt string
 		if err := rows.Scan(&t.ID, &t.Title, &status, &priority, &size, &t.Project,
 			&t.ParentID, &createdAt, &modifiedAt, &dueDate, &startDate,
-			&completedAt, &t.Notes, &t.Recurrence); err != nil {
+			&completedAt, &t.Notes, &t.Recurrence, &deleted, &deletedAt); err != nil {
 			return nil, err
 		}
 		t.Status = safeStatus(status, t.ID)
@@ -314,6 +391,8 @@ func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 		t.DueDate = parseTime(dueDate)
 		t.StartDate = parseTime(startDate)
 		t.CompletedAt = parseTime(completedAt)
+		t.Deleted = deleted != 0
+		t.DeletedAt = parseTime(deletedAt)
 		todos[t.ID] = &t
 		ordered = append(ordered, t.ID)
 	}
@@ -322,7 +401,7 @@ func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 	}
 	rows.Close()
 
-	if err := loadChildren(h, todos, "task_tags", "task_id, tag",
+	if err := loadChildren(h, todos, "task_tags", "task_id, tag", "",
 		func(t *todo.Todo, s *sql.Rows) error {
 			var taskID, tag string
 			if err := s.Scan(&taskID, &tag); err != nil {
@@ -335,7 +414,7 @@ func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 		}); err != nil {
 		return nil, err
 	}
-	if err := loadChildren(h, todos, "task_dependencies", "task_id, depends_on_id",
+	if err := loadChildren(h, todos, "task_dependencies", "task_id, depends_on_id", "",
 		func(t *todo.Todo, s *sql.Rows) error {
 			var taskID, dep string
 			if err := s.Scan(&taskID, &dep); err != nil {
@@ -348,14 +427,15 @@ func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 		}); err != nil {
 		return nil, err
 	}
-	if err := loadChildren(h, todos, "task_comments", "id, task_id, text, created_at",
+	if err := loadChildren(h, todos, "task_comments", "id, task_id, text, created_at, deleted_at", childWhere,
 		func(t *todo.Todo, s *sql.Rows) error {
 			var c todo.Comment
-			var taskID, createdAt string
-			if err := s.Scan(&c.ID, &taskID, &c.Text, &createdAt); err != nil {
+			var taskID, createdAt, deletedAt string
+			if err := s.Scan(&c.ID, &taskID, &c.Text, &createdAt, &deletedAt); err != nil {
 				return err
 			}
 			c.CreatedAt = parseTime(createdAt)
+			c.DeletedAt = parseTime(deletedAt)
 			if t = todos[taskID]; t != nil {
 				t.Comments = append(t.Comments, c)
 			}
@@ -363,14 +443,15 @@ func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 		}); err != nil {
 		return nil, err
 	}
-	if err := loadChildren(h, todos, "task_learnings", "id, task_id, text, created_at",
+	if err := loadChildren(h, todos, "task_learnings", "id, task_id, text, created_at, deleted_at", childWhere,
 		func(t *todo.Todo, s *sql.Rows) error {
 			var l todo.Learning
-			var taskID, createdAt string
-			if err := s.Scan(&l.ID, &taskID, &l.Text, &createdAt); err != nil {
+			var taskID, createdAt, deletedAt string
+			if err := s.Scan(&l.ID, &taskID, &l.Text, &createdAt, &deletedAt); err != nil {
 				return err
 			}
 			l.CreatedAt = parseTime(createdAt)
+			l.DeletedAt = parseTime(deletedAt)
 			if t = todos[taskID]; t != nil {
 				t.Learnings = append(t.Learnings, l)
 			}
@@ -378,15 +459,16 @@ func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 		}); err != nil {
 		return nil, err
 	}
-	if err := loadChildren(h, todos, "task_time_entries", "id, task_id, started_at, stopped_at",
+	if err := loadChildren(h, todos, "task_time_entries", "id, task_id, started_at, stopped_at, deleted_at", childWhere,
 		func(t *todo.Todo, s *sql.Rows) error {
 			var e todo.TimeEntry
-			var taskID, startedAt, stoppedAt string
-			if err := s.Scan(&e.ID, &taskID, &startedAt, &stoppedAt); err != nil {
+			var taskID, startedAt, stoppedAt, deletedAt string
+			if err := s.Scan(&e.ID, &taskID, &startedAt, &stoppedAt, &deletedAt); err != nil {
 				return err
 			}
 			e.StartedAt = parseTime(startedAt)
 			e.StoppedAt = parseTime(stoppedAt)
+			e.DeletedAt = parseTime(deletedAt)
 			if t = todos[taskID]; t != nil {
 				t.TimeEntries = append(t.TimeEntries, e)
 			}
@@ -402,10 +484,10 @@ func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
 	return out, nil
 }
 
-func loadChildren(h *sql.DB, todos map[string]*todo.Todo, table, cols string,
+func loadChildren(h *sql.DB, todos map[string]*todo.Todo, table, cols, where string,
 	scan func(*todo.Todo, *sql.Rows) error,
 ) error {
-	rows, err := h.Query(`SELECT ` + cols + ` FROM ` + table)
+	rows, err := h.Query(`SELECT ` + cols + ` FROM ` + table + ` ` + where)
 	if err != nil {
 		return err
 	}

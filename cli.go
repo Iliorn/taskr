@@ -25,7 +25,7 @@ func isCLICommand(arg string) bool {
 	case "add", "list", "ls", "done", "top",
 		"show", "edit", "delete", "rm", "comment",
 		"stats", "start", "stop", "export", "subtask",
-		"search", "tags", "projects",
+		"search", "tags", "projects", "serve", "sync",
 		"help", "-h", "--help", "--version":
 		return true
 	}
@@ -33,6 +33,27 @@ func isCLICommand(arg string) bool {
 }
 
 func runCLI(args []string) int {
+	rc := dispatchCLI(args)
+	// After a successful mutating command, push the change to the sync server so
+	// a shell edit propagates even when the TUI isn't open. Fail-soft and gated
+	// on sync being configured.
+	if rc == 0 && cliMutates(args[0]) {
+		maybeAutoSyncCLI()
+	}
+	return rc
+}
+
+// cliMutates reports whether a subcommand changes stored tasks (and so should
+// trigger an auto-sync afterward).
+func cliMutates(cmd string) bool {
+	switch cmd {
+	case "add", "done", "edit", "delete", "rm", "comment", "start", "stop", "subtask":
+		return true
+	}
+	return false
+}
+
+func dispatchCLI(args []string) int {
 	cmd, rest := args[0], args[1:]
 	switch cmd {
 	case "add":
@@ -67,6 +88,10 @@ func runCLI(args []string) int {
 		return cliTags(rest)
 	case "projects":
 		return cliProjects(rest)
+	case "serve":
+		return cliServe(rest)
+	case "sync":
+		return cliSync(rest)
 	case "--version":
 		fmt.Println(appVersion)
 		return 0
@@ -1563,6 +1588,12 @@ Comments:
 Reporting / backup:
   taskr stats [--format=text|json|waybar]   one-line health summary (default text)
   taskr export [--include-done]             JSON snapshot of every live task to stdout
+
+Sync (cross-device):
+  taskr serve [--listen=ADDR] [--token=T]   run the sync server (self-hosted; binds 127.0.0.1:8765 by default)
+  taskr sync [--url=U] [--token=T] [--save]  push/pull once against a sync server (--save stores config)
+                                            auto-sync runs on its own once configured (set "auto_sync":false in
+                                            ~/.taskr/sync.json to disable); conflicts log to ~/.taskr/sync.log
 
 Meta:
   taskr --version                      print build version

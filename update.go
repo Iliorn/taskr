@@ -85,6 +85,13 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case saveDoneMsg:
 		return m, nil
+	case syncTickMsg:
+		if !m.autoSync {
+			return m, nil
+		}
+		return m, tea.Batch(m.backgroundSync(), syncTick())
+	case syncDoneMsg:
+		return m.handleSyncDone(msg)
 	case saveErrMsg:
 		m.err = fmt.Sprintf("Error saving tasks: %v", msg.err)
 		return m, clearErrAfter()

@@ -113,6 +113,9 @@ type Comment struct {
 	ID        string    `json:"id"`
 	Text      string    `json:"text"`
 	CreatedAt time.Time `json:"created_at"`
+	// DeletedAt tombstones the record for cross-device sync (see merge.go); the
+	// zero value means live. Kept rather than removed so a deletion propagates.
+	DeletedAt time.Time `json:"deleted_at,omitempty"`
 }
 
 // ── Learning ──────────────────────────────────────────────────────────────────
@@ -125,6 +128,7 @@ type Learning struct {
 	ID        string    `json:"id"`
 	Text      string    `json:"text"`
 	CreatedAt time.Time `json:"created_at"`
+	DeletedAt time.Time `json:"deleted_at,omitempty"` // sync tombstone; see Comment.DeletedAt
 }
 
 // ── TimeEntry ─────────────────────────────────────────────────────────────────
@@ -133,6 +137,7 @@ type TimeEntry struct {
 	ID        string    `json:"id"`
 	StartedAt time.Time `json:"started_at"`
 	StoppedAt time.Time `json:"stopped_at,omitempty"`
+	DeletedAt time.Time `json:"deleted_at,omitempty"` // sync tombstone; see Comment.DeletedAt
 }
 
 func (te TimeEntry) Duration() time.Duration {
@@ -168,6 +173,13 @@ type Todo struct {
 	Notes        string      `json:"notes,omitempty"`
 	ParentID     string      `json:"parent_id,omitempty"`
 	Recurrence   string      `json:"recurrence,omitempty"`
+
+	// Tombstone fields for cross-device sync: a deleted task is retained as a
+	// tombstone (Deleted=true, DeletedAt set) so the deletion propagates during
+	// sync instead of reappearing from another device. Storage already keeps
+	// soft-deleted rows; these surface that state on the struct and the wire.
+	Deleted   bool      `json:"deleted,omitempty"`
+	DeletedAt time.Time `json:"deleted_at,omitempty"`
 }
 
 func New(title string) Todo {
