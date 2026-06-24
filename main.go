@@ -30,4 +30,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	// Final best-effort sync on exit so the session's last edits propagate
+	// immediately (no-op unless sync is configured).
+	maybeAutoSyncCLI()
 }

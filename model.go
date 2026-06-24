@@ -280,6 +280,12 @@ type model struct {
 	// Filesystem watcher state. nil if the watcher couldn't start (in which
 	// case the TUI behaves exactly as before — no live reload, no errors).
 	watcher *watcherState
+
+	// Cross-device sync config, loaded once at startup. autoSync gates the
+	// periodic background sync (and the launch/exit syncs); it is on whenever a
+	// sync URL+token are configured and not explicitly disabled.
+	syncCfg  syncConfig
+	autoSync bool
 }
 
 func initialModel(repo Repository) model {
@@ -392,6 +398,10 @@ func initialModel(repo Repository) model {
 			m.watcher = state
 		}
 	}
+	// Load cross-device sync config once; auto-sync drives launch/periodic/exit
+	// syncs when a server is configured.
+	m.syncCfg = loadSyncConfig()
+	m.autoSync = autoSyncEnabled(m.syncCfg)
 	m.calendar.selected = startOfDay(time.Now())
 	if t := m.runningTask(); t != nil {
 		m.timerTickOn = true
@@ -411,6 +421,10 @@ func (m model) Init() tea.Cmd {
 	}
 	if m.watcher != nil {
 		cmds = append(cmds, waitForDBChange(m.watcher.ch))
+	}
+	if m.autoSync {
+		// Sync once on launch, then on a periodic tick while open.
+		cmds = append(cmds, m.backgroundSync(), syncTick())
 	}
 	switch len(cmds) {
 	case 0:
