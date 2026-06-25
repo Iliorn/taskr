@@ -30,6 +30,14 @@ type syncConfig struct {
 	// mutations). nil means "default on" — set "auto_sync": false in sync.json to
 	// keep sync manual-only.
 	AutoSync *bool `json:"auto_sync,omitempty"`
+
+	// Server side: this machine acting as a sync hub. ServerOn runs the endpoint
+	// in-process while the TUI is open (the always-on case still uses the
+	// headless `taskr serve`). ServerListen/ServerToken are its bind address and
+	// the token clients must present.
+	ServerListen string `json:"server_listen,omitempty"`
+	ServerToken  string `json:"server_token,omitempty"`
+	ServerOn     bool   `json:"server_on,omitempty"`
 }
 
 func (c syncConfig) ready() bool { return c.URL != "" && c.Token != "" }

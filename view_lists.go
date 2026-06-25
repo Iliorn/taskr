@@ -1019,6 +1019,9 @@ var settingsLeftCol = []int{
 	settingSyncServer,
 	settingSyncToken,
 	settingSyncNow,
+	settingServerOn,
+	settingServerListen,
+	settingServerToken,
 	settingVersion,
 	settingCheckUpdate,
 }
@@ -1080,6 +1083,9 @@ func (m model) renderSettingsList() string {
 		settingSyncServer:      tr("Sync server"),
 		settingSyncToken:       tr("Sync token"),
 		settingSyncNow:         tr("Sync now"),
+		settingServerOn:        tr("Server"),
+		settingServerListen:    tr("Listen"),
+		settingServerToken:     tr("Server token"),
 		settingVersion:         tr("Version"),
 		settingCheckUpdate:     tr("Check for updates"),
 	}
@@ -1107,6 +1113,19 @@ func (m model) renderSettingsList() string {
 	if m.syncCfg.Token != "" {
 		syncTokenVal = "•••• " + tr("set")
 	}
+	serverState := tr("Off")
+	switch {
+	case m.inprocServer != nil:
+		serverState = tr("On")
+	case m.serverExternal:
+		serverState = tr("external")
+	case m.syncCfg.ServerToken == "":
+		serverState = tr("needs token")
+	}
+	serverTokenVal := tr("not set")
+	if m.syncCfg.ServerToken != "" {
+		serverTokenVal = "•••• " + tr("set")
+	}
 	values := map[int]string{
 		settingBiasDeadline:    biasPickerValue(activeBiases.Deadline),
 		settingBiasPriority:    biasPickerValue(activeBiases.Priority),
@@ -1119,6 +1138,9 @@ func (m model) renderSettingsList() string {
 		settingSyncServer:      syncServerVal,
 		settingSyncToken:       syncTokenVal,
 		settingSyncNow:         tr("press enter to sync"),
+		settingServerOn:        "‹ " + serverState + " ›",
+		settingServerListen:    m.syncCfg.listenAddr(),
+		settingServerToken:     serverTokenVal,
 		settingVersion:         appVersion,
 		settingCheckUpdate:     tr("press enter to check"),
 	}
