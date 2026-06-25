@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -44,6 +45,9 @@ const (
 	settingSyncServer
 	settingSyncToken
 	settingSyncNow
+	settingServerOn
+	settingServerListen
+	settingServerToken
 	settingVersion
 	settingCheckUpdate
 	numSettingsRows
@@ -107,6 +111,8 @@ const (
 	modeAddTimeEntry
 	modeEditSyncURL
 	modeEditSyncToken
+	modeEditServerListen
+	modeEditServerToken
 )
 
 type tagSortMode int
@@ -294,6 +300,11 @@ type model struct {
 	syncCfg    syncConfig
 	autoSync   bool
 	syncStatus string
+	// inprocServer is the in-process sync server when "Server" is toggled on
+	// (nil otherwise). serverExternal is set by probeServer when a headless
+	// `taskr serve` is answering at the configured address.
+	inprocServer   *http.Server
+	serverExternal bool
 }
 
 func initialModel(repo Repository) model {
@@ -410,6 +421,15 @@ func initialModel(repo Repository) model {
 	// syncs when a server is configured.
 	m.syncCfg = loadSyncConfig()
 	m.autoSync = autoSyncEnabled(m.syncCfg)
+	// If this machine is set to serve, start the in-process endpoint now. A bind
+	// failure (e.g. an external taskr serve already on that address) is non-fatal
+	// — the TUI keeps working and the Settings row will show it's served
+	// externally instead.
+	if m.syncCfg.ServerOn && m.syncCfg.ServerToken != "" {
+		if srv, err := startSyncServer(m.syncCfg.listenAddr(), m.syncCfg.ServerToken); err == nil {
+			m.inprocServer = srv
+		}
+	}
 	m.calendar.selected = startOfDay(time.Now())
 	if t := m.runningTask(); t != nil {
 		m.timerTickOn = true
@@ -436,6 +456,9 @@ func (m model) Init() tea.Cmd {
 	cmds = append(cmds, syncTick())
 	if m.autoSync {
 		cmds = append(cmds, m.backgroundSync())
+	}
+	if p := m.probeServer(); p != nil {
+		cmds = append(cmds, p)
 	}
 	switch len(cmds) {
 	case 0:
@@ -1522,7 +1545,8 @@ func (m model) extraOverheadLines() int {
 	case modeInput, modeEditComment, modeEditTag, modeEditTitle,
 		modeSearch, modeAddLearning, modeEditLearning, modeAddSubtask,
 		modeEditSubtask, modeEditProjectInline, modeEditTimeEntry,
-		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken:
+		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken,
+		modeEditServerListen, modeEditServerToken:
 		return 3
 	case modeSearchDep, modeSearchTag, modeSearchProject:
 		return 8

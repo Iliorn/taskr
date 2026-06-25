@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -15,6 +16,38 @@ import (
 
 	"taskr/todo"
 )
+
+// defaultServerListen is the bind address used when none is configured —
+// localhost only, so an accidental "Server: On" never exposes tasks beyond this
+// machine until the user deliberately sets a reachable address.
+const defaultServerListen = "127.0.0.1:8765"
+
+// startSyncServer launches the sync endpoint in a background goroutine and
+// returns the running server so the caller can stop it. net.Listen runs
+// synchronously so a bind failure (e.g. address already in use) is reported now
+// rather than vanishing into the goroutine. A token is mandatory — the endpoint
+// must never serve unauthenticated.
+func startSyncServer(listen, token string) (*http.Server, error) {
+	if token == "" {
+		return nil, fmt.Errorf("a server token is required")
+	}
+	if listen == "" {
+		listen = defaultServerListen
+	}
+	ln, err := net.Listen("tcp", listen)
+	if err != nil {
+		return nil, err
+	}
+	srv := &syncServer{db: db, token: token}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/health", srv.handleHealth)
+	mux.HandleFunc("/v1/sync", srv.handleSync)
+	// Addr is informational here (Serve uses ln); it reflects the actually-bound
+	// address, which matters when the configured port was 0 (OS-assigned).
+	httpServer := &http.Server{Addr: ln.Addr().String(), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	go httpServer.Serve(ln)
+	return httpServer, nil
+}
 
 // serve.go implements `taskr serve`: a small self-hosted HTTP endpoint that
 // merges task sets pushed by `taskr sync` clients. It is taskr in another mode —

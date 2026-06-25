@@ -232,7 +232,8 @@ func (m model) buildFooterContent(w int) string {
 	case modeInput, modeEditComment, modeEditTag, modeEditTitle,
 		modeAddLearning, modeEditLearning, modeAddSubtask, modeEditSubtask,
 		modeEditProjectInline, modeEditTimeEntry, modeAddTimeEntry,
-		modeEditSyncURL, modeEditSyncToken:
+		modeEditSyncURL, modeEditSyncToken,
+		modeEditServerListen, modeEditServerToken:
 		return inputStyle.Width(w).Render(m.textInput.View())
 	case modeIdlePrompt, modeConfirmUpdate:
 		return calTodayStyle.Render(m.confirmMsg)

@@ -86,13 +86,20 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case saveDoneMsg:
 		return m, nil
 	case syncTickMsg:
+		cmds := []tea.Cmd{syncTick()}
 		if m.autoSync {
-			return m, tea.Batch(m.backgroundSync(), syncTick())
+			cmds = append(cmds, m.backgroundSync())
 		}
-		// Keep ticking even when disabled so a mid-session enable is picked up.
-		return m, syncTick()
+		if p := m.probeServer(); p != nil {
+			cmds = append(cmds, p)
+		}
+		return m, tea.Batch(cmds...)
 	case syncDoneMsg:
 		return m.handleSyncDone(msg)
+	case serverProbeMsg:
+		// Only flag "external" when we aren't the one serving in-process.
+		m.serverExternal = msg.reachable && m.inprocServer == nil
+		return m, nil
 	case saveErrMsg:
 		m.err = fmt.Sprintf("Error saving tasks: %v", msg.err)
 		return m, clearErrAfter()
@@ -214,6 +221,10 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m.updateEditSyncURL(msg)
 	case modeEditSyncToken:
 		newModel, cmd = m.updateEditSyncToken(msg)
+	case modeEditServerListen:
+		newModel, cmd = m.updateEditServerListen(msg)
+	case modeEditServerToken:
+		newModel, cmd = m.updateEditServerToken(msg)
 	case modeEditLearning:
 		newModel, cmd = m.updateEditLearning(msg)
 	case modeAddLearning:
@@ -481,6 +492,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cycleLang(1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingSyncAuto {
 				m.toggleSyncAuto()
+			} else if m.tab == tabSettings && m.settingsCursor == settingServerOn {
+				m.toggleServer()
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil && m.subtaskCount(t.ID) > 0 {
 					m.expandedTasks[t.ID] = true
@@ -501,6 +514,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cycleLang(-1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingSyncAuto {
 				m.toggleSyncAuto()
+			} else if m.tab == tabSettings && m.settingsCursor == settingServerOn {
+				m.toggleServer()
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil {
 					// On a subtask: collapse the containing parent and
@@ -1095,6 +1110,20 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		}
 		m.syncStatus = tr("Syncing…")
 		return m, m.backgroundSync()
+	case settingServerOn:
+		m.toggleServer()
+	case settingServerListen:
+		m.mode = modeEditServerListen
+		m.textInput.SetValue(m.syncCfg.listenAddr())
+		m.textInput.Placeholder = tr("Bind address, e.g. 100.x.y.z:8765 or 127.0.0.1:8765")
+		m.textInput.Focus()
+		return m, textinput.Blink
+	case settingServerToken:
+		m.mode = modeEditServerToken
+		m.textInput.SetValue("")
+		m.textInput.Placeholder = tr("Set server token clients must present (blank = keep current)")
+		m.textInput.Focus()
+		return m, textinput.Blink
 	case settingCheckUpdate:
 		m.updateStatus = tr("Checking…")
 		return m, checkForUpdate()
