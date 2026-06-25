@@ -304,7 +304,9 @@ type model struct {
 	// (nil otherwise). serverExternal is set by probeServer when a headless
 	// `taskr serve` is answering at the configured address.
 	inprocServer   *http.Server
+	inprocStop     func() // stops the in-process server's change watcher
 	serverExternal bool
+	liveSync       *liveSyncState // SSE listener for real-time inbound push
 	// lastTimerHeartbeat throttles how often the running timer's last_seen is
 	// written to the DB (see the timer tick) so a live timer stays "fresh"
 	// against the stale-timer recoverer without writing every second.
@@ -425,13 +427,19 @@ func initialModel(repo Repository) model {
 	// syncs when a server is configured.
 	m.syncCfg = loadSyncConfig()
 	m.autoSync = autoSyncEnabled(m.syncCfg)
+	// Real-time inbound push: hold an SSE stream to the server so changes from
+	// other devices arrive in near-instant, with the periodic tick as fallback.
+	if m.autoSync {
+		m.liveSync = startLiveSync(m.syncCfg)
+	}
 	// If this machine is set to serve, start the in-process endpoint now. A bind
 	// failure (e.g. an external taskr serve already on that address) is non-fatal
 	// — the TUI keeps working and the Settings row will show it's served
 	// externally instead.
 	if m.syncCfg.ServerOn && m.syncCfg.ServerToken != "" {
-		if srv, err := startSyncServer(m.syncCfg.listenAddr(), m.syncCfg.ServerToken); err == nil {
+		if srv, stop, err := startSyncServer(m.syncCfg.listenAddr(), m.syncCfg.ServerToken); err == nil {
 			m.inprocServer = srv
+			m.inprocStop = stop
 		}
 	}
 	m.calendar.selected = startOfDay(time.Now())
@@ -453,6 +461,9 @@ func (m model) Init() tea.Cmd {
 	}
 	if m.watcher != nil {
 		cmds = append(cmds, waitForDBChange(m.watcher.ch))
+	}
+	if m.liveSync != nil {
+		cmds = append(cmds, waitForSyncEvent(m.liveSync.ch))
 	}
 	// Keep a periodic sync tick running for the whole session so enabling sync
 	// from Settings mid-session takes effect; only sync immediately on launch

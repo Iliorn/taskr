@@ -39,10 +39,11 @@ func (m model) updateEditSyncURL(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "enter":
-			if v := strings.TrimSpace(m.textInput.Value()); v != "" {
-				m.syncCfg.URL = v
-				m.saveSyncCfg()
-			}
+			// Save whatever's in the field, blank included: the editor is
+			// pre-filled with the current value, so an empty field is a
+			// deliberate clear, not an accidental no-op.
+			m.syncCfg.URL = strings.TrimSpace(m.textInput.Value())
+			m.saveSyncCfg()
 			m.mode = modeNormal
 			return m, nil
 		case "esc":
@@ -54,17 +55,15 @@ func (m model) updateEditSyncURL(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// updateEditSyncToken handles the inline token editor. A blank entry keeps the
-// existing token, so opening the editor and pressing enter doesn't wipe it.
+// updateEditSyncToken handles the inline token editor. The field is pre-filled
+// with the current token, so clearing it to blank clears the stored token.
 func (m model) updateEditSyncToken(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "enter":
-			if v := strings.TrimSpace(m.textInput.Value()); v != "" {
-				m.syncCfg.Token = v
-				m.saveSyncCfg()
-			}
+			m.syncCfg.Token = strings.TrimSpace(m.textInput.Value())
+			m.saveSyncCfg()
 			m.mode = modeNormal
 			return m, nil
 		case "esc":

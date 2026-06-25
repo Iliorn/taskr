@@ -15,6 +15,13 @@ func getStoragePath() string {
 	return filepath.Join(home, ".taskr", "tasks.json")
 }
 
+// taskrDir is the storage directory (~/.taskr) holding tasks.db, settings, and
+// sync state.
+func taskrDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".taskr")
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 // currentSettingsVersion is stamped into newly written settings.json. Bump it

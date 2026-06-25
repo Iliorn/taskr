@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -27,26 +29,29 @@ const defaultServerListen = "127.0.0.1:8765"
 // synchronously so a bind failure (e.g. address already in use) is reported now
 // rather than vanishing into the goroutine. A token is mandatory — the endpoint
 // must never serve unauthenticated.
-func startSyncServer(listen, token string) (*http.Server, error) {
+func startSyncServer(listen, token string) (*http.Server, func(), error) {
 	if token == "" {
-		return nil, fmt.Errorf("a server token is required")
+		return nil, nil, fmt.Errorf("a server token is required")
 	}
 	if listen == "" {
 		listen = defaultServerListen
 	}
 	ln, err := net.Listen("tcp", listen)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	srv := &syncServer{db: db, token: token}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/health", srv.handleHealth)
-	mux.HandleFunc("/v1/sync", srv.handleSync)
+	srv := &syncServer{db: db, token: token, hub: newSSEHub()}
+	// Watch the store so out-of-process writes (a CLI taskr add on this host)
+	// also push to clients. Non-fatal if it can't start.
+	stopWatch := func() {}
+	if stop, werr := startChangeWatcher(srv.hub, taskrDir()); werr == nil {
+		stopWatch = stop
+	}
 	// Addr is informational here (Serve uses ln); it reflects the actually-bound
 	// address, which matters when the configured port was 0 (OS-assigned).
-	httpServer := &http.Server{Addr: ln.Addr().String(), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	httpServer := &http.Server{Addr: ln.Addr().String(), Handler: srv.handler(), ReadHeaderTimeout: 10 * time.Second}
 	go httpServer.Serve(ln)
-	return httpServer, nil
+	return httpServer, stopWatch, nil
 }
 
 // serve.go implements `taskr serve`: a small self-hosted HTTP endpoint that
@@ -70,11 +75,23 @@ type syncResponse struct {
 }
 
 // syncServer holds the store handle and serializes merges so concurrent client
-// syncs can't interleave load→merge→save and drop a write.
+// syncs can't interleave load→merge→save and drop a write. hub fans real-time
+// change notifications out to subscribed clients (see ssehub.go).
 type syncServer struct {
 	db    *sql.DB
 	token string
+	hub   *sseHub
 	mu    sync.Mutex
+}
+
+// handler builds the route set. Shared by both entry points (headless cliServe
+// and the in-process startSyncServer) so they never drift.
+func (s *syncServer) handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/health", s.handleHealth)
+	mux.HandleFunc("/v1/sync", s.handleSync)
+	mux.HandleFunc("/v1/events", s.handleEvents)
+	return mux
 }
 
 func cliServe(args []string) int {
@@ -94,15 +111,18 @@ func cliServe(args []string) int {
 		fmt.Fprintf(os.Stderr, "taskr serve: open store: %v\n", err)
 		return 1
 	}
-	srv := &syncServer{db: db, token: *token}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/health", srv.handleHealth)
-	mux.HandleFunc("/v1/sync", srv.handleSync)
+	srv := &syncServer{db: db, token: *token, hub: newSSEHub()}
+	// Watch the store so out-of-process writes (a CLI taskr add on this host)
+	// also push to clients in real time, not just client-initiated merges.
+	if stop, werr := startChangeWatcher(srv.hub, taskrDir()); werr != nil {
+		fmt.Fprintf(os.Stderr, "taskr serve: change watcher unavailable (%v); out-of-process writes won't push in real time\n", werr)
+	} else {
+		defer stop()
+	}
 
 	httpServer := &http.Server{
 		Addr:              *listen,
-		Handler:           mux,
+		Handler:           srv.handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	fmt.Fprintf(os.Stderr, "taskr serve: listening on %s (POST /v1/sync)\n", *listen)
@@ -164,6 +184,12 @@ func (s *syncServer) sync(clientTasks []todo.Todo) ([]todo.Todo, error) {
 		return nil, err
 	}
 	merged := Merge(server, clientTasks)
+	// A no-op pull (client already in sync) must not write: the write would wake
+	// the change watcher into a pointless broadcast and churn the DB. Idempotent
+	// merge plus this guard guarantee convergence with no feedback loop.
+	if storeDigest(server) == storeDigest(merged) {
+		return merged, nil
+	}
 	ptrs := make([]*todo.Todo, len(merged))
 	for i := range merged {
 		ptrs[i] = &merged[i]
@@ -171,5 +197,59 @@ func (s *syncServer) sync(clientTasks []todo.Todo) ([]todo.Todo, error) {
 	if err := saveNormalized(s.db, ptrs, nil); err != nil {
 		return nil, err
 	}
+	// Nudge every connected client to pull. The change watcher would also catch
+	// this write, but broadcasting here makes client→client propagation immediate
+	// and independent of fsnotify being available.
+	if s.hub != nil {
+		s.hub.broadcast()
+	}
 	return merged, nil
+}
+
+// storeDigest is an order-independent fingerprint of a task set: identical
+// content hashes identically regardless of slice ordering, so sync() can tell
+// whether a merge actually changed the store. It must have no false positives —
+// a stable order is imposed on the task slice and every child/tag slice before
+// hashing — or the no-op-write guard could loop.
+func storeDigest(ts []todo.Todo) [32]byte {
+	cp := make([]todo.Todo, len(ts))
+	copy(cp, ts)
+	for i := range cp {
+		canonicalizeForDigest(&cp[i])
+	}
+	sort.Slice(cp, func(i, j int) bool { return cp[i].ID < cp[j].ID })
+	b, _ := json.Marshal(cp)
+	return sha256.Sum256(b)
+}
+
+// canonicalizeForDigest replaces a task's order-insensitive slices with sorted
+// copies — never mutating the caller's backing arrays — so storeDigest is stable
+// across the reordering a merge may introduce.
+func canonicalizeForDigest(t *todo.Todo) {
+	t.Tags = sortedStrings(t.Tags)
+	t.Dependencies = sortedStrings(t.Dependencies)
+	if len(t.Comments) > 1 {
+		c := append([]todo.Comment(nil), t.Comments...)
+		sort.Slice(c, func(i, j int) bool { return c[i].ID < c[j].ID })
+		t.Comments = c
+	}
+	if len(t.Learnings) > 1 {
+		l := append([]todo.Learning(nil), t.Learnings...)
+		sort.Slice(l, func(i, j int) bool { return l[i].ID < l[j].ID })
+		t.Learnings = l
+	}
+	if len(t.TimeEntries) > 1 {
+		e := append([]todo.TimeEntry(nil), t.TimeEntries...)
+		sort.Slice(e, func(i, j int) bool { return e[i].ID < e[j].ID })
+		t.TimeEntries = e
+	}
+}
+
+func sortedStrings(s []string) []string {
+	if len(s) < 2 {
+		return s
+	}
+	c := append([]string(nil), s...)
+	sort.Strings(c)
+	return c
 }
