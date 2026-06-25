@@ -40,6 +40,10 @@ const (
 	settingAutoCloseParent
 	settingTheme
 	settingLanguage
+	settingSyncAuto
+	settingSyncServer
+	settingSyncToken
+	settingSyncNow
 	settingVersion
 	settingCheckUpdate
 	numSettingsRows
@@ -101,6 +105,8 @@ const (
 	modeAddSubtask
 	modeEditSubtask
 	modeAddTimeEntry
+	modeEditSyncURL
+	modeEditSyncToken
 )
 
 type tagSortMode int
@@ -283,9 +289,11 @@ type model struct {
 
 	// Cross-device sync config, loaded once at startup. autoSync gates the
 	// periodic background sync (and the launch/exit syncs); it is on whenever a
-	// sync URL+token are configured and not explicitly disabled.
-	syncCfg  syncConfig
-	autoSync bool
+	// sync URL+token are configured and not explicitly disabled. syncStatus is
+	// the last sync outcome shown in the Settings footer.
+	syncCfg    syncConfig
+	autoSync   bool
+	syncStatus string
 }
 
 func initialModel(repo Repository) model {
@@ -422,9 +430,12 @@ func (m model) Init() tea.Cmd {
 	if m.watcher != nil {
 		cmds = append(cmds, waitForDBChange(m.watcher.ch))
 	}
+	// Keep a periodic sync tick running for the whole session so enabling sync
+	// from Settings mid-session takes effect; only sync immediately on launch
+	// when it's already configured.
+	cmds = append(cmds, syncTick())
 	if m.autoSync {
-		// Sync once on launch, then on a periodic tick while open.
-		cmds = append(cmds, m.backgroundSync(), syncTick())
+		cmds = append(cmds, m.backgroundSync())
 	}
 	switch len(cmds) {
 	case 0:
@@ -1511,7 +1522,7 @@ func (m model) extraOverheadLines() int {
 	case modeInput, modeEditComment, modeEditTag, modeEditTitle,
 		modeSearch, modeAddLearning, modeEditLearning, modeAddSubtask,
 		modeEditSubtask, modeEditProjectInline, modeEditTimeEntry,
-		modeAddTimeEntry:
+		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken:
 		return 3
 	case modeSearchDep, modeSearchTag, modeSearchProject:
 		return 8

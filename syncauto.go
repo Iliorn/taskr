@@ -37,11 +37,18 @@ func (m model) backgroundSync() tea.Cmd {
 	}
 }
 
-// handleSyncDone flashes a transient status. Sync failures are intentionally
-// quiet — a network blip shouldn't nag — so only resolved conflicts are
-// surfaced, since they mean a local edit was superseded and logged.
+// handleSyncDone records the outcome in the Settings footer (m.syncStatus) and,
+// only when a conflict was auto-resolved, flashes a transient toast on the error
+// line — a resolved conflict means a local edit was superseded and logged.
+// Plain failures stay quiet on the toast line (a network blip shouldn't nag);
+// they're still visible in the Settings footer.
 func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
-	if msg.err == nil && msg.summary.conflicts > 0 {
+	if msg.err != nil {
+		m.syncStatus = tr("Last sync failed: ") + truncate(msg.err.Error(), 60)
+		return m, nil
+	}
+	m.syncStatus = fmt.Sprintf(tr("Last sync: sent %d, received %d"), msg.summary.sent, msg.summary.received)
+	if msg.summary.conflicts > 0 {
 		m.err = fmt.Sprintf(tr("Sync: %d conflict(s) resolved — see ~/.taskr/sync.log"), msg.summary.conflicts)
 		return m, clearErrAfter()
 	}

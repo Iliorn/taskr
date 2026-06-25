@@ -1015,6 +1015,10 @@ var settingsLeftCol = []int{
 	settingAutoCloseParent,
 	settingTheme,
 	settingLanguage,
+	settingSyncAuto,
+	settingSyncServer,
+	settingSyncToken,
+	settingSyncNow,
 	settingVersion,
 	settingCheckUpdate,
 }
@@ -1072,6 +1076,10 @@ func (m model) renderSettingsList() string {
 		settingAutoCloseParent: tr("Auto-close parent"),
 		settingTheme:           tr("Theme"),
 		settingLanguage:        tr("Language"),
+		settingSyncAuto:        tr("Sync"),
+		settingSyncServer:      tr("Sync server"),
+		settingSyncToken:       tr("Sync token"),
+		settingSyncNow:         tr("Sync now"),
 		settingVersion:         tr("Version"),
 		settingCheckUpdate:     tr("Check for updates"),
 	}
@@ -1083,6 +1091,22 @@ func (m model) renderSettingsList() string {
 	if m.autoCloseParent {
 		autoCloseVal = tr("On")
 	}
+	syncAutoVal := "‹ " + tr("needs server") + " ›"
+	if m.syncCfg.ready() {
+		if m.autoSync {
+			syncAutoVal = "‹ " + tr("On") + " ›"
+		} else {
+			syncAutoVal = "‹ " + tr("Off") + " ›"
+		}
+	}
+	syncServerVal := tr("not set")
+	if m.syncCfg.URL != "" {
+		syncServerVal = m.syncCfg.URL
+	}
+	syncTokenVal := tr("not set")
+	if m.syncCfg.Token != "" {
+		syncTokenVal = "•••• " + tr("set")
+	}
 	values := map[int]string{
 		settingBiasDeadline:    biasPickerValue(activeBiases.Deadline),
 		settingBiasPriority:    biasPickerValue(activeBiases.Priority),
@@ -1091,6 +1115,10 @@ func (m model) renderSettingsList() string {
 		settingAutoCloseParent: "‹ " + autoCloseVal + " ›",
 		settingTheme:           "‹ " + m.themeName + " ›",
 		settingLanguage:        "‹ " + activeLang.displayName() + " ›",
+		settingSyncAuto:        syncAutoVal,
+		settingSyncServer:      syncServerVal,
+		settingSyncToken:       syncTokenVal,
+		settingSyncNow:         tr("press enter to sync"),
 		settingVersion:         appVersion,
 		settingCheckUpdate:     tr("press enter to check"),
 	}
@@ -1148,6 +1176,9 @@ func (m model) renderSettingsList() string {
 
 	if m.updateStatus != "" {
 		b.WriteString("\n  " + activeCountStyle.Render(m.updateStatus) + "\n")
+	}
+	if m.syncStatus != "" {
+		b.WriteString("\n  " + helpStyle.Render(m.syncStatus) + "\n")
 	}
 	return b.String()
 }

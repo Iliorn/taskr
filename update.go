@@ -86,10 +86,11 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case saveDoneMsg:
 		return m, nil
 	case syncTickMsg:
-		if !m.autoSync {
-			return m, nil
+		if m.autoSync {
+			return m, tea.Batch(m.backgroundSync(), syncTick())
 		}
-		return m, tea.Batch(m.backgroundSync(), syncTick())
+		// Keep ticking even when disabled so a mid-session enable is picked up.
+		return m, syncTick()
 	case syncDoneMsg:
 		return m.handleSyncDone(msg)
 	case saveErrMsg:
@@ -209,6 +210,10 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m.updateEditTitle(msg)
 	case modeEditProjectInline:
 		newModel, cmd = m.updateEditProjectInline(msg)
+	case modeEditSyncURL:
+		newModel, cmd = m.updateEditSyncURL(msg)
+	case modeEditSyncToken:
+		newModel, cmd = m.updateEditSyncToken(msg)
 	case modeEditLearning:
 		newModel, cmd = m.updateEditLearning(msg)
 	case modeAddLearning:
@@ -474,6 +479,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cycleTheme(1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
 				m.cycleLang(1)
+			} else if m.tab == tabSettings && m.settingsCursor == settingSyncAuto {
+				m.toggleSyncAuto()
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil && m.subtaskCount(t.ID) > 0 {
 					m.expandedTasks[t.ID] = true
@@ -492,6 +499,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cycleTheme(-1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
 				m.cycleLang(-1)
+			} else if m.tab == tabSettings && m.settingsCursor == settingSyncAuto {
+				m.toggleSyncAuto()
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil {
 					// On a subtask: collapse the containing parent and
@@ -1065,6 +1074,27 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		m.cycleTheme(1)
 	case settingLanguage:
 		m.cycleLang(1)
+	case settingSyncAuto:
+		m.toggleSyncAuto()
+	case settingSyncServer:
+		m.mode = modeEditSyncURL
+		m.textInput.SetValue(m.syncCfg.URL)
+		m.textInput.Placeholder = tr("Sync server URL, e.g. http://100.x.y.z:8765")
+		m.textInput.Focus()
+		return m, textinput.Blink
+	case settingSyncToken:
+		m.mode = modeEditSyncToken
+		m.textInput.SetValue("")
+		m.textInput.Placeholder = tr("Paste sync token (blank = keep current)")
+		m.textInput.Focus()
+		return m, textinput.Blink
+	case settingSyncNow:
+		if !m.syncCfg.ready() {
+			m.syncStatus = tr("Set sync server + token first")
+			return m, nil
+		}
+		m.syncStatus = tr("Syncing…")
+		return m, m.backgroundSync()
 	case settingCheckUpdate:
 		m.updateStatus = tr("Checking…")
 		return m, checkForUpdate()
