@@ -55,6 +55,17 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case timerTickMsg:
 		if m.anyTimerRunning() {
+			// Heartbeat the running timer's last_seen at most once a minute so
+			// the stale-timer recoverer never mistakes this live timer for an
+			// abandoned one. recordSelfSave keeps the fs watcher from reloading
+			// on our own write.
+			if time.Since(m.lastTimerHeartbeat) >= time.Minute {
+				m.lastTimerHeartbeat = time.Now()
+				if m.watcher != nil {
+					m.watcher.recordSelfSave()
+				}
+				_ = heartbeatRunningTimers(db, time.Now())
+			}
 			return m, timerTick()
 		}
 		m.timerTickOn = false

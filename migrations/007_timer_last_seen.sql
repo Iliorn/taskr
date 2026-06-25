@@ -1,0 +1,11 @@
+-- Migration 007: add `last_seen` to running time entries so an abandoned timer
+-- can be recovered instead of accruing forever.
+--
+-- A live TUI heartbeats last_seen while a timer runs; on load (CLI or TUI) a
+-- timer whose last_seen (or started_at, if it never heartbeated) is older than
+-- the staleness threshold is auto-stopped at that last-credible-activity moment
+-- and flagged to the user — so a session that died mid-work (e.g. an agent that
+-- ran out of context) can't leave a 30-hour entry to be discovered days later.
+--
+-- DEFAULT '' = never heartbeated; the recoverer falls back to started_at then.
+ALTER TABLE task_time_entries ADD COLUMN last_seen TEXT NOT NULL DEFAULT '';

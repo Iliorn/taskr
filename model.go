@@ -305,6 +305,10 @@ type model struct {
 	// `taskr serve` is answering at the configured address.
 	inprocServer   *http.Server
 	serverExternal bool
+	// lastTimerHeartbeat throttles how often the running timer's last_seen is
+	// written to the DB (see the timer tick) so a live timer stays "fresh"
+	// against the stale-timer recoverer without writing every second.
+	lastTimerHeartbeat time.Time
 }
 
 func initialModel(repo Repository) model {

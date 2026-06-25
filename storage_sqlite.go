@@ -220,9 +220,9 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 			return err
 		}
 		defer upLearning.Close()
-		upEntry, err := tx.Prepare(`INSERT INTO task_time_entries (id, task_id, started_at, stopped_at, deleted_at)
-			VALUES (?, ?, ?, ?, ?)
-			ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at, stopped_at=excluded.stopped_at, deleted_at=excluded.deleted_at`)
+		upEntry, err := tx.Prepare(`INSERT INTO task_time_entries (id, task_id, started_at, stopped_at, last_seen, deleted_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at, stopped_at=excluded.stopped_at, last_seen=excluded.last_seen, deleted_at=excluded.deleted_at`)
 		if err != nil {
 			return err
 		}
@@ -273,7 +273,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 			if err := saveChildren(tx, t.ID, now, "task_time_entries", t.TimeEntries,
 				func(e todo.TimeEntry) string { return e.ID },
 				upEntry, func(e todo.TimeEntry) []any {
-					return []any{e.ID, t.ID, fmtTime(e.StartedAt), fmtTime(e.StoppedAt), fmtTime(e.DeletedAt)}
+					return []any{e.ID, t.ID, fmtTime(e.StartedAt), fmtTime(e.StoppedAt), fmtTime(e.LastSeen), fmtTime(e.DeletedAt)}
 				}); err != nil {
 				return err
 			}
@@ -459,15 +459,16 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 		}); err != nil {
 		return nil, err
 	}
-	if err := loadChildren(h, todos, "task_time_entries", "id, task_id, started_at, stopped_at, deleted_at", childWhere,
+	if err := loadChildren(h, todos, "task_time_entries", "id, task_id, started_at, stopped_at, last_seen, deleted_at", childWhere,
 		func(t *todo.Todo, s *sql.Rows) error {
 			var e todo.TimeEntry
-			var taskID, startedAt, stoppedAt, deletedAt string
-			if err := s.Scan(&e.ID, &taskID, &startedAt, &stoppedAt, &deletedAt); err != nil {
+			var taskID, startedAt, stoppedAt, lastSeen, deletedAt string
+			if err := s.Scan(&e.ID, &taskID, &startedAt, &stoppedAt, &lastSeen, &deletedAt); err != nil {
 				return err
 			}
 			e.StartedAt = parseTime(startedAt)
 			e.StoppedAt = parseTime(stoppedAt)
+			e.LastSeen = parseTime(lastSeen)
 			e.DeletedAt = parseTime(deletedAt)
 			if t = todos[taskID]; t != nil {
 				t.TimeEntries = append(t.TimeEntries, e)

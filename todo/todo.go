@@ -138,6 +138,10 @@ type TimeEntry struct {
 	StartedAt time.Time `json:"started_at"`
 	StoppedAt time.Time `json:"stopped_at,omitempty"`
 	DeletedAt time.Time `json:"deleted_at,omitempty"` // sync tombstone; see Comment.DeletedAt
+	// LastSeen is the last moment a live taskr process confirmed this timer was
+	// still running (heartbeat). A running entry whose LastSeen has gone stale is
+	// treated as abandoned and recovered. Zero = never heartbeated.
+	LastSeen time.Time `json:"last_seen,omitempty"`
 }
 
 func (te TimeEntry) Duration() time.Duration {
