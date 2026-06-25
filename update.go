@@ -100,9 +100,30 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds := []tea.Cmd{syncTick()}
 		if m.autoSync {
 			cmds = append(cmds, m.backgroundSync())
+			// Mid-session enable: start the real-time listener if sync was just
+			// turned on (it isn't running yet) and arm its reader once.
+			if m.liveSync == nil {
+				if ls := startLiveSync(m.syncCfg); ls != nil {
+					m.liveSync = ls
+					cmds = append(cmds, waitForSyncEvent(ls.ch))
+				}
+			}
 		}
 		if p := m.probeServer(); p != nil {
 			cmds = append(cmds, p)
+		}
+		return m, tea.Batch(cmds...)
+	case syncEventMsg:
+		// Server signalled a change. Re-arm the listener and pull now.
+		var cmds []tea.Cmd
+		if m.liveSync != nil {
+			cmds = append(cmds, waitForSyncEvent(m.liveSync.ch))
+		}
+		if m.autoSync {
+			cmds = append(cmds, m.backgroundSync())
+		}
+		if len(cmds) == 0 {
+			return m, nil
 		}
 		return m, tea.Batch(cmds...)
 	case syncDoneMsg:
@@ -1110,8 +1131,8 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		return m, textinput.Blink
 	case settingSyncToken:
 		m.mode = modeEditSyncToken
-		m.textInput.SetValue("")
-		m.textInput.Placeholder = tr("Paste sync token (blank = keep current)")
+		m.textInput.SetValue(m.syncCfg.Token)
+		m.textInput.Placeholder = tr("Sync token (clear the field to remove it)")
 		m.textInput.Focus()
 		return m, textinput.Blink
 	case settingSyncNow:
@@ -1131,8 +1152,8 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		return m, textinput.Blink
 	case settingServerToken:
 		m.mode = modeEditServerToken
-		m.textInput.SetValue("")
-		m.textInput.Placeholder = tr("Set server token clients must present (blank = keep current)")
+		m.textInput.SetValue(m.syncCfg.ServerToken)
+		m.textInput.Placeholder = tr("Server token clients must present (clear the field to remove it)")
 		m.textInput.Focus()
 		return m, textinput.Blink
 	case settingCheckUpdate:

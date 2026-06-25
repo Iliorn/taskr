@@ -28,6 +28,10 @@ func (m *model) toggleServer() {
 	if m.inprocServer != nil {
 		_ = m.inprocServer.Close()
 		m.inprocServer = nil
+		if m.inprocStop != nil {
+			m.inprocStop()
+			m.inprocStop = nil
+		}
 		m.syncCfg.ServerOn = false
 		m.saveSyncCfg()
 		m.syncStatus = tr("Server stopped")
@@ -38,12 +42,13 @@ func (m *model) toggleServer() {
 		return
 	}
 	listen := m.syncCfg.listenAddr()
-	srv, err := startSyncServer(listen, m.syncCfg.ServerToken)
+	srv, stop, err := startSyncServer(listen, m.syncCfg.ServerToken)
 	if err != nil {
 		m.syncStatus = tr("Server: ") + err.Error()
 		return
 	}
 	m.inprocServer = srv
+	m.inprocStop = stop
 	m.syncCfg.ServerOn = true
 	m.syncCfg.ServerListen = listen
 	m.saveSyncCfg()
@@ -55,10 +60,10 @@ func (m model) updateEditServerListen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "enter":
-			if v := strings.TrimSpace(m.textInput.Value()); v != "" {
-				m.syncCfg.ServerListen = v
-				m.saveSyncCfg()
-			}
+			// Blank clears (falls back to the default bind address); the editor
+			// is pre-filled, so an empty field is a deliberate clear.
+			m.syncCfg.ServerListen = strings.TrimSpace(m.textInput.Value())
+			m.saveSyncCfg()
 			m.mode = modeNormal
 			return m, nil
 		case "esc":
@@ -75,10 +80,9 @@ func (m model) updateEditServerToken(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "enter":
-			if v := strings.TrimSpace(m.textInput.Value()); v != "" {
-				m.syncCfg.ServerToken = v
-				m.saveSyncCfg()
-			}
+			// Pre-filled editor: blank is a deliberate clear of the server token.
+			m.syncCfg.ServerToken = strings.TrimSpace(m.textInput.Value())
+			m.saveSyncCfg()
 			m.mode = modeNormal
 			return m, nil
 		case "esc":
