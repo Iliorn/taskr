@@ -218,6 +218,17 @@ func droppedLocalEdits(local, merged []todo.Todo) []todo.Todo {
 		if !ok {
 			continue
 		}
+		if m.Deleted {
+			// The authoritative version is a tombstone while we still had it
+			// live: another device deleted it. That's only a genuine dropped
+			// edit if our copy was modified *after* the deletion (an edit that
+			// lost to a delete). A plain deletion propagating to us is not a
+			// conflict — surfacing it as one nags on every remote delete.
+			if l.ModifiedAt.After(m.DeletedAt) {
+				dropped = append(dropped, l)
+			}
+			continue
+		}
 		if scalarHash(l) != scalarHash(m) {
 			dropped = append(dropped, l)
 		}

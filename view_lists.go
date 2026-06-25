@@ -1167,10 +1167,16 @@ func (m model) renderSettingsList() string {
 
 	b.WriteString(headerStyle.Render(tr("Settings")) + "\n\n")
 
+	// Personality summary: what the current bias mix "feels like", so tweaking a
+	// single bias gives immediate feedback that the sequence has shifted. It
+	// belongs next to the biases that produce it (the right column).
+	name, descr := personality(activeBiases)
+
 	availW := m.termWidth - 8
 	if availW >= twoColumnSettingsMinWidth {
 		gap := 4
 		leftW := (availW - gap) / 2
+		rightW := availW - leftW - gap
 		leftLabelW := maxLabelW(settingsLeftCol)
 		rightLabelW := maxLabelW(settingsRightCol)
 		var left, right strings.Builder
@@ -1180,21 +1186,23 @@ func (m model) renderSettingsList() string {
 		for _, id := range settingsRightCol {
 			right.WriteString(renderRow(id, rightLabelW) + "\n")
 		}
+		// Drop the sequence summary directly under the bias controls, wrapped to
+		// the column width so it respects the no-wrap contract.
+		right.WriteString("\n  " + activeCountStyle.Render(tr("Sequence: ")+name) + "\n")
+		for _, line := range wrapText(descr, rightW-4) {
+			right.WriteString("    " + helpStyle.Render(line) + "\n")
+		}
 		b.WriteString(joinColumns(left.String(), right.String(), leftW, gap))
 	} else {
+		// Narrow layout has no columns, so the summary stays a stacked footer.
 		order := settingsNavOrder()
 		labelW := maxLabelW(order)
 		for _, id := range order {
 			b.WriteString(renderRow(id, labelW) + "\n")
 		}
+		b.WriteString("\n  " + activeCountStyle.Render(tr("Sequence: ")+name) +
+			"  " + helpStyle.Render(descr) + "\n")
 	}
-
-	// Personality footer: a one-line summary of what the current bias mix
-	// "feels like", so a user tweaking a single bias gets immediate text
-	// feedback that their sequence has shifted.
-	name, descr := personality(activeBiases)
-	b.WriteString("\n  " + activeCountStyle.Render("Sequence: "+name) +
-		"  " + helpStyle.Render(descr) + "\n")
 
 	if m.updateStatus != "" {
 		b.WriteString("\n  " + activeCountStyle.Render(m.updateStatus) + "\n")
