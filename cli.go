@@ -33,6 +33,9 @@ func isCLICommand(arg string) bool {
 }
 
 func runCLI(args []string) int {
+	// Recover any timer a prior (possibly crashed) session left running, before
+	// running the command, so the warning rides along with this invocation.
+	reconcileStaleTimersCLI(args[0])
 	rc := dispatchCLI(args)
 	// After a successful mutating command, push the change to the sync server so
 	// a shell edit propagates even when the TUI isn't open. Fail-soft and gated
