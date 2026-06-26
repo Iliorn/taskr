@@ -188,6 +188,21 @@ func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 		}
 		*d = false
 	}
+
+	// The flat name-column cap (nameColWidth) keeps the title sane on the other
+	// list tabs, but on a wide terminal it can clip a long title while empty
+	// space sits to the right of the fixed columns. Grow the title to absorb
+	// that slack — but never past what the longest entry actually needs.
+	if want := contentMax + 4; c.titleW < want {
+		if spare := inner - fixed - c.titleW - colsW(); spare > 0 {
+			grow := want - c.titleW
+			if grow > spare {
+				grow = spare
+			}
+			c.titleW += grow
+		}
+	}
+
 	return c
 }
 

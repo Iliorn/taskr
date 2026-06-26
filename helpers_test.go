@@ -390,6 +390,76 @@ func TestNameColWidth(t *testing.T) {
 	}
 }
 
+// ── taskListCols title growth ───────────────────────────────────────────────
+
+func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
+	// shownColsW reconstructs the fixed-column budget from a laid-out listCols so
+	// the no-overflow check below doesn't depend on taskListCols internals.
+	shownColsW := func(c listCols) int {
+		w := 0
+		if c.showSize {
+			w += sizeColW
+		}
+		if c.showDue {
+			w += dueColW
+		}
+		if c.showLast {
+			w += scoreColW
+		}
+		if c.showProject {
+			w += projectColW
+		}
+		return w
+	}
+
+	tests := []struct {
+		name       string
+		termWidth  int
+		contentMax int
+	}{
+		{"wide + long titles", 200, 120},
+		{"wide + short titles", 200, 18},
+		{"medium + long titles", 120, 90},
+		{"narrow + long titles", 60, 90},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := taskListCols(tt.termWidth, false, tt.contentMax)
+
+			// Never wider than the longest title needs (+gap), but at least the
+			// header label — growth must not produce an empty padded column.
+			floor := len([]rune(tr("Task")))
+			want := tt.contentMax + 4
+			if want < floor {
+				want = floor
+			}
+			if c.titleW > want {
+				t.Errorf("titleW = %d, exceeds content need %d", c.titleW, want)
+			}
+
+			// No-wrap contract: title + fixed cells must fit the inner width.
+			const fixed = 6
+			inner := tt.termWidth - 8
+			if total := c.titleW + fixed + shownColsW(c); total > inner {
+				t.Errorf("titleW=%d + fixed + cols = %d overflows inner %d",
+					c.titleW, total, inner)
+			}
+		})
+	}
+
+	// On a wide terminal a long title must grow past the flat nameColMaxWidth
+	// cap, filling slack the old hard cap left empty.
+	if c := taskListCols(200, false, 120); c.titleW <= nameColMaxWidth {
+		t.Errorf("wide terminal titleW = %d, want > flat cap %d (should absorb slack)",
+			c.titleW, nameColMaxWidth)
+	}
+	// But a short title still hugs its content — no needless sprawl.
+	if c := taskListCols(200, false, 18); c.titleW != 18+4 {
+		t.Errorf("short title titleW = %d, want %d (hug content)", c.titleW, 18+4)
+	}
+}
+
 // ── computeTagStats ───────────────────────────────────────────────────────────
 
 func TestComputeTagStats(t *testing.T) {
