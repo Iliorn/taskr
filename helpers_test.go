@@ -416,16 +416,18 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 		name       string
 		termWidth  int
 		contentMax int
+		tagsMax    int
 	}{
-		{"wide + long titles", 200, 120},
-		{"wide + short titles", 200, 18},
-		{"medium + long titles", 120, 90},
-		{"narrow + long titles", 60, 90},
+		{"wide + long titles", 200, 120, 0},
+		{"wide + short titles", 200, 18, 0},
+		{"medium + long titles", 120, 90, 0},
+		{"narrow + long titles", 60, 90, 0},
+		{"wide + long titles + tags", 200, 120, 40},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := taskListCols(tt.termWidth, false, tt.contentMax)
+			c := taskListCols(tt.termWidth, false, tt.contentMax, tt.tagsMax)
 
 			// Never wider than the longest title needs (+gap), but at least the
 			// header label — growth must not produce an empty padded column.
@@ -438,11 +440,16 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 				t.Errorf("titleW = %d, exceeds content need %d", c.titleW, want)
 			}
 
-			// No-wrap contract: title + fixed cells must fit the inner width.
+			// No-wrap contract: title + fixed cells + the widest row's tags
+			// (a leading space + tagsMax) must fit the inner width.
 			const fixed = 6
 			inner := tt.termWidth - 8
-			if total := c.titleW + fixed + shownColsW(c); total > inner {
-				t.Errorf("titleW=%d + fixed + cols = %d overflows inner %d",
+			tagsReserve := 0
+			if tt.tagsMax > 0 {
+				tagsReserve = 1 + tt.tagsMax
+			}
+			if total := c.titleW + fixed + shownColsW(c) + tagsReserve; total > inner {
+				t.Errorf("titleW=%d + fixed + cols + tags = %d overflows inner %d",
 					c.titleW, total, inner)
 			}
 		})
@@ -450,13 +457,21 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 
 	// On a wide terminal a long title must grow past the flat nameColMaxWidth
 	// cap, filling slack the old hard cap left empty.
-	if c := taskListCols(200, false, 120); c.titleW <= nameColMaxWidth {
+	if c := taskListCols(200, false, 120, 0); c.titleW <= nameColMaxWidth {
 		t.Errorf("wide terminal titleW = %d, want > flat cap %d (should absorb slack)",
 			c.titleW, nameColMaxWidth)
 	}
 	// But a short title still hugs its content — no needless sprawl.
-	if c := taskListCols(200, false, 18); c.titleW != 18+4 {
+	if c := taskListCols(200, false, 18, 0); c.titleW != 18+4 {
 		t.Errorf("short title titleW = %d, want %d (hug content)", c.titleW, 18+4)
+	}
+	// Reserving tag room must shrink the grown title vs. the no-tags case, so
+	// the tags column survives.
+	noTags := taskListCols(200, false, 120, 0)
+	withTags := taskListCols(200, false, 120, 40)
+	if !(withTags.titleW < noTags.titleW) {
+		t.Errorf("titleW with tags reserve = %d, want < no-reserve %d",
+			withTags.titleW, noTags.titleW)
 	}
 }
 

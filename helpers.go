@@ -133,7 +133,18 @@ type listCols struct {
 	showProject bool
 }
 
-func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
+// tagsRenderWidth is the on-screen width of a task's trailing tag list as the
+// list rows render it (each tag as " #tag" plus styling padding). Used both to
+// size rows and to reserve tag room when growing the title column.
+func tagsRenderWidth(tags []string) int {
+	w := 0
+	for _, tag := range tags {
+		w += 4 + len([]rune(tag))
+	}
+	return w
+}
+
+func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int) listCols {
 	inner := termWidth - 8 // panel content width (margin + border + padding)
 	const fixed = 6        // cursor + checkbox + fold icon
 	c := listCols{showDue: true, showLast: true}
@@ -192,9 +203,15 @@ func taskListCols(termWidth int, isHistory bool, contentMax int) listCols {
 	// The flat name-column cap (nameColWidth) keeps the title sane on the other
 	// list tabs, but on a wide terminal it can clip a long title while empty
 	// space sits to the right of the fixed columns. Grow the title to absorb
-	// that slack — but never past what the longest entry actually needs.
+	// that slack — but never past what the longest entry actually needs, and
+	// leave room for the trailing tags column (a leading space + the widest
+	// row's tags) so growing the title can't push tags off the right edge.
+	tagsReserve := 0
+	if tagsMax > 0 {
+		tagsReserve = 1 + tagsMax
+	}
 	if want := contentMax + 4; c.titleW < want {
-		if spare := inner - fixed - c.titleW - colsW(); spare > 0 {
+		if spare := inner - fixed - c.titleW - colsW() - tagsReserve; spare > 0 {
 			grow := want - c.titleW
 			if grow > spare {
 				grow = spare

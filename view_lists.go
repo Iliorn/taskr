@@ -618,6 +618,7 @@ func (m model) renderTaskList() string {
 	// Must mirror every suffix/prefix renderTaskLineWithSet appends to the title,
 	// otherwise the longest row eats into the gap before the Score column.
 	contentMax := 0
+	tagsMax := 0
 	for i := range active {
 		w := len([]rune(active[i].Title))
 		if active[i].HasOverdueDependencyFast(overdueSet) {
@@ -641,8 +642,11 @@ func (m model) renderTaskList() string {
 		if w > contentMax {
 			contentMax = w
 		}
+		if tw := tagsRenderWidth(active[i].Tags); tw > tagsMax {
+			tagsMax = tw
+		}
 	}
-	cols := taskListCols(m.termWidth, false, contentMax)
+	cols := taskListCols(m.termWidth, false, contentMax, tagsMax)
 	renderListHeader(b, m.termWidth, false, m.taskSort, cols)
 
 	visible := m.visibleActiveTasks()
@@ -689,12 +693,16 @@ func (m model) renderHistoryList() string {
 	defer putBuilder(b)
 
 	contentMax := 0
+	tagsMax := 0
 	for i := range completed {
 		if w := len([]rune(completed[i].Title)); w > contentMax {
 			contentMax = w
 		}
+		if tw := tagsRenderWidth(completed[i].Tags); tw > tagsMax {
+			tagsMax = tw
+		}
 	}
-	cols := taskListCols(m.termWidth, true, contentMax)
+	cols := taskListCols(m.termWidth, true, contentMax, tagsMax)
 	renderListHeader(b, m.termWidth, true, m.taskSort, cols)
 
 	maxVisible := m.estimateListHeight()
@@ -739,10 +747,7 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	mainW := len([]rune(cursorStr)) + 4 + len([]rune(titleCol)) + len([]rune(dateCols))
 	tagsStr := ""
 	if tagsPart != "" {
-		tagsW := 0
-		for _, tag := range t.Tags {
-			tagsW += 4 + len([]rune(tag))
-		}
+		tagsW := tagsRenderWidth(t.Tags)
 		if mainW+1+tagsW <= m.termWidth-8 {
 			tagsStr = " " + tagsPart
 		} else {
@@ -882,10 +887,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	// Only append tags if they fit within the inner panel content width.
 	tagsStr := ""
 	if tagsPart != "" {
-		tagsW := 0
-		for _, tag := range t.Tags {
-			tagsW += 4 + len([]rune(tag))
-		}
+		tagsW := tagsRenderWidth(t.Tags)
 		if len([]rune(line))+1+tagsW <= m.termWidth-8 {
 			tagsStr = " " + tagsPart
 		} else {
