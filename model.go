@@ -907,7 +907,7 @@ func (m model) visibleActiveTasks() []todo.Todo {
 
 // subtaskCount returns how many subtasks parentID has, via the maintained
 // subtaskOf index.
-func (m model) subtaskCount(parentID string) int {
+func (m *model) subtaskCount(parentID string) int {
 	return len(m.subtaskOf[parentID])
 }
 
@@ -926,7 +926,7 @@ func (m model) descendantIDs(rootID string) []string {
 // subtaskProgress reports the (done, total) count of parentID's direct
 // children. The Tasks-tab badge `(2/5)` reads this — direct children match
 // the visible tree better than counting transitive descendants.
-func (m model) subtaskProgress(parentID string) (done, total int) {
+func (m *model) subtaskProgress(parentID string) (done, total int) {
 	ids := m.subtaskIDs(parentID)
 	total = len(ids)
 	for _, id := range ids {
@@ -940,7 +940,7 @@ func (m model) subtaskProgress(parentID string) (done, total int) {
 // hasOverdueDescendant returns true if any task in parentID's subtree (any
 // depth) is currently overdue. Recursive so a deeply-nested overdue child
 // still surfaces on the root row.
-func (m model) hasOverdueDescendant(parentID string, overdueSet map[string]bool) bool {
+func (m *model) hasOverdueDescendant(parentID string, overdueSet map[string]bool) bool {
 	for _, id := range m.subtaskIDs(parentID) {
 		if overdueSet[id] {
 			return true

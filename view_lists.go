@@ -633,7 +633,7 @@ func (m model) renderTaskList() string {
 	}
 
 	for i := startIdx; i < endIdx; i++ {
-		t := visible[i]
+		t := &visible[i]
 		if t.ParentID == "" {
 			b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, true, overdueSet, cols))
 			continue
@@ -646,7 +646,7 @@ func (m model) renderTaskList() string {
 				break
 			}
 		}
-		b.WriteString(m.renderSubtaskLine(&t, subIdx, len(siblings), cols, i, m.cursor, true))
+		b.WriteString(m.renderSubtaskLine(t, subIdx, len(siblings), cols, i, m.cursor, true))
 	}
 	return b.String()
 }
@@ -742,7 +742,7 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 		tagsStr + "\n"
 }
 
-func (m model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols listCols, flatIndex, cursor int, active bool) string {
+func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols listCols, flatIndex, cursor int, active bool) string {
 	connector := "├"
 	if subIndex == subTotal-1 {
 		connector = "└"
@@ -781,7 +781,7 @@ func (m model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols li
 	return dimStyle.Render(cursorStr+body) + "\n"
 }
 
-func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
+func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
 	titleW := cols.titleW
 	cursorStr := "  "
 	if index == cursor && active {
@@ -837,7 +837,7 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	if cols.showLast {
 		// Score column is always score now — priority lives only in the
 		// detail view, where the user can still set it.
-		line += padRight(fmt.Sprintf("%.1f", sequenceScore(&t)), scoreColW)
+		line += padRight(fmt.Sprintf("%.1f", sequenceScore(t)), scoreColW)
 	}
 	if cols.showDue {
 		line += padRight(dueVal, dueColW)
