@@ -752,7 +752,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showHistory {
 			m.clampListOffset(len(m.cache.done))
 		} else {
-			m.clampListOffset(len(m.visibleActiveTasks()))
+			m.clampListOffset(m.visibleActiveLen())
 		}
 	case tabProjects:
 		m.clampListOffset(len(m.allProjectsForList()))
@@ -1055,7 +1055,7 @@ func (m *model) moveCursorDown() {
 				m.cursor++
 			}
 		} else {
-			if m.cursor < len(m.visibleActiveTasks())-1 {
+			if m.cursor < m.visibleActiveLen()-1 {
 				m.cursor++
 			}
 		}

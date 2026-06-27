@@ -620,20 +620,21 @@ func (m model) renderTaskList() string {
 	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax)
 	renderListHeader(b, m.termWidth, false, m.taskSort, cols)
 
-	visible := m.visibleActiveTasks()
-
+	total := m.visibleActiveLen()
 	maxVisible := m.estimateListHeight()
 	startIdx := m.listOffset
-	endIdx := startIdx + maxVisible
-	if endIdx > len(visible) {
-		endIdx = len(visible)
-	}
-	if startIdx > len(visible) {
+	if startIdx > total {
 		startIdx = 0
 	}
+	endIdx := startIdx + maxVisible
+	if endIdx > total {
+		endIdx = total
+	}
+	// Materialize only the rows we draw, not the whole flattened list.
+	window := m.visibleActiveWindow(startIdx, endIdx)
 
 	for i := startIdx; i < endIdx; i++ {
-		t := &visible[i]
+		t := &window[i-startIdx]
 		if t.ParentID == "" {
 			b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, true, overdueSet, cols))
 			continue

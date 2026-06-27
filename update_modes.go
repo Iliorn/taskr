@@ -600,7 +600,7 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showHistory {
 				newLen = len(m.cache.done)
 			} else {
-				newLen = len(m.visibleActiveTasks())
+				newLen = m.visibleActiveLen()
 			}
 			if m.cursor >= newLen && m.cursor > 0 {
 				m.cursor--

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -341,6 +342,64 @@ func TestVisibleActiveTasksFlatten(t *testing.T) {
 	if cur := m.currentTodo(); cur == nil || cur.ID != "c2" {
 		t.Fatalf("currentTodo at flat cursor=2 = %v, want c2", cur)
 	}
+}
+
+// The non-allocating active-list helpers (length, index-of, at, window) must
+// agree exactly with the materialized visibleActiveTasks they replaced on the
+// hot path, in both collapsed and expanded states.
+func TestVisibleActiveHelpersMatchFull(t *testing.T) {
+	now := time.Now()
+	parent := mkTodo("p", "parent", todo.Pending)
+	parent.CreatedAt = now
+	c1 := mkTodo("c1", "child one", todo.Pending)
+	c1.ParentID = "p"
+	c1.CreatedAt = now.Add(1 * time.Minute)
+	c2 := mkTodo("c2", "child two", todo.Pending)
+	c2.ParentID = "p"
+	c2.CreatedAt = now.Add(2 * time.Minute)
+	other := mkTodo("o", "unrelated", todo.Pending)
+	other.CreatedAt = now.Add(3 * time.Minute)
+
+	m := newTestModel()
+	for _, td := range []todo.Todo{parent, c1, c2, other} {
+		m.add(td)
+	}
+	m.refreshCaches()
+
+	check := func(label string) {
+		full := m.visibleActiveTasks()
+		if got := m.visibleActiveLen(); got != len(full) {
+			t.Fatalf("%s: visibleActiveLen=%d, want %d", label, got, len(full))
+		}
+		for i, want := range full {
+			if at := m.visibleActiveAt(i); at == nil || at.ID != want.ID {
+				t.Fatalf("%s: visibleActiveAt(%d)=%v, want %s", label, i, at, want.ID)
+			}
+			if idx := m.visibleActiveIndexOf(want.ID); idx != i {
+				t.Fatalf("%s: visibleActiveIndexOf(%s)=%d, want %d", label, want.ID, idx, i)
+			}
+		}
+		if m.visibleActiveAt(len(full)) != nil {
+			t.Fatalf("%s: visibleActiveAt past end should be nil", label)
+		}
+		if idx := m.visibleActiveIndexOf("nope"); idx != -1 {
+			t.Fatalf("%s: visibleActiveIndexOf(missing)=%d, want -1", label, idx)
+		}
+		// Every sub-window must equal the corresponding slice of the full list.
+		for start := 0; start <= len(full); start++ {
+			for end := start; end <= len(full); end++ {
+				win := m.visibleActiveWindow(start, end)
+				if !reflect.DeepEqual(idsOf(win), idsOf(full[start:end])) {
+					t.Fatalf("%s: window[%d:%d]=%v, want %v",
+						label, start, end, idsOf(win), idsOf(full[start:end]))
+				}
+			}
+		}
+	}
+
+	check("collapsed")
+	m.expandedTasks["p"] = true
+	check("expanded")
 }
 
 func idsOf(ts []todo.Todo) []string {

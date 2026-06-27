@@ -623,17 +623,17 @@ func (m *model) followTask(taskID string) {
 	if taskID == "" {
 		return
 	}
-	var list []todo.Todo
 	if m.showHistory {
-		list = m.cache.done
-	} else {
-		list = m.visibleActiveTasks()
-	}
-	for i, t := range list {
-		if t.ID == taskID {
-			m.cursor = i
-			return
+		for i, t := range m.cache.done {
+			if t.ID == taskID {
+				m.cursor = i
+				return
+			}
 		}
+		return
+	}
+	if idx := m.visibleActiveIndexOf(taskID); idx >= 0 {
+		m.cursor = idx
 	}
 }
 
@@ -813,15 +813,13 @@ func (m model) findTodoByID(id string) *todo.Todo {
 func (m model) currentTodo() *todo.Todo {
 	switch m.tab {
 	case tabTasks:
-		var list []todo.Todo
 		if m.showHistory {
-			list = m.cache.done
-		} else {
-			list = m.visibleActiveTasks()
+			if m.cursor < len(m.cache.done) {
+				return m.get(m.cache.done[m.cursor].ID)
+			}
+			return nil
 		}
-		if m.cursor < len(list) {
-			return m.get(list[m.cursor].ID)
-		}
+		return m.visibleActiveAt(m.cursor)
 	case tabProjects:
 		if m.projectTaskMode {
 			projects := m.cache.projects
@@ -900,6 +898,130 @@ func (m model) visibleActiveTasks() []todo.Todo {
 			if sub := m.get(subID); sub != nil {
 				out = append(out, *sub)
 			}
+		}
+	}
+	return out
+}
+
+// visibleActiveLen reports how many rows the active Tasks list renders to —
+// top-level tasks plus the subtasks of expanded parents — without materializing
+// the flattened slice. Mirrors visibleActiveTasks' counting (including its skip
+// of any dangling subtask ID) so flat indices line up with it.
+func (m *model) visibleActiveLen() int {
+	active := m.cache.active
+	n := len(active)
+	for i := range active {
+		if !m.expandedTasks[active[i].ID] {
+			continue
+		}
+		for _, subID := range m.subtaskOf[active[i].ID] {
+			if m.get(subID) != nil {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// visibleActiveAt returns the task at flat row idx in the active Tasks list, or
+// nil if idx is out of range — walking the flattened order without building it.
+func (m *model) visibleActiveAt(idx int) *todo.Todo {
+	if idx < 0 {
+		return nil
+	}
+	row := 0
+	active := m.cache.active
+	for i := range active {
+		if row == idx {
+			return m.get(active[i].ID)
+		}
+		row++
+		if !m.expandedTasks[active[i].ID] {
+			continue
+		}
+		for _, subID := range m.subtaskOf[active[i].ID] {
+			sub := m.get(subID)
+			if sub == nil {
+				continue
+			}
+			if row == idx {
+				return sub
+			}
+			row++
+		}
+	}
+	return nil
+}
+
+// visibleActiveIndexOf returns the flat row index of taskID in the active Tasks
+// list, or -1 if it isn't currently visible.
+func (m *model) visibleActiveIndexOf(taskID string) int {
+	row := 0
+	active := m.cache.active
+	for i := range active {
+		if active[i].ID == taskID {
+			return row
+		}
+		row++
+		if !m.expandedTasks[active[i].ID] {
+			continue
+		}
+		for _, subID := range m.subtaskOf[active[i].ID] {
+			sub := m.get(subID)
+			if sub == nil {
+				continue
+			}
+			if sub.ID == taskID {
+				return row
+			}
+			row++
+		}
+	}
+	return -1
+}
+
+// visibleActiveWindow materializes only flat rows [start, end) of the active
+// Tasks list, so the renderer copies the screenful it draws instead of the whole
+// list. Rows outside the window are walked by pointer (no struct copy); only the
+// emitted rows are copied into the returned slice.
+func (m *model) visibleActiveWindow(start, end int) []todo.Todo {
+	if start < 0 {
+		start = 0
+	}
+	if end <= start {
+		return nil
+	}
+	out := make([]todo.Todo, 0, end-start)
+	row := 0
+	done := false
+	visit := func(t *todo.Todo) {
+		if row >= start && row < end {
+			out = append(out, *t)
+		}
+		row++
+		if row >= end {
+			done = true
+		}
+	}
+	active := m.cache.active
+	for i := range active {
+		visit(&active[i])
+		if done {
+			break
+		}
+		if !m.expandedTasks[active[i].ID] {
+			continue
+		}
+		for _, subID := range m.subtaskOf[active[i].ID] {
+			if sub := m.get(subID); sub != nil {
+				visit(sub)
+				if done {
+					break
+				}
+			}
+		}
+		if done {
+			break
 		}
 	}
 	return out
