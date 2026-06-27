@@ -597,6 +597,18 @@ func (m *model) markCacheDirty() {
 	m.invalidateDetailCache()
 }
 
+// markFilterDirty marks only the filter-derived views (the active/done split and
+// its tag-render cache) for rebuild, leaving the data-derived caches — overdue
+// set, tag stats, sorted tags, per-project task lists — intact. Use this when
+// only the search query or focus filter changed; a full markCacheDirty would
+// make every search keystroke rescan and re-sort the whole task set. A pending
+// full rebuild (m.cache.dirty) still wins in ensureCache, so combining the two
+// in one Update is safe.
+func (m *model) markFilterDirty() {
+	m.cache.filterDirty = true
+	m.invalidateDetailCache()
+}
+
 func (m *model) currentTaskID() string {
 	if m.pane != paneDetail || m.tab != tabTasks {
 		return ""

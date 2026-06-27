@@ -506,7 +506,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusFilter = !m.focusFilter
 				m.cursor = 0
 				m.listOffset = 0
-				m.markCacheDirty()
+				m.markFilterDirty()
 			}
 
 		case "right":
@@ -782,7 +782,7 @@ func (m *model) switchTab(t tab) {
 		m.calendar.focusTimeline = false
 	}
 	m.invalidateDetailCache()
-	m.markCacheDirty()
+	m.markFilterDirty()
 }
 
 // startEditTimeEntry opens the inline editor for an entry's times,
@@ -955,13 +955,13 @@ func (m *model) handleListEsc() {
 		m.focusFilter = false
 		m.cursor = 0
 		m.listOffset = 0
-		m.markCacheDirty()
+		m.markFilterDirty()
 	case m.tab == tabTasks && m.searchQuery != "":
 		m.searchQuery = ""
 		m.searchInput.SetValue("")
 		m.cursor = 0
 		m.listOffset = 0
-		m.markCacheDirty()
+		m.markFilterDirty()
 	case m.tab == tabTags && m.tagTabSearchQuery != "":
 		m.tagTabSearchQuery = ""
 		m.tagTabCursor = 0
@@ -1099,7 +1099,7 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 			} else {
 				m.searchQuery = "#" + tag
 			}
-			m.markCacheDirty()
+			m.markFilterDirty()
 		}
 	case tabStats:
 		m.statsRange = (m.statsRange + 1) % statsRangeCount

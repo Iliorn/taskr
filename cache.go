@@ -15,6 +15,7 @@ import (
 // and are maintained incrementally — they're not rebuilt here.
 type cacheState struct {
 	dirty         bool
+	filterDirty   bool
 	overdueSet    map[string]bool
 	active        []todo.Todo
 	done          []todo.Todo
@@ -77,6 +78,20 @@ func (m *model) refreshCaches() {
 	m.refreshTagRenderCache()
 
 	m.cache.dirty = false
+	m.cache.filterDirty = false
+}
+
+// refreshFilteredCaches rebuilds only the views that depend on the search/focus
+// filter: the active/done split and the tag-render cache derived from it. The
+// data-derived caches (overdue set, tag stats, sorted tags, per-project task
+// lists) are left intact because none of them depend on the filter. This is the
+// per-keystroke search path — a full refreshCaches would rescan and re-sort the
+// entire task set on every keypress for no reason.
+func (m *model) refreshFilteredCaches() {
+	all := m.allTodos()
+	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort)
+	m.refreshTagRenderCache()
+	m.cache.filterDirty = false
 }
 
 // rebuildSortedTags refreshes the cached unique, sorted tag list. The list is
@@ -156,8 +171,11 @@ func (m *model) refreshProjects() {
 // ── Cache accessors ───────────────────────────────────────────────────────────
 
 func (m *model) ensureCache() {
-	if m.cache.dirty {
+	switch {
+	case m.cache.dirty:
 		m.refreshCaches()
+	case m.cache.filterDirty:
+		m.refreshFilteredCaches()
 	}
 }
 
