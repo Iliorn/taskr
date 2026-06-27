@@ -50,7 +50,14 @@ func startSyncServer(listen, token string) (*http.Server, func(), error) {
 	// Addr is informational here (Serve uses ln); it reflects the actually-bound
 	// address, which matters when the configured port was 0 (OS-assigned).
 	httpServer := &http.Server{Addr: ln.Addr().String(), Handler: srv.handler(), ReadHeaderTimeout: 10 * time.Second}
-	go httpServer.Serve(ln)
+	go func() {
+		// Serve blocks until the listener fails or Shutdown/Close is called;
+		// ErrServerClosed is the expected stop signal, anything else is a real
+		// failure that would otherwise vanish into this goroutine.
+		if err := httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
+			log.Printf("taskr serve: %v", err)
+		}
+	}()
 	return httpServer, stopWatch, nil
 }
 
