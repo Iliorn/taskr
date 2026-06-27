@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -32,6 +33,13 @@ type cacheState struct {
 	learningSearch string
 	learningSort   learningSortMode
 	projectSearch  string
+
+	// Tasks-tab column-sizing metrics for the active list: the widest rendered
+	// row content and the widest tag cell. Derived from the active set + overdue
+	// set, so cached here rather than rescanned every frame (the scan called
+	// subtaskProgress/hasOverdueDescendant per task and dominated the render).
+	activeColContentMax int
+	activeColTagsMax    int
 }
 
 // ── Cache management ──────────────────────────────────────────────────────────
@@ -76,9 +84,53 @@ func (m *model) refreshCaches() {
 	m.cache.learningSearch = "\x00"
 
 	m.refreshTagRenderCache()
+	m.refreshTaskColMetrics()
 
 	m.cache.dirty = false
 	m.cache.filterDirty = false
+}
+
+// refreshTaskColMetrics recomputes the Tasks-tab column-sizing metrics for the
+// active list: the widest rendered row content (title plus every indicator the
+// row appends) and the widest tag cell. These depend only on the active set and
+// the overdue set, so they're computed once per cache refresh instead of being
+// rescanned on every frame — the per-frame scan was O(active) and dominated the
+// render because it called subtaskProgress/hasOverdueDescendant for every task.
+// It must mirror exactly the width every suffix/prefix renderTaskLineWithSet
+// adds, or the longest row eats into the gap before the Score column.
+func (m *model) refreshTaskColMetrics() {
+	contentMax, tagsMax := 0, 0
+	overdueSet := m.cache.overdueSet
+	active := m.cache.active
+	for i := range active {
+		w := len([]rune(active[i].Title))
+		if active[i].HasOverdueDependencyFast(overdueSet) {
+			w += 2 // " !"
+		}
+		if active[i].Notes != "" {
+			w += 2 // " ¶"
+		}
+		if active[i].IsRecurring() {
+			w += 2 // " ↻"
+		}
+		if subDone, subTotal := m.subtaskProgress(active[i].ID); subTotal > 0 {
+			w += len([]rune(fmt.Sprintf(" (%d/%d)", subDone, subTotal)))
+			if m.hasOverdueDescendant(active[i].ID, overdueSet) {
+				w++ // "‼"
+			}
+		}
+		if active[i].IsTimerRunning() {
+			w += 2 // "⏱ " prefix
+		}
+		if w > contentMax {
+			contentMax = w
+		}
+		if tw := tagsRenderWidth(active[i].Tags); tw > tagsMax {
+			tagsMax = tw
+		}
+	}
+	m.cache.activeColContentMax = contentMax
+	m.cache.activeColTagsMax = tagsMax
 }
 
 // refreshFilteredCaches rebuilds only the views that depend on the search/focus
@@ -91,6 +143,7 @@ func (m *model) refreshFilteredCaches() {
 	all := m.allTodos()
 	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort)
 	m.refreshTagRenderCache()
+	m.refreshTaskColMetrics()
 	m.cache.filterDirty = false
 }
 

@@ -614,39 +614,10 @@ func (m model) renderTaskList() string {
 
 	overdueSet := m.cache.overdueSet
 
-	// Size the title column to the widest displayed task (title + its indicators).
-	// Must mirror every suffix/prefix renderTaskLineWithSet appends to the title,
-	// otherwise the longest row eats into the gap before the Score column.
-	contentMax := 0
-	tagsMax := 0
-	for i := range active {
-		w := len([]rune(active[i].Title))
-		if active[i].HasOverdueDependencyFast(overdueSet) {
-			w += 2 // " !"
-		}
-		if active[i].Notes != "" {
-			w += 2 // " ¶"
-		}
-		if active[i].IsRecurring() {
-			w += 2 // " ↻"
-		}
-		if subDone, subTotal := m.subtaskProgress(active[i].ID); subTotal > 0 {
-			w += len([]rune(fmt.Sprintf(" (%d/%d)", subDone, subTotal)))
-			if m.hasOverdueDescendant(active[i].ID, overdueSet) {
-				w++ // "‼"
-			}
-		}
-		if active[i].IsTimerRunning() {
-			w += 2 // "⏱ " prefix
-		}
-		if w > contentMax {
-			contentMax = w
-		}
-		if tw := tagsRenderWidth(active[i].Tags); tw > tagsMax {
-			tagsMax = tw
-		}
-	}
-	cols := taskListCols(m.termWidth, false, contentMax, tagsMax)
+	// Column widths (widest row content + widest tag cell) are derived from the
+	// active set and cached by refreshTaskColMetrics, so the frame doesn't
+	// rescan every task — see cache.go.
+	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax)
 	renderListHeader(b, m.termWidth, false, m.taskSort, cols)
 
 	visible := m.visibleActiveTasks()
