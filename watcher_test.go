@@ -2,9 +2,26 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
+
+// startWatcherOrSkip starts a watcher, skipping the test when the host can't
+// initialize inotify (e.g. fs.inotify.max_user_instances exhausted on a busy
+// box) — that's an environment limit, not a watcher bug, so a hard failure
+// would just be noise. Returns the cleanup func to defer.
+func startWatcherOrSkip(t *testing.T, state *watcherState, dir string) func() {
+	t.Helper()
+	cleanup, err := startWatcher(state, dir)
+	if err != nil {
+		if strings.Contains(err.Error(), "inotify") {
+			t.Skipf("inotify unavailable on this host: %v", err)
+		}
+		t.Fatalf("startWatcher: %v", err)
+	}
+	return cleanup
+}
 
 // TestShouldReloadNowWhileTypingDefers covers the modal-mode rule: a fs
 // event arriving while the user is mid-edit must not clobber the input.
@@ -66,11 +83,7 @@ func TestStartWatcherFiresOnFileChange(t *testing.T) {
 	dir := t.TempDir()
 	state := newWatcherState()
 
-	cleanup, err := startWatcher(state, dir)
-	if err != nil {
-		t.Fatalf("startWatcher: %v", err)
-	}
-	defer cleanup()
+	defer startWatcherOrSkip(t, state, dir)()
 
 	// Write to tasks.db — this is the file the watcher is filtered to.
 	dbPath := dir + "/tasks.db"
@@ -94,11 +107,7 @@ func TestStartWatcherIgnoresUnrelatedFiles(t *testing.T) {
 	dir := t.TempDir()
 	state := newWatcherState()
 
-	cleanup, err := startWatcher(state, dir)
-	if err != nil {
-		t.Fatalf("startWatcher: %v", err)
-	}
-	defer cleanup()
+	defer startWatcherOrSkip(t, state, dir)()
 
 	if err := os.WriteFile(dir+"/not-relevant.txt", []byte("noise"), 0644); err != nil {
 		t.Fatalf("write: %v", err)

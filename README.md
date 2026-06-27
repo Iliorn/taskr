@@ -117,7 +117,7 @@ title "milk" matches 2 tasks:
 
 Flags can appear before or after the reference. `taskr top --json` and `taskr show --json` are the recommended hooks for scripts and other tools. The CLI reads the same `~/.taskr/settings.json` as the TUI, so ranking matches your current bias personality.
 
-The TUI and CLI share the SQLite store. Concurrent reads are safe; writes serialize via SQLite's busy-timeout. A running TUI won't see CLI mutations until it restarts — keep that in mind if you script alongside an open session.
+The TUI and CLI share the SQLite store. Concurrent reads are safe; writes serialize via SQLite's busy-timeout. A running TUI watches `~/.taskr` and live-reloads when the CLI (or a sync from another device) mutates the database, so scripted changes show up without restarting — a reload is briefly deferred while you're mid-edit so it can't clobber in-flight input.
 
 ## Data
 
