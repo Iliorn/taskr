@@ -135,18 +135,22 @@ func (m *model) refreshTagRenderCache() {
 	for k := range m.cache.tagRender {
 		delete(m.cache.tagRender, k)
 	}
-	seen := make(map[string]struct{}, len(m.cache.active))
-	allTasks := append(m.cache.active, m.cache.done...)
-	for _, t := range allTasks {
-		if len(t.Tags) == 0 {
-			continue
+	seen := make(map[string]struct{}, len(m.cache.active)+len(m.cache.done))
+	// Iterate the two lists in place. `append(m.cache.active, m.cache.done...)`
+	// would write into active's backing array whenever it has spare capacity,
+	// so avoid the concatenation entirely.
+	for _, list := range [2][]todo.Todo{m.cache.active, m.cache.done} {
+		for _, t := range list {
+			if len(t.Tags) == 0 {
+				continue
+			}
+			key := strings.Join(t.Tags, ",")
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			m.cache.tagRender[key] = renderTagsPart(t.Tags)
 		}
-		key := strings.Join(t.Tags, ",")
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		m.cache.tagRender[key] = renderTagsPart(t.Tags)
 	}
 }
 
