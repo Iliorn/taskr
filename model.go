@@ -236,41 +236,41 @@ type model struct {
 	learningSearchInput textinput.Model
 
 	// UI state
-	confirmMsg          string
-	pendingDeleteID     string
-	pendingComment      int
-	pendingDep          int
-	pendingTag          int
-	pendingLearning     int
-	pendingSubtask      int
+	confirmMsg           string
+	pendingDeleteID      string
+	pendingComment       int
+	pendingDep           int
+	pendingTag           int
+	pendingLearning      int
+	pendingSubtask       int
 	pendingCloseParentID string
-	pendingEntryTaskID  string
-	pendingEntryID      string
-	termWidth           int
-	termHeight          int
-	err                 string
-	projectCursor       int
-	tagTabCursor        int
-	learningCursor      int
-	settingsCursor      int
-	searchQuery         string
-	tagTabSearchQuery   string
-	learningSearchQuery string
-	listOffset          int
-	projectTaskMode     bool
-	showHistory         bool
-	focusFilter         bool
-	expandedTasks       map[string]bool
-	editingTagName      string
-	editingProjectName  string
-	tagSort             tagSortMode
-	taskSort            taskSortMode
-	learningSort        learningSortMode
-	statsRange          statsRangeMode
-	themeName           string
-	updateStatus        string
-	searchCursor        int
-	autoCloseParent     bool
+	pendingEntryTaskID   string
+	pendingEntryID       string
+	termWidth            int
+	termHeight           int
+	err                  string
+	projectCursor        int
+	tagTabCursor         int
+	learningCursor       int
+	settingsCursor       int
+	searchQuery          string
+	tagTabSearchQuery    string
+	learningSearchQuery  string
+	listOffset           int
+	projectTaskMode      bool
+	showHistory          bool
+	focusFilter          bool
+	expandedTasks        map[string]bool
+	editingTagName       string
+	editingProjectName   string
+	tagSort              tagSortMode
+	taskSort             taskSortMode
+	learningSort         learningSortMode
+	statsRange           statsRangeMode
+	themeName            string
+	updateStatus         string
+	searchCursor         int
+	autoCloseParent      bool
 
 	// Persistence
 	dirty         bool
@@ -1270,316 +1270,4 @@ func (m *model) renameProjectGlobally(oldName, newName string) []string {
 		}
 	}
 	return touched
-}
-
-// ── Detail scroll estimation ──────────────────────────────────────────────────
-
-func (m model) estimateDetailCursorLine() int {
-	t := m.currentTodo()
-	if t == nil {
-		return 0
-	}
-	twoCol := (m.termWidth - 8) >= twoColumnDetailMinWidth
-	switch m.detail.page {
-	case 0:
-		line := 2 // title + blank
-		switch m.detail.field {
-		case fieldStartDate:
-			return line
-		case fieldDueDate:
-			return line + 1
-		case fieldRecurrence:
-			return line + 2
-		case fieldPriority:
-			return line + 3
-		case fieldSize:
-			return line + 4
-		case fieldProject:
-			return line + 5
-		case fieldNotes:
-			return line + 6
-		default: // fieldTags
-			if twoCol {
-				// Two-col mode: left has 7 rows (start..notes); right has
-				// 3 + optional (time, completed|score) rows. Tags label sits
-				// below the longer of the two.
-				leftRows := 7
-				rightRows := 3 // id, created, modified
-				if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
-					rightRows++
-				}
-				if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-					rightRows++
-				}
-				if t.Status == todo.Pending {
-					rightRows++ // score
-				}
-				rows := leftRows
-				if rightRows > rows {
-					rows = rightRows
-				}
-				line += rows + 2 // block + blank + tags label
-				return line + m.detail.tagCursor
-			}
-			// Single column: fields stack as before.
-			line += 10 // start, due, recurrence, priority, size, project, notes, id, created, modified
-			if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
-				line++
-			}
-			if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-				line++
-			}
-			if t.Status == todo.Pending {
-				line++ // score
-			}
-			line += 2 // blank + tags label
-			return line + m.detail.tagCursor
-		}
-	case 1:
-		line := 3 // title + blank + subtasks label
-		switch m.detail.field {
-		case fieldSubtasks:
-			return line + m.detail.subtaskCursor
-		case fieldDependencies:
-			if twoCol {
-				// In two-col mode subtasks (left) and deps (right) share the
-				// same top, so the deps cursor sits next to its own list head.
-				return line + m.detail.depCursor
-			}
-			if m.subtaskCount(t.ID) == 0 {
-				line++
-			} else {
-				line += m.subtaskCount(t.ID)
-			}
-			line += 2 // blank + deps label
-			return line + m.detail.depCursor
-		default: // fieldLearnings
-			if twoCol {
-				// Right column = deps + blank + learnings. Learnings label
-				// sits right below deps, regardless of subtasks count.
-				if len(t.Dependencies) == 0 {
-					line++
-				} else {
-					line += len(t.Dependencies)
-				}
-				line += 2 // blank + learnings label
-				return line + m.detail.learningCursor
-			}
-			if m.subtaskCount(t.ID) == 0 {
-				line++
-			} else {
-				line += m.subtaskCount(t.ID)
-			}
-			line++
-			if len(t.Dependencies) == 0 {
-				line++
-			} else {
-				line += len(t.Dependencies)
-			}
-			line += 2 // blank + learnings label
-			return line + m.detail.learningCursor
-		}
-	case 2:
-		return 3 + m.detail.commentCursor // title + blank + comments label
-	}
-	return 0
-}
-
-// ── List offset clamping ──────────────────────────────────────────────────────
-
-func (m *model) clampListOffset(listLen int) {
-	visible := m.listVisible()
-	if m.cursor < m.listOffset {
-		m.listOffset = m.cursor
-	}
-	if m.cursor >= m.listOffset+visible {
-		m.listOffset = m.cursor - visible + 1
-	}
-	if m.listOffset < 0 {
-		m.listOffset = 0
-	}
-	if max := listLen - visible; m.listOffset > max {
-		if max < 0 {
-			m.listOffset = 0
-		} else {
-			m.listOffset = max
-		}
-	}
-}
-
-// detailVisible reports whether the detail pane will be rendered for the
-// current tab/mode/pane. Mirrors the showDetail decision in view.View so the
-// list-height math matches what the renderer actually emits.
-func (m model) detailVisible() bool {
-	if m.mode != modeNormal {
-		return false
-	}
-	switch m.tab {
-	case tabTasks, tabProjects, tabLearnings:
-		return m.pane == paneDetail
-	case tabSettings:
-		return false
-	}
-	return true
-}
-
-func (m model) listVisible() int {
-	detailTotal := 0
-	if m.detailVisible() {
-		var contentH int
-		switch m.detail.page {
-		case 1:
-			contentH = m.detailPage2ContentHeight()
-		case 2:
-			contentH = m.detailPage3ContentHeight()
-		default:
-			contentH = m.detailPage1ContentHeight()
-		}
-		if maxH := m.maxDetailHeight(); contentH > maxH {
-			contentH = maxH
-		}
-		detailTotal = contentH + 4
-	}
-	fixedLines := 4
-	if m.err != "" {
-		fixedLines++
-	}
-	if m.searchQuery != "" {
-		fixedLines++
-	}
-	if m.focusFilter {
-		fixedLines++
-	}
-	if m.anyTimerRunning() {
-		fixedLines++ // live timer line above the key hints
-	}
-	fixedLines += m.extraOverheadLines()
-	if available := m.termHeight - fixedLines - detailTotal; available >= minListHeight {
-		return available
-	}
-	return minListHeight
-}
-
-func (m model) estimateListHeight() int {
-	headerH := minHeaderLines
-	if m.err != "" {
-		headerH++
-	}
-	if m.focusFilter {
-		headerH++
-	}
-	if m.searchQuery != "" {
-		headerH++
-	}
-	if m.anyTimerRunning() {
-		headerH++ // live timer line above the key hints
-	}
-	detailH := 0
-	if m.detailVisible() && m.tab != tabStats {
-		detailH = 12
-	}
-	available := m.termHeight - headerH - footerHeight - detailH - 2
-	if available < minListHeight {
-		return minListHeight
-	}
-	return available
-}
-
-func (m model) maxDetailHeight() int {
-	available := m.termHeight - minHeaderLines - footerHeight - detailBorderLines - minListPanelLines
-	if available < minDetailHeight {
-		return minDetailHeight
-	}
-	return available
-}
-
-func (m model) detailPage1ContentHeight() int {
-	t := m.currentTodo()
-	if t == nil {
-		return 1
-	}
-	lines := 12 // 10 fixed + Size row + ID row
-	if t.Status == todo.Pending {
-		lines++ // Score breakdown row, rendered only for pending tasks
-	}
-	if len(t.Tags) == 0 {
-		lines += 2
-	} else {
-		lines += 1 + len(t.Tags)
-	}
-	if len(t.TimeEntries) > 0 {
-		lines++
-	}
-	if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-		lines++
-	}
-	return lines
-}
-
-func (m model) detailPage2ContentHeight() int {
-	t := m.currentTodo()
-	if t == nil {
-		return 1
-	}
-	lines := 3 // title + blank + subtasks label
-	if m.subtaskCount(t.ID) == 0 {
-		lines += 2
-	} else {
-		lines += 1 + m.subtaskCount(t.ID)
-	}
-	lines++ // blank
-	if len(t.Dependencies) == 0 {
-		lines += 2
-	} else {
-		lines += 1 + len(t.Dependencies)
-	}
-	lines++ // blank
-	if len(t.Learnings) == 0 {
-		lines += 2
-	} else {
-		lines += 1 + len(t.Learnings)
-	}
-	return lines
-}
-
-func (m model) detailPage3ContentHeight() int {
-	t := m.currentTodo()
-	if t == nil {
-		return 1
-	}
-	lines := 3
-	if len(t.Comments) == 0 {
-		lines++
-	} else {
-		available := m.termWidth - 32
-		if available < 10 {
-			available = 10
-		}
-		for _, c := range t.Comments {
-			lines += commentLineCount(c.Text, available)
-		}
-	}
-	return lines
-}
-
-func (m model) extraOverheadLines() int {
-	switch m.mode {
-	case modeInput, modeEditComment, modeEditTag, modeEditTitle,
-		modeSearch, modeAddLearning, modeEditLearning, modeAddSubtask,
-		modeEditSubtask, modeEditProjectInline, modeEditTimeEntry,
-		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken,
-		modeEditServerListen, modeEditServerToken:
-		return 3
-	case modeSearchDep, modeSearchTag, modeSearchProject:
-		return 8
-	case modeSearchTagTab:
-		return 3
-	case modeConfirmDelete, modeConfirmDeleteComment,
-		modeConfirmDeleteDep, modeConfirmDeleteTag,
-		modeConfirmDeleteTagGlobal, modeConfirmDeleteProject,
-		modeConfirmDeleteLearning, modeConfirmDeleteSubtask,
-		modeConfirmDeleteTimeEntry, modeConfirmUpdate, modeIdlePrompt:
-		return 1
-	}
-	return 0
 }

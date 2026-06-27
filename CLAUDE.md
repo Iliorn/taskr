@@ -46,7 +46,9 @@ The manual equivalent (if ever building locally) is the same four `go build -ldf
 Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file convention is gone — the app is split by *concern*, with one big `model` struct threaded through everything:
 
 - **`model.go`** — the `model` struct (large, flat), all the enums (`tab`, `appMode`, `pane`, sort modes), message types, `initialModel`, undo stack, and most pure model-mutation/lookup helpers.
-- **`update.go`** — top-level `Update`, the normal-mode list/detail key handling, tab switching, editor launching, self-update plumbing.
+- **`model_layout.go`** — `model`-method geometry helpers split out of `model.go`: detail-scroll cursor estimation (`estimateDetailCursorLine`), list-offset clamping, and the detail/list height math (`detailVisible`, `listVisible`, `maxDetailHeight`, the per-page `detailPageNContentHeight`). Pairs with the pure width/height math in `layout.go`.
+- **`update.go`** — top-level `Update`, the normal-mode list key handling, tab switching, editor launching, self-update plumbing.
+- **`update_detail.go`** — `Update` handlers for the detail pane (`updateDetail`, detail cursor moves, `detailAdd`/`detailDelete`, `updateLearningsDetail`, `startEditing`); the input-side mirror of `view_detail.go`.
 - **`update_modes.go`** — `Update` handlers for the text-entry / search modes (`updateInput`, `updateSearch`, `updateEditTitle`, etc.). When adding a modal interaction, the handler usually lives here.
 - **`view.go`** — top-level `View` + the Tasks tab and shared rendering helpers; dispatches to `view_lists.go` (projects/tags/learnings/stats), `view_calendar.go`, `view_detail.go`.
 - **`cache.go`** — `cacheState` (see below).
