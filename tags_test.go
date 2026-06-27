@@ -39,6 +39,25 @@ func TestRenameTagMerges(t *testing.T) {
 	}
 }
 
+func TestRenameTagMergesMixedCase(t *testing.T) {
+	// Legacy data: a capitalized tag stored before normalization, alongside
+	// the lowercase form. Merging the two must collapse to one.
+	capped := todo.New("capped")
+	capped.Tags = []string{"Work"}
+	lower := todo.New("lower")
+	lower.Tags = []string{"work"}
+	m := newTagModel(capped, lower)
+
+	m.renameTagGlobally("Work", "work")
+
+	if got := m.get(capped.ID).Tags; len(got) != 1 || got[0] != "work" {
+		t.Errorf("capped task tags = %v, want [work]", got)
+	}
+	if got := m.get(lower.ID).Tags; len(got) != 1 || got[0] != "work" {
+		t.Errorf("lower task tags = %v, want [work]", got)
+	}
+}
+
 func TestRenameTagNonColliding(t *testing.T) {
 	task := todo.New("rename")
 	task.Tags = []string{"a", "b"}
