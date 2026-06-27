@@ -398,10 +398,11 @@ func initialModel(repo Repository) model {
 		ganttBarBuf:         make([]rune, 256),
 		ganttColorBuf:       make([]int, 256),
 		cache: &cacheState{
-			dirty:        true,
-			overdueSet:   make(map[string]bool),
-			tagRender:    make(map[string]string, 32),
-			projectTasks: make(map[string][]todo.Todo),
+			dirty:         true,
+			overdueSet:    make(map[string]bool),
+			tagRender:     make(map[string]string, 32),
+			taskTagRender: make(map[string]string, 64),
+			projectTasks:  make(map[string][]todo.Todo),
 		},
 	}
 	m.applyLangPlaceholders()

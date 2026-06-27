@@ -715,7 +715,7 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	if cols.showLast {
 		dateCols += padRight(completedVal, 12)
 	}
-	tagsPart := m.getRenderedTags(t.Tags)
+	tagsPart := m.getRenderedTagsForTask(&t)
 	mainW := len([]rune(cursorStr)) + 4 + len([]rune(titleCol)) + len([]rune(dateCols))
 	tagsStr := ""
 	if tagsPart != "" {
@@ -833,7 +833,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	// Reserve one trailing space inside the column so a truncated title (ending
 	// in "(…)") never butts up against the Score column that follows.
 	titleCol := padRight(truncate(title, titleW-1), titleW)
-	tagsPart := m.getRenderedTags(t.Tags)
+	tagsPart := m.getRenderedTagsForTask(t)
 	line := cursorStr + checkbox + foldIcon + titleCol
 	if cols.showLast {
 		// Score column is always score now — priority lives only in the

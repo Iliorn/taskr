@@ -29,6 +29,7 @@ type cacheState struct {
 	projects      []string
 	projectTasks  map[string][]todo.Todo
 	tagRender     map[string]string
+	taskTagRender map[string]string
 
 	learningSearch string
 	learningSort   learningSortMode
@@ -188,21 +189,26 @@ func (m *model) refreshTagRenderCache() {
 	for k := range m.cache.tagRender {
 		delete(m.cache.tagRender, k)
 	}
-	seen := make(map[string]struct{}, len(m.cache.active)+len(m.cache.done))
-	// Iterate the two lists in place. `append(m.cache.active, m.cache.done...)`
-	// would write into active's backing array whenever it has spare capacity,
-	// so avoid the concatenation entirely.
+	for k := range m.cache.taskTagRender {
+		delete(m.cache.taskTagRender, k)
+	}
+	// tagRender dedups the expensive renderTagsPart by tag-set (joined key) so
+	// it runs once per distinct tag set; taskTagRender then maps each task's ID
+	// to that rendered string, so the row renderer can look tags up by ID with
+	// no per-frame strings.Join. Iterate the two lists in place —
+	// append(active, done...) would scribble into active's spare capacity.
 	for _, list := range [2][]todo.Todo{m.cache.active, m.cache.done} {
 		for _, t := range list {
 			if len(t.Tags) == 0 {
 				continue
 			}
 			key := strings.Join(t.Tags, ",")
-			if _, ok := seen[key]; ok {
-				continue
+			rendered, ok := m.cache.tagRender[key]
+			if !ok {
+				rendered = renderTagsPart(t.Tags)
+				m.cache.tagRender[key] = rendered
 			}
-			seen[key] = struct{}{}
-			m.cache.tagRender[key] = renderTagsPart(t.Tags)
+			m.cache.taskTagRender[t.ID] = rendered
 		}
 	}
 }
@@ -259,6 +265,20 @@ func (m model) getProjectTasks(project string) []todo.Todo {
 		return tasks
 	}
 	return nil
+}
+
+// getRenderedTagsForTask returns a task's rendered tags via the by-ID cache
+// (populated by refreshTagRenderCache), avoiding the per-frame strings.Join that
+// getRenderedTags pays to build its key. Falls back to rendering directly for a
+// task not in the active/done lists.
+func (m *model) getRenderedTagsForTask(t *todo.Todo) string {
+	if len(t.Tags) == 0 {
+		return ""
+	}
+	if r, ok := m.cache.taskTagRender[t.ID]; ok {
+		return r
+	}
+	return renderTagsPart(t.Tags)
 }
 
 func (m model) getRenderedTags(tags []string) string {
