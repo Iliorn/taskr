@@ -1225,9 +1225,16 @@ func (m *model) renameTagGlobally(oldName, newName string) []string {
 		if !has {
 			continue
 		}
-		// RemoveTag + AddTag merges into an existing tag (no duplicates) and
-		// normalizes, rather than blindly overwriting in place.
-		t.RemoveTag(oldName)
+		// RemoveTag normalizes its argument, so it can't match a legacy
+		// mixed-case stored tag (e.g. "Work") — strip the literal oldName,
+		// then AddTag (which normalizes + dedups) to complete the merge.
+		kept := t.Tags[:0]
+		for _, tag := range t.Tags {
+			if tag != oldName {
+				kept = append(kept, tag)
+			}
+		}
+		t.Tags = kept
 		t.AddTag(newName)
 		touched = append(touched, t.ID)
 	}
