@@ -165,10 +165,60 @@ func Merge(server, client []todo.Todo) []todo.Todo {
 			merged[id] = t
 		}
 	}
+	breakParentCycles(merged)
 	out := make([]todo.Todo, 0, len(merged))
 	for _, t := range merged {
 		out = append(out, t)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+// breakParentCycles guarantees every ParentID chain terminates, so the
+// parent-chain walkers (sequence-score rollup, ancestor auto-close) can never
+// spin forever. The re-home pass above already cuts tasks whose parent is
+// missing or deleted; this covers the one remaining case — a chain that loops
+// back on itself (A→B→A) without ever hitting a missing/deleted parent. Such a
+// cycle can't be created through the UI, but a corrupt store or a buggy/hostile
+// peer could send one. Each task has exactly one parent, so the parent graph is
+// functional and every component holds at most one cycle; re-homing the
+// highest-ID member of each cycle to top level (deterministic, independent of
+// map order) is enough to make the whole set acyclic.
+func breakParentCycles(merged map[string]todo.Todo) {
+	for id := range merged {
+		seen := make(map[string]bool)
+		for cur := id; cur != ""; {
+			if seen[cur] {
+				cut := highestInCycle(merged, cur)
+				t := merged[cut]
+				t.ParentID = ""
+				merged[cut] = t
+				break
+			}
+			seen[cur] = true
+			t, ok := merged[cur]
+			if !ok {
+				break
+			}
+			cur = t.ParentID
+		}
+	}
+}
+
+// highestInCycle returns the greatest task ID on the cycle that contains start,
+// walking the loop once from start back to itself. start is assumed to lie on a
+// cycle (it's the node a chain walk reached twice).
+func highestInCycle(merged map[string]todo.Todo, start string) string {
+	hi := start
+	for cur := merged[start].ParentID; cur != start && cur != ""; {
+		if cur > hi {
+			hi = cur
+		}
+		t, ok := merged[cur]
+		if !ok {
+			break
+		}
+		cur = t.ParentID
+	}
+	return hi
 }
