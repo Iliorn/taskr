@@ -398,10 +398,11 @@ func initialModel(repo Repository) model {
 		ganttBarBuf:         make([]rune, 256),
 		ganttColorBuf:       make([]int, 256),
 		cache: &cacheState{
-			dirty:        true,
-			overdueSet:   make(map[string]bool),
-			tagRender:    make(map[string]string, 32),
-			projectTasks: make(map[string][]todo.Todo),
+			dirty:         true,
+			overdueSet:    make(map[string]bool),
+			tagRender:     make(map[string]string, 32),
+			taskTagRender: make(map[string]string, 64),
+			projectTasks:  make(map[string][]todo.Todo),
 		},
 	}
 	m.applyLangPlaceholders()
@@ -597,6 +598,18 @@ func (m *model) markCacheDirty() {
 	m.invalidateDetailCache()
 }
 
+// markFilterDirty marks only the filter-derived views (the active/done split and
+// its tag-render cache) for rebuild, leaving the data-derived caches — overdue
+// set, tag stats, sorted tags, per-project task lists — intact. Use this when
+// only the search query or focus filter changed; a full markCacheDirty would
+// make every search keystroke rescan and re-sort the whole task set. A pending
+// full rebuild (m.cache.dirty) still wins in ensureCache, so combining the two
+// in one Update is safe.
+func (m *model) markFilterDirty() {
+	m.cache.filterDirty = true
+	m.invalidateDetailCache()
+}
+
 func (m *model) currentTaskID() string {
 	if m.pane != paneDetail || m.tab != tabTasks {
 		return ""
@@ -611,17 +624,17 @@ func (m *model) followTask(taskID string) {
 	if taskID == "" {
 		return
 	}
-	var list []todo.Todo
 	if m.showHistory {
-		list = m.cache.done
-	} else {
-		list = m.visibleActiveTasks()
-	}
-	for i, t := range list {
-		if t.ID == taskID {
-			m.cursor = i
-			return
+		for i, t := range m.cache.done {
+			if t.ID == taskID {
+				m.cursor = i
+				return
+			}
 		}
+		return
+	}
+	if idx := m.visibleActiveIndexOf(taskID); idx >= 0 {
+		m.cursor = idx
 	}
 }
 
@@ -801,15 +814,13 @@ func (m model) findTodoByID(id string) *todo.Todo {
 func (m model) currentTodo() *todo.Todo {
 	switch m.tab {
 	case tabTasks:
-		var list []todo.Todo
 		if m.showHistory {
-			list = m.cache.done
-		} else {
-			list = m.visibleActiveTasks()
+			if m.cursor < len(m.cache.done) {
+				return m.get(m.cache.done[m.cursor].ID)
+			}
+			return nil
 		}
-		if m.cursor < len(list) {
-			return m.get(list[m.cursor].ID)
-		}
+		return m.visibleActiveAt(m.cursor)
 	case tabProjects:
 		if m.projectTaskMode {
 			projects := m.cache.projects
@@ -893,9 +904,133 @@ func (m model) visibleActiveTasks() []todo.Todo {
 	return out
 }
 
+// visibleActiveLen reports how many rows the active Tasks list renders to —
+// top-level tasks plus the subtasks of expanded parents — without materializing
+// the flattened slice. Mirrors visibleActiveTasks' counting (including its skip
+// of any dangling subtask ID) so flat indices line up with it.
+func (m *model) visibleActiveLen() int {
+	active := m.cache.active
+	n := len(active)
+	for i := range active {
+		if !m.expandedTasks[active[i].ID] {
+			continue
+		}
+		for _, subID := range m.subtaskOf[active[i].ID] {
+			if m.get(subID) != nil {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// visibleActiveAt returns the task at flat row idx in the active Tasks list, or
+// nil if idx is out of range — walking the flattened order without building it.
+func (m *model) visibleActiveAt(idx int) *todo.Todo {
+	if idx < 0 {
+		return nil
+	}
+	row := 0
+	active := m.cache.active
+	for i := range active {
+		if row == idx {
+			return m.get(active[i].ID)
+		}
+		row++
+		if !m.expandedTasks[active[i].ID] {
+			continue
+		}
+		for _, subID := range m.subtaskOf[active[i].ID] {
+			sub := m.get(subID)
+			if sub == nil {
+				continue
+			}
+			if row == idx {
+				return sub
+			}
+			row++
+		}
+	}
+	return nil
+}
+
+// visibleActiveIndexOf returns the flat row index of taskID in the active Tasks
+// list, or -1 if it isn't currently visible.
+func (m *model) visibleActiveIndexOf(taskID string) int {
+	row := 0
+	active := m.cache.active
+	for i := range active {
+		if active[i].ID == taskID {
+			return row
+		}
+		row++
+		if !m.expandedTasks[active[i].ID] {
+			continue
+		}
+		for _, subID := range m.subtaskOf[active[i].ID] {
+			sub := m.get(subID)
+			if sub == nil {
+				continue
+			}
+			if sub.ID == taskID {
+				return row
+			}
+			row++
+		}
+	}
+	return -1
+}
+
+// visibleActiveWindow materializes only flat rows [start, end) of the active
+// Tasks list, so the renderer copies the screenful it draws instead of the whole
+// list. Rows outside the window are walked by pointer (no struct copy); only the
+// emitted rows are copied into the returned slice.
+func (m *model) visibleActiveWindow(start, end int) []todo.Todo {
+	if start < 0 {
+		start = 0
+	}
+	if end <= start {
+		return nil
+	}
+	out := make([]todo.Todo, 0, end-start)
+	row := 0
+	done := false
+	visit := func(t *todo.Todo) {
+		if row >= start && row < end {
+			out = append(out, *t)
+		}
+		row++
+		if row >= end {
+			done = true
+		}
+	}
+	active := m.cache.active
+	for i := range active {
+		visit(&active[i])
+		if done {
+			break
+		}
+		if !m.expandedTasks[active[i].ID] {
+			continue
+		}
+		for _, subID := range m.subtaskOf[active[i].ID] {
+			if sub := m.get(subID); sub != nil {
+				visit(sub)
+				if done {
+					break
+				}
+			}
+		}
+		if done {
+			break
+		}
+	}
+	return out
+}
+
 // subtaskCount returns how many subtasks parentID has, via the maintained
 // subtaskOf index.
-func (m model) subtaskCount(parentID string) int {
+func (m *model) subtaskCount(parentID string) int {
 	return len(m.subtaskOf[parentID])
 }
 
@@ -914,7 +1049,7 @@ func (m model) descendantIDs(rootID string) []string {
 // subtaskProgress reports the (done, total) count of parentID's direct
 // children. The Tasks-tab badge `(2/5)` reads this — direct children match
 // the visible tree better than counting transitive descendants.
-func (m model) subtaskProgress(parentID string) (done, total int) {
+func (m *model) subtaskProgress(parentID string) (done, total int) {
 	ids := m.subtaskIDs(parentID)
 	total = len(ids)
 	for _, id := range ids {
@@ -928,7 +1063,7 @@ func (m model) subtaskProgress(parentID string) (done, total int) {
 // hasOverdueDescendant returns true if any task in parentID's subtree (any
 // depth) is currently overdue. Recursive so a deeply-nested overdue child
 // still surfaces on the root row.
-func (m model) hasOverdueDescendant(parentID string, overdueSet map[string]bool) bool {
+func (m *model) hasOverdueDescendant(parentID string, overdueSet map[string]bool) bool {
 	for _, id := range m.subtaskIDs(parentID) {
 		if overdueSet[id] {
 			return true

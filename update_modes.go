@@ -371,7 +371,7 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = 0
 				m.projectCursor = 0
 				m.listOffset = 0
-				m.markCacheDirty()
+				m.markFilterDirty()
 			}
 			return m, nil
 		case "esc":
@@ -387,7 +387,7 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = 0
 				m.projectCursor = 0
 				m.listOffset = 0
-				m.markCacheDirty()
+				m.markFilterDirty()
 			}
 			return m, nil
 		}
@@ -411,7 +411,7 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor = 0
 			m.projectCursor = 0
 			m.listOffset = 0
-			m.markCacheDirty()
+			m.markFilterDirty()
 		}
 	}
 	return m, cmd
@@ -600,7 +600,7 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showHistory {
 				newLen = len(m.cache.done)
 			} else {
-				newLen = len(m.visibleActiveTasks())
+				newLen = m.visibleActiveLen()
 			}
 			if m.cursor >= newLen && m.cursor > 0 {
 				m.cursor--

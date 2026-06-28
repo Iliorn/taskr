@@ -16,22 +16,34 @@ import (
 // ── Predicates ────────────────────────────────────────────────────────────────
 
 func todoMatchesSearch(t todo.Todo, search string) bool {
-	if search == "" {
-		return true
-	}
-	if search == untaggedKey {
-		return len(t.Tags) == 0
-	}
-	if strings.HasPrefix(search, "#") {
+	return compileSearch(search)(t)
+}
+
+// compileSearch lowers the query once and returns a per-task predicate, so the
+// active/done scan doesn't re-lower the (constant) search string for every task.
+// todoMatchesSearch is the single-shot form; both share this one definition.
+func compileSearch(search string) func(todo.Todo) bool {
+	switch {
+	case search == "":
+		return func(todo.Todo) bool { return true }
+	case search == untaggedKey:
+		return func(t todo.Todo) bool { return len(t.Tags) == 0 }
+	case strings.HasPrefix(search, "#"):
 		tagQuery := strings.ToLower(strings.TrimPrefix(search, "#"))
-		for _, tag := range t.Tags {
-			if strings.Contains(strings.ToLower(tag), tagQuery) {
-				return true
+		return func(t todo.Todo) bool {
+			for _, tag := range t.Tags {
+				if strings.Contains(strings.ToLower(tag), tagQuery) {
+					return true
+				}
 			}
+			return false
 		}
-		return false
+	default:
+		titleQuery := strings.ToLower(search)
+		return func(t todo.Todo) bool {
+			return strings.Contains(strings.ToLower(t.Title), titleQuery)
+		}
 	}
-	return strings.Contains(strings.ToLower(t.Title), strings.ToLower(search))
 }
 
 func todoMatchesFocus(t todo.Todo, focus bool) bool {
@@ -50,14 +62,15 @@ func todoMatchesFocus(t todo.Todo, focus bool) bool {
 // stays the parent's own — so a high-priority subtask pulls its parent up
 // rather than hiding beneath a calmer one.
 func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode taskSortMode) (active, done []todo.Todo) {
+	match := compileSearch(search)
 	for _, t := range todos {
 		if t.ParentID != "" {
 			continue
 		}
 		switch {
-		case t.Status == todo.Pending && todoMatchesSearch(t, search) && todoMatchesFocus(t, focus):
+		case t.Status == todo.Pending && match(t) && todoMatchesFocus(t, focus):
 			active = append(active, t)
-		case t.Status == todo.Done && todoMatchesSearch(t, search):
+		case t.Status == todo.Done && match(t):
 			done = append(done, t)
 		}
 	}

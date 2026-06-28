@@ -614,55 +614,27 @@ func (m model) renderTaskList() string {
 
 	overdueSet := m.cache.overdueSet
 
-	// Size the title column to the widest displayed task (title + its indicators).
-	// Must mirror every suffix/prefix renderTaskLineWithSet appends to the title,
-	// otherwise the longest row eats into the gap before the Score column.
-	contentMax := 0
-	tagsMax := 0
-	for i := range active {
-		w := len([]rune(active[i].Title))
-		if active[i].HasOverdueDependencyFast(overdueSet) {
-			w += 2 // " !"
-		}
-		if active[i].Notes != "" {
-			w += 2 // " ¶"
-		}
-		if active[i].IsRecurring() {
-			w += 2 // " ↻"
-		}
-		if subDone, subTotal := m.subtaskProgress(active[i].ID); subTotal > 0 {
-			w += len([]rune(fmt.Sprintf(" (%d/%d)", subDone, subTotal)))
-			if m.hasOverdueDescendant(active[i].ID, overdueSet) {
-				w++ // "‼"
-			}
-		}
-		if active[i].IsTimerRunning() {
-			w += 2 // "⏱ " prefix
-		}
-		if w > contentMax {
-			contentMax = w
-		}
-		if tw := tagsRenderWidth(active[i].Tags); tw > tagsMax {
-			tagsMax = tw
-		}
-	}
-	cols := taskListCols(m.termWidth, false, contentMax, tagsMax)
+	// Column widths (widest row content + widest tag cell) are derived from the
+	// active set and cached by refreshTaskColMetrics, so the frame doesn't
+	// rescan every task — see cache.go.
+	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax)
 	renderListHeader(b, m.termWidth, false, m.taskSort, cols)
 
-	visible := m.visibleActiveTasks()
-
+	total := m.visibleActiveLen()
 	maxVisible := m.estimateListHeight()
 	startIdx := m.listOffset
-	endIdx := startIdx + maxVisible
-	if endIdx > len(visible) {
-		endIdx = len(visible)
-	}
-	if startIdx > len(visible) {
+	if startIdx > total {
 		startIdx = 0
 	}
+	endIdx := startIdx + maxVisible
+	if endIdx > total {
+		endIdx = total
+	}
+	// Materialize only the rows we draw, not the whole flattened list.
+	window := m.visibleActiveWindow(startIdx, endIdx)
 
 	for i := startIdx; i < endIdx; i++ {
-		t := visible[i]
+		t := &window[i-startIdx]
 		if t.ParentID == "" {
 			b.WriteString(m.renderTaskLineWithSet(t, i, m.cursor, true, overdueSet, cols))
 			continue
@@ -675,7 +647,7 @@ func (m model) renderTaskList() string {
 				break
 			}
 		}
-		b.WriteString(m.renderSubtaskLine(&t, subIdx, len(siblings), cols, i, m.cursor, true))
+		b.WriteString(m.renderSubtaskLine(t, subIdx, len(siblings), cols, i, m.cursor, true))
 	}
 	return b.String()
 }
@@ -743,7 +715,7 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	if cols.showLast {
 		dateCols += padRight(completedVal, 12)
 	}
-	tagsPart := m.getRenderedTags(t.Tags)
+	tagsPart := m.getRenderedTagsForTask(&t)
 	mainW := len([]rune(cursorStr)) + 4 + len([]rune(titleCol)) + len([]rune(dateCols))
 	tagsStr := ""
 	if tagsPart != "" {
@@ -760,18 +732,18 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	}
 
 	if index == cursor && active {
-		return selectedStyle.Render(cursorStr+"[") +
-			checkDoneStyle.Render("✓") +
-			selectedStyle.Render("] "+titleCol+dateCols) +
+		return fastSelected.render(cursorStr+"[") +
+			fastCheckDone.render("✓") +
+			fastSelected.render("] "+titleCol+dateCols) +
 			tagsStr + "\n"
 	}
-	return normalStyle.Render(cursorStr+"[") +
-		checkDoneStyle.Render("✓") +
-		normalStyle.Render("] "+titleCol+dateCols) +
+	return fastNormal.render(cursorStr+"[") +
+		fastCheckDone.render("✓") +
+		fastNormal.render("] "+titleCol+dateCols) +
 		tagsStr + "\n"
 }
 
-func (m model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols listCols, flatIndex, cursor int, active bool) string {
+func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols listCols, flatIndex, cursor int, active bool) string {
 	connector := "├"
 	if subIndex == subTotal-1 {
 		connector = "└"
@@ -798,19 +770,19 @@ func (m model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols li
 	body := "   " + connector + " " + check + " " + title
 
 	if selected {
-		return selectedStyle.Render(cursorStr+body) + "\n"
+		return fastSelected.render(cursorStr+body) + "\n"
 	}
 	if sub.Status == todo.Done {
 		// Keep ✓ in checkDoneStyle so the done marker stays legible
 		// against the surrounding dim row.
-		return dimStyle.Render(cursorStr+"   "+connector+" [") +
-			checkDoneStyle.Render("✓") +
-			dimStyle.Render("] "+title) + "\n"
+		return fastDim.render(cursorStr+"   "+connector+" [") +
+			fastCheckDone.render("✓") +
+			fastDim.render("] "+title) + "\n"
 	}
-	return dimStyle.Render(cursorStr+body) + "\n"
+	return fastDim.render(cursorStr+body) + "\n"
 }
 
-func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
+func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
 	titleW := cols.titleW
 	cursorStr := "  "
 	if index == cursor && active {
@@ -861,12 +833,12 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 	// Reserve one trailing space inside the column so a truncated title (ending
 	// in "(…)") never butts up against the Score column that follows.
 	titleCol := padRight(truncate(title, titleW-1), titleW)
-	tagsPart := m.getRenderedTags(t.Tags)
+	tagsPart := m.getRenderedTagsForTask(t)
 	line := cursorStr + checkbox + foldIcon + titleCol
 	if cols.showLast {
 		// Score column is always score now — priority lives only in the
 		// detail view, where the user can still set it.
-		line += padRight(fmt.Sprintf("%.1f", sequenceScore(&t)), scoreColW)
+		line += padRight(fmt.Sprintf("%.1f", sequenceScore(t)), scoreColW)
 	}
 	if cols.showDue {
 		line += padRight(dueVal, dueColW)
@@ -901,15 +873,15 @@ func (m model) renderTaskLineWithSet(t todo.Todo, index, cursor int, active bool
 
 	switch {
 	case t.IsTimerRunning():
-		return timerStyle.Render(line) + tagsStr + "\n"
+		return fastTimer.render(line) + tagsStr + "\n"
 	case t.IsOverdue():
-		return overdueStyle.Render(line) + tagsStr + "\n"
+		return fastOverdue.render(line) + tagsStr + "\n"
 	case hasOverdueDep:
-		return depOverdueStyle.Render(line) + tagsStr + "\n"
+		return fastDepOverdue.render(line) + tagsStr + "\n"
 	case index == cursor && active:
-		return selectedStyle.Render(line) + tagsStr + "\n"
+		return fastSelected.render(line) + tagsStr + "\n"
 	default:
-		return normalStyle.Render(line) + tagsStr + "\n"
+		return fastNormal.render(line) + tagsStr + "\n"
 	}
 }
 
