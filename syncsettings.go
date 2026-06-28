@@ -31,6 +31,13 @@ func (m *model) toggleSyncAuto() {
 	v := !autoSyncEnabled(m.syncCfg)
 	m.syncCfg.AutoSync = &v
 	m.saveSyncCfg()
+	// Turning auto-sync off: stop the real-time SSE listener so its goroutine
+	// and connection don't linger for the rest of the session. (The syncTick
+	// path restarts it when auto-sync is re-enabled.)
+	if !v && m.liveSync != nil {
+		m.liveSync.close()
+		m.liveSync = nil
+	}
 }
 
 // updateEditSyncURL handles the inline server-URL editor.
