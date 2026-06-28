@@ -257,6 +257,10 @@ func applyTheme(t theme) {
 	calTodayStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
 
 	projLabelStyle = lipgloss.NewStyle().Foreground(t.orange)
+
+	// Capture the SGR prefix/suffix of the per-row styles for the fast render
+	// path; must run after the styles above are (re)built.
+	rebuildFastStyles()
 }
 
 // Ensure styles are always populated (e.g. in tests that render without

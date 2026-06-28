@@ -732,14 +732,14 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	}
 
 	if index == cursor && active {
-		return selectedStyle.Render(cursorStr+"[") +
-			checkDoneStyle.Render("✓") +
-			selectedStyle.Render("] "+titleCol+dateCols) +
+		return fastSelected.render(cursorStr+"[") +
+			fastCheckDone.render("✓") +
+			fastSelected.render("] "+titleCol+dateCols) +
 			tagsStr + "\n"
 	}
-	return normalStyle.Render(cursorStr+"[") +
-		checkDoneStyle.Render("✓") +
-		normalStyle.Render("] "+titleCol+dateCols) +
+	return fastNormal.render(cursorStr+"[") +
+		fastCheckDone.render("✓") +
+		fastNormal.render("] "+titleCol+dateCols) +
 		tagsStr + "\n"
 }
 
@@ -770,16 +770,16 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 	body := "   " + connector + " " + check + " " + title
 
 	if selected {
-		return selectedStyle.Render(cursorStr+body) + "\n"
+		return fastSelected.render(cursorStr+body) + "\n"
 	}
 	if sub.Status == todo.Done {
 		// Keep ✓ in checkDoneStyle so the done marker stays legible
 		// against the surrounding dim row.
-		return dimStyle.Render(cursorStr+"   "+connector+" [") +
-			checkDoneStyle.Render("✓") +
-			dimStyle.Render("] "+title) + "\n"
+		return fastDim.render(cursorStr+"   "+connector+" [") +
+			fastCheckDone.render("✓") +
+			fastDim.render("] "+title) + "\n"
 	}
-	return dimStyle.Render(cursorStr+body) + "\n"
+	return fastDim.render(cursorStr+body) + "\n"
 }
 
 func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
@@ -873,15 +873,15 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 
 	switch {
 	case t.IsTimerRunning():
-		return timerStyle.Render(line) + tagsStr + "\n"
+		return fastTimer.render(line) + tagsStr + "\n"
 	case t.IsOverdue():
-		return overdueStyle.Render(line) + tagsStr + "\n"
+		return fastOverdue.render(line) + tagsStr + "\n"
 	case hasOverdueDep:
-		return depOverdueStyle.Render(line) + tagsStr + "\n"
+		return fastDepOverdue.render(line) + tagsStr + "\n"
 	case index == cursor && active:
-		return selectedStyle.Render(line) + tagsStr + "\n"
+		return fastSelected.render(line) + tagsStr + "\n"
 	default:
-		return normalStyle.Render(line) + tagsStr + "\n"
+		return fastNormal.render(line) + tagsStr + "\n"
 	}
 }
 
