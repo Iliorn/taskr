@@ -123,6 +123,60 @@ The TUI and CLI share the SQLite store. Concurrent reads are safe; writes serial
 
 Tasks are stored in `~/.taskr/tasks.db` (SQLite, WAL mode). On first launch any legacy `~/.taskr/tasks.json` is imported into the new database and then left in place as a backup.
 
+## Sync
+
+taskr can sync tasks across devices through a small **self-hosted** server — one
+authoritative merge point, no third-party service. The same binary is both client
+and server.
+
+### Run a server
+
+On the machine that should host the canonical store (e.g. a home server reachable
+over Tailscale/LAN):
+
+```sh
+taskr serve --listen 100.x.y.z:8765 --token "$(openssl rand -hex 32)"
+# or: TASKR_SYNC_TOKEN=… taskr serve --listen 100.x.y.z:8765
+```
+
+A token is **mandatory** — taskr refuses to run unauthenticated. `--listen`
+defaults to `127.0.0.1:8765`; bind to a Tailscale/LAN address (or put it behind a
+reverse proxy for TLS) to reach it from other devices. The server persists to its
+own `~/.taskr/tasks.db` and exposes:
+
+- `POST /v1/sync` — full-snapshot sync (Bearer token)
+- `GET  /v1/health` — liveness check
+- `GET  /v1/events` — Server-Sent Events "doorbell" so clients pull in real time
+
+To keep it running, wrap it in a `systemd --user` unit with the token in an
+`EnvironmentFile` (mode 600) and enable lingering.
+
+### Point a client at it
+
+```sh
+taskr sync --url http://100.x.y.z:8765 --token "<token>" --save
+```
+
+`--save` writes the URL + token to `~/.taskr/sync.json` so future syncs need no
+flags; `TASKR_SYNC_URL` / `TASKR_SYNC_TOKEN` work too. Once configured, the TUI
+auto-syncs (on launch/exit, on a periodic tick, and live via SSE), and CLI
+mutations sync best-effort in the background. Set `"auto_sync": false` in
+`sync.json` to require manual `taskr sync`. The local SQLite store is always the
+source of truth — network failures never block the UI.
+
+You can also manage all of this from the **Settings tab**: toggle auto-sync, edit
+the server URL/token inline (token masked), run "Sync now", and (v1.17+) flip the
+local instance into server mode.
+
+### How merge works
+
+Sync is UUID-keyed with last-writer-wins on scalars (by `ModifiedAt`), union of
+child collections (comments/learnings/time-entries) by UUID, and soft-delete
+tombstones so a deletion propagates instead of the row reappearing. Edit-vs-delete
+conflicts surface as a brief toast, and the losing version is appended to
+`~/.taskr/sync.log` for recovery. Clock-based LWW assumes roughly synced clocks
+(NTP); only tasks sync, not `settings.json`.
+
 ## License
 
 MIT
