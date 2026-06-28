@@ -95,32 +95,6 @@ func computeLayout(in layoutInput) layout {
 	return l
 }
 
-// ── View metrics cache ────────────────────────────────────────────────────────
-
-type viewMetrics struct {
-	termW       int
-	termH       int
-	taskID      string
-	page        int
-	listVisible int
-}
-
-func (m *model) getCachedListVisible() int {
-	id := m.currentTaskID()
-	if m.metrics.termW == m.termWidth &&
-		m.metrics.termH == m.termHeight &&
-		m.metrics.taskID == id &&
-		m.metrics.page == m.detail.page {
-		return m.metrics.listVisible
-	}
-	m.metrics.listVisible = m.listVisible()
-	m.metrics.termW = m.termWidth
-	m.metrics.termH = m.termHeight
-	m.metrics.taskID = id
-	m.metrics.page = m.detail.page
-	return m.metrics.listVisible
-}
-
 // ── Detail render cache ───────────────────────────────────────────────────────
 
 type detailRenderCache struct {

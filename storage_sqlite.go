@@ -402,12 +402,12 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 	rows.Close()
 
 	if err := loadChildren(h, todos, "task_tags", "task_id, tag", "",
-		func(t *todo.Todo, s *sql.Rows) error {
+		func(s *sql.Rows) error {
 			var taskID, tag string
 			if err := s.Scan(&taskID, &tag); err != nil {
 				return err
 			}
-			if t = todos[taskID]; t != nil {
+			if t := todos[taskID]; t != nil {
 				t.Tags = append(t.Tags, tag)
 			}
 			return nil
@@ -415,12 +415,12 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 		return nil, err
 	}
 	if err := loadChildren(h, todos, "task_dependencies", "task_id, depends_on_id", "",
-		func(t *todo.Todo, s *sql.Rows) error {
+		func(s *sql.Rows) error {
 			var taskID, dep string
 			if err := s.Scan(&taskID, &dep); err != nil {
 				return err
 			}
-			if t = todos[taskID]; t != nil {
+			if t := todos[taskID]; t != nil {
 				t.Dependencies = append(t.Dependencies, dep)
 			}
 			return nil
@@ -428,7 +428,7 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 		return nil, err
 	}
 	if err := loadChildren(h, todos, "task_comments", "id, task_id, text, created_at, deleted_at", childWhere,
-		func(t *todo.Todo, s *sql.Rows) error {
+		func(s *sql.Rows) error {
 			var c todo.Comment
 			var taskID, createdAt, deletedAt string
 			if err := s.Scan(&c.ID, &taskID, &c.Text, &createdAt, &deletedAt); err != nil {
@@ -436,7 +436,7 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 			}
 			c.CreatedAt = parseTime(createdAt)
 			c.DeletedAt = parseTime(deletedAt)
-			if t = todos[taskID]; t != nil {
+			if t := todos[taskID]; t != nil {
 				t.Comments = append(t.Comments, c)
 			}
 			return nil
@@ -444,7 +444,7 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 		return nil, err
 	}
 	if err := loadChildren(h, todos, "task_learnings", "id, task_id, text, created_at, deleted_at", childWhere,
-		func(t *todo.Todo, s *sql.Rows) error {
+		func(s *sql.Rows) error {
 			var l todo.Learning
 			var taskID, createdAt, deletedAt string
 			if err := s.Scan(&l.ID, &taskID, &l.Text, &createdAt, &deletedAt); err != nil {
@@ -452,7 +452,7 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 			}
 			l.CreatedAt = parseTime(createdAt)
 			l.DeletedAt = parseTime(deletedAt)
-			if t = todos[taskID]; t != nil {
+			if t := todos[taskID]; t != nil {
 				t.Learnings = append(t.Learnings, l)
 			}
 			return nil
@@ -460,7 +460,7 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 		return nil, err
 	}
 	if err := loadChildren(h, todos, "task_time_entries", "id, task_id, started_at, stopped_at, last_seen, deleted_at", childWhere,
-		func(t *todo.Todo, s *sql.Rows) error {
+		func(s *sql.Rows) error {
 			var e todo.TimeEntry
 			var taskID, startedAt, stoppedAt, lastSeen, deletedAt string
 			if err := s.Scan(&e.ID, &taskID, &startedAt, &stoppedAt, &lastSeen, &deletedAt); err != nil {
@@ -470,7 +470,7 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 			e.StoppedAt = parseTime(stoppedAt)
 			e.LastSeen = parseTime(lastSeen)
 			e.DeletedAt = parseTime(deletedAt)
-			if t = todos[taskID]; t != nil {
+			if t := todos[taskID]; t != nil {
 				t.TimeEntries = append(t.TimeEntries, e)
 			}
 			return nil
@@ -486,7 +486,7 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 }
 
 func loadChildren(h *sql.DB, todos map[string]*todo.Todo, table, cols, where string,
-	scan func(*todo.Todo, *sql.Rows) error,
+	scan func(*sql.Rows) error,
 ) error {
 	rows, err := h.Query(`SELECT ` + cols + ` FROM ` + table + ` ` + where)
 	if err != nil {
@@ -494,7 +494,7 @@ func loadChildren(h *sql.DB, todos map[string]*todo.Todo, table, cols, where str
 	}
 	defer rows.Close()
 	for rows.Next() {
-		if err := scan(nil, rows); err != nil {
+		if err := scan(rows); err != nil {
 			return err
 		}
 	}

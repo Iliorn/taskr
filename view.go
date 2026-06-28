@@ -795,7 +795,8 @@ func (m model) renderStatsDetail() string {
 			top := 2*r + 1     // top-half task index
 			rowIdx := chartH - 1 - r
 			var ch rune
-			gi, bg := -1, -1
+			var gi int
+			bg := -1
 			switch {
 			case overflow && r == chartH-1:
 				ch = '+'

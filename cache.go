@@ -148,14 +148,10 @@ func (m *model) refreshFilteredCaches() {
 	m.cache.filterDirty = false
 }
 
-// rebuildSortedTags refreshes the cached unique, sorted tag list. The list is
-// the expensive part of the Tags tab (a full scan + sort) and was previously
+// rebuildSortedTagsFrom refreshes the cached unique, sorted tag list. The list
+// is the expensive part of the Tags tab (a full scan + sort) and was previously
 // recomputed on every render; cache it alongside tagStats and invalidate it
 // the same way (on data change, and on sort-mode toggle via sortCachedTags).
-func (m *model) rebuildSortedTags() {
-	m.rebuildSortedTagsFrom(m.allTodos())
-}
-
 func (m *model) rebuildSortedTagsFrom(todos []todo.Todo) {
 	m.cache.tagsSorted, m.cache.untaggedTotal, m.cache.untaggedDone =
 		selectSortedTags(todos, m.tagSort, m.cache.tags)

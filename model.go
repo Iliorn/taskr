@@ -208,9 +208,6 @@ type model struct {
 	pane   pane
 	mode   appMode
 
-	// View metrics cache
-	metrics viewMetrics
-
 	// detail render cache
 	detailRC detailRenderCache
 
@@ -269,7 +266,6 @@ type model struct {
 	statsRange           statsRangeMode
 	themeName            string
 	updateStatus         string
-	searchCursor         int
 	autoCloseParent      bool
 
 	// Persistence
@@ -1089,29 +1085,10 @@ func (m model) descendantTimeSpent(parentID string) time.Duration {
 	return sum
 }
 
-// allDescendantsDone reports whether parentID has at least one subtask AND
-// every transitive descendant is Done. Used by the auto-close setting: a
-// parent with no subtasks never auto-closes.
-func (m model) allDescendantsDone(parentID string) bool {
-	ids := m.subtaskIDs(parentID)
-	if len(ids) == 0 {
-		return false
-	}
-	for _, id := range ids {
-		c := m.get(id)
-		if c == nil || c.Status != todo.Done {
-			return false
-		}
-		if !m.allDescendantsDoneOrEmpty(id) {
-			return false
-		}
-	}
-	return true
-}
-
-// allDescendantsDoneOrEmpty: like allDescendantsDone but returns true when
-// parentID has no children. Used recursively so a leaf doesn't fail the
-// "all done" check just by lacking subtasks.
+// allDescendantsDoneOrEmpty reports whether every transitive descendant of
+// parentID is Done, returning true when parentID has no children. Used
+// recursively so a leaf doesn't fail the "all done" check just by lacking
+// subtasks.
 func (m model) allDescendantsDoneOrEmpty(parentID string) bool {
 	for _, id := range m.subtaskIDs(parentID) {
 		c := m.get(id)
@@ -1185,15 +1162,6 @@ func (m *model) extendParentDueIfNeeded(subID string) []string {
 	return bumped
 }
 
-// addSubtask creates a child of parentID and returns the new subtask's ID so
-// the caller can mark it dirty.
-func (m *model) addSubtask(parentID, title string) string {
-	sub := todo.NewSubtask(title, parentID)
-	sub.InheritContextFrom(m.get(parentID))
-	m.add(sub)
-	return sub.ID
-}
-
 // toggleSubtask flips a child task's status and returns every ID the caller
 // should mark dirty: the toggled subtask, plus the freshly-spawned next
 // instance when the subtask was a recurring task closed by this call, plus
@@ -1231,10 +1199,6 @@ func (m *model) toggleSubtask(parentID string, subtaskCursor int) []string {
 
 func (m model) matchesSearch(t todo.Todo) bool {
 	return todoMatchesSearch(t, m.searchQuery)
-}
-
-func (m model) matchesFocusFilter(t todo.Todo) bool {
-	return todoMatchesFocus(t, m.focusFilter)
 }
 
 func (m model) depSearchResults() []todo.Todo {

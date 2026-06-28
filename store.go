@@ -1,8 +1,6 @@
 package main
 
 import (
-	"sort"
-
 	"taskr/todo"
 )
 
@@ -154,14 +152,6 @@ func (s *Store) allTodos() []todo.Todo {
 	for _, t := range s.tasks {
 		out = append(out, *t)
 	}
-	return out
-}
-
-// allTodosSortedByCreatedAt is a convenience for callers that want a stable
-// order without writing a custom sort closure.
-func (s *Store) allTodosSortedByCreatedAt() []todo.Todo {
-	out := s.allTodos()
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
 	return out
 }
 

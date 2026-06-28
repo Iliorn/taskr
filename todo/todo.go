@@ -1,3 +1,6 @@
+// Package todo is taskr's framework-free domain layer: the Todo type and its
+// mutations (toggle, tags, timers, subtasks, comments, learnings, time entries).
+// It carries no Bubble Tea or rendering concerns.
 package todo
 
 import (

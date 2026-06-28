@@ -1,0 +1,26 @@
+version: "2"
+
+# Standard linters: errcheck, govet, ineffassign, staticcheck, unused.
+linters:
+  default: standard
+  settings:
+    errcheck:
+      # defer tx.Rollback() after a commit is a no-op; the error is intentionally
+      # ignored (the std-error-handling preset already covers *.Close, Fprint…).
+      exclude-functions:
+        - (*database/sql.Tx).Rollback
+    staticcheck:
+      # Keep the bug-class (SA*) checks; drop the opinionated "quickfix" style
+      # nits (tagged-switch / De Morgan / embedded-field rewrites) — they'd churn
+      # render hot paths for no behavioural gain.
+      checks:
+        - all
+        - -QF1001
+        - -QF1002
+        - -QF1003
+        - -QF1008
+  exclusions:
+    # Don't flag the conventional "intentionally ignored" errors — deferred
+    # *.Close, fmt.Fprint to stderr, etc.
+    presets:
+      - std-error-handling

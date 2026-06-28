@@ -223,19 +223,6 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int) listCo
 	return c
 }
 
-func renderSortDivider(availW int, sortLabel string) string {
-	prefix := "  ↕ sort:" + sortLabel + " "
-	remainW := availW - len([]rune(prefix))
-	if remainW < 4 {
-		remainW = 4
-	}
-	return dimStyle.Render(prefix+strings.Repeat("─", remainW)) + "\n"
-}
-
-func renderPlainDivider(availW int) string {
-	return dimStyle.Render("  "+strings.Repeat("─", availW)) + "\n"
-}
-
 func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMode taskSortMode, c listCols) {
 	dueW := dueColW
 	if isHistory {

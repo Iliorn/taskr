@@ -501,7 +501,6 @@ func (m model) renderTimelineSub(a dayActivity, innerW int, hasNext bool) string
 	}
 	if showProj && showTags && projW+sep+tagsPlainW > avail {
 		showTags = false
-		sep = 0
 	}
 	if showProj && projW > avail {
 		showProj = false
