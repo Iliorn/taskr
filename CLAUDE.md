@@ -15,9 +15,15 @@ go run .                                              # build & run
 go test ./...                                         # run all tests (root pkg + todo pkg)
 go test -run TestName ./...                           # run a single test
 go vet ./...                                          # vet
+golangci-lint run ./...                               # lint (config in .golangci.yml)
 ```
 
-There is no linter config or CI; `go test` and `go vet` are the full check suite. Tests live alongside code (`*_test.go`) and cover storage, helpers, layout, tags, stats — not the Bubble Tea event loop.
+CI (`.github/workflows/ci.yml`) runs `go vet` + `go test` + `go build` and a
+separate `golangci-lint` job. The check suite is `go test`, `go vet`, and
+golangci-lint (standard linters; `.golangci.yml` excludes the conventional
+ignored errors and the opinionated QF* style nits). Tests live alongside code
+(`*_test.go`) and cover storage, helpers, layout, tags, stats, and the
+client↔server sync round trip — not the Bubble Tea event loop.
 
 ### Releasing
 
