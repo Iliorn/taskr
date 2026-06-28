@@ -225,6 +225,39 @@ func TestStartTimerOnRunningTaskRotatesEntry(t *testing.T) {
 	}
 }
 
+func TestCliAddDependsLinksExistingTask(t *testing.T) {
+	if code := cliAdd([]string{"prereq task"}); code != 0 {
+		t.Fatalf("add prerequisite: exit %d", code)
+	}
+	if code := cliAdd([]string{"dependent task", "--depends", "prereq"}); code != 0 {
+		t.Fatalf("add dependent with --depends: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	var dependent, prereq *todo.Todo
+	for i := range todos {
+		if len(todos[i].Dependencies) > 0 {
+			dependent = &todos[i]
+		} else {
+			prereq = &todos[i]
+		}
+	}
+	if dependent == nil || prereq == nil {
+		t.Fatalf("want one task with a dependency and one without; got %d tasks", len(todos))
+	}
+	if len(dependent.Dependencies) != 1 || dependent.Dependencies[0] != prereq.ID {
+		t.Fatalf("dependent.Dependencies = %v, want [%s]", dependent.Dependencies, prereq.ID)
+	}
+}
+
+func TestCliAddDependsUnknownRefFails(t *testing.T) {
+	if code := cliAdd([]string{"orphan", "--depends", "no-such-task-zzz"}); code != 2 {
+		t.Errorf("want exit 2 for unknown --depends ref, got %d", code)
+	}
+}
+
 func TestIsCLICommand(t *testing.T) {
 	cases := map[string]bool{
 		"add": true, "list": true, "ls": true, "done": true, "top": true,

@@ -13,6 +13,7 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 
 - **Tasks** — add, complete, delete, rename, set priority, size (S/M/L), due dates, start dates
 - **Sequencing engine** — a weighted score (deadline + priority + size + age) decides the next-best task automatically; cycle `s` to switch between Sequence / Due / Size sort. Tune the weights in Settings (Relaxed / Balanced / Intense for each dimension)
+- **Dependency-aware ordering** — a task that blocks others inherits their urgency, so the prerequisite for an urgent task surfaces right above it (critical-path behaviour). In the list, `↥` marks a blocker (something depends on it) and `↧` marks a blocked task (waiting on an unfinished dependency)
 - **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
 - **Projects** — group tasks, Gantt timeline view
 - **Tags** — tag tasks, filter by tag, rename/delete globally
@@ -95,6 +96,7 @@ taskr edit milk --p=high --add-tag=urgent --due=tomorrow
 taskr done milk                  # mark a task done
 taskr delete milk                # soft delete (alias: taskr rm)
 taskr subtask milk "find receipt"   # create a subtask of "milk"
+taskr add "Deploy release" --depends="sign-off"   # block the new task until "sign-off" is done
 taskr start milk                 # start the time tracker
 taskr stop                       # stop the running tracker (no ref needed)
 taskr comment milk "blocked on review"

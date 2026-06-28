@@ -109,7 +109,7 @@ func dispatchCLI(args []string) int {
 // uses this to know which flags consume the next arg (vs. being self-contained
 // `--name=value`), so users can put the title in any position.
 var addValueFlags = map[string]bool{
-	"due": true, "p": true, "size": true, "project": true, "tag": true, "like": true, "recur": true,
+	"due": true, "p": true, "size": true, "project": true, "tag": true, "like": true, "recur": true, "depends": true,
 }
 
 func cliAdd(args []string) int {
@@ -123,6 +123,7 @@ func cliAdd(args []string) int {
 	project := fs.String("project", "", "project name")
 	tags := fs.String("tag", "", "comma-separated tags")
 	recur := fs.String("recur", "", "recurrence rule: daily|weekly|monthly|yearly|weekdays|Nd|Nw|Nm|Ny")
+	depends := fs.String("depends", "", "make the new task depend on an existing task ref (blocks it until that task is done)")
 	like := fs.String("like", "", "clone priority/size/project/tags from an existing task ref")
 	startNow := fs.Bool("start", false, "start the time tracker on the new task (stops any other running timer first)")
 	fs.Usage = func() {
@@ -194,6 +195,19 @@ func cliAdd(args []string) int {
 			return 2
 		}
 		t.Recurrence = canonical
+	}
+	if *depends != "" {
+		existing, err := repo.Load()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "load: %v\n", err)
+			return 1
+		}
+		dep, err := findTaskByRef(existing, *depends)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		t.AddDependency(dep.ID)
 	}
 	// --start collapses the common "add then start tracking" two-call dance
 	// into one. We re-load to find any other running timer (the TUI's
@@ -1383,7 +1397,7 @@ Usage:
   taskr                                launch the TUI (no args)
 
 Tasks:
-  taskr add "title" [flags]            add a new task (--like <ref> clones, --start tracks)
+  taskr add "title" [flags]            add a new task (--like <ref> clones, --depends <ref> blocks on, --start tracks)
   taskr list [flags]                   list pending top-level tasks (filters below)
   taskr search "term" [flags]          title-substring search (includes done by default)
   taskr top [-n=N] [--json] [--wide]   show top-N by sequence score

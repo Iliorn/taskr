@@ -76,6 +76,7 @@ func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode tas
 	}
 	if sortMode == taskSortSequence {
 		rollup := descendantScoreRollup(todos)
+		rollup = dependencyScoreRollup(todos, rollup)
 		sortTodosBySequenceWithRollup(active, rollup)
 		sortTodosBySequenceWithRollup(done, rollup)
 	} else {
@@ -119,6 +120,92 @@ func descendantScoreRollup(todos []todo.Todo) map[string]float64 {
 		}
 	}
 	return rollup
+}
+
+// dependencyScoreRollup augments base (the subtask rollup) with dependency
+// boosts: a still-pending task that another pending task depends on inherits
+// that dependent's urgency, so a blocker can't sort below the work it's holding
+// up — the prerequisite for an urgent task surfaces right above it (critical-path
+// behaviour). Propagation is transitive (a chain lifts end-to-end) and cycle-safe.
+// effBase is max(own score, subtask rollup), so subtask and dependency boosts
+// compose. Returns base unchanged when no task depends on a pending one.
+// depBoostEpsilon is the per-edge nudge that keeps a boosted blocker strictly
+// ahead of the dependent it inherited from.
+const depBoostEpsilon = 0.001
+
+func dependencyScoreRollup(todos []todo.Todo, base map[string]float64) map[string]float64 {
+	if len(todos) == 0 {
+		return base
+	}
+	pending := make(map[string]bool, len(todos))
+	for i := range todos {
+		if todos[i].Status != todo.Done {
+			pending[todos[i].ID] = true
+		}
+	}
+	// dependents maps a pending task to the pending tasks that depend on it.
+	dependents := make(map[string][]string)
+	for i := range todos {
+		if todos[i].Status == todo.Done {
+			continue
+		}
+		for _, depID := range todos[i].Dependencies {
+			if pending[depID] {
+				dependents[depID] = append(dependents[depID], todos[i].ID)
+			}
+		}
+	}
+	if len(dependents) == 0 {
+		return base
+	}
+	idx := make(map[string]int, len(todos))
+	for i := range todos {
+		idx[todos[i].ID] = i
+	}
+	effBase := func(id string) float64 {
+		s := sequenceScore(&todos[idx[id]])
+		if b, ok := base[id]; ok && b > s {
+			s = b
+		}
+		return s
+	}
+	// eff(id) = max(effBase(id), max eff over its dependents). Memoised DFS;
+	// visiting guards back-edges so a dependency cycle terminates.
+	eff := make(map[string]float64, len(dependents))
+	visiting := make(map[string]bool)
+	var compute func(id string) float64
+	compute = func(id string) float64 {
+		if v, ok := eff[id]; ok {
+			return v
+		}
+		best := effBase(id)
+		if visiting[id] {
+			return best
+		}
+		visiting[id] = true
+		for _, dep := range dependents[id] {
+			// + epsilon so a blocker sorts strictly above its dependent rather
+			// than merely tying (the score-tie backstop is CreatedAt/ID, which
+			// could otherwise place the dependent first). Compounds per chain
+			// hop; far below the %.1f the score column rounds to, so invisible.
+			if s := compute(dep) + depBoostEpsilon; s > best {
+				best = s
+			}
+		}
+		visiting[id] = false
+		eff[id] = best
+		return best
+	}
+	out := make(map[string]float64, len(base)+len(dependents))
+	for k, v := range base {
+		out[k] = v
+	}
+	for id := range dependents {
+		if s := compute(id); s > out[id] {
+			out[id] = s
+		}
+	}
+	return out
 }
 
 // selectSortedTags returns the unique tags across all tasks (sorted by mode)

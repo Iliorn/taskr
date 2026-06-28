@@ -18,6 +18,8 @@ type cacheState struct {
 	dirty         bool
 	filterDirty   bool
 	overdueSet    map[string]bool
+	blockedSet    map[string]bool // tasks waiting on an unfinished dependency
+	blockerSet    map[string]bool // tasks an unfinished task depends on
 	active        []todo.Todo
 	done          []todo.Todo
 	tags          map[string]tagStats
@@ -61,6 +63,8 @@ func (m *model) refreshCaches() {
 		}
 	}
 
+	m.rebuildDependencySets(all)
+
 	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort)
 
 	m.cache.tags = computeTagStats(all)
@@ -93,6 +97,36 @@ func (m *model) refreshCaches() {
 
 	m.cache.dirty = false
 	m.cache.filterDirty = false
+}
+
+// rebuildDependencySets recomputes blockedSet/blockerSet from the full task set.
+// A task is "blocked" if any task it depends on is still pending (not Done); that
+// depended-on task is in turn a "blocker". Dependencies on a Done or deleted task
+// don't count — they're already cleared — so a dangling/finished dep never blocks.
+func (m *model) rebuildDependencySets(all []todo.Todo) {
+	for k := range m.cache.blockedSet {
+		delete(m.cache.blockedSet, k)
+	}
+	for k := range m.cache.blockerSet {
+		delete(m.cache.blockerSet, k)
+	}
+	pending := make(map[string]bool, len(all))
+	for i := range all {
+		if all[i].Status != todo.Done {
+			pending[all[i].ID] = true
+		}
+	}
+	for i := range all {
+		if all[i].Status == todo.Done {
+			continue
+		}
+		for _, depID := range all[i].Dependencies {
+			if pending[depID] {
+				m.cache.blockedSet[all[i].ID] = true
+				m.cache.blockerSet[depID] = true
+			}
+		}
+	}
 }
 
 // refreshUsageRecency records, per tag and per project, the latest ModifiedAt of
@@ -135,6 +169,12 @@ func (m *model) refreshTaskColMetrics() {
 		w := len([]rune(active[i].Title))
 		if active[i].HasOverdueDependencyFast(overdueSet) {
 			w += 2 // " !"
+		}
+		if m.cache.blockerSet[active[i].ID] {
+			w += 2 // " ↥"
+		}
+		if m.cache.blockedSet[active[i].ID] {
+			w += 2 // " ↧"
 		}
 		if active[i].Notes != "" {
 			w += 2 // " ¶"

@@ -807,6 +807,12 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	if hasOverdueDep {
 		title += " !"
 	}
+	if m.cache.blockerSet[t.ID] {
+		title += " ↥" // others depend on this — clearing it unblocks them
+	}
+	if m.cache.blockedSet[t.ID] {
+		title += " ↧" // waiting on an unfinished dependency
+	}
 	if t.Notes != "" {
 		title += " ¶"
 	}

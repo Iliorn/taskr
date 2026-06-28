@@ -396,6 +396,8 @@ func initialModel(repo Repository) model {
 		cache: &cacheState{
 			dirty:         true,
 			overdueSet:    make(map[string]bool),
+			blockedSet:    make(map[string]bool),
+			blockerSet:    make(map[string]bool),
 			tagRender:     make(map[string]string, 32),
 			taskTagRender: make(map[string]string, 64),
 			projectTasks:  make(map[string][]todo.Todo),

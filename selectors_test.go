@@ -51,6 +51,55 @@ func TestSelectActiveDoneFilterAndSort(t *testing.T) {
 	}
 }
 
+// A trivial blocker (no due date) should be lifted above the urgent task that
+// depends on it, so the prerequisite surfaces right before the work it gates.
+func TestDependencyBoostLiftsBlockerAboveDependent(t *testing.T) {
+	now := time.Now()
+	blocker := mkTodo("a", "get sign-off", todo.Pending) // low score on its own
+	urgent := mkTodo("b", "deploy release", todo.Pending)
+	urgent.DueDate = now // due today → high urgency
+	urgent.Priority = todo.PriorityHigh
+	urgent.Dependencies = []string{"a"}
+
+	// Without the boost, urgent's score dwarfs the blocker's.
+	if sequenceScore(&blocker) >= sequenceScore(&urgent) {
+		t.Fatalf("precondition: blocker raw score should be below urgent")
+	}
+
+	active, _ := selectActiveDone([]todo.Todo{blocker, urgent}, "", false, taskSortSequence)
+	if got := ids(active); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("active = %v, want [a b] (blocker lifted above its dependent)", got)
+	}
+}
+
+// A→B→C chain (C depends on B depends on A): an urgent C should lift the whole
+// prerequisite chain, in dependency order, above itself.
+func TestDependencyBoostTransitiveChain(t *testing.T) {
+	now := time.Now()
+	a := mkTodo("a", "a", todo.Pending)
+	b := mkTodo("b", "b", todo.Pending)
+	b.Dependencies = []string{"a"}
+	c := mkTodo("c", "c", todo.Pending)
+	c.DueDate = now
+	c.Priority = todo.PriorityHigh
+	c.Dependencies = []string{"b"}
+
+	active, _ := selectActiveDone([]todo.Todo{a, b, c}, "", false, taskSortSequence)
+	if got := ids(active); len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {
+		t.Fatalf("active = %v, want [a b c] (chain lifted in dependency order)", got)
+	}
+}
+
+// A dependency cycle must terminate (and not panic) rather than recurse forever.
+func TestDependencyBoostCycleSafe(t *testing.T) {
+	a := mkTodo("a", "a", todo.Pending)
+	a.Dependencies = []string{"b"}
+	b := mkTodo("b", "b", todo.Pending)
+	b.Dependencies = []string{"a"}
+	// Just assert it returns; a non-terminating walk would hang the test.
+	selectActiveDone([]todo.Todo{a, b}, "", false, taskSortSequence)
+}
+
 func TestSelectActiveDoneSearch(t *testing.T) {
 	p1 := mkTodo("a", "buy milk", todo.Pending)
 	p2 := mkTodo("b", "walk dog", todo.Pending)
