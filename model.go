@@ -1217,12 +1217,15 @@ func (m model) depSearchResults() []todo.Todo {
 			result = append(result, *candidate)
 		}
 	}
-	// Range over a map gives unstable order, so the list visibly reshuffled on
-	// every redraw (cursor blink, timer tick, anything). Sort alphabetically so
-	// the picker is stable across redraws and the cursor points at the same
-	// task between frames.
+	// Most-recently-modified first, so the tasks you've just been working on are
+	// the likeliest dependencies and sit at the top — matching the recency order
+	// the tag/project pickers use. The ID tiebreak keeps the picker stable across
+	// redraws (cursor blink, timer tick): a bare map range reshuffled every frame.
 	sort.Slice(result, func(i, j int) bool {
-		return strings.ToLower(result[i].Title) < strings.ToLower(result[j].Title)
+		if !result[i].ModifiedAt.Equal(result[j].ModifiedAt) {
+			return result[i].ModifiedAt.After(result[j].ModifiedAt)
+		}
+		return result[i].ID < result[j].ID
 	})
 	if len(result) > maxDepSearchResults*3 {
 		result = result[:maxDepSearchResults*3]
