@@ -258,6 +258,67 @@ func TestCliAddDependsUnknownRefFails(t *testing.T) {
 	}
 }
 
+func TestCliEditAddDepLinksAndRefusesLoop(t *testing.T) {
+	if code := cliAdd([]string{"edit-dep-base"}); code != 0 {
+		t.Fatalf("add base: exit %d", code)
+	}
+	if code := cliAdd([]string{"edit-dep-leaf"}); code != 0 {
+		t.Fatalf("add leaf: exit %d", code)
+	}
+	// leaf depends on base — fine.
+	if code := cliEdit([]string{"edit-dep-leaf", "--add-dep", "edit-dep-base"}); code != 0 {
+		t.Fatalf("add-dep leaf->base: exit %d", code)
+	}
+	// base depending on leaf would close a loop — must be refused (exit 2).
+	if code := cliEdit([]string{"edit-dep-base", "--add-dep", "edit-dep-leaf"}); code != 2 {
+		t.Errorf("loop-forming add-dep: want exit 2, got %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	leaf, err := findTaskByRef(todos, "edit-dep-leaf")
+	if err != nil {
+		t.Fatalf("find leaf: %v", err)
+	}
+	base, err := findTaskByRef(todos, "edit-dep-base")
+	if err != nil {
+		t.Fatalf("find base: %v", err)
+	}
+	if len(leaf.Dependencies) != 1 || leaf.Dependencies[0] != base.ID {
+		t.Errorf("leaf.Dependencies = %v, want [%s]", leaf.Dependencies, base.ID)
+	}
+	if len(base.Dependencies) != 0 {
+		t.Errorf("base.Dependencies = %v, want none (loop add refused)", base.Dependencies)
+	}
+}
+
+func TestCliEditRemoveDep(t *testing.T) {
+	if code := cliAdd([]string{"rmdep-base"}); code != 0 {
+		t.Fatalf("add base: exit %d", code)
+	}
+	if code := cliAdd([]string{"rmdep-leaf"}); code != 0 {
+		t.Fatalf("add leaf: exit %d", code)
+	}
+	if code := cliEdit([]string{"rmdep-leaf", "--add-dep", "rmdep-base"}); code != 0 {
+		t.Fatalf("add-dep: exit %d", code)
+	}
+	if code := cliEdit([]string{"rmdep-leaf", "--remove-dep", "rmdep-base"}); code != 0 {
+		t.Fatalf("remove-dep: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	leaf, err := findTaskByRef(todos, "rmdep-leaf")
+	if err != nil {
+		t.Fatalf("find leaf: %v", err)
+	}
+	if len(leaf.Dependencies) != 0 {
+		t.Errorf("leaf.Dependencies = %v, want none after remove", leaf.Dependencies)
+	}
+}
+
 func TestIsCLICommand(t *testing.T) {
 	cases := map[string]bool{
 		"add": true, "list": true, "ls": true, "done": true, "top": true,

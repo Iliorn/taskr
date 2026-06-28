@@ -715,7 +715,7 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo) {
 // the flags.
 var editValueFlags = map[string]bool{
 	"title": true, "p": true, "size": true, "due": true, "start": true,
-	"project": true, "add-tag": true, "remove-tag": true,
+	"project": true, "add-tag": true, "remove-tag": true, "add-dep": true, "remove-dep": true,
 }
 
 func cliEdit(args []string) int {
@@ -732,6 +732,8 @@ func cliEdit(args []string) int {
 	clearProject := fs.Bool("clear-project", false, "drop the project")
 	addTag := fs.String("add-tag", "", "comma-separated tags to add")
 	removeTag := fs.String("remove-tag", "", "comma-separated tags to remove")
+	addDep := fs.String("add-dep", "", "add a dependency (ref to an existing task; refused if it would loop)")
+	removeDep := fs.String("remove-dep", "", "remove a dependency (ref to a currently-depended-on task)")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: taskr edit <id-prefix> [flags]")
 		fs.PrintDefaults()
@@ -811,6 +813,34 @@ func cliEdit(args []string) int {
 		for _, tag := range strings.Split(*removeTag, ",") {
 			t.RemoveTag(tag)
 		}
+		changed = true
+	}
+	if *addDep != "" {
+		dep, err := findTaskByRef(todos, *addDep)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		// Refuse a dependency that would close a loop: dep already (transitively)
+		// depends on t, or is t itself. Same rule the TUI picker filters by.
+		byID := make(map[string]*todo.Todo, len(todos))
+		for i := range todos {
+			byID[todos[i].ID] = &todos[i]
+		}
+		if loopingDepCandidates(byID, t.ID)[dep.ID] {
+			fmt.Fprintf(os.Stderr, "taskr edit: %q can't depend on %q — it would create a dependency loop\n", t.Title, dep.Title)
+			return 2
+		}
+		t.AddDependency(dep.ID)
+		changed = true
+	}
+	if *removeDep != "" {
+		dep, err := findTaskByRef(todos, *removeDep)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		t.RemoveDependency(dep.ID)
 		changed = true
 	}
 	if !changed {
@@ -1473,6 +1503,8 @@ Flags (edit):
   --project=NAME  set project          --clear-project   drop project
   --add-tag=t1,t2     append tags
   --remove-tag=t1,t2  remove tags
+  --add-dep=REF       add a dependency (refused if it would loop)
+  --remove-dep=REF    remove a dependency
 
 Notes:
   - Data lives at ~/.taskr/tasks.db (shared with the TUI). Concurrent CLI +

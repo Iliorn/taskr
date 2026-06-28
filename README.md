@@ -93,6 +93,8 @@ taskr list --json --focus        # JSON, today + overdue only
 taskr top -n=5                   # top 5 by sequence score
 taskr show milk                  # full detail (incl. score breakdown + subtask IDs)
 taskr edit milk --p=high --add-tag=urgent --due=tomorrow
+taskr edit deploy --add-dep=sign-off   # depend on another task (refused if it would loop)
+taskr edit deploy --remove-dep=sign-off
 taskr done milk                  # mark a task done
 taskr delete milk                # soft delete (alias: taskr rm)
 taskr subtask milk "find receipt"   # create a subtask of "milk"
