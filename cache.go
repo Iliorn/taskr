@@ -28,6 +28,8 @@ type cacheState struct {
 	learnings     []learningView
 	projects      []string
 	projectTasks  map[string][]todo.Todo
+	tagLastUsed   map[string]time.Time // tag → latest ModifiedAt of a task using it
+	projLastUsed  map[string]time.Time // project → latest ModifiedAt of a task in it
 	tagRender     map[string]string
 	taskTagRender map[string]string
 
@@ -79,6 +81,8 @@ func (m *model) refreshCaches() {
 		m.cache.projectTasks[p] = sortTodosByStartDate(tasks)
 	}
 
+	m.refreshUsageRecency(all)
+
 	m.cache.projects = nil
 	m.cache.projectSearch = "\x00"
 
@@ -89,6 +93,30 @@ func (m *model) refreshCaches() {
 
 	m.cache.dirty = false
 	m.cache.filterDirty = false
+}
+
+// refreshUsageRecency records, per tag and per project, the latest ModifiedAt of
+// any task carrying it. Detail-pane tag/project search uses these to surface the
+// most-recently-used entries first (see sortByRecency). Computed once per cache
+// refresh rather than per frame, mirroring the projectTasks rebuild above.
+func (m *model) refreshUsageRecency(all []todo.Todo) {
+	for k := range m.cache.tagLastUsed {
+		delete(m.cache.tagLastUsed, k)
+	}
+	for k := range m.cache.projLastUsed {
+		delete(m.cache.projLastUsed, k)
+	}
+	for i := range all {
+		mod := all[i].ModifiedAt
+		if p := all[i].Project; p != "" && mod.After(m.cache.projLastUsed[p]) {
+			m.cache.projLastUsed[p] = mod
+		}
+		for _, tag := range all[i].Tags {
+			if mod.After(m.cache.tagLastUsed[tag]) {
+				m.cache.tagLastUsed[tag] = mod
+			}
+		}
+	}
 }
 
 // refreshTaskColMetrics recomputes the Tasks-tab column-sizing metrics for the

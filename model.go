@@ -399,6 +399,8 @@ func initialModel(repo Repository) model {
 			tagRender:     make(map[string]string, 32),
 			taskTagRender: make(map[string]string, 64),
 			projectTasks:  make(map[string][]todo.Todo),
+			tagLastUsed:   make(map[string]time.Time),
+			projLastUsed:  make(map[string]time.Time),
 		},
 	}
 	m.applyLangPlaceholders()
@@ -1288,6 +1290,7 @@ func (m model) tagSearchResults() []string {
 			result = append(result, tag)
 		}
 	}
+	sortByRecency(result, m.cache.tagLastUsed)
 	return result
 }
 
@@ -1299,8 +1302,21 @@ func (m model) projSearchResults() []string {
 			result = append(result, p)
 		}
 	}
-	sort.Strings(result)
+	sortByRecency(result, m.cache.projLastUsed)
 	return result
+}
+
+// sortByRecency orders names most-recently-used first (latest ModifiedAt of any
+// task carrying the tag/project); names with equal/no usage time fall back to
+// alphabetical.
+func sortByRecency(names []string, lastUsed map[string]time.Time) {
+	sort.SliceStable(names, func(i, j int) bool {
+		ti, tj := lastUsed[names[i]], lastUsed[names[j]]
+		if ti.Equal(tj) {
+			return names[i] < names[j]
+		}
+		return ti.After(tj)
+	})
 }
 
 // ── Global mutations ──────────────────────────────────────────────────────────
