@@ -1205,12 +1205,48 @@ func (m model) matchesSearch(t todo.Todo) bool {
 	return todoMatchesSearch(t, m.searchQuery)
 }
 
+// loopingDepCandidates returns the task IDs that must not be offered as a new
+// dependency of curID, because depending on them would create a cycle: curID
+// itself, plus every task that already (transitively) depends on curID. It
+// builds the dependents adjacency once and BFS-es out from curID; the visited
+// set doubles as the result and guards against pre-existing/malformed cycles so
+// the walk always terminates.
+func loopingDepCandidates(tasks map[string]*todo.Todo, curID string) map[string]bool {
+	excluded := map[string]bool{curID: true}
+	dependents := make(map[string][]string)
+	for _, c := range tasks {
+		for _, dep := range c.Dependencies {
+			dependents[dep] = append(dependents[dep], c.ID)
+		}
+	}
+	queue := []string{curID}
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		for _, d := range dependents[id] {
+			if !excluded[d] {
+				excluded[d] = true
+				queue = append(queue, d)
+			}
+		}
+	}
+	return excluded
+}
+
 func (m model) depSearchResults() []todo.Todo {
 	t := m.currentTodo()
 	q := strings.ToLower(m.depSearch.query)
+	// Hide any candidate that would close a dependency loop — the current task
+	// itself plus everything that already (transitively) depends on it — so the
+	// picker can only ever offer a task that's safe to depend on. No error path
+	// needed: a cycle-forming task simply isn't in the list.
+	var excluded map[string]bool
+	if t != nil {
+		excluded = loopingDepCandidates(m.tasks, t.ID)
+	}
 	result := make([]todo.Todo, 0, maxDepSearchResults*2)
 	for _, candidate := range m.tasks {
-		if t != nil && candidate.ID == t.ID {
+		if excluded[candidate.ID] {
 			continue
 		}
 		if q == "" || strings.Contains(strings.ToLower(candidate.Title), q) {

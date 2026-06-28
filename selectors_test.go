@@ -100,6 +100,39 @@ func TestDependencyBoostCycleSafe(t *testing.T) {
 	selectActiveDone([]todo.Todo{a, b}, "", false, taskSortSequence)
 }
 
+// The dependency picker must hide tasks that would close a loop: the current
+// task itself and anything that already depends on it (transitively). Unrelated
+// tasks stay selectable, and a pre-existing cycle elsewhere must not hang.
+func TestLoopingDepCandidates(t *testing.T) {
+	a := mkTodo("a", "a", todo.Pending)
+	b := mkTodo("b", "b", todo.Pending)
+	b.Dependencies = []string{"a"} // b depends on a
+	c := mkTodo("c", "c", todo.Pending)
+	c.Dependencies = []string{"b"} // c -> b -> a, so c depends on a transitively
+	free := mkTodo("free", "free", todo.Pending)
+	// A pre-existing cycle unrelated to a — proves the walk terminates.
+	d := mkTodo("d", "d", todo.Pending)
+	d.Dependencies = []string{"e"}
+	e := mkTodo("e", "e", todo.Pending)
+	e.Dependencies = []string{"d"}
+
+	tasks := map[string]*todo.Todo{
+		"a": &a, "b": &b, "c": &c, "free": &free, "d": &d, "e": &e,
+	}
+	ex := loopingDepCandidates(tasks, "a")
+
+	for _, id := range []string{"a", "b", "c"} {
+		if !ex[id] {
+			t.Errorf("want %q excluded (would loop with a), but it wasn't", id)
+		}
+	}
+	for _, id := range []string{"free", "d", "e"} {
+		if ex[id] {
+			t.Errorf("want %q selectable as a dependency of a, but it was excluded", id)
+		}
+	}
+}
+
 func TestSelectActiveDoneSearch(t *testing.T) {
 	p1 := mkTodo("a", "buy milk", todo.Pending)
 	p2 := mkTodo("b", "walk dog", todo.Pending)
