@@ -21,7 +21,7 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 - **Stats** — productivity overview with an activity heatmap
 - **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
 - **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`), plus a live score breakdown so you can see why a task ranks where it does
-- **Search** — live filter across tasks, projects, tags and learnings
+- **Search** — live filter across tasks, projects, tags and learnings; fuzzy title matching plus field filters (`#tag @project p:high due:<fri overdue`)
 - **Undo** — multi-level undo for all mutations
 - **Settings** — three sequencing-bias knobs, theme, language, version, in-app self-update (tab 7)
 
@@ -77,6 +77,18 @@ Buy groceries #shopping due:friday p:high size:s @personal
 ```
 
 Supports `#tag`, `due:date`, `p:high/medium/low`, `size:s/m/l`, `@project` inline when adding a task.
+
+### Search syntax
+
+The `/` filter tokenises on whitespace and ANDs the tokens together, reusing the quick-add vocabulary:
+
+```
+@work p:high due:<friday        # high-priority Work tasks due before Friday
+#urgent overdue                 # overdue tasks tagged urgent
+grcry                           # fuzzy title match → "Buy groceries"
+```
+
+Supported tokens: `#tag`, `@project`, `p:high/medium/low`, `due:<date` / `due:>date` / `due:date` (`<=`/`>=` too), and the bare keyword `overdue`. Anything left over fuzzy-matches the title (subsequence, so `dply` finds "Deploy release").
 
 ### Date formats
 

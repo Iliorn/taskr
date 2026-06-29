@@ -502,7 +502,9 @@ func TestTodoMatchesSearch(t *testing.T) {
 		{"", true},
 		{"milk", true}, // case-insensitive title match
 		{"bread", false},
-		{"#shop", true}, // tag prefix match
+		{"bymlk", true}, // fuzzy subsequence: B-uy M-i-L-K
+		{"bmm", false},  // subsequence still ordered: no second 'm' after milk
+		{"#shop", true}, // tag substring match
 		{"#xyz", false},
 		{untaggedKey, false}, // x has tags
 	}
@@ -513,5 +515,48 @@ func TestTodoMatchesSearch(t *testing.T) {
 	}
 	if !todoMatchesSearch(mkTodo("b", "no tags", todo.Pending), untaggedKey) {
 		t.Error("untagged task should match untaggedKey")
+	}
+}
+
+// TestCompileSearchFields covers the field-token query surface: project, priority,
+// due-date comparisons, the overdue keyword, and an ANDed field+title combo.
+func TestCompileSearchFields(t *testing.T) {
+	yesterday := startOfDay(time.Now().AddDate(0, 0, -1))
+	tomorrow := startOfDay(time.Now().AddDate(0, 0, 1))
+
+	deploy := mkTodo("a", "Deploy release", todo.Pending)
+	deploy.Project = "Work"
+	deploy.Priority = todo.PriorityHigh
+	deploy.DueDate = tomorrow
+
+	taxes := mkTodo("b", "File taxes", todo.Pending)
+	taxes.Project = "Personal"
+	taxes.Priority = todo.PriorityLow
+	taxes.DueDate = yesterday // overdue
+
+	cases := []struct {
+		q    string
+		a, b bool // expected match for deploy, taxes
+		desc string
+	}{
+		{"@work", true, false, "project substring"},
+		{"p:high", true, false, "priority high"},
+		{"p:low", false, true, "priority low"},
+		{"overdue", false, true, "overdue keyword"},
+		{"due:<today", false, true, "due before today"},
+		{"due:>today", true, false, "due after today"},
+		{"@work p:high", true, false, "project AND priority"},
+		{"@work dply", true, false, "field AND fuzzy title"},
+		{"@work taxes", false, false, "field AND title both required"},
+		{"p:bogus", false, false, "unparseable priority falls back to title word"},
+	}
+	for _, c := range cases {
+		match := compileSearch(c.q)
+		if got := match(deploy); got != c.a {
+			t.Errorf("%s: compileSearch(%q)(deploy) = %v, want %v", c.desc, c.q, got, c.a)
+		}
+		if got := match(taxes); got != c.b {
+			t.Errorf("%s: compileSearch(%q)(taxes) = %v, want %v", c.desc, c.q, got, c.b)
+		}
 	}
 }

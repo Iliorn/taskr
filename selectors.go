@@ -22,28 +22,156 @@ func todoMatchesSearch(t todo.Todo, search string) bool {
 // compileSearch lowers the query once and returns a per-task predicate, so the
 // active/done scan doesn't re-lower the (constant) search string for every task.
 // todoMatchesSearch is the single-shot form; both share this one definition.
+//
+// The query is tokenised on whitespace and the tokens are ANDed together,
+// reusing the quick-add vocabulary: `#tag` (tag substring), `@project` (project
+// substring), `p:high|med|low`, `due:<date` / `due:>date` / `due:date`
+// (comparison, "<"/">"/"<="/">=" or exact day), and the bare keyword `overdue`.
+// Any leftover bare words are joined and fuzzy-matched against the title
+// (subsequence, so "grcry" finds "Buy groceries"). The two click-driven sentinels
+// — empty (match all) and untaggedKey (no tags) — keep their exact-string meaning.
 func compileSearch(search string) func(todo.Todo) bool {
-	switch {
-	case search == "":
+	switch search {
+	case "":
 		return func(todo.Todo) bool { return true }
-	case search == untaggedKey:
+	case untaggedKey:
 		return func(t todo.Todo) bool { return len(t.Tags) == 0 }
-	case strings.HasPrefix(search, "#"):
-		tagQuery := strings.ToLower(strings.TrimPrefix(search, "#"))
-		return func(t todo.Todo) bool {
-			for _, tag := range t.Tags {
-				if strings.Contains(strings.ToLower(tag), tagQuery) {
-					return true
+	}
+
+	var preds []func(todo.Todo) bool
+	var titleWords []string
+
+	for _, tok := range strings.Fields(search) {
+		lower := strings.ToLower(tok)
+		switch {
+		case strings.HasPrefix(tok, "#") && len(tok) > 1:
+			q := strings.ToLower(tok[1:])
+			preds = append(preds, func(t todo.Todo) bool {
+				for _, tag := range t.Tags {
+					if strings.Contains(strings.ToLower(tag), q) {
+						return true
+					}
 				}
+				return false
+			})
+		case strings.HasPrefix(tok, "@") && len(tok) > 1:
+			q := strings.ToLower(tok[1:])
+			preds = append(preds, func(t todo.Todo) bool {
+				return strings.Contains(strings.ToLower(t.Project), q)
+			})
+		case strings.HasPrefix(lower, "p:"):
+			if p, ok := parsePriorityFilter(strings.TrimPrefix(lower, "p:")); ok {
+				preds = append(preds, func(t todo.Todo) bool { return t.Priority == p })
+			} else {
+				titleWords = append(titleWords, tok)
 			}
-			return false
-		}
-	default:
-		titleQuery := strings.ToLower(search)
-		return func(t todo.Todo) bool {
-			return strings.Contains(strings.ToLower(t.Title), titleQuery)
+		case strings.HasPrefix(lower, "due:"):
+			if f, ok := parseDueFilter(strings.TrimPrefix(lower, "due:")); ok {
+				preds = append(preds, f)
+			} else {
+				titleWords = append(titleWords, tok)
+			}
+		case lower == "overdue":
+			preds = append(preds, func(t todo.Todo) bool { return t.IsOverdue() })
+		default:
+			titleWords = append(titleWords, tok)
 		}
 	}
+
+	if len(titleWords) > 0 {
+		titleQuery := strings.ToLower(strings.Join(titleWords, " "))
+		preds = append(preds, func(t todo.Todo) bool {
+			return subsequenceFold(t.Title, titleQuery)
+		})
+	}
+
+	if len(preds) == 0 {
+		return func(todo.Todo) bool { return true }
+	}
+	return func(t todo.Todo) bool {
+		for _, p := range preds {
+			if !p(t) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// subsequenceFold reports whether every rune of needle appears in haystack in
+// order (not necessarily contiguous), case-insensitively. Empty needle matches.
+// This is the fuzzy form of strings.Contains: "grcry" matches "Buy groceries".
+func subsequenceFold(haystack, needle string) bool {
+	if needle == "" {
+		return true
+	}
+	n := []rune(strings.ToLower(needle))
+	i := 0
+	for _, r := range strings.ToLower(haystack) {
+		if r == n[i] {
+			if i++; i == len(n) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// parsePriorityFilter maps a `p:` filter value to a priority, reusing the
+// quick-add spellings. The bool is false for anything unrecognised so the caller
+// can fall back to treating the token as a literal title word.
+func parsePriorityFilter(s string) (todo.Priority, bool) {
+	switch s {
+	case "high", "h":
+		return todo.PriorityHigh, true
+	case "medium", "med", "m":
+		return todo.PriorityMedium, true
+	case "low", "l":
+		return todo.PriorityLow, true
+	}
+	return 0, false
+}
+
+// parseDueFilter builds a due-date predicate from a `due:` filter value. An
+// optional leading "<", ">", "<=" or ">=" sets the comparison (else exact day);
+// the rest is parsed with the same parseDueDate the quick-add path uses. Tasks
+// with no due date never match a due: filter. Returns false if the date is
+// unparseable so the caller can fall back to a literal title word.
+func parseDueFilter(spec string) (func(todo.Todo) bool, bool) {
+	op, rest := "=", spec
+	switch {
+	case strings.HasPrefix(spec, "<="):
+		op, rest = "<=", spec[2:]
+	case strings.HasPrefix(spec, ">="):
+		op, rest = ">=", spec[2:]
+	case strings.HasPrefix(spec, "<"):
+		op, rest = "<", spec[1:]
+	case strings.HasPrefix(spec, ">"):
+		op, rest = ">", spec[1:]
+	}
+	d, err := parseDueDate(rest)
+	if err != nil {
+		return nil, false
+	}
+	day := startOfDay(d)
+	return func(t todo.Todo) bool {
+		if t.DueDate.IsZero() {
+			return false
+		}
+		td := startOfDay(t.DueDate)
+		switch op {
+		case "<":
+			return td.Before(day)
+		case "<=":
+			return !td.After(day)
+		case ">":
+			return td.After(day)
+		case ">=":
+			return !td.Before(day)
+		default:
+			return td.Equal(day)
+		}
+	}, true
 }
 
 func todoMatchesFocus(t todo.Todo, focus bool) bool {

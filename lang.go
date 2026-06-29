@@ -472,7 +472,7 @@ var daTranslations = map[string]string{
 	"Delete %s entry for '%s'? (y/n)":             "Slet %s-post for '%s'? (y/n)",
 
 	// Input placeholders
-	"Search... (use # to filter by tag)":          "Søg... (brug # for at filtrere på mærke)",
+	"Search... (#tag @project p:high due:<fri)":   "Søg... (#mærke @projekt p:high due:<fre)",
 	"Search for task to add as dependency...":     "Søg efter opgave at tilføje som afhængighed...",
 	"Search or create tag...":                     "Søg eller opret mærke...",
 	"Search or create project...":                 "Søg eller opret projekt...",

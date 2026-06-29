@@ -1227,7 +1227,7 @@ func (m *model) cycleLang(dir int) {
 // language. Called at startup and whenever the language changes so the prompts
 // switch live rather than waiting for a restart.
 func (m *model) applyLangPlaceholders() {
-	m.searchInput.Placeholder = tr("Search... (use # to filter by tag)")
+	m.searchInput.Placeholder = tr("Search... (#tag @project p:high due:<fri)")
 	m.depSearchInput.Placeholder = tr("Search for task to add as dependency...")
 	m.tagSearchInput.Placeholder = tr("Search or create tag...")
 	m.projSearchInput.Placeholder = tr("Search or create project...")
