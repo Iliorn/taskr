@@ -3,8 +3,10 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"taskr/todo"
 )
 
 // TestRenderTimelineSubSkipsBareEntries asserts the sub-line is skipped when
@@ -75,5 +77,55 @@ func TestRenderTimelineSubShowsParent(t *testing.T) {
 	got = m.renderTimelineSub(narrow, 16, false)
 	if w := ansi.StringWidth(got); w > 16 {
 		t.Errorf("parent ref overflowed innerW=16: width=%d %q", w, got)
+	}
+}
+
+// localMidnight returns midnight of today shifted by deltaDays, matching how
+// due dates are stored (local midnight, date-only).
+func localMidnight(deltaDays int) time.Time {
+	now := time.Now()
+	d := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	return d.AddDate(0, 0, deltaDays)
+}
+
+// TestActivitiesForDaySurfacesDueTasks asserts an unfinished task with a future
+// DueDate shows up as a "due" activity on its due day, and that a completed task
+// with the same due date does not (its deadline is moot).
+func TestActivitiesForDaySurfacesDueTasks(t *testing.T) {
+	m := newTestModel()
+	day := localMidnight(5)
+
+	pending := mkTodo("p", "ship release", todo.Pending)
+	pending.DueDate = day
+	done := mkTodo("d", "already shipped", todo.Done)
+	done.DueDate = day
+	m.add(pending)
+	m.add(done)
+	m.refreshCaches()
+
+	acts := m.activitiesForDay(day)
+	if len(acts) != 1 {
+		t.Fatalf("activitiesForDay = %d activities, want 1 (done task must not surface)", len(acts))
+	}
+	if a := acts[0]; !a.due || a.taskID != "p" {
+		t.Fatalf("got %+v, want due event for task p", a)
+	}
+
+	line := ansi.Strip(m.renderTimelineEntry(acts[0], 0, 80))
+	if !strings.Contains(line, "⌛ due") || !strings.Contains(line, "Ship release") {
+		t.Fatalf("timeline entry = %q, want due marker + title", line)
+	}
+}
+
+// TestRenderTimelineEntryOverdue asserts a due event whose day is already past
+// renders as "⌛ overdue" rather than "⌛ due".
+func TestRenderTimelineEntryOverdue(t *testing.T) {
+	m := newTestModel()
+	past := localMidnight(-3)
+	a := dayActivity{title: "file taxes", start: past, stop: past, due: true}
+
+	line := ansi.Strip(m.renderTimelineEntry(a, 0, 80))
+	if !strings.Contains(line, "⌛ overdue") {
+		t.Fatalf("timeline entry = %q, want overdue marker", line)
 	}
 }

@@ -24,6 +24,11 @@ type dayActivity struct {
 	// this day) rather than a time-tracking entry. start==stop==CompletedAt
 	// and duration is 0; the timeline renders it as "✓ done at HH:MM".
 	completed bool
+	// due marks this as a deadline event (the task's DueDate falls on this
+	// day and it isn't done). start==stop==DueDate and duration is 0; the
+	// timeline renders it as "⌛ due" (orange) or "⌛ overdue" (red) when the
+	// due day is already past.
+	due bool
 	// parentTitle is set when the activity's task is a subtask; the timeline
 	// shows it as a "↳ parent" reference because subtask titles are often too
 	// terse to identify on their own.
@@ -102,6 +107,22 @@ func (m model) activitiesForDay(day time.Time) []dayActivity {
 				})
 			}
 		}
+		// Deadline event: an unfinished task whose DueDate lands on this day.
+		// Shown regardless of whether the day also has tracked time — the
+		// deadline is different information from the work, and due dates are
+		// stored at local midnight so this sorts to the top of the day.
+		if !t.DueDate.IsZero() && t.Status != todo.Done && dayKey(t.DueDate) == key {
+			acts = append(acts, dayActivity{
+				taskID:      t.ID,
+				title:       t.Title,
+				project:     t.Project,
+				tags:        t.Tags,
+				start:       t.DueDate,
+				stop:        t.DueDate,
+				due:         true,
+				parentTitle: parentTitle,
+			})
+		}
 	}
 	// Total order with deterministic tiebreakers — m.tasks is a map
 	// (randomized iteration) and sort.Slice isn't stable, so without
@@ -132,6 +153,24 @@ func (m model) trackedPerDay(from, to time.Time) map[string]time.Duration {
 		}
 	}
 	return totals
+}
+
+// dueDaysInRange marks days in [from, to] that have at least one unfinished
+// task due, so the month grid can hint upcoming deadlines without the user
+// landing on each day.
+func (m model) dueDaysInRange(from, to time.Time) map[string]bool {
+	end := to.AddDate(0, 0, 1)
+	days := make(map[string]bool)
+	for _, t := range m.tasks {
+		if t.DueDate.IsZero() || t.Status == todo.Done {
+			continue
+		}
+		if t.DueDate.Before(from) || !t.DueDate.Before(end) {
+			continue
+		}
+		days[dayKey(t.DueDate)] = true
+	}
+	return days
 }
 
 // ── Calendar tab layout ───────────────────────────────────────────────────────
@@ -174,6 +213,7 @@ func (m model) renderMonthCalendarLines() []string {
 	monthStart := time.Date(sel.Year(), sel.Month(), 1, 0, 0, 0, 0, sel.Location())
 	monthEnd := monthStart.AddDate(0, 1, -1)
 	totals := m.trackedPerDay(monthStart, monthEnd)
+	dueDays := m.dueDaysInRange(monthStart, monthEnd)
 
 	var maxDay, monthTotal time.Duration
 	for _, d := range totals {
@@ -219,6 +259,10 @@ func (m model) renderMonthCalendarLines() []string {
 					cell = calGradient[idx].Bold(true).Render(cell)
 				case day.Equal(today):
 					cell = calTodayStyle.Render(cell)
+				case dueDays[dayKey(day)]:
+					// Upcoming/unmet deadline: orange + underline, distinct
+					// from today (orange bold) and overdue red.
+					cell = depOverdueStyle.Underline(true).Render(cell)
 				default:
 					cell = normalStyle.Render(cell)
 				}
@@ -432,6 +476,12 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 	if a.completed {
 		rangeStr = tr("✓ done at ") + a.start.Format("15:04")
 	}
+	if a.due {
+		rangeStr = tr("⌛ due")
+		if a.start.Before(startOfDay(m.frameTime)) {
+			rangeStr = tr("⌛ overdue")
+		}
+	}
 	durStr := formatDuration(a.duration())
 
 	// Fixed right-hand block (range + duration); title/project/tags share the rest.
@@ -455,15 +505,21 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 	switch {
 	case running:
 		durStyled = calTodayStyle.Render(padRight(durStr+" ◉", 8))
-	case a.completed:
-		// No duration for a completion event; pad to keep column alignment
-		// honest across mixed rows.
+	case a.completed, a.due:
+		// No duration for a completion or deadline event; pad to keep column
+		// alignment honest across mixed rows.
 		durStyled = dimStyle.Render(strings.Repeat(" ", 8))
 	}
 
 	dot := timerStyle.Render("●")
-	if a.completed {
+	switch {
+	case a.completed:
 		dot = checkDoneStyle.Render("✓")
+	case a.due:
+		dot = depOverdueStyle.Render("◆")
+		if a.start.Before(startOfDay(m.frameTime)) {
+			dot = overdueStyle.Render("◆")
+		}
 	}
 	return cur + dot + " " + left + " " +
 		dimStyle.Render(rangeStr) + "  " + durStyled
