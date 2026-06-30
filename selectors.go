@@ -185,11 +185,12 @@ func todoMatchesFocus(t todo.Todo, focus bool) bool {
 
 // selectActiveDone splits the top-level (non-subtask) tasks into the active and
 // done lists, applying the search filter to both and the focus filter to active
-// only, then sorts each by the given mode. In Sequence mode, parents inherit
-// the max score of their descendants for ranking only — the displayed score
-// stays the parent's own — so a high-priority subtask pulls its parent up
-// rather than hiding beneath a calmer one.
-func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode taskSortMode) (active, done []todo.Todo) {
+// only. The active list is sorted by sortMode; the done list by historyMode
+// (its own dimension). In Sequence mode, parents inherit the max score of their
+// descendants for ranking only — the displayed score stays the parent's own —
+// so a high-priority subtask pulls its parent up rather than hiding beneath a
+// calmer one.
+func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
 	match := compileSearch(search)
 	for _, t := range todos {
 		if t.ParentID != "" {
@@ -202,15 +203,16 @@ func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode tas
 			done = append(done, t)
 		}
 	}
+	// Active tasks rank by taskSort; the done list has its own history sort,
+	// since the active modes (score, size) carry no meaning once tasks close.
 	if sortMode == taskSortSequence {
 		rollup := descendantScoreRollup(todos)
 		rollup = dependencyScoreRollup(todos, rollup)
 		sortTodosBySequenceWithRollup(active, rollup)
-		sortTodosBySequenceWithRollup(done, rollup)
 	} else {
 		sortTodosByMode(active, sortMode)
-		sortTodosByMode(done, sortMode)
 	}
+	sortHistory(done, historyMode)
 	return active, done
 }
 

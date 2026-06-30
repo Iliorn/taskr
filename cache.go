@@ -65,7 +65,7 @@ func (m *model) refreshCaches() {
 
 	m.rebuildDependencySets(all)
 
-	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort)
+	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 
 	m.cache.tags = computeTagStats(all)
 	m.rebuildSortedTagsFrom(all)
@@ -210,7 +210,7 @@ func (m *model) refreshTaskColMetrics() {
 // entire task set on every keypress for no reason.
 func (m *model) refreshFilteredCaches() {
 	all := m.allTodos()
-	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort)
+	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
 	m.cache.filterDirty = false

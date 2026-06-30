@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"taskr/todo"
 )
@@ -35,6 +36,7 @@ type appSettings struct {
 	Version int `json:"version"`
 
 	TaskSort     taskSortMode     `json:"task_sort"`
+	HistorySort  historySortMode  `json:"history_sort"`
 	TagSort      tagSortMode      `json:"tag_sort"`
 	LearningSort learningSortMode `json:"learning_sort"`
 	Theme        string           `json:"theme"`
@@ -303,6 +305,34 @@ func sortTodosBySequenceWithRollup(todos []todo.Todo, rollup map[string]float64)
 		}
 		return todos[i].ID < todos[j].ID
 	})
+}
+
+// sortHistory orders the completed-tasks list by its own mode, independent of
+// the active-task taskSort. Completed mode is most-recent-first (the usual
+// "what did I just finish" view); Alpha is case-insensitive title A→Z. Ties
+// break by ID for a stable order across cache rebuilds.
+func sortHistory(todos []todo.Todo, mode historySortMode) {
+	if len(todos) <= 1 {
+		return
+	}
+	switch mode {
+	case historySortAlpha:
+		sort.SliceStable(todos, func(i, j int) bool {
+			ti := strings.ToLower(todos[i].Title)
+			tj := strings.ToLower(todos[j].Title)
+			if ti != tj {
+				return ti < tj
+			}
+			return todos[i].ID < todos[j].ID
+		})
+	default: // historySortCompleted — most recent first
+		sort.SliceStable(todos, func(i, j int) bool {
+			if !todos[i].CompletedAt.Equal(todos[j].CompletedAt) {
+				return todos[i].CompletedAt.After(todos[j].CompletedAt)
+			}
+			return todos[i].ID < todos[j].ID
+		})
+	}
 }
 
 func sortTodosByStartDate(todos []todo.Todo) []todo.Todo {

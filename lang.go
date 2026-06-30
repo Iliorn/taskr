@@ -328,16 +328,18 @@ var daTranslations = map[string]string{
 	"low":    "lav",
 
 	// List headers / sort
-	"Task":            "Opgave",
-	"Completed tasks": "Afsluttede opgaver",
-	"Start":           "Start",
-	"Due":             "Forfald",
-	"Priority":        "Prioritet",
-	">Due<":           ">Forfald<",
-	">Start<":         ">Start<",
-	">Priority<":      ">Prioritet<",
-	"Tags":            "Mærker",
-	"sort:":           "sortér:",
+	"Task":              "Opgave",
+	"Completed tasks":   "Afsluttede opgaver",
+	">Completed tasks<": ">Afsluttede opgaver<",
+	">Completed<":       ">Afsluttet<",
+	"Start":             "Start",
+	"Due":               "Forfald",
+	"Priority":          "Prioritet",
+	">Due<":             ">Forfald<",
+	">Start<":           ">Start<",
+	">Priority<":        ">Prioritet<",
+	"Tags":              "Mærker",
+	"sort:":             "sortér:",
 
 	// Tag list / detail
 	"  No tags match your filter.":                  "  Ingen mærker matcher dit filter.",

@@ -756,6 +756,10 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tabProjects:
 		m.clampListOffset(len(m.allProjectsForList()))
+	case tabTags:
+		m.clampListOffsetFor(m.tagTabCursor, len(m.getFilteredTagsForTab()))
+	case tabLearnings:
+		m.clampListOffsetFor(m.learningCursor, len(m.allLearnings()))
 	}
 	return m, nil
 }
@@ -855,14 +859,23 @@ func (m *model) cycleSortMode() {
 		m.tagTabCursor = 0
 		m.sortCachedTags()
 	case tabTasks:
-		// Three-state cycle: Sequence → DueDate → Size → Sequence.
-		switch m.taskSort {
-		case taskSortSequence:
-			m.taskSort = taskSortDueDate
-		case taskSortDueDate:
-			m.taskSort = taskSortSize
-		default:
-			m.taskSort = taskSortSequence
+		if m.showHistory {
+			// History has its own two-state cycle: Completed → Alpha.
+			if m.historySort == historySortCompleted {
+				m.historySort = historySortAlpha
+			} else {
+				m.historySort = historySortCompleted
+			}
+		} else {
+			// Three-state cycle: Sequence → DueDate → Size → Sequence.
+			switch m.taskSort {
+			case taskSortSequence:
+				m.taskSort = taskSortDueDate
+			case taskSortDueDate:
+				m.taskSort = taskSortSize
+			default:
+				m.taskSort = taskSortSequence
+			}
 		}
 		m.cursor = 0
 		m.listOffset = 0
@@ -933,6 +946,7 @@ func (m *model) toggleAutoCloseParent() {
 func (m *model) persistSettings() {
 	if err := saveSettings(appSettings{
 		TaskSort:         m.taskSort,
+		HistorySort:      m.historySort,
 		TagSort:          m.tagSort,
 		LearningSort:     m.learningSort,
 		Theme:            m.themeName,
@@ -989,28 +1003,28 @@ func (m *model) moveCursorUp() {
 			m.moveCalendarDay(-7)
 		}
 	case tabTags:
-		if m.tagTabCursor > 0 {
-			m.tagTabCursor--
+		if n := len(m.getFilteredTagsForTab()); n > 0 {
+			m.tagTabCursor = (m.tagTabCursor - 1 + n) % n
 		}
 	case tabLearnings:
-		if m.learningCursor > 0 {
-			m.learningCursor--
+		if n := len(m.allLearnings()); n > 0 {
+			m.learningCursor = (m.learningCursor - 1 + n) % n
 		}
 	case tabSettings:
 		m.settingsCursor = settingsCursorStep(m.settingsCursor, -1)
 	case tabProjects:
 		if m.projectTaskMode {
-			if m.cursor > 0 {
-				m.cursor--
+			if n := m.currentProjectTaskLen(); n > 0 {
+				m.cursor = (m.cursor - 1 + n) % n
 			}
-		} else if m.projectCursor > 0 {
-			m.projectCursor--
+		} else if n := len(m.allProjectsForList()); n > 0 {
+			m.projectCursor = (m.projectCursor - 1 + n) % n
 			m.cursor = 0
 			m.listOffset = 0
 		}
 	case tabTasks:
-		if m.cursor > 0 {
-			m.cursor--
+		if n := m.currentTaskListLen(); n > 0 {
+			m.cursor = (m.cursor - 1 + n) % n
 		}
 	}
 }
@@ -1026,40 +1040,49 @@ func (m *model) moveCursorDown() {
 			m.moveCalendarDay(7)
 		}
 	case tabTags:
-		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags)-1 {
-			m.tagTabCursor++
+		if n := len(m.getFilteredTagsForTab()); n > 0 {
+			m.tagTabCursor = (m.tagTabCursor + 1) % n
 		}
 	case tabLearnings:
-		if learnings := m.allLearnings(); m.learningCursor < len(learnings)-1 {
-			m.learningCursor++
+		if n := len(m.allLearnings()); n > 0 {
+			m.learningCursor = (m.learningCursor + 1) % n
 		}
 	case tabSettings:
 		m.settingsCursor = settingsCursorStep(m.settingsCursor, +1)
 	case tabProjects:
-		projects := m.allProjectsForList()
 		if m.projectTaskMode {
-			if m.projectCursor < len(projects) {
-				tasks := m.getProjectTasks(projects[m.projectCursor])
-				if m.cursor < len(tasks)-1 {
-					m.cursor++
-				}
+			if n := m.currentProjectTaskLen(); n > 0 {
+				m.cursor = (m.cursor + 1) % n
 			}
-		} else if m.projectCursor < len(projects)-1 {
-			m.projectCursor++
+		} else if n := len(m.allProjectsForList()); n > 0 {
+			m.projectCursor = (m.projectCursor + 1) % n
 			m.cursor = 0
 			m.listOffset = 0
 		}
 	case tabTasks:
-		if m.showHistory {
-			if m.cursor < len(m.cache.done)-1 {
-				m.cursor++
-			}
-		} else {
-			if m.cursor < m.visibleActiveLen()-1 {
-				m.cursor++
-			}
+		if n := m.currentTaskListLen(); n > 0 {
+			m.cursor = (m.cursor + 1) % n
 		}
 	}
+}
+
+// currentTaskListLen is the row count of the active Tasks list — the history
+// list when showing history, otherwise the visible active list.
+func (m *model) currentTaskListLen() int {
+	if m.showHistory {
+		return len(m.cache.done)
+	}
+	return m.visibleActiveLen()
+}
+
+// currentProjectTaskLen is the task count of the project under the project
+// cursor (used while drilled into a project's task list).
+func (m *model) currentProjectTaskLen() int {
+	projects := m.allProjectsForList()
+	if m.projectCursor < 0 || m.projectCursor >= len(projects) {
+		return 0
+	}
+	return len(m.getProjectTasks(projects[m.projectCursor]))
 }
 
 func (m model) handleListEnter() (tea.Model, tea.Cmd) {

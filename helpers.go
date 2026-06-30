@@ -223,7 +223,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int) listCo
 	return c
 }
 
-func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMode taskSortMode, c listCols) {
+func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMode taskSortMode, historyMode historySortMode, c listCols) {
 	dueW := dueColW
 	if isHistory {
 		dueW = 12
@@ -231,11 +231,19 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMod
 	sizeLabel := padCenter(tr("Size"), sizeColW)
 	dueLabel := padRight(tr("Due"), dueW)
 	lastLabel := padRight(tr("Score"), scoreColW)
+	// >..< wraps the active sort column so the user always sees which header
+	// owns the ordering — in both the active and history lists.
+	title := tr("Task")
 	if isHistory {
+		title = tr("Completed tasks")
 		lastLabel = padRight(tr("Completed"), 12)
+		switch historyMode {
+		case historySortCompleted:
+			lastLabel = padRight(tr(">Completed<"), 12)
+		case historySortAlpha:
+			title = tr(">Completed tasks<")
+		}
 	} else {
-		// >..< wraps the active sort so the user always sees which header
-		// owns the ordering.
 		switch sortMode {
 		case taskSortSequence:
 			lastLabel = padRight(tr(">Score<"), scoreColW)
@@ -247,10 +255,6 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMod
 	}
 
 	const prefix = "      "
-	title := tr("Task")
-	if isHistory {
-		title = tr("Completed tasks")
-	}
 	headerLeft := prefix + padRight(title, c.titleW)
 	// Active view: Score sits right after the title. History keeps the
 	// historical Due → Completed order so the completion date stays next

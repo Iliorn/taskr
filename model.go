@@ -157,6 +157,18 @@ const (
 	learningSortAlpha
 )
 
+type historySortMode int
+
+// The history (completed-tasks) list has its own sort, independent of the
+// active-task taskSort: the active modes (Sequence score, Size) are
+// meaningless once a task is done. History sorts by completion time (most
+// recent first) or task title — each lining up with a visible history column
+// so the >..< header marker stays meaningful here too.
+const (
+	historySortCompleted historySortMode = iota // most-recent completion first
+	historySortAlpha                            // title A→Z
+)
+
 // ── Messages ──────────────────────────────────────────────────────────────────
 
 type clearErrMsg struct{}
@@ -262,6 +274,7 @@ type model struct {
 	editingProjectName   string
 	tagSort              tagSortMode
 	taskSort             taskSortMode
+	historySort          historySortMode
 	learningSort         learningSortMode
 	statsRange           statsRangeMode
 	themeName            string
@@ -385,6 +398,7 @@ func initialModel(repo Repository) model {
 		err:                 errMsg,
 		tagSort:             settings.TagSort,
 		taskSort:            settings.TaskSort,
+		historySort:         settings.HistorySort,
 		learningSort:        settings.LearningSort,
 		autoCloseParent:     settings.AutoCloseParent,
 		themeName:           th.name,

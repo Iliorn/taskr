@@ -118,12 +118,19 @@ func (m model) estimateDetailCursorLine() int {
 // ── List offset clamping ──────────────────────────────────────────────────────
 
 func (m *model) clampListOffset(listLen int) {
+	m.clampListOffsetFor(m.cursor, listLen)
+}
+
+// clampListOffsetFor scrolls m.listOffset so the given cursor row stays within
+// the visible window. The Tasks/Projects lists track m.cursor; the Tags and
+// Learnings lists keep their own cursor, so they pass it in here.
+func (m *model) clampListOffsetFor(cursor, listLen int) {
 	visible := m.listVisible()
-	if m.cursor < m.listOffset {
-		m.listOffset = m.cursor
+	if cursor < m.listOffset {
+		m.listOffset = cursor
 	}
-	if m.cursor >= m.listOffset+visible {
-		m.listOffset = m.cursor - visible + 1
+	if cursor >= m.listOffset+visible {
+		m.listOffset = cursor - visible + 1
 	}
 	if m.listOffset < 0 {
 		m.listOffset = 0

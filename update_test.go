@@ -150,20 +150,18 @@ func TestCursorJKMovesCursor(t *testing.T) {
 	}
 }
 
-func TestCursorClampsToListBounds(t *testing.T) {
+func TestCursorWrapsAroundListBounds(t *testing.T) {
 	m := modelWithTasks(t, todo.New("a"), todo.New("b"))
 
-	// k at top: cursor should not go negative.
+	// k at top: cursor wraps to the last row.
 	m = sendKey(t, m, "k")
-	if m.cursor != 0 {
-		t.Errorf("k at top: cursor = %d, want 0 (no negative)", m.cursor)
-	}
-	// j past bottom: cursor should clamp to last index (len-1).
-	m = sendKey(t, m, "j")
-	m = sendKey(t, m, "j")
-	m = sendKey(t, m, "j") // would go to 3, but only 2 items
 	if m.cursor != 1 {
-		t.Errorf("j past bottom: cursor = %d, want 1 (clamped)", m.cursor)
+		t.Errorf("k at top: cursor = %d, want 1 (wraps to bottom)", m.cursor)
+	}
+	// j at bottom: cursor wraps back to the top.
+	m = sendKey(t, m, "j")
+	if m.cursor != 0 {
+		t.Errorf("j at bottom: cursor = %d, want 0 (wraps to top)", m.cursor)
 	}
 }
 

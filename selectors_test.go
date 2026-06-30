@@ -42,12 +42,40 @@ func TestSelectActiveDoneFilterAndSort(t *testing.T) {
 	sub.ParentID = "a" // subtasks are excluded from the top-level lists
 	todos := []todo.Todo{a, b, c, sub}
 
-	active, done := selectActiveDone(todos, "", false, taskSortDueDate)
+	active, done := selectActiveDone(todos, "", false, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 2 || got[0] != "b" || got[1] != "a" {
 		t.Fatalf("active = %v, want [b a] (sorted by due date, subtask excluded)", got)
 	}
 	if got := ids(done); len(got) != 1 || got[0] != "c" {
 		t.Fatalf("done = %v, want [c]", got)
+	}
+}
+
+// The done list has its own sort, independent of the active taskSort: by
+// completion time (most recent first) or title (A→Z). taskSort must not leak
+// into history ordering.
+func TestSelectActiveDoneHistorySort(t *testing.T) {
+	mk := func(id, title string, completed time.Time) todo.Todo {
+		d := mkTodo(id, title, todo.Done)
+		d.CompletedAt = completed
+		return d
+	}
+	base := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
+	a := mk("a", "zebra", base)                  // oldest, last alphabetically
+	b := mk("b", "apple", base.AddDate(0, 0, 1)) // middle
+	c := mk("c", "mango", base.AddDate(0, 0, 2)) // newest
+	todos := []todo.Todo{a, b, c}
+
+	// Completed mode: most recent first, regardless of the active sort mode.
+	_, done := selectActiveDone(todos, "", false, taskSortSequence, historySortCompleted)
+	if got := ids(done); len(got) != 3 || got[0] != "c" || got[1] != "b" || got[2] != "a" {
+		t.Fatalf("history completed = %v, want [c b a] (most recent first)", got)
+	}
+
+	// Alpha mode: title A→Z.
+	_, done = selectActiveDone(todos, "", false, taskSortSize, historySortAlpha)
+	if got := ids(done); len(got) != 3 || got[0] != "b" || got[1] != "c" || got[2] != "a" {
+		t.Fatalf("history alpha = %v, want [b c a] (apple, mango, zebra)", got)
 	}
 }
 
@@ -66,7 +94,7 @@ func TestDependencyBoostLiftsBlockerAboveDependent(t *testing.T) {
 		t.Fatalf("precondition: blocker raw score should be below urgent")
 	}
 
-	active, _ := selectActiveDone([]todo.Todo{blocker, urgent}, "", false, taskSortSequence)
+	active, _ := selectActiveDone([]todo.Todo{blocker, urgent}, "", false, taskSortSequence, historySortCompleted)
 	if got := ids(active); len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Fatalf("active = %v, want [a b] (blocker lifted above its dependent)", got)
 	}
@@ -84,7 +112,7 @@ func TestDependencyBoostTransitiveChain(t *testing.T) {
 	c.Priority = todo.PriorityHigh
 	c.Dependencies = []string{"b"}
 
-	active, _ := selectActiveDone([]todo.Todo{a, b, c}, "", false, taskSortSequence)
+	active, _ := selectActiveDone([]todo.Todo{a, b, c}, "", false, taskSortSequence, historySortCompleted)
 	if got := ids(active); len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {
 		t.Fatalf("active = %v, want [a b c] (chain lifted in dependency order)", got)
 	}
@@ -97,7 +125,7 @@ func TestDependencyBoostCycleSafe(t *testing.T) {
 	b := mkTodo("b", "b", todo.Pending)
 	b.Dependencies = []string{"a"}
 	// Just assert it returns; a non-terminating walk would hang the test.
-	selectActiveDone([]todo.Todo{a, b}, "", false, taskSortSequence)
+	selectActiveDone([]todo.Todo{a, b}, "", false, taskSortSequence, historySortCompleted)
 }
 
 // The dependency picker must hide tasks that would close a loop: the current
@@ -136,7 +164,7 @@ func TestLoopingDepCandidates(t *testing.T) {
 func TestSelectActiveDoneSearch(t *testing.T) {
 	p1 := mkTodo("a", "buy milk", todo.Pending)
 	p2 := mkTodo("b", "walk dog", todo.Pending)
-	active, _ := selectActiveDone([]todo.Todo{p1, p2}, "milk", false, taskSortDueDate)
+	active, _ := selectActiveDone([]todo.Todo{p1, p2}, "milk", false, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 1 || got[0] != "a" {
 		t.Fatalf("search active = %v, want [a]", got)
 	}
@@ -158,13 +186,13 @@ func TestSelectActiveDoneStableUnderShuffle(t *testing.T) {
 	base := []todo.Todo{mkDone("a"), mkDone("b"), mkDone("c"), mkDone("d")}
 
 	for _, mode := range []taskSortMode{taskSortSequence, taskSortDueDate, taskSortSize} {
-		_, want := selectActiveDone(base, "", false, mode)
+		_, want := selectActiveDone(base, "", false, mode, historySortCompleted)
 		for shuffle, perm := range [][]int{{3, 2, 1, 0}, {1, 3, 0, 2}, {2, 0, 3, 1}} {
 			in := make([]todo.Todo, len(base))
 			for i, p := range perm {
 				in[i] = base[p]
 			}
-			_, got := selectActiveDone(in, "", false, mode)
+			_, got := selectActiveDone(in, "", false, mode, historySortCompleted)
 			if w, g := ids(want), ids(got); !equalStrings(w, g) {
 				t.Errorf("mode=%v shuffle=%d: got %v, want %v", mode, shuffle, g, w)
 			}
@@ -191,7 +219,7 @@ func TestSelectActiveDoneFocusFilter(t *testing.T) {
 	future := mkTodo("f", "future", todo.Pending)
 	future.DueDate = now.AddDate(0, 0, 10)
 	// focus filter keeps only overdue/due-today
-	active, _ := selectActiveDone([]todo.Todo{overdue, future}, "", true, taskSortDueDate)
+	active, _ := selectActiveDone([]todo.Todo{overdue, future}, "", true, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 1 || got[0] != "o" {
 		t.Fatalf("focus active = %v, want [o]", got)
 	}
