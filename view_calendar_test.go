@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // TestRenderTimelineSubSkipsBareEntries asserts the sub-line is skipped when
@@ -51,5 +53,27 @@ func TestRenderTimelineSubDropsTagsOnNarrow(t *testing.T) {
 	}
 	if strings.Contains(got, "a-very-long-tag-name") {
 		t.Errorf("tag should be dropped when it doesn't fit: %q", got)
+	}
+}
+
+// TestRenderTimelineSubShowsParent asserts a subtask activity renders a
+// "↳ parent" reference even when it has no project or tags (so a done subtask's
+// short title gets parent context in the day timeline), and that the parent ref
+// is truncated rather than overflowing a narrow panel.
+func TestRenderTimelineSubShowsParent(t *testing.T) {
+	m := newTestModel()
+
+	sub := dayActivity{title: "fix", completed: true, parentTitle: "Big parent task"}
+	got := m.renderTimelineSub(sub, 80, false)
+	if !strings.Contains(got, "↳ Big parent task") {
+		t.Errorf("want parent reference in sub line, got %q", got)
+	}
+
+	// Parent reference must not overflow the inner width once styled
+	// (indent + truncated content stays within innerW).
+	narrow := dayActivity{title: "fix", parentTitle: "A parent title that is far too long to fit"}
+	got = m.renderTimelineSub(narrow, 16, false)
+	if w := ansi.StringWidth(got); w > 16 {
+		t.Errorf("parent ref overflowed innerW=16: width=%d %q", w, got)
 	}
 }

@@ -24,6 +24,10 @@ type dayActivity struct {
 	// this day) rather than a time-tracking entry. start==stop==CompletedAt
 	// and duration is 0; the timeline renders it as "✓ done at HH:MM".
 	completed bool
+	// parentTitle is set when the activity's task is a subtask; the timeline
+	// shows it as a "↳ parent" reference because subtask titles are often too
+	// terse to identify on their own.
+	parentTitle string
 }
 
 func (a dayActivity) duration() time.Duration {
@@ -52,18 +56,25 @@ func (m model) activitiesForDay(day time.Time) []dayActivity {
 	key := dayKey(day)
 	var acts []dayActivity
 	for _, t := range m.tasks {
+		parentTitle := ""
+		if t.ParentID != "" {
+			if p := m.get(t.ParentID); p != nil {
+				parentTitle = p.Title
+			}
+		}
 		for _, e := range t.TimeEntries {
 			if dayKey(e.StartedAt) != key {
 				continue
 			}
 			acts = append(acts, dayActivity{
-				taskID:  t.ID,
-				entryID: e.ID,
-				title:   t.Title,
-				project: t.Project,
-				tags:    t.Tags,
-				start:   e.StartedAt,
-				stop:    e.StoppedAt,
+				taskID:      t.ID,
+				entryID:     e.ID,
+				title:       t.Title,
+				project:     t.Project,
+				tags:        t.Tags,
+				start:       e.StartedAt,
+				stop:        e.StoppedAt,
+				parentTitle: parentTitle,
 			})
 		}
 		// Completion event: task marked done on this day. Only surfaces when
@@ -80,13 +91,14 @@ func (m model) activitiesForDay(day time.Time) []dayActivity {
 			}
 			if !hasTracked {
 				acts = append(acts, dayActivity{
-					taskID:    t.ID,
-					title:     t.Title,
-					project:   t.Project,
-					tags:      t.Tags,
-					start:     t.CompletedAt,
-					stop:      t.CompletedAt,
-					completed: true,
+					taskID:      t.ID,
+					title:       t.Title,
+					project:     t.Project,
+					tags:        t.Tags,
+					start:       t.CompletedAt,
+					stop:        t.CompletedAt,
+					completed:   true,
+					parentTitle: parentTitle,
 				})
 			}
 		}
@@ -313,7 +325,7 @@ func (m model) renderTimelineLines(innerW, innerH int) []string {
 	heights := make([]int, len(acts))
 	for i := range acts {
 		heights[i] = 1
-		if acts[i].project != "" || len(acts[i].tags) > 0 {
+		if acts[i].project != "" || len(acts[i].tags) > 0 || acts[i].parentTitle != "" {
 			heights[i] = 2
 		}
 	}
@@ -469,7 +481,7 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 // the column doesn't visually break between an entry's body and the next
 // entry. When false (last visible entry, no clipped bot) the gutter is blank.
 func (m model) renderTimelineSub(a dayActivity, innerW int, hasNext bool) string {
-	if a.project == "" && len(a.tags) == 0 {
+	if a.project == "" && len(a.tags) == 0 && a.parentTitle == "" {
 		return ""
 	}
 	const indentW = 4 // visual cells: "  │ " or "    "
@@ -480,6 +492,25 @@ func (m model) renderTimelineSub(a dayActivity, innerW int, hasNext bool) string
 	avail := innerW - indentW
 	if avail < 4 {
 		return ""
+	}
+
+	// Parent reference takes priority: a subtask's own title is often too terse
+	// to place on its own, so it's shown (truncated to fit) ahead of any
+	// project/tags, which then lay out in whatever width remains.
+	parentPlain := ""
+	if a.parentTitle != "" {
+		parentPlain = "↳ " + a.parentTitle
+		if len([]rune(parentPlain)) > avail {
+			parentPlain = truncate(parentPlain, avail)
+		}
+	}
+	parentW := len([]rune(parentPlain))
+	rest := avail - parentW
+	if parentW > 0 {
+		rest-- // separating space before project/tags
+	}
+	if rest < 0 {
+		rest = 0
 	}
 
 	projPlain := ""
@@ -499,18 +530,24 @@ func (m model) renderTimelineSub(a dayActivity, innerW int, hasNext bool) string
 	if showProj && showTags {
 		sep = 1
 	}
-	if showProj && showTags && projW+sep+tagsPlainW > avail {
+	if showProj && showTags && projW+sep+tagsPlainW > rest {
 		showTags = false
 	}
-	if showProj && projW > avail {
+	if showProj && projW > rest {
 		showProj = false
 	}
-	if !showProj && !showTags {
+	if parentW == 0 && !showProj && !showTags {
 		return ""
 	}
 
 	var b strings.Builder
 	b.WriteString(indent)
+	if parentW > 0 {
+		b.WriteString(dimStyle.Render(parentPlain))
+	}
+	if parentW > 0 && (showProj || showTags) {
+		b.WriteString(" ")
+	}
 	if showProj {
 		b.WriteString(projLabelStyle.Render(projPlain))
 	}
