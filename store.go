@@ -146,7 +146,16 @@ func (s *Store) len() int { return len(s.tasks) }
 
 // allTodos returns value copies of every task in unspecified order. Used by
 // cache rebuilds, selector inputs, and undo snapshots — anywhere the caller
-// wants an iterable slice. Each call allocates.
+// wants an iterable slice. Each call allocates the slice.
+//
+// READ-ONLY CONTRACT: the returned structs are shallow copies — their slice
+// fields (Tags, Dependencies, Comments, Learnings, TimeEntries) still alias the
+// backing arrays of the live *Todo in the store. Treat the result as read-only.
+// The in-place slice mutators in the todo package (RemoveTag, DeleteComment, …)
+// scribble those same arrays, so a caller that both holds an allTodos() result
+// and mutates the store would see torn data. Every current caller either only
+// reads, or deep-copies first with copyTodo (as pushUndo does) — keep it that
+// way; if you need to mutate a returned task, copyTodo it first.
 func (s *Store) allTodos() []todo.Todo {
 	out := make([]todo.Todo, 0, len(s.tasks))
 	for _, t := range s.tasks {
