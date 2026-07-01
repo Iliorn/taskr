@@ -293,6 +293,9 @@ func (t *Todo) RemoveTag(tag string) {
 			tags = append(tags, existing)
 		}
 	}
+	if len(tags) == len(t.Tags) {
+		return // tag wasn't present — don't bump ModifiedAt on a no-op
+	}
 	t.Tags = tags
 	t.ModifiedAt = time.Now()
 }
@@ -313,6 +316,9 @@ func (t *Todo) RemoveDependency(id string) {
 		if dep != id {
 			deps = append(deps, dep)
 		}
+	}
+	if len(deps) == len(t.Dependencies) {
+		return // id wasn't a dependency — don't bump ModifiedAt on a no-op
 	}
 	t.Dependencies = deps
 	t.ModifiedAt = time.Now()

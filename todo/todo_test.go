@@ -193,10 +193,15 @@ func TestRemoveTag(t *testing.T) {
 		t.Errorf("remaining tag = %q, want %q", task.Tags[0], "urgent")
 	}
 
-	// Remove non-existent — should not panic or change length
+	// Remove non-existent — should not panic, change length, or bump ModifiedAt
+	// (a no-op must not win a last-writer-wins sync race).
+	before := task.ModifiedAt
 	task.RemoveTag("nonexistent")
 	if len(task.Tags) != 1 {
 		t.Fatal("removing nonexistent tag changed length")
+	}
+	if !task.ModifiedAt.Equal(before) {
+		t.Error("removing nonexistent tag bumped ModifiedAt")
 	}
 }
 
@@ -224,10 +229,14 @@ func TestRemoveDependency(t *testing.T) {
 		t.Fatalf("expected [dep-2], got %v", task.Dependencies)
 	}
 
-	// Remove non-existent
+	// Remove non-existent — must not change length or bump ModifiedAt.
+	before := task.ModifiedAt
 	task.RemoveDependency("nonexistent")
 	if len(task.Dependencies) != 1 {
 		t.Fatal("removing nonexistent dep changed length")
+	}
+	if !task.ModifiedAt.Equal(before) {
+		t.Error("removing nonexistent dependency bumped ModifiedAt")
 	}
 }
 
