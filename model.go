@@ -671,6 +671,11 @@ func buildNextRecurrence(src todo.Todo) (todo.Todo, bool) {
 		return todo.Todo{}, false
 	}
 	rule := src.Recurrence
+	// Anchor the next instance on the source's due date. A recurring task with
+	// no due date intentionally still gets one on respawn: we fall back to its
+	// completion time (or now) as the base, so e.g. a "weekly" task closed today
+	// yields a fresh instance due one interval out ("next one's due in a week").
+	// That keeps urgency scoring meaningful rather than leaving recur rules inert.
 	base := src.DueDate
 	if base.IsZero() {
 		base = src.CompletedAt
