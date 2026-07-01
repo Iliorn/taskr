@@ -791,8 +791,8 @@ func (m model) renderStatsDetail() string {
 
 		overflow := cnt > 2*chartH
 		for r := 0; r < chartH; r++ { // r = 0 is the bottom row
-			bot := 2 * r       // bottom-half task index
-			top := 2*r + 1     // top-half task index
+			bot := 2 * r   // bottom-half task index
+			top := 2*r + 1 // top-half task index
 			rowIdx := chartH - 1 - r
 			var ch rune
 			var gi int

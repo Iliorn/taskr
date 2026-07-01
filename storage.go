@@ -354,4 +354,3 @@ func sortTodosByStartDate(todos []todo.Todo) []todo.Todo {
 	})
 	return result
 }
-

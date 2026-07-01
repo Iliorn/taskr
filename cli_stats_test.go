@@ -59,9 +59,9 @@ func TestComputeStatsBuckets(t *testing.T) {
 func TestComputeStatsIgnoresEdgeCases(t *testing.T) {
 	now := time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC)
 	todos := []todo.Todo{
-		{ParentID: "p", Status: todo.Pending},           // subtask → skipped
-		{Status: todo.Done, CompletedAt: time.Time{}},   // done with no timestamp → skipped from done buckets
-		{Status: todo.Done, CompletedAt: time.Time{}},   // ditto
+		{ParentID: "p", Status: todo.Pending},         // subtask → skipped
+		{Status: todo.Done, CompletedAt: time.Time{}}, // done with no timestamp → skipped from done buckets
+		{Status: todo.Done, CompletedAt: time.Time{}}, // ditto
 	}
 	got := computeStats(todos, now)
 	if got.Active != 0 || got.DoneToday != 0 || got.DoneThisWeek != 0 {

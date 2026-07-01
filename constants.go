@@ -26,7 +26,7 @@ const (
 	maxTagBarWidth     = 60
 	minInnerWidth      = 20
 
-	ganttSuffixWidth = 16
+	ganttSuffixWidth  = 16
 	ganttChartPadding = 8
 
 	// Projects tab count columns. Sized so the typical 1-2-digit count leaves a

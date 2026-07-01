@@ -20,11 +20,11 @@ import (
 // session ends.
 
 const (
-	undoPersistFile        = "undo.json"
-	undoPersistVersion     = 1
-	undoPersistMaxEntries  = 5 // user-requested floor: "the last five deletions"
-	undoDescDeleteTask     = "delete task"
-	undoDescDeleteSubtask  = "delete subtask"
+	undoPersistFile       = "undo.json"
+	undoPersistVersion    = 1
+	undoPersistMaxEntries = 5 // user-requested floor: "the last five deletions"
+	undoDescDeleteTask    = "delete task"
+	undoDescDeleteSubtask = "delete subtask"
 )
 
 type persistedUndo struct {
@@ -33,9 +33,9 @@ type persistedUndo struct {
 }
 
 type persistedUndoEntry struct {
-	Desc    string       `json:"desc"`
-	IDs     []string     `json:"ids"`
-	Partial []todo.Todo  `json:"partial"`
+	Desc    string      `json:"desc"`
+	IDs     []string    `json:"ids"`
+	Partial []todo.Todo `json:"partial"`
 }
 
 func undoPersistPath() string {
