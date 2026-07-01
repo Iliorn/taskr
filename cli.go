@@ -513,6 +513,27 @@ func cliDone(args []string) int {
 
 // ── top ──────────────────────────────────────────────────────────────────────
 
+// rankTopBySequence returns the top-level pending tasks ranked exactly as the
+// TUI's Sequence sort ranks them (selectActiveDone): each task's base score
+// lifted by the subtask and dependency critical-path rollups, so a parent
+// inherits its subtasks' urgency and a blocker inherits the urgency of the work
+// it holds up. The rollup is computed from the full set — it needs subtasks and
+// dependency targets, not just the top-level rows. Pure; the caller applies any
+// -n limit. `taskr top`'s displayed SCORE stays each task's own score (matching
+// the TUI); only the ordering reflects the boost.
+func rankTopBySequence(todos []todo.Todo) []todo.Todo {
+	rows := make([]todo.Todo, 0, len(todos))
+	for _, t := range todos {
+		if t.ParentID == "" && t.Status == todo.Pending {
+			rows = append(rows, t)
+		}
+	}
+	rollup := descendantScoreRollup(todos)
+	rollup = dependencyScoreRollup(todos, rollup)
+	sortTodosBySequenceWithRollup(rows, rollup)
+	return rows
+}
+
 func cliTop(args []string) int {
 	fs := flag.NewFlagSet("top", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -528,13 +549,7 @@ func cliTop(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	rows := make([]todo.Todo, 0, len(todos))
-	for _, t := range todos {
-		if t.ParentID == "" && t.Status == todo.Pending {
-			rows = append(rows, t)
-		}
-	}
-	sortTodosByMode(rows, taskSortSequence)
+	rows := rankTopBySequence(todos)
 	if *n > 0 && len(rows) > *n {
 		rows = rows[:*n]
 	}

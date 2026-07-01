@@ -334,6 +334,31 @@ func TestIsCLICommand(t *testing.T) {
 	}
 }
 
+func TestRankTopBySequenceLiftsBlockerAboveDependent(t *testing.T) {
+	// A low-priority, no-due-date blocker has a low base score; the urgent task
+	// that depends on it has a high base score. The critical-path rollup must
+	// lift the blocker above the work it holds up, so `taskr top` matches the
+	// TUI's Sequence ordering rather than the plain base-score sort.
+	blocker := todo.New("blocker")
+	blocker.Priority = todo.PriorityLow
+
+	dependent := todo.New("urgent dependent")
+	dependent.Priority = todo.PriorityHigh
+	dependent.DueDate = time.Now()
+	dependent.AddDependency(blocker.ID)
+
+	ranked := rankTopBySequence([]todo.Todo{dependent, blocker})
+
+	pos := make(map[string]int, len(ranked))
+	for i := range ranked {
+		pos[ranked[i].ID] = i
+	}
+	if pos[blocker.ID] >= pos[dependent.ID] {
+		t.Fatalf("blocker should rank above the urgent task it blocks; got blocker=%d dependent=%d",
+			pos[blocker.ID], pos[dependent.ID])
+	}
+}
+
 // TestFilterTopLevel exercises every combination of filter the list / search
 // verbs expose, so a future refactor of filterTopLevel can't silently change
 // inclusion semantics.
