@@ -77,8 +77,11 @@ func mergeTask(a, b todo.Todo) todo.Todo {
 
 // mergeChildren unions two child slices by ID. A tombstone on either side wins
 // and is retained so the deletion keeps propagating; among live versions the
-// higher-hash one is kept for a stable result. Order follows first appearance.
-func mergeChildren[T any](a, b []T, id func(T) string, deleted func(T) bool) []T {
+// later-modified one wins (an edit on one device beats the stale copy on the
+// other), with the higher-hash one as the tiebreak so records written before
+// ModifiedAt existed (both zero) still resolve stably. Order follows first
+// appearance.
+func mergeChildren[T any](a, b []T, id func(T) string, deleted func(T) bool, modified func(T) time.Time) []T {
 	type slot struct {
 		v        T
 		isDel    bool
@@ -103,6 +106,10 @@ func mergeChildren[T any](a, b []T, id func(T) string, deleted func(T) bool) []T
 		case !s.haveLive:
 			s.v = x
 			s.haveLive = true
+		case modified(x).After(modified(s.v)):
+			s.v = x
+		case modified(x).Before(modified(s.v)):
+			// keep s.v — it is the later edit
 		case hashGreater(x, s.v):
 			s.v = x
 		}
@@ -124,6 +131,7 @@ func mergeComments(a, b []todo.Comment) []todo.Comment {
 	return mergeChildren(a, b,
 		func(c todo.Comment) string { return c.ID },
 		func(c todo.Comment) bool { return !c.DeletedAt.IsZero() },
+		func(c todo.Comment) time.Time { return c.ModifiedAt },
 	)
 }
 
@@ -131,13 +139,24 @@ func mergeLearnings(a, b []todo.Learning) []todo.Learning {
 	return mergeChildren(a, b,
 		func(l todo.Learning) string { return l.ID },
 		func(l todo.Learning) bool { return !l.DeletedAt.IsZero() },
+		func(l todo.Learning) time.Time { return l.ModifiedAt },
 	)
 }
 
+// Time entries order by ModifiedAt like the others, but with a fallback for
+// entries from before the field existed: a stopped entry beats a running copy
+// of itself when neither carries a ModifiedAt, since a stop is always the
+// later event.
 func mergeTimeEntries(a, b []todo.TimeEntry) []todo.TimeEntry {
 	return mergeChildren(a, b,
 		func(e todo.TimeEntry) string { return e.ID },
 		func(e todo.TimeEntry) bool { return !e.DeletedAt.IsZero() },
+		func(e todo.TimeEntry) time.Time {
+			if !e.ModifiedAt.IsZero() {
+				return e.ModifiedAt
+			}
+			return e.StoppedAt // zero for a running legacy entry → stop wins
+		},
 	)
 }
 

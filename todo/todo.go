@@ -116,6 +116,10 @@ type Comment struct {
 	ID        string    `json:"id"`
 	Text      string    `json:"text"`
 	CreatedAt time.Time `json:"created_at"`
+	// ModifiedAt orders two live versions of the same record during the sync
+	// merge (later edit wins; see mergeChildren). Zero on records written
+	// before the field existed — the merge falls back to a hash tiebreak then.
+	ModifiedAt time.Time `json:"modified_at,omitempty"`
 	// DeletedAt tombstones the record for cross-device sync (see merge.go); the
 	// zero value means live. Kept rather than removed so a deletion propagates.
 	DeletedAt time.Time `json:"deleted_at,omitempty"`
@@ -128,19 +132,21 @@ type Comment struct {
 // time (see learningView), so they always reflect the task rather than a frozen
 // snapshot.
 type Learning struct {
-	ID        string    `json:"id"`
-	Text      string    `json:"text"`
-	CreatedAt time.Time `json:"created_at"`
-	DeletedAt time.Time `json:"deleted_at,omitempty"` // sync tombstone; see Comment.DeletedAt
+	ID         string    `json:"id"`
+	Text       string    `json:"text"`
+	CreatedAt  time.Time `json:"created_at"`
+	ModifiedAt time.Time `json:"modified_at,omitempty"` // sync merge recency; see Comment.ModifiedAt
+	DeletedAt  time.Time `json:"deleted_at,omitempty"`  // sync tombstone; see Comment.DeletedAt
 }
 
 // ── TimeEntry ─────────────────────────────────────────────────────────────────
 
 type TimeEntry struct {
-	ID        string    `json:"id"`
-	StartedAt time.Time `json:"started_at"`
-	StoppedAt time.Time `json:"stopped_at,omitempty"`
-	DeletedAt time.Time `json:"deleted_at,omitempty"` // sync tombstone; see Comment.DeletedAt
+	ID         string    `json:"id"`
+	StartedAt  time.Time `json:"started_at"`
+	StoppedAt  time.Time `json:"stopped_at,omitempty"`
+	ModifiedAt time.Time `json:"modified_at,omitempty"` // sync merge recency; see Comment.ModifiedAt
+	DeletedAt  time.Time `json:"deleted_at,omitempty"`  // sync tombstone; see Comment.DeletedAt
 	// LastSeen is the last moment a live taskr process confirmed this timer was
 	// still running (heartbeat). A running entry whose LastSeen has gone stale is
 	// treated as abandoned and recovered. Zero = never heartbeated.
@@ -325,17 +331,20 @@ func (t *Todo) RemoveDependency(id string) {
 }
 
 func (t *Todo) AddComment(text string) {
+	now := time.Now()
 	t.Comments = append(t.Comments, Comment{
-		ID:        uuid.New().String(),
-		Text:      text,
-		CreatedAt: time.Now(),
+		ID:         uuid.New().String(),
+		Text:       text,
+		CreatedAt:  now,
+		ModifiedAt: now,
 	})
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = now
 }
 
 func (t *Todo) UpdateComment(index int, text string) {
 	if index >= 0 && index < len(t.Comments) {
 		t.Comments[index].Text = text
+		t.Comments[index].ModifiedAt = time.Now()
 		t.ModifiedAt = time.Now()
 	}
 }
@@ -348,18 +357,21 @@ func (t *Todo) DeleteComment(index int) {
 }
 
 func (t *Todo) AddLearning(text string) {
+	now := time.Now()
 	l := Learning{
-		ID:        uuid.New().String(),
-		Text:      text,
-		CreatedAt: time.Now(),
+		ID:         uuid.New().String(),
+		Text:       text,
+		CreatedAt:  now,
+		ModifiedAt: now,
 	}
 	t.Learnings = append(t.Learnings, l)
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = now
 }
 
 func (t *Todo) UpdateLearning(index int, text string) {
 	if index >= 0 && index < len(t.Learnings) {
 		t.Learnings[index].Text = text
+		t.Learnings[index].ModifiedAt = time.Now()
 		t.ModifiedAt = time.Now()
 	}
 }
@@ -375,11 +387,13 @@ func (t *Todo) DeleteLearning(index int) {
 
 func (t *Todo) StartTimer() {
 	t.StopTimer()
+	now := time.Now()
 	t.TimeEntries = append(t.TimeEntries, TimeEntry{
-		ID:        uuid.New().String(),
-		StartedAt: time.Now(),
+		ID:         uuid.New().String(),
+		StartedAt:  now,
+		ModifiedAt: now,
 	})
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = now
 }
 
 // AddTimeEntry appends a completed entry for [start, stop) and returns its
@@ -388,21 +402,27 @@ func (t *Todo) StartTimer() {
 func (t *Todo) AddTimeEntry(start, stop time.Time) string {
 	id := uuid.New().String()
 	t.TimeEntries = append(t.TimeEntries, TimeEntry{
-		ID:        id,
-		StartedAt: start,
-		StoppedAt: stop,
+		ID:         id,
+		StartedAt:  start,
+		StoppedAt:  stop,
+		ModifiedAt: time.Now(),
 	})
 	t.ModifiedAt = time.Now()
 	return id
 }
 
+// StopTimer stops every running entry. Stamping the stopped entry's ModifiedAt
+// matters for sync: another device still holds the *running* version of the
+// same entry, and the newer stop must win that merge or the timer resurrects.
 func (t *Todo) StopTimer() {
+	now := time.Now()
 	for i := range t.TimeEntries {
 		if t.TimeEntries[i].IsRunning() {
-			t.TimeEntries[i].StoppedAt = time.Now()
+			t.TimeEntries[i].StoppedAt = now
+			t.TimeEntries[i].ModifiedAt = now
 		}
 	}
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = now
 }
 
 func (t *Todo) IsTimerRunning() bool {

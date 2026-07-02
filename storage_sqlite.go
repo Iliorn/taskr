@@ -206,23 +206,23 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 		// and any child that vanished from the task is tombstoned rather than
 		// hard-deleted — see saveChildren. That is what lets a child deletion
 		// propagate during sync instead of resurfacing from another device.
-		upComment, err := tx.Prepare(`INSERT INTO task_comments (id, task_id, text, created_at, deleted_at)
-			VALUES (?, ?, ?, ?, ?)
-			ON CONFLICT(id) DO UPDATE SET text=excluded.text, created_at=excluded.created_at, deleted_at=excluded.deleted_at`)
+		upComment, err := tx.Prepare(`INSERT INTO task_comments (id, task_id, text, created_at, modified_at, deleted_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET text=excluded.text, created_at=excluded.created_at, modified_at=excluded.modified_at, deleted_at=excluded.deleted_at`)
 		if err != nil {
 			return err
 		}
 		defer upComment.Close()
-		upLearning, err := tx.Prepare(`INSERT INTO task_learnings (id, task_id, text, created_at, deleted_at)
-			VALUES (?, ?, ?, ?, ?)
-			ON CONFLICT(id) DO UPDATE SET text=excluded.text, created_at=excluded.created_at, deleted_at=excluded.deleted_at`)
+		upLearning, err := tx.Prepare(`INSERT INTO task_learnings (id, task_id, text, created_at, modified_at, deleted_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET text=excluded.text, created_at=excluded.created_at, modified_at=excluded.modified_at, deleted_at=excluded.deleted_at`)
 		if err != nil {
 			return err
 		}
 		defer upLearning.Close()
-		upEntry, err := tx.Prepare(`INSERT INTO task_time_entries (id, task_id, started_at, stopped_at, last_seen, deleted_at)
-			VALUES (?, ?, ?, ?, ?, ?)
-			ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at, stopped_at=excluded.stopped_at, last_seen=excluded.last_seen, deleted_at=excluded.deleted_at`)
+		upEntry, err := tx.Prepare(`INSERT INTO task_time_entries (id, task_id, started_at, stopped_at, last_seen, modified_at, deleted_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at, stopped_at=excluded.stopped_at, last_seen=excluded.last_seen, modified_at=excluded.modified_at, deleted_at=excluded.deleted_at`)
 		if err != nil {
 			return err
 		}
@@ -259,21 +259,21 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 			if err := saveChildren(tx, t.ID, now, "task_comments", t.Comments,
 				func(c todo.Comment) string { return c.ID },
 				upComment, func(c todo.Comment) []any {
-					return []any{c.ID, t.ID, c.Text, fmtTime(c.CreatedAt), fmtTime(c.DeletedAt)}
+					return []any{c.ID, t.ID, c.Text, fmtTime(c.CreatedAt), fmtTime(c.ModifiedAt), fmtTime(c.DeletedAt)}
 				}); err != nil {
 				return err
 			}
 			if err := saveChildren(tx, t.ID, now, "task_learnings", t.Learnings,
 				func(l todo.Learning) string { return l.ID },
 				upLearning, func(l todo.Learning) []any {
-					return []any{l.ID, t.ID, l.Text, fmtTime(l.CreatedAt), fmtTime(l.DeletedAt)}
+					return []any{l.ID, t.ID, l.Text, fmtTime(l.CreatedAt), fmtTime(l.ModifiedAt), fmtTime(l.DeletedAt)}
 				}); err != nil {
 				return err
 			}
 			if err := saveChildren(tx, t.ID, now, "task_time_entries", t.TimeEntries,
 				func(e todo.TimeEntry) string { return e.ID },
 				upEntry, func(e todo.TimeEntry) []any {
-					return []any{e.ID, t.ID, fmtTime(e.StartedAt), fmtTime(e.StoppedAt), fmtTime(e.LastSeen), fmtTime(e.DeletedAt)}
+					return []any{e.ID, t.ID, fmtTime(e.StartedAt), fmtTime(e.StoppedAt), fmtTime(e.LastSeen), fmtTime(e.ModifiedAt), fmtTime(e.DeletedAt)}
 				}); err != nil {
 				return err
 			}
@@ -427,14 +427,15 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 		}); err != nil {
 		return nil, err
 	}
-	if err := loadChildren(h, todos, "task_comments", "id, task_id, text, created_at, deleted_at", childWhere,
+	if err := loadChildren(h, todos, "task_comments", "id, task_id, text, created_at, modified_at, deleted_at", childWhere,
 		func(s *sql.Rows) error {
 			var c todo.Comment
-			var taskID, createdAt, deletedAt string
-			if err := s.Scan(&c.ID, &taskID, &c.Text, &createdAt, &deletedAt); err != nil {
+			var taskID, createdAt, modifiedAt, deletedAt string
+			if err := s.Scan(&c.ID, &taskID, &c.Text, &createdAt, &modifiedAt, &deletedAt); err != nil {
 				return err
 			}
 			c.CreatedAt = parseTime(createdAt)
+			c.ModifiedAt = parseTime(modifiedAt)
 			c.DeletedAt = parseTime(deletedAt)
 			if t := todos[taskID]; t != nil {
 				t.Comments = append(t.Comments, c)
@@ -443,14 +444,15 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 		}); err != nil {
 		return nil, err
 	}
-	if err := loadChildren(h, todos, "task_learnings", "id, task_id, text, created_at, deleted_at", childWhere,
+	if err := loadChildren(h, todos, "task_learnings", "id, task_id, text, created_at, modified_at, deleted_at", childWhere,
 		func(s *sql.Rows) error {
 			var l todo.Learning
-			var taskID, createdAt, deletedAt string
-			if err := s.Scan(&l.ID, &taskID, &l.Text, &createdAt, &deletedAt); err != nil {
+			var taskID, createdAt, modifiedAt, deletedAt string
+			if err := s.Scan(&l.ID, &taskID, &l.Text, &createdAt, &modifiedAt, &deletedAt); err != nil {
 				return err
 			}
 			l.CreatedAt = parseTime(createdAt)
+			l.ModifiedAt = parseTime(modifiedAt)
 			l.DeletedAt = parseTime(deletedAt)
 			if t := todos[taskID]; t != nil {
 				t.Learnings = append(t.Learnings, l)
@@ -459,16 +461,17 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 		}); err != nil {
 		return nil, err
 	}
-	if err := loadChildren(h, todos, "task_time_entries", "id, task_id, started_at, stopped_at, last_seen, deleted_at", childWhere,
+	if err := loadChildren(h, todos, "task_time_entries", "id, task_id, started_at, stopped_at, last_seen, modified_at, deleted_at", childWhere,
 		func(s *sql.Rows) error {
 			var e todo.TimeEntry
-			var taskID, startedAt, stoppedAt, lastSeen, deletedAt string
-			if err := s.Scan(&e.ID, &taskID, &startedAt, &stoppedAt, &lastSeen, &deletedAt); err != nil {
+			var taskID, startedAt, stoppedAt, lastSeen, modifiedAt, deletedAt string
+			if err := s.Scan(&e.ID, &taskID, &startedAt, &stoppedAt, &lastSeen, &modifiedAt, &deletedAt); err != nil {
 				return err
 			}
 			e.StartedAt = parseTime(startedAt)
 			e.StoppedAt = parseTime(stoppedAt)
 			e.LastSeen = parseTime(lastSeen)
+			e.ModifiedAt = parseTime(modifiedAt)
 			e.DeletedAt = parseTime(deletedAt)
 			if t := todos[taskID]; t != nil {
 				t.TimeEntries = append(t.TimeEntries, e)

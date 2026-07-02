@@ -240,6 +240,59 @@ func TestMergeUnionAndStableOrder(t *testing.T) {
 	}
 }
 
+// A child edited later must win over the stale copy from the other device,
+// in both argument orders — recency, not the hash coin flip, decides.
+func TestMergeChildEditWinsByRecency(t *testing.T) {
+	older := mkComment("c1", "first wording", at(0))
+	older.ModifiedAt = at(0)
+	newer := mkComment("c1", "edited wording", at(0))
+	newer.ModifiedAt = at(time.Hour)
+
+	for _, dir := range []struct {
+		name string
+		a, b []todo.Comment
+	}{
+		{"newer second", []todo.Comment{older}, []todo.Comment{newer}},
+		{"newer first", []todo.Comment{newer}, []todo.Comment{older}},
+	} {
+		got := mergeComments(dir.a, dir.b)
+		if len(got) != 1 || got[0].Text != "edited wording" {
+			t.Errorf("%s: got %+v, want the later edit to win", dir.name, got)
+		}
+	}
+}
+
+// A stopped time entry must beat the still-running copy of itself, both via
+// ModifiedAt (new records) and via the stopped_at fallback (records from
+// before ModifiedAt existed). Otherwise a stop can lose the merge and the
+// timer resurrects on every device.
+func TestMergeStoppedTimerBeatsRunningCopy(t *testing.T) {
+	running := todo.TimeEntry{ID: "e1", StartedAt: at(0)}
+	stopped := todo.TimeEntry{ID: "e1", StartedAt: at(0), StoppedAt: at(time.Hour)}
+
+	for _, tc := range []struct {
+		name    string
+		stamped bool
+	}{
+		{"legacy entries (no ModifiedAt)", false},
+		{"stamped entries", true},
+	} {
+		s := stopped
+		if tc.stamped {
+			s.ModifiedAt = at(time.Hour)
+		}
+		for _, pair := range [][2][]todo.TimeEntry{
+			{{running}, {s}},
+			{{s}, {running}},
+		} {
+			got := mergeTimeEntries(pair[0], pair[1])
+			if len(got) != 1 || got[0].StoppedAt.IsZero() {
+				t.Errorf("%s: got %+v, want the stopped entry to win", tc.name, got)
+			}
+		}
+	}
+}
+
 func TestMergeIdempotent(t *testing.T) {
 	a := mkTask("a", "A", at(time.Hour))
 	a.Comments = []todo.Comment{mkComment("c1", "x", at(0))}

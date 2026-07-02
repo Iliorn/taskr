@@ -715,6 +715,7 @@ func (m model) updateEditTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.pushUndo("edit time entry", t.ID)
 					e.StartedAt = start
 					e.StoppedAt = stop
+					e.ModifiedAt = time.Now()
 					t.ModifiedAt = time.Now()
 					m.markModified(t.ID)
 					break
