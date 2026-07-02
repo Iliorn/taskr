@@ -129,6 +129,8 @@ func cliAdd(args []string) int {
 	note := fs.String("note", "", "set the task's notes field (freeform body)")
 	comment := fs.String("comment", "", "add an initial timestamped comment to the task")
 	startNow := fs.Bool("start", false, "start the time tracker on the new task (stops any other running timer first)")
+	asJSON := fs.Bool("json", false, "emit the created task as JSON (includes its id) instead of the human line")
+	quietID := fs.Bool("quiet-id", false, "print only the new task's full id (for scripting / shell capture)")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: taskr add \"title\" [flags]")
 		fs.PrintDefaults()
@@ -246,14 +248,32 @@ func cliAdd(args []string) int {
 			fmt.Fprintf(os.Stderr, "save: %v\n", err)
 			return 1
 		}
-		fmt.Printf("added + started: %s  %s\n", t.ID[:8], t.Title)
-		return 0
+		return emitAddResult(&t, true, *asJSON, *quietID)
 	}
 	if err := repo.Save([]*todo.Todo{&t}, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
 		return 1
 	}
-	fmt.Printf("added %s  %s\n", t.ID[:8], t.Title)
+	return emitAddResult(&t, false, *asJSON, *quietID)
+}
+
+// emitAddResult renders the outcome of `taskr add`. --json emits the full
+// created task so a script can read .id (or any other field); --quiet-id prints
+// only the full UUID for shell capture (id=$(taskr add … --quiet-id)); otherwise
+// the usual human line. started selects the --start variant's message. Any
+// --start "stopped:" notices already went to stderr, so stdout stays clean for
+// the machine-readable modes.
+func emitAddResult(t *todo.Todo, started, asJSON, quietID bool) int {
+	switch {
+	case asJSON:
+		return emitJSON(t)
+	case quietID:
+		fmt.Println(t.ID)
+	case started:
+		fmt.Printf("added + started: %s  %s\n", t.ID[:8], t.Title)
+	default:
+		fmt.Printf("added %s  %s\n", t.ID[:8], t.Title)
+	}
 	return 0
 }
 
@@ -1508,6 +1528,8 @@ Flags (add):
   --note=TEXT     set the notes field (freeform body)
   --comment=TEXT  add an initial timestamped comment
   --start         start the time tracker on the new task (stops any other running timer first)
+  --json          emit the created task as JSON (includes its id)
+  --quiet-id      print only the new task's full id (for scripting)
 
 Flags (list / search):
   --json          emit JSON

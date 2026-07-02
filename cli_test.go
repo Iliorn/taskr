@@ -1,12 +1,37 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"taskr/todo"
 )
+
+// captureStdout redirects os.Stdout for the duration of fn and returns what was
+// written. CLI verbs print to os.Stdout directly (fmt.Println / emitJSON), so
+// this lets tests assert the machine-readable output modes.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+	fn()
+	w.Close()
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatalf("read captured stdout: %v", err)
+	}
+	return buf.String()
+}
 
 func TestFindByPrefix(t *testing.T) {
 	a := todo.New("a")
@@ -270,6 +295,47 @@ func TestCliAddNoteAndComment(t *testing.T) {
 	}
 	if len(got.Comments) != 1 || got.Comments[0].Text != "first log entry" {
 		t.Errorf("Comments = %+v, want a single comment %q", got.Comments, "first log entry")
+	}
+}
+
+func TestCliAddQuietIDPrintsOnlyID(t *testing.T) {
+	out := captureStdout(t, func() {
+		if code := cliAdd([]string{"quiet-id-check", "--quiet-id"}); code != 0 {
+			t.Fatalf("add --quiet-id: exit %d", code)
+		}
+	})
+	id := strings.TrimSpace(out)
+	if strings.ContainsAny(id, " \n") || strings.Contains(out, "added") {
+		t.Fatalf("--quiet-id must print only the bare id, got %q", out)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, id)
+	if err != nil {
+		t.Fatalf("printed id %q does not resolve: %v", id, err)
+	}
+	if got.ID != id {
+		t.Errorf("resolved id = %q, want printed id %q", got.ID, id)
+	}
+}
+
+func TestCliAddJSONEmitsCreatedTask(t *testing.T) {
+	out := captureStdout(t, func() {
+		if code := cliAdd([]string{"json-add-check", "--json"}); code != 0 {
+			t.Fatalf("add --json: exit %d", code)
+		}
+	})
+	var got todo.Todo
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, out)
+	}
+	if got.ID == "" {
+		t.Error("json output missing id")
+	}
+	if got.Title != "Json-add-check" {
+		t.Errorf("json title = %q, want %q", got.Title, "Json-add-check")
 	}
 }
 
