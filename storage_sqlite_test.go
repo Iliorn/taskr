@@ -321,3 +321,74 @@ func TestImportGatedOnFreshDB(t *testing.T) {
 		t.Fatalf("reopen re-imported deleted tasks (got %d, want 0) — zombie bug", len(got))
 	}
 }
+
+// TestPruneOldTombstones: task and child tombstones older than the retention
+// window are hard-deleted (row plus every child row); fresh tombstones and
+// live data are untouched.
+func TestPruneOldTombstones(t *testing.T) {
+	h := openTestDB(t)
+	now := time.Now()
+	ancient := now.Add(-tombstoneRetention - 24*time.Hour)
+
+	oldDead := todo.New("pruned long ago")
+	oldDead.AddTag("x")
+	oldDead.AddComment("gone with me")
+	oldDead.Deleted = true
+	oldDead.DeletedAt = ancient
+
+	freshDead := todo.New("deleted yesterday")
+	freshDead.Deleted = true
+	freshDead.DeletedAt = now.Add(-24 * time.Hour)
+
+	live := todo.New("alive")
+	live.Comments = []todo.Comment{
+		{ID: "c-old", Text: "old deleted comment", CreatedAt: ancient, DeletedAt: ancient},
+		{ID: "c-fresh", Text: "freshly deleted", CreatedAt: now, DeletedAt: now.Add(-time.Hour)},
+		{ID: "c-live", Text: "still here", CreatedAt: now},
+	}
+
+	saveTodos(t, h, []todo.Todo{oldDead, freshDead, live})
+	if err := pruneOldTombstones(h, now); err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+
+	got, err := loadTodosForSync(h)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	byID := make(map[string]todo.Todo, len(got))
+	for _, td := range got {
+		byID[td.ID] = td
+	}
+	if _, ok := byID[oldDead.ID]; ok {
+		t.Errorf("tombstone older than retention should be pruned")
+	}
+	if _, ok := byID[freshDead.ID]; !ok {
+		t.Errorf("fresh tombstone must be retained so the deletion keeps propagating")
+	}
+	gotLive, ok := byID[live.ID]
+	if !ok {
+		t.Fatalf("live task must survive pruning")
+	}
+	commentIDs := make(map[string]bool, len(gotLive.Comments))
+	for _, c := range gotLive.Comments {
+		commentIDs[c.ID] = true
+	}
+	if commentIDs["c-old"] {
+		t.Errorf("old child tombstone should be pruned")
+	}
+	if !commentIDs["c-fresh"] || !commentIDs["c-live"] {
+		t.Errorf("fresh child tombstone and live comment must survive; got %v", commentIDs)
+	}
+
+	// The pruned task's child rows must go with it — no orphans.
+	for _, table := range []string{"task_tags", "task_comments"} {
+		var n int
+		if err := h.QueryRow(`SELECT COUNT(*) FROM `+table+` WHERE task_id = ?`, oldDead.ID).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		if n != 0 {
+			t.Errorf("%s still holds %d row(s) for the pruned task", table, n)
+		}
+	}
+}

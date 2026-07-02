@@ -90,7 +90,91 @@ func openStoreAt(path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
+	// Fail-soft: a GC hiccup must never keep the store from opening — the
+	// tombstones just live a little longer.
+	if err := pruneOldTombstones(handle, time.Now()); err != nil {
+		fmt.Fprintf(os.Stderr, "taskr: tombstone cleanup failed (harmless, will retry next open): %v\n", err)
+	}
 	return handle, nil
+}
+
+// tombstoneRetention is how long task and child tombstones are kept before
+// being hard-deleted by pruneOldTombstones. Tombstones exist so deletions
+// propagate during sync instead of a stale device resurrecting the row; once
+// every device has synced past one it is dead weight that still rides along in
+// full on every sync round trip, forever. Six months bounds that growth. The
+// tradeoff is explicit: a device that stays offline LONGER than this window
+// and still holds the task live will resurrect it on its next sync (the merge
+// sees an unopposed live copy). Acceptable for a personal task set; widen the
+// window rather than disabling GC if that ever bites.
+const tombstoneRetention = 180 * 24 * time.Hour
+
+// pruneOldTombstones hard-deletes task tombstones (row + all child rows) and
+// child tombstones older than tombstoneRetention. Timestamps are compared in
+// Go — deleted_at mixes RFC3339 and RFC3339Nano strings, whose lexicographic
+// order lies within a shared second. A tombstone with no parseable timestamp
+// is left alone, mirroring the stale-timer recovery's caution.
+func pruneOldTombstones(h *sql.DB, now time.Time) error {
+	cutoff := now.Add(-tombstoneRetention)
+	oldIDs := func(query string) ([]string, error) {
+		rows, err := h.Query(query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var ids []string
+		for rows.Next() {
+			var id, deletedAt string
+			if err := rows.Scan(&id, &deletedAt); err != nil {
+				return nil, err
+			}
+			if at := parseTime(deletedAt); !at.IsZero() && at.Before(cutoff) {
+				ids = append(ids, id)
+			}
+		}
+		return ids, rows.Err()
+	}
+
+	taskIDs, err := oldIDs(`SELECT id, deleted_at FROM todos WHERE deleted = 1`)
+	if err != nil {
+		return err
+	}
+	childTables := []string{"task_tags", "task_dependencies", "task_comments", "task_learnings", "task_time_entries"}
+	oldChildren := make(map[string][]string, len(childTables))
+	for _, table := range childTables[2:] { // only the identified children carry deleted_at
+		ids, err := oldIDs(`SELECT id, deleted_at FROM ` + table + ` WHERE deleted_at != ''`)
+		if err != nil {
+			return err
+		}
+		oldChildren[table] = ids
+	}
+	if len(taskIDs) == 0 && len(oldChildren["task_comments"])+len(oldChildren["task_learnings"])+len(oldChildren["task_time_entries"]) == 0 {
+		return nil
+	}
+
+	tx, err := h.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, id := range taskIDs {
+		for _, table := range childTables {
+			if _, err := tx.Exec(`DELETE FROM `+table+` WHERE task_id = ?`, id); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(`DELETE FROM todos WHERE id = ?`, id); err != nil {
+			return err
+		}
+	}
+	for table, ids := range oldChildren {
+		for _, id := range ids {
+			if _, err := tx.Exec(`DELETE FROM `+table+` WHERE id = ?`, id); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
 }
 
 func tableExists(h *sql.DB, name string) bool {
