@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -73,6 +74,9 @@ func (m model) updateEditSyncURL(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// deliberate clear, not an accidental no-op.
 			m.syncCfg.URL = strings.TrimSpace(m.textInput.Value())
 			m.saveSyncCfg()
+			if w := insecureSyncURLWarning(m.syncCfg.URL); w != "" {
+				m.syncStatus = tr("Plain http to a public host — token travels unencrypted")
+			}
 			m.mode = modeNormal
 			return m, m.restartLiveSync()
 		case "esc":
@@ -94,9 +98,11 @@ func (m model) updateEditSyncToken(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncCfg.Token = strings.TrimSpace(m.textInput.Value())
 			m.saveSyncCfg()
 			m.mode = modeNormal
+			m.textInput.EchoMode = textinput.EchoNormal // un-mask for the next mode
 			return m, m.restartLiveSync()
 		case "esc":
 			m.mode = modeNormal
+			m.textInput.EchoMode = textinput.EchoNormal
 			return m, nil
 		}
 	}

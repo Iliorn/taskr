@@ -176,3 +176,34 @@ func TestSyncSaveIgnoresEnvOverlay(t *testing.T) {
 		t.Errorf("runtime config should overlay the env token, got %q", run.Token)
 	}
 }
+
+// The insecure-URL warning must fire only for plain http to genuinely public
+// hosts — private transports (Tailscale, LAN, loopback) and https stay quiet,
+// so the warning keeps signal when it does appear.
+func TestInsecureSyncURLWarning(t *testing.T) {
+	quiet := []string{
+		"",
+		"https://tasks.example.com",
+		"http://127.0.0.1:8765",
+		"http://localhost:8765",
+		"http://100.122.178.43:8765", // Tailscale CGNAT
+		"http://192.168.1.10:8765",   // RFC1918
+		"http://10.0.0.5:8765",
+		"http://hoth.tail1234.ts.net:8765",
+	}
+	for _, u := range quiet {
+		if w := insecureSyncURLWarning(u); w != "" {
+			t.Errorf("unexpected warning for %q: %s", u, w)
+		}
+	}
+	loud := []string{
+		"http://203.0.113.7:8765",     // public IP
+		"http://tasks.example.com:80", // public hostname
+		"http://100.32.1.1:8765",      // 100.x but below CGNAT range
+	}
+	for _, u := range loud {
+		if w := insecureSyncURLWarning(u); w == "" {
+			t.Errorf("expected warning for %q, got none", u)
+		}
+	}
+}

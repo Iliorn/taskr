@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -84,9 +85,11 @@ func (m model) updateEditServerToken(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncCfg.ServerToken = strings.TrimSpace(m.textInput.Value())
 			m.saveSyncCfg()
 			m.mode = modeNormal
+			m.textInput.EchoMode = textinput.EchoNormal // un-mask for the next mode
 			return m, nil
 		case "esc":
 			m.mode = modeNormal
+			m.textInput.EchoMode = textinput.EchoNormal
 			return m, nil
 		}
 	}

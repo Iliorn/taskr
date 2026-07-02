@@ -186,6 +186,7 @@ func (s *syncServer) sync(clientTasks []todo.Todo) ([]todo.Todo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	clampFutureEventTimes(clientTasks, time.Now())
 	server, err := loadTodosForSync(s.db)
 	if err != nil {
 		return nil, err
@@ -211,6 +212,45 @@ func (s *syncServer) sync(clientTasks []todo.Todo) ([]todo.Todo, error) {
 		s.hub.broadcast()
 	}
 	return merged, nil
+}
+
+// maxClientClockSkew bounds how far ahead of the server's clock a client's
+// merge-ordering timestamps may run. The merge is last-writer-wins by
+// ModifiedAt/DeletedAt, all stamped from device wall clocks — a device with a
+// clock hours in the future would win every conflict it touches until real
+// time catches up (and its edits would be unbeatable by devices with correct
+// clocks). Five minutes tolerates ordinary NTP drift without letting a broken
+// clock own the store.
+const maxClientClockSkew = 5 * time.Minute
+
+// clampFutureEventTimes pulls any merge-ordering timestamp (task and child
+// ModifiedAt/DeletedAt) that is more than maxClientClockSkew ahead of now back
+// to now, in place. Domain dates (DueDate, StartDate, time-entry bounds) are
+// deliberately untouched — a future due date is data, not clock skew.
+func clampFutureEventTimes(tasks []todo.Todo, now time.Time) {
+	limit := now.Add(maxClientClockSkew)
+	clamp := func(t *time.Time) {
+		if t.After(limit) {
+			*t = now
+		}
+	}
+	for i := range tasks {
+		t := &tasks[i]
+		clamp(&t.ModifiedAt)
+		clamp(&t.DeletedAt)
+		for j := range t.Comments {
+			clamp(&t.Comments[j].ModifiedAt)
+			clamp(&t.Comments[j].DeletedAt)
+		}
+		for j := range t.Learnings {
+			clamp(&t.Learnings[j].ModifiedAt)
+			clamp(&t.Learnings[j].DeletedAt)
+		}
+		for j := range t.TimeEntries {
+			clamp(&t.TimeEntries[j].ModifiedAt)
+			clamp(&t.TimeEntries[j].DeletedAt)
+		}
+	}
 }
 
 // storeDigest is an order-independent fingerprint of a task set: identical

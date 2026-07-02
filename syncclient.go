@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -222,6 +223,9 @@ func cliSync(args []string) int {
 			fmt.Fprintf(os.Stderr, "taskr sync: save config: %v\n", err)
 			return 1
 		}
+		if w := insecureSyncURLWarning(saved.URL); w != "" {
+			fmt.Fprintln(os.Stderr, "taskr sync: "+w)
+		}
 	}
 	if !cfg.ready() {
 		fmt.Fprintln(os.Stderr, "taskr sync: missing url/token — pass --url/--token (optionally --save), or set TASKR_SYNC_URL/TASKR_SYNC_TOKEN")
@@ -249,6 +253,33 @@ func cliSync(args []string) int {
 
 type syncSummary struct {
 	sent, received, conflicts int
+}
+
+// insecureSyncURLWarning returns a human warning when url sends the bearer
+// token in cleartext somewhere it could actually be sniffed: plain http to a
+// host that is not loopback, RFC1918/link-local private, Tailscale CGNAT
+// (100.64/10), or a *.ts.net name. https and private transports return "".
+// Empty/unparseable URLs return "" too — reachability errors surface later,
+// on the sync itself; this is only about the token's exposure.
+func insecureSyncURLWarning(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "http" {
+		return ""
+	}
+	host := u.Hostname()
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".ts.net") {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+			return ""
+		}
+		// Tailscale's CGNAT range 100.64.0.0/10 — private in practice.
+		if ip4 := ip.To4(); ip4 != nil && ip4[0] == 100 && ip4[1] >= 64 && ip4[1] < 128 {
+			return ""
+		}
+	}
+	return fmt.Sprintf("warning: %s is plain http to a public host — the sync token and your tasks travel unencrypted; prefer a Tailscale IP or an https reverse proxy", rawURL)
 }
 
 // runClientSync pushes the local full task set (including tombstones) to the
@@ -417,6 +448,12 @@ func syncLogPath() string {
 	return filepath.Join(home, ".taskr", "sync.log")
 }
 
+// syncLogMaxBytes caps ~/.taskr/sync.log growth: past this size the file is
+// rotated to sync.log.1 (replacing any previous .1) before the next append.
+// The log is a recovery net for conflict-overwritten edits, so one full
+// generation of history is plenty; unbounded append-forever is not.
+const syncLogMaxBytes = 1 << 20 // 1 MiB
+
 // logDroppedEdits appends one JSON line per dropped local edit to
 // ~/.taskr/sync.log so a wrongly-overwritten edit can be recovered.
 func logDroppedEdits(dropped []todo.Todo) error {
@@ -425,6 +462,10 @@ func logDroppedEdits(dropped []todo.Todo) error {
 	}
 	if err := ensureStorageDir(); err != nil {
 		return err
+	}
+	if fi, err := os.Stat(syncLogPath()); err == nil && fi.Size() > syncLogMaxBytes {
+		// Best-effort rotation — a failure must not block logging the drops.
+		_ = os.Rename(syncLogPath(), syncLogPath()+".1")
 	}
 	f, err := os.OpenFile(syncLogPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {

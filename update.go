@@ -1208,6 +1208,10 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	case settingSyncToken:
 		m.mode = modeEditSyncToken
 		m.textInput.SetValue(m.syncCfg.Token)
+		// Mask the pre-filled secret — the list row shows "•••• set" but the
+		// editor used to echo it back in plaintext. The editors reset EchoMode
+		// on exit so the shared input doesn't stay masked for other modes.
+		m.textInput.EchoMode = textinput.EchoPassword
 		m.textInput.Placeholder = tr("Sync token (clear the field to remove it)")
 		m.textInput.Focus()
 		return m, textinput.Blink
@@ -1229,6 +1233,7 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	case settingServerToken:
 		m.mode = modeEditServerToken
 		m.textInput.SetValue(m.syncCfg.ServerToken)
+		m.textInput.EchoMode = textinput.EchoPassword // see settingSyncToken
 		m.textInput.Placeholder = tr("Server token clients must present (clear the field to remove it)")
 		m.textInput.Focus()
 		return m, textinput.Blink
