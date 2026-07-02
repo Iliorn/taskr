@@ -105,14 +105,6 @@ func dispatchCLI(args []string) int {
 
 // ── add ──────────────────────────────────────────────────────────────────────
 
-// addValueFlags lists the value-taking flags `add` accepts. splitFlagsAndPositionals
-// uses this to know which flags consume the next arg (vs. being self-contained
-// `--name=value`), so users can put the title in any position.
-var addValueFlags = map[string]bool{
-	"due": true, "p": true, "size": true, "project": true, "tag": true, "like": true, "recur": true, "depends": true,
-	"note": true, "comment": true,
-}
-
 func cliAdd(args []string) int {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -135,7 +127,7 @@ func cliAdd(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: taskr add \"title\" [flags]   (or `taskr add -` to read one title per line from stdin)")
 		fs.PrintDefaults()
 	}
-	flagArgs, titleParts := splitFlagsAndPositionals(args, addValueFlags)
+	flagArgs, titleParts := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
@@ -283,13 +275,9 @@ func cliAdd(args []string) int {
 	// running timer to keep the single-timer invariant, then start + save.
 	started := false
 	if *startNow {
-		for i := range existing {
-			if existing[i].IsTimerRunning() {
-				x := existing[i]
-				x.StopTimer()
-				dirty = append(dirty, &x)
-				fmt.Fprintf(os.Stderr, "stopped: %s  %s\n", x.ID[:8], x.Title)
-			}
+		for _, x := range stopOtherRunningTimers(existing, created[0].ID) {
+			dirty = append(dirty, x)
+			fmt.Fprintf(os.Stderr, "stopped: %s  %s\n", x.ID[:8], x.Title)
 		}
 		created[0].StartTimer()
 		started = true
@@ -361,10 +349,6 @@ func emitAddResult(t *todo.Todo, started, asJSON, quietID bool) int {
 
 // ── list ─────────────────────────────────────────────────────────────────────
 
-var listValueFlags = map[string]bool{
-	"limit": true, "tag": true, "project": true, "search": true,
-}
-
 func cliList(args []string) int {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -375,7 +359,7 @@ func cliList(args []string) int {
 	tag := fs.String("tag", "", "only tasks carrying this tag (case-insensitive)")
 	project := fs.String("project", "", "only tasks in this project")
 	search := fs.String("search", "", "only tasks whose title contains this substring")
-	flagArgs, _ := splitFlagsAndPositionals(args, listValueFlags)
+	flagArgs, _ := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
@@ -423,7 +407,7 @@ func cliSearch(args []string) int {
 	asJSON := fs.Bool("json", false, "emit JSON instead of a table")
 	pendingOnly := fs.Bool("pending", false, "exclude completed tasks (default: include)")
 	limit := fs.Int("limit", 0, "cap rows (0 = no cap)")
-	flagArgs, positionals := splitFlagsAndPositionals(args, map[string]bool{"limit": true})
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
@@ -557,7 +541,7 @@ func cliDone(args []string) int {
 	var comment string
 	fs.StringVar(&comment, "comment", "", "append this comment to each task transitioned to done")
 	fs.StringVar(&comment, "m", "", "shorthand for --comment (git muscle memory)")
-	flagArgs, positionals := splitFlagsAndPositionals(args, map[string]bool{"comment": true, "m": true})
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
@@ -577,6 +561,7 @@ func cliDone(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
+	children, get := sliceTaskLookups(todos)
 	var dirty, skipped, stopped []*todo.Todo
 	var spawned []todo.Todo
 	for _, t := range targets {
@@ -607,7 +592,7 @@ func cliDone(args []string) int {
 				if !t.DueDate.IsZero() && !next.DueDate.IsZero() {
 					delta = next.DueDate.Sub(t.DueDate)
 				}
-				spawned = append(spawned, cloneSubtreeResetInSlice(todos, t.ID, next.ID, delta)...)
+				spawned = append(spawned, cloneSubtreeResetFrom(children, get, t.ID, next.ID, delta)...)
 			}
 		}
 	}
@@ -669,7 +654,7 @@ func cliTop(args []string) int {
 	n := fs.Int("n", 10, "rows to show")
 	asJSON := fs.Bool("json", false, "emit JSON instead of a table")
 	wide := fs.Bool("wide", false, "include priority, due date, and tags columns")
-	flagArgs, _ := splitFlagsAndPositionals(args, map[string]bool{"n": true})
+	flagArgs, _ := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
@@ -746,7 +731,7 @@ func cliShow(args []string) int {
 	// the same as `taskr show --json <ref>`. Stdlib flag.Parse stops at the
 	// first non-flag token, which otherwise turns a trailing --json into a
 	// second positional and trips the usage check below.
-	flagArgs, positionals := splitFlagsAndPositionals(args, nil)
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
@@ -854,14 +839,6 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo) {
 
 // ── edit ─────────────────────────────────────────────────────────────────────
 
-// editValueFlags mirrors addValueFlags for splitFlagsAndPositionals: every
-// value-taking flag is listed so the user can write the id before or after
-// the flags.
-var editValueFlags = map[string]bool{
-	"title": true, "p": true, "size": true, "due": true, "start": true,
-	"project": true, "add-tag": true, "remove-tag": true, "add-dep": true, "remove-dep": true,
-}
-
 func cliEdit(args []string) int {
 	fs := flag.NewFlagSet("edit", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -882,7 +859,7 @@ func cliEdit(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: taskr edit <id-prefix> [flags]")
 		fs.PrintDefaults()
 	}
-	flagArgs, positionals := splitFlagsAndPositionals(args, editValueFlags)
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
@@ -995,7 +972,8 @@ func cliEdit(args []string) int {
 	// If a subtask's due moved later, walk up and extend every ancestor
 	// whose due falls short of the child's — mirrors the TUI flow.
 	if *due != "" && t.ParentID != "" {
-		saveSet = append(saveSet, extendAncestorsDueInSlice(todos, t)...)
+		_, get := sliceTaskLookups(todos)
+		saveSet = append(saveSet, extendAncestorsDue(get, t)...)
 	}
 	if err := repo.Save(saveSet, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
@@ -1006,98 +984,6 @@ func cliEdit(args []string) int {
 		fmt.Printf("bumped  %s  %s  due → %s\n", a.ID[:8], a.Title, a.DueDate.Format("02-01-06"))
 	}
 	return 0
-}
-
-// cloneSubtreeResetInSlice is the CLI counterpart to model.cloneSubtreeReset:
-// builds a fresh Pending copy of every descendant of srcParentID, reparented
-// under newParentID, with DueDate/StartDate shifted by `delta`. Pure: walks
-// the loaded slice once to build a parent→children index, then BFS-clones.
-func cloneSubtreeResetInSlice(todos []todo.Todo, srcParentID, newParentID string, delta time.Duration) []todo.Todo {
-	children := make(map[string][]int, len(todos))
-	for i := range todos {
-		if pid := todos[i].ParentID; pid != "" {
-			children[pid] = append(children[pid], i)
-		}
-	}
-	var out []todo.Todo
-	// queue holds (srcID, newParentID) pairs to clone next, so nested
-	// grandchildren land under their freshly-cloned parent rather than the
-	// recurring root.
-	type pair struct{ srcID, newPID string }
-	queue := []pair{{srcParentID, newParentID}}
-	for len(queue) > 0 {
-		p := queue[0]
-		queue = queue[1:]
-		for _, idx := range children[p.srcID] {
-			c := todos[idx]
-			clone := todo.NewSubtask(c.Title, p.newPID)
-			clone.Priority = c.Priority
-			clone.Size = c.Size
-			clone.Project = c.Project
-			clone.Notes = c.Notes
-			clone.Recurrence = c.Recurrence
-			if len(c.Tags) > 0 {
-				clone.Tags = append([]string{}, c.Tags...)
-			}
-			if !c.DueDate.IsZero() {
-				clone.DueDate = c.DueDate.Add(delta)
-			}
-			if !c.StartDate.IsZero() {
-				clone.StartDate = c.StartDate.Add(delta)
-			}
-			out = append(out, clone)
-			queue = append(queue, pair{c.ID, clone.ID})
-		}
-	}
-	return out
-}
-
-// descendantIDsInSlice returns rootID followed by every transitive subtask
-// ID, walking ParentID over the loaded slice. CLI counterpart to the model's
-// descendantIDs — used by cliDelete so a CLI delete cascades like the TUI
-// instead of stranding subtasks with a parent_id pointing at a tombstone.
-func descendantIDsInSlice(todos []todo.Todo, rootID string) []string {
-	children := make(map[string][]string, len(todos))
-	for _, t := range todos {
-		if t.ParentID != "" {
-			children[t.ParentID] = append(children[t.ParentID], t.ID)
-		}
-	}
-	out := []string{rootID}
-	for i := 0; i < len(out); i++ {
-		out = append(out, children[out[i]]...)
-	}
-	return out
-}
-
-// extendAncestorsDueInSlice walks up from child via ParentID, bumping each
-// ancestor's DueDate to at least match the child's. Pure CLI counterpart to
-// the model's extendParentDueIfNeeded — needs the loaded slice because the
-// CLI doesn't carry a subtaskOf index. Returns the ancestors that changed
-// so the caller can include them in the save set.
-func extendAncestorsDueInSlice(todos []todo.Todo, child *todo.Todo) []*todo.Todo {
-	idx := make(map[string]*todo.Todo, len(todos))
-	for i := range todos {
-		idx[todos[i].ID] = &todos[i]
-	}
-	var bumped []*todo.Todo
-	cur := child
-	for cur != nil && cur.ParentID != "" {
-		parent := idx[cur.ParentID]
-		if parent == nil {
-			break
-		}
-		if cur.DueDate.IsZero() {
-			break
-		}
-		if !parent.DueDate.IsZero() && !parent.DueDate.Before(cur.DueDate) {
-			break
-		}
-		parent.SetDueDate(cur.DueDate)
-		bumped = append(bumped, parent)
-		cur = parent
-	}
-	return bumped
 }
 
 // ── delete ───────────────────────────────────────────────────────────────────
@@ -1126,7 +1012,8 @@ func cliDelete(args []string) int {
 	// will not load again. Matches the TUI's delete semantics: cascade to
 	// every descendant so subtasks don't get stranded with a parent_id
 	// pointing at a tombstone.
-	ids := descendantIDsInSlice(todos, t.ID)
+	children, _ := sliceTaskLookups(todos)
+	ids := descendantIDsFrom(children, t.ID)
 	if err := repo.Save(nil, ids); err != nil {
 		fmt.Fprintf(os.Stderr, "delete: %v\n", err)
 		return 1
@@ -1159,7 +1046,7 @@ func cliComment(args []string) int {
 	}
 	// comment supports interspersed flags so --edit / --delete can sit
 	// before or after the ref, just like other mutation commands.
-	flagArgs, positionals := splitFlagsAndPositionals(args, map[string]bool{"edit": true, "delete": true})
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
@@ -1380,19 +1267,12 @@ func cliStart(args []string) int {
 		return 0
 	}
 	// Stop any other running timer first — the TUI enforces single-task
-	// time tracking and the CLI should preserve that invariant. Collect
-	// all touched tasks so they're flushed in one Save.
+	// time tracking and the CLI preserves that invariant via the shared
+	// helper. Collect all touched tasks so they're flushed in one Save.
 	dirty := []*todo.Todo{target}
-	for i := range todos {
-		if todos[i].ID == target.ID {
-			continue
-		}
-		if todos[i].IsTimerRunning() {
-			t := todos[i]
-			t.StopTimer()
-			dirty = append(dirty, &t)
-			fmt.Printf("stopped: %s  %s\n", t.ID[:8], t.Title)
-		}
+	for _, t := range stopOtherRunningTimers(todos, target.ID) {
+		dirty = append(dirty, t)
+		fmt.Printf("stopped: %s  %s\n", t.ID[:8], t.Title)
 	}
 	target.StartTimer()
 	if err := repo.Save(dirty, nil); err != nil {
@@ -1511,7 +1391,7 @@ func cliSubtask(args []string) int {
   taskr subtask <parent-ref> "title"                   one subtask (args after parent are joined)
   taskr subtask <parent-ref> --each "title1" "title2"  one subtask per remaining positional`)
 	}
-	flagArgs, positionals := splitFlagsAndPositionals(args, nil)
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
@@ -1675,10 +1555,19 @@ Notes:
 // this helper users would have to write `taskr add --p=h "Buy milk"` instead
 // of the more natural `taskr add "Buy milk" --p=h`.
 //
-// valueFlags names the flags that consume the next arg when written without an
-// embedded `=` (e.g. `--due tomorrow`). Boolean flags should be omitted from
-// the map so their following non-flag token stays a positional.
-func splitFlagsAndPositionals(args []string, valueFlags map[string]bool) (flags, positionals []string) {
+// Which flags consume the next arg when written without an embedded `=`
+// (e.g. `--due tomorrow`) is derived from fs itself: every registered flag
+// whose Value does not implement the stdlib's boolFlag interface takes a
+// value. Deriving it kills the old hand-maintained per-command maps, which
+// had to mirror each FlagSet and would silently mis-parse when they drifted.
+// Callers must therefore define all flags on fs BEFORE calling this.
+func splitFlagsAndPositionals(fs *flag.FlagSet, args []string) (flags, positionals []string) {
+	valueFlags := make(map[string]bool)
+	fs.VisitAll(func(f *flag.Flag) {
+		if bf, ok := f.Value.(interface{ IsBoolFlag() bool }); !ok || !bf.IsBoolFlag() {
+			valueFlags[f.Name] = true
+		}
+	})
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {

@@ -1,0 +1,126 @@
+package main
+
+import (
+	"time"
+
+	"taskr/todo"
+)
+
+// taskops.go — task-tree operations shared by the TUI model and the CLI.
+// Each operation is parameterized by lookup funcs instead of a concrete
+// container: the model passes its maintained indexes (m.subtaskIDs / m.get),
+// the CLI passes closures over the loaded slice (sliceTaskLookups). One
+// implementation, two data sources — the two surfaces can't drift apart.
+
+// sliceTaskLookups builds the (children, get) lookup pair over a loaded task
+// slice. The returned pointers alias the slice's elements, so mutations made
+// through get are visible to the caller's slice (and safe to hand to Save).
+func sliceTaskLookups(todos []todo.Todo) (children func(string) []string, get func(string) *todo.Todo) {
+	byID := make(map[string]*todo.Todo, len(todos))
+	kids := make(map[string][]string, len(todos))
+	for i := range todos {
+		byID[todos[i].ID] = &todos[i]
+		if pid := todos[i].ParentID; pid != "" {
+			kids[pid] = append(kids[pid], todos[i].ID)
+		}
+	}
+	return func(id string) []string { return kids[id] }, func(id string) *todo.Todo { return byID[id] }
+}
+
+// descendantIDsFrom returns rootID followed by every transitive subtask ID in
+// BFS order. Used by cascade-delete on both surfaces: every descendant must be
+// tombstoned alongside the root, otherwise children survive with a ParentID
+// pointing at a deleted task.
+func descendantIDsFrom(children func(string) []string, rootID string) []string {
+	out := []string{rootID}
+	for i := 0; i < len(out); i++ {
+		out = append(out, children(out[i])...)
+	}
+	return out
+}
+
+// cloneSubtreeResetFrom builds a fresh Pending copy of every descendant of
+// srcParentID, reparented under newParentID, with each clone's history wiped
+// (todo.NewSubtask starts clean) and DueDate/StartDate shifted by delta so the
+// subtree's internal scheduling stays relative to the new parent. BFS with
+// (srcID, newParentID) pairs so nested grandchildren land under their
+// freshly-cloned parent rather than the recurring root. Returns the clones;
+// the caller stores them (model.add / repo.Save).
+func cloneSubtreeResetFrom(children func(string) []string, get func(string) *todo.Todo,
+	srcParentID, newParentID string, delta time.Duration,
+) []todo.Todo {
+	var out []todo.Todo
+	type pair struct{ srcID, newPID string }
+	queue := []pair{{srcParentID, newParentID}}
+	for len(queue) > 0 {
+		p := queue[0]
+		queue = queue[1:]
+		for _, childID := range children(p.srcID) {
+			child := get(childID)
+			if child == nil {
+				continue
+			}
+			clone := todo.NewSubtask(child.Title, p.newPID)
+			clone.Priority = child.Priority
+			clone.Size = child.Size
+			clone.Project = child.Project
+			clone.Notes = child.Notes
+			clone.Recurrence = child.Recurrence
+			if len(child.Tags) > 0 {
+				clone.Tags = append([]string{}, child.Tags...)
+			}
+			if !child.DueDate.IsZero() {
+				clone.DueDate = child.DueDate.Add(delta)
+			}
+			if !child.StartDate.IsZero() {
+				clone.StartDate = child.StartDate.Add(delta)
+			}
+			out = append(out, clone)
+			queue = append(queue, pair{child.ID, clone.ID})
+		}
+	}
+	return out
+}
+
+// extendAncestorsDue walks up from child via ParentID, bumping each ancestor's
+// DueDate forward to at least match the child's. Only extends — never shrinks
+// an ancestor's date. Mutates through the pointers get returns and reports the
+// bumped ancestors so the caller can mark them dirty / include them in a save.
+func extendAncestorsDue(get func(string) *todo.Todo, child *todo.Todo) []*todo.Todo {
+	var bumped []*todo.Todo
+	cur := child
+	for cur != nil && cur.ParentID != "" {
+		parent := get(cur.ParentID)
+		if parent == nil {
+			break
+		}
+		if cur.DueDate.IsZero() {
+			break
+		}
+		if !parent.DueDate.IsZero() && !parent.DueDate.Before(cur.DueDate) {
+			break
+		}
+		parent.SetDueDate(cur.DueDate)
+		bumped = append(bumped, parent)
+		cur = parent
+	}
+	return bumped
+}
+
+// stopOtherRunningTimers stops every running timer except exceptID, returning
+// the touched tasks for the save set. This is the single-running-timer
+// invariant the TUI's toggleTimer enforces, shared by the CLI paths
+// (add --start, start) so the rule can't fork between surfaces.
+func stopOtherRunningTimers(todos []todo.Todo, exceptID string) []*todo.Todo {
+	var stopped []*todo.Todo
+	for i := range todos {
+		if todos[i].ID == exceptID {
+			continue
+		}
+		if todos[i].IsTimerRunning() {
+			todos[i].StopTimer()
+			stopped = append(stopped, &todos[i])
+		}
+	}
+	return stopped
+}

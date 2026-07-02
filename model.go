@@ -741,30 +741,10 @@ func (m *model) spawnNextRecurrence(src *todo.Todo) string {
 // newParentID, with each clone reset to Pending and history wiped
 // (CompletedAt, TimeEntries, Comments, Learnings cleared). DueDate and
 // StartDate are shifted by `delta` so the subtree's internal scheduling is
-// preserved relative to the new parent. Recurses to preserve nested shape.
+// preserved relative to the new parent. Shared traversal in taskops.go.
 func (m *model) cloneSubtreeReset(srcParentID, newParentID string, delta time.Duration) {
-	for _, childID := range m.subtaskIDs(srcParentID) {
-		child := m.get(childID)
-		if child == nil {
-			continue
-		}
-		clone := todo.NewSubtask(child.Title, newParentID)
-		clone.Priority = child.Priority
-		clone.Size = child.Size
-		clone.Project = child.Project
-		clone.Notes = child.Notes
-		clone.Recurrence = child.Recurrence
-		if len(child.Tags) > 0 {
-			clone.Tags = append([]string{}, child.Tags...)
-		}
-		if !child.DueDate.IsZero() {
-			clone.DueDate = child.DueDate.Add(delta)
-		}
-		if !child.StartDate.IsZero() {
-			clone.StartDate = child.StartDate.Add(delta)
-		}
+	for _, clone := range cloneSubtreeResetFrom(m.subtaskIDs, m.get, srcParentID, newParentID, delta) {
 		m.add(clone)
-		m.cloneSubtreeReset(child.ID, clone.ID, delta)
 	}
 }
 
@@ -1054,15 +1034,10 @@ func (m *model) subtaskCount(parentID string) int {
 }
 
 // descendantIDs returns rootID followed by every transitive subtask ID in
-// BFS order. Used by cascade-delete: every descendant must be tombstoned and
-// removed alongside the root, otherwise children stay in the store with a
-// ParentID pointing at a deleted task.
+// BFS order, via the maintained subtaskOf index. Shared traversal in
+// taskops.go.
 func (m model) descendantIDs(rootID string) []string {
-	out := []string{rootID}
-	for i := 0; i < len(out); i++ {
-		out = append(out, m.subtaskIDs(out[i])...)
-	}
-	return out
+	return descendantIDsFrom(m.subtaskIDs, rootID)
 }
 
 // subtaskProgress reports the (done, total) count of parentID's direct
@@ -1163,26 +1138,14 @@ func (m *model) autoCloseAncestorsIfAllDone(childID string) []string {
 // extendParentDueIfNeeded walks up from subID and bumps each ancestor's
 // DueDate forward to at least match the child's, recursively. Only extends
 // — never shrinks an ancestor's date. Returns the ancestor IDs that were
-// modified so the caller can mark them dirty.
+// modified so the caller can mark them dirty. Shared walk in taskops.go.
 func (m *model) extendParentDueIfNeeded(subID string) []string {
-	var bumped []string
-	cur := m.get(subID)
-	for cur != nil && cur.ParentID != "" {
-		parent := m.get(cur.ParentID)
-		if parent == nil {
-			break
-		}
-		if cur.DueDate.IsZero() {
-			break
-		}
-		if !parent.DueDate.IsZero() && !parent.DueDate.Before(cur.DueDate) {
-			break
-		}
-		parent.SetDueDate(cur.DueDate)
-		bumped = append(bumped, parent.ID)
-		cur = parent
+	bumped := extendAncestorsDue(m.get, m.get(subID))
+	ids := make([]string, len(bumped))
+	for i, p := range bumped {
+		ids[i] = p.ID
 	}
-	return bumped
+	return ids
 }
 
 // toggleSubtask flips a child task's status and returns every ID the caller

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"io"
 	"os"
 	"strings"
@@ -83,7 +84,16 @@ func TestFindByPrefix(t *testing.T) {
 }
 
 func TestSplitFlagsAndPositionals(t *testing.T) {
-	valueFlags := map[string]bool{"due": true, "p": true, "size": true}
+	// Value-vs-bool is now derived from the FlagSet itself: string flags
+	// consume the next bare arg, bool flags don't.
+	newFS := func() *flag.FlagSet {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		fs.String("due", "", "")
+		fs.String("p", "", "")
+		fs.String("size", "", "")
+		fs.Bool("json", false, "")
+		return fs
+	}
 
 	cases := []struct {
 		name      string
@@ -123,10 +133,18 @@ func TestSplitFlagsAndPositionals(t *testing.T) {
 			wantFlags: nil,
 			wantPos:   []string{"abc123", "-"},
 		},
+		{
+			// A bool flag must NOT swallow the next bare token — that token is
+			// a positional. Guards the IsBoolFlag-based derivation.
+			name:      "bool flag does not consume the next arg",
+			in:        []string{"--json", "title", "words"},
+			wantFlags: []string{"--json"},
+			wantPos:   []string{"title", "words"},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			gotFlags, gotPos := splitFlagsAndPositionals(c.in, valueFlags)
+			gotFlags, gotPos := splitFlagsAndPositionals(newFS(), c.in)
 			if !sliceEq(gotFlags, c.wantFlags) {
 				t.Errorf("flags = %v, want %v", gotFlags, c.wantFlags)
 			}
@@ -214,7 +232,9 @@ func TestFindTaskByRefFallsBackToTitleSubstring(t *testing.T) {
 // cliShow now routes through splitFlagsAndPositionals; this test guards that
 // path at the helper level so a future refactor can't silently revert it.
 func TestShowAcceptsTrailingJSONFlag(t *testing.T) {
-	flags, positionals := splitFlagsAndPositionals([]string{"1ecdcc90", "--json"}, nil)
+	fs := flag.NewFlagSet("show", flag.ContinueOnError)
+	fs.Bool("json", false, "")
+	flags, positionals := splitFlagsAndPositionals(fs, []string{"1ecdcc90", "--json"})
 	if !sliceEq(flags, []string{"--json"}) {
 		t.Errorf("flags = %v, want [--json]", flags)
 	}
@@ -776,9 +796,13 @@ func TestTrackedTodayDuration(t *testing.T) {
 // the refs as positionals and the comment as a flag value, with the comment
 // surviving spaces. Guards the splitFlagsAndPositionals wiring on cliDone.
 func TestDoneCommentSplitter(t *testing.T) {
+	newFS := func() *flag.FlagSet {
+		fs := flag.NewFlagSet("done", flag.ContinueOnError)
+		fs.String("comment", "", "")
+		return fs
+	}
 	flags, positionals := splitFlagsAndPositionals(
-		[]string{"abc", "def", "--comment=finished sprint"},
-		map[string]bool{"comment": true},
+		newFS(), []string{"abc", "def", "--comment=finished sprint"},
 	)
 	if !sliceEq(flags, []string{"--comment=finished sprint"}) {
 		t.Errorf("flags = %v, want [--comment=finished sprint]", flags)
@@ -788,8 +812,7 @@ func TestDoneCommentSplitter(t *testing.T) {
 	}
 	// Spaced form: --comment "why" — value consumes next arg.
 	flags, positionals = splitFlagsAndPositionals(
-		[]string{"abc", "--comment", "finished sprint", "def"},
-		map[string]bool{"comment": true},
+		newFS(), []string{"abc", "--comment", "finished sprint", "def"},
 	)
 	if !sliceEq(flags, []string{"--comment", "finished sprint"}) {
 		t.Errorf("spaced form flags = %v", flags)
@@ -799,10 +822,10 @@ func TestDoneCommentSplitter(t *testing.T) {
 	}
 }
 
-// TestCommentTextFromPositionals: literal text path joins with spaces;
-// descendantIDsInSlice must return rootID and every transitive subtask, so
-// cliDelete can cascade the tombstone set and not strand subtasks with a
-// parent_id pointing at a deleted parent (the DOGFOOD-child orphan bug).
+// The slice-backed descendant walk must return rootID and every transitive
+// subtask, so cliDelete can cascade the tombstone set and not strand subtasks
+// with a parent_id pointing at a deleted parent (the DOGFOOD-child orphan bug).
+// Now exercises the shared descendantIDsFrom over sliceTaskLookups.
 func TestDescendantIDsInSliceCascadesSubtree(t *testing.T) {
 	root := todo.New("root")
 	root.ID = "root"
@@ -813,7 +836,8 @@ func TestDescendantIDsInSliceCascadesSubtree(t *testing.T) {
 	sibling := todo.New("sibling") // unrelated, must not appear
 	sibling.ID = "sibling"
 
-	got := descendantIDsInSlice([]todo.Todo{root, child, grand, sibling}, "root")
+	children, _ := sliceTaskLookups([]todo.Todo{root, child, grand, sibling})
+	got := descendantIDsFrom(children, "root")
 	want := map[string]bool{"root": true, "child": true, "grand": true}
 	if len(got) != len(want) {
 		t.Fatalf("got %v, want exactly %v", got, want)
