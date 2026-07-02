@@ -75,7 +75,13 @@ func reconcileStaleTimers(h *sql.DB, now time.Time, threshold time.Duration) ([]
 
 	var recovered []recoveredTimer
 	for _, c := range stale {
-		if _, err := h.Exec(`UPDATE task_time_entries SET stopped_at=? WHERE id=?`, fmtTime(c.ref), c.id); err != nil {
+		// modified_at must move too: the sync merge orders entry versions by it,
+		// and without the bump this stop ties with another device's still-running
+		// copy (both carry the start-time stamp) and can lose the hash tiebreak —
+		// resurrecting the abandoned timer. Normal stops via todo.StopTimer bump
+		// ModifiedAt for the same reason.
+		if _, err := h.Exec(`UPDATE task_time_entries SET stopped_at=?, modified_at=? WHERE id=?`,
+			fmtTime(c.ref), fmtTime(now), c.id); err != nil {
 			return recovered, err
 		}
 		logged := c.ref.Sub(c.started)

@@ -38,6 +38,12 @@ func TestReconcileStopsAbandonedTimer(t *testing.T) {
 	if got[0].TimeEntries[0].IsRunning() {
 		t.Errorf("timer should be stopped after recovery")
 	}
+	// modified_at must be bumped to the recovery time: the sync merge orders
+	// entry versions by ModifiedAt, and an unbumped stop ties with (and can
+	// lose to) another device's still-running copy of the same entry.
+	if !got[0].TimeEntries[0].ModifiedAt.Equal(now) {
+		t.Errorf("recovery must bump modified_at to now (%s), got %s", now, got[0].TimeEntries[0].ModifiedAt)
+	}
 }
 
 func TestReconcileKeepsFreshlyHeartbeatedTimer(t *testing.T) {
