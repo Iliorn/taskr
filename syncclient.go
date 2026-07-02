@@ -68,13 +68,21 @@ func syncConfigPath() string {
 	return filepath.Join(home, ".taskr", "sync.json")
 }
 
-// loadSyncConfig reads ~/.taskr/sync.json, then overlays TASKR_SYNC_URL /
-// TASKR_SYNC_TOKEN when set. Either source may be absent.
-func loadSyncConfig() syncConfig {
+// loadSyncConfigFile reads ~/.taskr/sync.json alone, no env overlay. This is
+// what `sync --save` must start from: persisting the runtime view would bake a
+// one-off TASKR_SYNC_URL/TOKEN into the file, silently outliving the env var.
+func loadSyncConfigFile() syncConfig {
 	var c syncConfig
 	if b, err := os.ReadFile(syncConfigPath()); err == nil {
 		_ = json.Unmarshal(b, &c)
 	}
+	return c
+}
+
+// loadSyncConfig is the runtime view: the file overlaid with TASKR_SYNC_URL /
+// TASKR_SYNC_TOKEN when set. Either source may be absent.
+func loadSyncConfig() syncConfig {
+	c := loadSyncConfigFile()
 	if v := os.Getenv("TASKR_SYNC_URL"); v != "" {
 		c.URL = v
 	}
@@ -201,7 +209,16 @@ func cliSync(args []string) int {
 		return printSyncStatus(cfg)
 	}
 	if *save {
-		if err := saveSyncConfig(cfg); err != nil {
+		// Persist file values + explicit flags only — never the env overlay
+		// sitting in cfg, which is runtime-only by nature.
+		saved := loadSyncConfigFile()
+		if *url != "" {
+			saved.URL = *url
+		}
+		if *token != "" {
+			saved.Token = *token
+		}
+		if err := saveSyncConfig(saved); err != nil {
 			fmt.Fprintf(os.Stderr, "taskr sync: save config: %v\n", err)
 			return 1
 		}

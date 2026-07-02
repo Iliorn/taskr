@@ -149,3 +149,30 @@ func TestDroppedLocalEditsDeletionVsEdit(t *testing.T) {
 		t.Errorf("a contested live edit should still be a conflict, got %d", len(d))
 	}
 }
+
+// TestSyncSaveIgnoresEnvOverlay: `sync --save` persists file values + explicit
+// flags, never the TASKR_SYNC_URL/TOKEN env overlay — a one-off env var must
+// not get baked into sync.json where it would silently outlive the shell.
+func TestSyncSaveIgnoresEnvOverlay(t *testing.T) {
+	t.Setenv("TASKR_SYNC_URL", "http://env-only:1")
+	t.Setenv("TASKR_SYNC_TOKEN", "env-only-token")
+	t.Cleanup(func() { _ = os.Remove(syncConfigPath()) })
+
+	// URL from a flag, token only from env. The sync itself fails (dead
+	// server, exit 1) but --save applies before the network round trip.
+	if rc := cliSync([]string{"--url", "http://127.0.0.1:1", "--save", "--quiet"}); rc != 1 {
+		t.Fatalf("sync against a dead server should fail with 1, got %d", rc)
+	}
+
+	saved := loadSyncConfigFile()
+	if saved.URL != "http://127.0.0.1:1" {
+		t.Errorf("--save should persist the flag URL, got %q", saved.URL)
+	}
+	if saved.Token != "" {
+		t.Errorf("env token must not be baked into sync.json, got %q", saved.Token)
+	}
+	// The runtime view still sees the env overlay.
+	if run := loadSyncConfig(); run.Token != "env-only-token" {
+		t.Errorf("runtime config should overlay the env token, got %q", run.Token)
+	}
+}
