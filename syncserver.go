@@ -66,6 +66,14 @@ func (m model) updateEditServerListen(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncCfg.ServerListen = strings.TrimSpace(m.textInput.Value())
 			m.saveSyncCfg()
 			m.mode = modeNormal
+			// Rebind a running in-process server now — otherwise the config
+			// says one address while the socket stays on the old one until the
+			// next manual toggle. Off/on reuses the full start/stop path; a
+			// bind failure on the new address lands in m.syncStatus.
+			if m.inprocServer != nil {
+				m.toggleServer()
+				m.toggleServer()
+			}
 			return m, nil
 		case "esc":
 			m.mode = modeNormal

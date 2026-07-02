@@ -43,6 +43,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.frameTime = time.Now()
 
+	// ctrl+c quits from anywhere — every mode, both panes — after flushing any
+	// mutation still inside the 300ms save debounce. Bubble Tea delivers it as
+	// an ordinary key (there is no built-in quit), and previously only the list
+	// pane's normal mode handled it, so ctrl+c in a modal or the detail pane
+	// silently did nothing.
+	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
+		m.flushPendingWrites()
+		return m, tea.Quit
+	}
+
 	if sz, ok := msg.(tea.WindowSizeMsg); ok {
 		m.termWidth = sz.Width
 		m.termHeight = sz.Height
@@ -513,7 +523,7 @@ func (m model) updateHelp(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "q", "ctrl+c":
+		case "q": // ctrl+c is handled globally in dispatch
 			m.flushPendingWrites()
 			return m, tea.Quit
 		case "?":
