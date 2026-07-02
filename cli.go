@@ -384,19 +384,31 @@ func cliList(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	rows := filterTopLevel(todos, listFilterOpts{
+	opts := listFilterOpts{
 		includeDone: *all,
 		focus:       *focus,
 		tag:         *tag,
 		project:     *project,
 		search:      *search,
-	})
+	}
+	rows := filterTopLevel(todos, opts)
 	sortTodosByMode(rows, taskSortSequence)
 	if *limit > 0 && len(rows) > *limit {
 		rows = rows[:*limit]
 	}
 	if *asJSON {
 		return emitJSON(rows)
+	}
+	// A bare "(no tasks)" after finishing a project is indistinguishable from
+	// a typo'd filter. When completed tasks match the same filters, say so —
+	// the project exists, the work is just done.
+	if len(rows) == 0 && !*all {
+		withDone := opts
+		withDone.includeDone = true
+		if hidden := len(filterTopLevel(todos, withDone)); hidden > 0 {
+			fmt.Printf("(no pending tasks — %d done match; use --all to see them)\n", hidden)
+			return 0
+		}
 	}
 	printTaskTable(rows)
 	return 0
@@ -542,13 +554,15 @@ func cliProjects(args []string) int {
 func cliDone(args []string) int {
 	fs := flag.NewFlagSet("done", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	comment := fs.String("comment", "", "append this comment to each task transitioned to done")
-	flagArgs, positionals := splitFlagsAndPositionals(args, map[string]bool{"comment": true})
+	var comment string
+	fs.StringVar(&comment, "comment", "", "append this comment to each task transitioned to done")
+	fs.StringVar(&comment, "m", "", "shorthand for --comment (git muscle memory)")
+	flagArgs, positionals := splitFlagsAndPositionals(args, map[string]bool{"comment": true, "m": true})
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
 	if len(positionals) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr done <ref> [<ref>...] [--comment=\"why\"]")
+		fmt.Fprintln(os.Stderr, "usage: taskr done <ref> [<ref>...] [-m \"why\"]")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -572,8 +586,8 @@ func cliDone(args []string) int {
 		}
 		// Comment lands BEFORE Toggle so the timeline reads "added the why,
 		// then closed it" — and the comment timestamp matches the close.
-		if *comment != "" {
-			t.AddComment(*comment)
+		if comment != "" {
+			t.AddComment(comment)
 		}
 		// Closing a task while its timer is running would leave a dangling
 		// open entry; the TUI auto-stops, so the CLI matches.
@@ -1564,7 +1578,7 @@ Tasks:
   taskr top [-n=N] [--json] [--wide]   show top-N by sequence score
   taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
   taskr edit <ref> [flags]             change fields on one task
-  taskr done <ref>... [--comment=...]  mark one or more tasks done (optional comment per task)
+  taskr done <ref>... [-m "why"]       mark one or more tasks done (-m/--comment adds a closing comment to each)
   taskr delete <ref>                   soft-delete a task (alias: rm)
   taskr subtask <parent> "title"       create a subtask (--each for multiple titles)
 

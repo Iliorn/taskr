@@ -321,6 +321,83 @@ func TestCliAddQuietIDPrintsOnlyID(t *testing.T) {
 	}
 }
 
+// Closing a task with `done -m` must attach the comment, and a filtered list
+// whose matches are all done must say so instead of a bare "(no tasks)" —
+// otherwise a finished project is indistinguishable from a typo'd filter.
+func TestCliDoneShortCommentAndListHintsHiddenDone(t *testing.T) {
+	const project = "done-hint-check"
+	var id string
+	out := captureStdout(t, func() {
+		if code := cliAdd([]string{"finish me", "--project", project, "--quiet-id"}); code != 0 {
+			t.Fatalf("add: exit %d", code)
+		}
+	})
+	id = strings.TrimSpace(out)
+
+	captureStdout(t, func() {
+		if code := cliDone([]string{id, "-m", "closed via short flag"}); code != 0 {
+			t.Fatalf("done -m: exit %d", code)
+		}
+	})
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, id)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if got.Status != todo.Done {
+		t.Fatalf("status = %v, want Done", got.Status)
+	}
+	if len(got.Comments) != 1 || got.Comments[0].Text != "closed via short flag" {
+		t.Errorf("comments = %+v, want the -m comment attached", got.Comments)
+	}
+
+	out = captureStdout(t, func() {
+		if code := cliList([]string{"--project", project}); code != 0 {
+			t.Fatalf("list: exit %d", code)
+		}
+	})
+	if !strings.Contains(out, "1 done match") || !strings.Contains(out, "--all") {
+		t.Errorf("list output = %q, want a hint that 1 done task is hidden behind --all", out)
+	}
+	out = captureStdout(t, func() {
+		if code := cliList([]string{"--project", project, "--all"}); code != 0 {
+			t.Fatalf("list --all: exit %d", code)
+		}
+	})
+	if !strings.Contains(out, "Finish me") { // add title-cases the first letter
+		t.Errorf("list --all output = %q, want the done task shown", out)
+	}
+	// A filter matching nothing at all keeps the plain marker (no false hint).
+	out = captureStdout(t, func() {
+		if code := cliList([]string{"--project", "no-such-project-zzz"}); code != 0 {
+			t.Fatalf("list: exit %d", code)
+		}
+	})
+	if !strings.Contains(out, "(no tasks)") {
+		t.Errorf("list output = %q, want plain '(no tasks)' when nothing matches at all", out)
+	}
+}
+
+// A hub host has server_listen/server_token in sync.json but no client URL;
+// sync --status must report the server role instead of looking unconfigured.
+func TestPrintSyncStatusReportsServerRole(t *testing.T) {
+	out := captureStdout(t, func() {
+		printSyncStatus(syncConfig{ServerListen: "100.64.0.1:8765", ServerToken: "tok"})
+	})
+	if !strings.Contains(out, "sync server (100.64.0.1:8765)") {
+		t.Errorf("status = %q, want the serving role with its listen address", out)
+	}
+	out = captureStdout(t, func() {
+		printSyncStatus(syncConfig{URL: "http://hub:8765"})
+	})
+	if strings.Contains(out, "sync server") {
+		t.Errorf("status = %q, must not claim server role on a plain client", out)
+	}
+}
+
 func TestCliAddJSONEmitsCreatedTask(t *testing.T) {
 	out := captureStdout(t, func() {
 		if code := cliAdd([]string{"json-add-check", "--json"}); code != 0 {

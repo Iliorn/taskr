@@ -147,6 +147,16 @@ func readSyncState() (st syncState, ok bool, err error) {
 // printSyncStatus reports the configured server and the last successful sync,
 // reading only local state (no network). Returns a process exit code.
 func printSyncStatus(cfg syncConfig) int {
+	// A hub host has server_listen/server_token in sync.json but usually no
+	// client URL — without this line, `sync --status` on the machine actually
+	// serving everyone reads like sync is broken ("none configured").
+	if cfg.ServerListen != "" || cfg.ServerToken != "" || cfg.ServerOn {
+		listen := cfg.ServerListen
+		if listen == "" {
+			listen = defaultServerListen
+		}
+		fmt.Printf("serving: this machine is a sync server (%s)\n", listen)
+	}
 	if cfg.URL != "" {
 		fmt.Printf("server: %s\n", cfg.URL)
 	} else {
