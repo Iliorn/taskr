@@ -588,11 +588,18 @@ func selfUpdate() error {
 			assetName = "taskr-macos-intel"
 		}
 	}
-	tmpFile := filepath.Join(os.TempDir(), assetName)
-	defer os.Remove(tmpFile)
+	// Stage the download in a private temp dir, not the shared os.TempDir():
+	// a fixed, predictable path like /tmp/taskr is writable by any local user,
+	// who could swap the file between the download and the install below.
+	stageDir, err := os.MkdirTemp("", "taskr-update-")
+	if err != nil {
+		return fmt.Errorf("could not create staging dir: %w", err)
+	}
+	defer os.RemoveAll(stageDir)
+	tmpFile := filepath.Join(stageDir, assetName)
 
 	cmd := exec.Command("gh", "release", "download", "--repo", "iliorn/taskr",
-		"--pattern", assetName, "-D", os.TempDir(), "--clobber")
+		"--pattern", assetName, "-D", stageDir, "--clobber")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("download failed: %s", strings.TrimSpace(string(out)))
 	}
