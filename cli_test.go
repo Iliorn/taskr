@@ -366,7 +366,9 @@ func TestCliAddBatchFromStdinSharesFlags(t *testing.T) {
 	}
 	os.Stdin = r
 	go func() {
-		io.WriteString(w, "batch-alpha\nbatch-beta\nbatch-gamma\n")
+		if _, err := io.WriteString(w, "batch-alpha\nbatch-beta\nbatch-gamma\n"); err != nil {
+			t.Errorf("write stdin: %v", err)
+		}
 		w.Close()
 	}()
 	code := cliAdd([]string{"-", "--project", "batchproj", "--p", "h"})
@@ -399,9 +401,17 @@ func TestCliAddBatchFromStdinSharesFlags(t *testing.T) {
 
 func TestCliAddBatchRejectsStart(t *testing.T) {
 	orig := os.Stdin
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
 	os.Stdin = r
-	go func() { io.WriteString(w, "x\n"); w.Close() }()
+	go func() {
+		if _, err := io.WriteString(w, "x\n"); err != nil {
+			t.Errorf("write stdin: %v", err)
+		}
+		w.Close()
+	}()
 	code := cliAdd([]string{"-", "--start"})
 	os.Stdin = orig
 	if code != 2 {
