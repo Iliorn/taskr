@@ -94,12 +94,86 @@ func saveSyncConfig(c syncConfig) error {
 	return os.WriteFile(syncConfigPath(), b, 0600)
 }
 
+// syncState is the outcome of the last successful sync, persisted so `taskr sync
+// --status` can report it without touching the network. Only successful syncs
+// update it, so a failed attempt never erases the last-known-good timestamp.
+type syncState struct {
+	LastSync  time.Time `json:"last_sync"`
+	Sent      int       `json:"sent"`
+	Received  int       `json:"received"`
+	Conflicts int       `json:"conflicts"`
+}
+
+func syncStatePath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".taskr", "sync-state.json")
+}
+
+// writeSyncState records the outcome of a successful sync. Best-effort — callers
+// ignore its error, since failing to note status must never fail the sync.
+func writeSyncState(sum syncSummary) error {
+	if err := ensureStorageDir(); err != nil {
+		return err
+	}
+	st := syncState{
+		LastSync:  time.Now().UTC(),
+		Sent:      sum.sent,
+		Received:  sum.received,
+		Conflicts: sum.conflicts,
+	}
+	b, err := json.MarshalIndent(st, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(syncStatePath(), b, 0600)
+}
+
+// readSyncState returns the last recorded sync outcome. ok is false (with a nil
+// error) when no sync has ever been recorded.
+func readSyncState() (st syncState, ok bool, err error) {
+	b, err := os.ReadFile(syncStatePath())
+	if os.IsNotExist(err) {
+		return syncState{}, false, nil
+	}
+	if err != nil {
+		return syncState{}, false, err
+	}
+	if err := json.Unmarshal(b, &st); err != nil {
+		return syncState{}, false, err
+	}
+	return st, true, nil
+}
+
+// printSyncStatus reports the configured server and the last successful sync,
+// reading only local state (no network). Returns a process exit code.
+func printSyncStatus(cfg syncConfig) int {
+	if cfg.URL != "" {
+		fmt.Printf("server: %s\n", cfg.URL)
+	} else {
+		fmt.Println("server: (none configured)")
+	}
+	st, ok, err := readSyncState()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "taskr sync: read state: %v\n", err)
+		return 1
+	}
+	if !ok {
+		fmt.Println("last sync: never")
+		return 0
+	}
+	fmt.Printf("last sync: %s (%s ago) — sent %d, received %d, %d conflict(s)\n",
+		st.LastSync.Local().Format("2006-01-02 15:04"), shortDur(time.Since(st.LastSync)),
+		st.Sent, st.Received, st.Conflicts)
+	return 0
+}
+
 func cliSync(args []string) int {
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 	url := fs.String("url", "", "sync server URL, e.g. http://100.x.y.z:8765 (or set TASKR_SYNC_URL)")
 	token := fs.String("token", "", "shared bearer token (or set TASKR_SYNC_TOKEN)")
 	save := fs.Bool("save", false, "persist --url/--token to ~/.taskr/sync.json for future syncs")
 	quiet := fs.Bool("quiet", false, "print nothing on success")
+	status := fs.Bool("status", false, "print the last sync time/result and exit (local only, no network)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -109,6 +183,11 @@ func cliSync(args []string) int {
 	}
 	if *token != "" {
 		cfg.Token = *token
+	}
+	// --status is a local read: report and exit before any config-required or
+	// network path, so it works even when no server is configured yet.
+	if *status {
+		return printSyncStatus(cfg)
 	}
 	if *save {
 		if err := saveSyncConfig(cfg); err != nil {
@@ -169,7 +248,11 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummar
 	if err := saveNormalized(h, ptrs, nil); err != nil {
 		return syncSummary{}, err
 	}
-	return syncSummary{sent: len(local), received: len(merged), conflicts: len(dropped)}, nil
+	sum := syncSummary{sent: len(local), received: len(merged), conflicts: len(dropped)}
+	// Record status for `taskr sync --status`. Best-effort: a write failure here
+	// must not fail an otherwise-successful sync.
+	_ = writeSyncState(sum)
+	return sum, nil
 }
 
 func postSync(cfg syncConfig, tasks []todo.Todo, timeout time.Duration) ([]todo.Todo, error) {

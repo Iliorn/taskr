@@ -1591,6 +1591,7 @@ Sync (cross-device):
   taskr sync [--url=U] [--token=T] [--save]  push/pull once against a sync server (--save stores config)
                                             auto-sync runs on its own once configured (set "auto_sync":false in
                                             ~/.taskr/sync.json to disable); conflicts log to ~/.taskr/sync.log
+  taskr sync --status                        print the last sync time/result (local only, no network)
 
 Meta:
   taskr --version                      print build version
