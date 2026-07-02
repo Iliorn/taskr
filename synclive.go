@@ -110,9 +110,19 @@ func (ls *liveSyncState) stream(cfg syncConfig) bool {
 	if resp.StatusCode != http.StatusOK {
 		return false
 	}
+	// Stall watchdog: the server writes a heartbeat comment every sseHeartbeat,
+	// so a read silence of several beats means the connection died without a
+	// FIN/RST (server power loss, network partition) and the blocked read would
+	// otherwise hang forever — live push silently gone for the session. Cancel
+	// the request so Scan unblocks and run() reconnects. Every received line
+	// (heartbeats included) re-arms it.
+	const stallAfter = 4 * sseHeartbeat
+	watchdog := time.AfterFunc(stallAfter, cancel)
+	defer watchdog.Stop()
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 0, 4096), 64*1024)
 	for sc.Scan() {
+		watchdog.Reset(stallAfter)
 		line := sc.Text()
 		if strings.HasPrefix(line, "event:") && strings.TrimSpace(line[len("event:"):]) == "changed" {
 			select {
