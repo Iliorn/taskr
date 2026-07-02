@@ -114,5 +114,6 @@ func savePersistedUndoEntries(stack []undoEntry) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	// 0600 like settings/sync state — the file holds full task content.
+	return os.WriteFile(path, data, 0600)
 }

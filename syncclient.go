@@ -267,11 +267,23 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummar
 			return syncSummary{}, err
 		}
 	}
-	sum := syncSummary{sent: len(local), received: len(merged), conflicts: len(dropped)}
+	// Count live tasks only: the wire sets include every tombstone ever made,
+	// so raw lengths would overstate forever ("received 400" on a no-op sync).
+	sum := syncSummary{sent: countLive(local), received: countLive(merged), conflicts: len(dropped)}
 	// Record status for `taskr sync --status`. Best-effort: a write failure here
 	// must not fail an otherwise-successful sync.
 	_ = writeSyncState(sum)
 	return sum, nil
+}
+
+func countLive(ts []todo.Todo) int {
+	n := 0
+	for i := range ts {
+		if !ts[i].Deleted {
+			n++
+		}
+	}
+	return n
 }
 
 func postSync(cfg syncConfig, tasks []todo.Todo, timeout time.Duration) ([]todo.Todo, error) {

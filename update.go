@@ -58,13 +58,18 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Heartbeat the running timer's last_seen at most once a minute so
 			// the stale-timer recoverer never mistakes this live timer for an
 			// abandoned one. recordSelfSave keeps the fs watcher from reloading
-			// on our own write.
+			// on our own write. The write itself runs as a tea.Cmd — off the
+			// Update goroutine — so a busy DB (concurrent sync/CLI write inside
+			// busy_timeout) can't freeze the UI for up to 5s.
 			if time.Since(m.lastTimerHeartbeat) >= time.Minute {
 				m.lastTimerHeartbeat = time.Now()
 				if m.watcher != nil {
 					m.watcher.recordSelfSave()
 				}
-				_ = heartbeatRunningTimers(db, time.Now())
+				return m, tea.Batch(timerTick(), func() tea.Msg {
+					_ = heartbeatRunningTimers(db, time.Now())
+					return nil
+				})
 			}
 			return m, timerTick()
 		}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -164,9 +165,14 @@ func startWatcher(state *watcherState, dir string) (cleanup func(), err error) {
 						// no point queueing more
 					}
 				})
-			case <-w.Errors:
-				// fsnotify error — log to stderr and keep going. A spurious
-				// error here shouldn't kill the watcher.
+			case err, ok := <-w.Errors:
+				if !ok {
+					return // watcher closed — Errors drained, stop reading it
+				}
+				// fsnotify error — log and keep going. A spurious error here
+				// shouldn't kill the watcher; rare enough that a stderr line
+				// (even under a live TUI) beats swallowing it.
+				log.Printf("taskr watcher: %v", err)
 			}
 		}
 	}()
