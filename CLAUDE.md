@@ -23,7 +23,12 @@ separate `golangci-lint` job. The check suite is `go test`, `go vet`, and
 golangci-lint (standard linters; `.golangci.yml` excludes the conventional
 ignored errors and the opinionated QF* style nits). Tests live alongside code
 (`*_test.go`) and cover storage, helpers, layout, tags, stats, and the
-client↔server sync round trip — not the Bubble Tea event loop.
+client↔server sync round trip. The Bubble Tea event loop is covered by two
+dedicated suites: `update_keyscript_test.go` drives real `Update` dispatch
+with scripted key sequences and asserts store/undo/save bookkeeping, and
+`undo_property_test.go` runs randomized op+undo pairs (fixed seeds) checking
+content digests round-trip. When adding a modal interaction, add a script
+flow for it.
 
 ### Releasing
 
