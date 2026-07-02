@@ -142,6 +142,26 @@ func TestMergeChildTombstoneBeatsLive(t *testing.T) {
 	}
 }
 
+func TestMergeChildBothTombstonesSymmetric(t *testing.T) {
+	// Both devices deleted the same comment with different DeletedAt. The
+	// resolution must be argument-order independent — the later tombstone wins
+	// either way — or each client's sync flips the server's copy back and
+	// forth, and the resulting write+broadcast per sync ping-pongs forever.
+	a := []todo.Comment{delComment("c1", at(time.Hour))}
+	b := []todo.Comment{delComment("c1", at(2 * time.Hour))}
+	ab := mergeComments(a, b)
+	ba := mergeComments(b, a)
+	if len(ab) != 1 || len(ba) != 1 {
+		t.Fatalf("want 1 tombstone each, got %d / %d", len(ab), len(ba))
+	}
+	if !ab[0].DeletedAt.Equal(ba[0].DeletedAt) {
+		t.Fatalf("asymmetric tombstone merge: a,b -> %v; b,a -> %v", ab[0].DeletedAt, ba[0].DeletedAt)
+	}
+	if !ab[0].DeletedAt.Equal(at(2 * time.Hour)) {
+		t.Errorf("later tombstone should win, got DeletedAt=%v", ab[0].DeletedAt)
+	}
+}
+
 // ── Tags / deps follow the scalar winner (LWW) ─────────────────────────────────
 
 func TestMergeTagsFollowScalarWinner(t *testing.T) {

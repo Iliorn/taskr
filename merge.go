@@ -81,7 +81,7 @@ func mergeTask(a, b todo.Todo) todo.Todo {
 // other), with the higher-hash one as the tiebreak so records written before
 // ModifiedAt existed (both zero) still resolve stably. Order follows first
 // appearance.
-func mergeChildren[T any](a, b []T, id func(T) string, deleted func(T) bool, modified func(T) time.Time) []T {
+func mergeChildren[T any](a, b []T, id func(T) string, deletedAt func(T) time.Time, modified func(T) time.Time) []T {
 	type slot struct {
 		v        T
 		isDel    bool
@@ -98,7 +98,20 @@ func mergeChildren[T any](a, b []T, id func(T) string, deleted func(T) bool, mod
 			order = append(order, k)
 		}
 		switch {
-		case deleted(x):
+		case !deletedAt(x).IsZero():
+			if s.isDel {
+				// Both sides are tombstones: resolve like laterWins does for
+				// tasks — later DeletedAt wins, hash tiebreak — so the result
+				// is independent of argument order. Without this the second
+				// argument always won, and two devices that each deleted the
+				// same child (different DeletedAt) would flip the server's
+				// store on every sync, ping-ponging forever.
+				dx, ds := deletedAt(x), deletedAt(s.v)
+				if dx.After(ds) || (dx.Equal(ds) && hashGreater(x, s.v)) {
+					s.v = x
+				}
+				return
+			}
 			s.isDel = true
 			s.v = x // keep the tombstone so deleted_at persists
 		case s.isDel:
@@ -130,7 +143,7 @@ func mergeChildren[T any](a, b []T, id func(T) string, deleted func(T) bool, mod
 func mergeComments(a, b []todo.Comment) []todo.Comment {
 	return mergeChildren(a, b,
 		func(c todo.Comment) string { return c.ID },
-		func(c todo.Comment) bool { return !c.DeletedAt.IsZero() },
+		func(c todo.Comment) time.Time { return c.DeletedAt },
 		func(c todo.Comment) time.Time { return c.ModifiedAt },
 	)
 }
@@ -138,7 +151,7 @@ func mergeComments(a, b []todo.Comment) []todo.Comment {
 func mergeLearnings(a, b []todo.Learning) []todo.Learning {
 	return mergeChildren(a, b,
 		func(l todo.Learning) string { return l.ID },
-		func(l todo.Learning) bool { return !l.DeletedAt.IsZero() },
+		func(l todo.Learning) time.Time { return l.DeletedAt },
 		func(l todo.Learning) time.Time { return l.ModifiedAt },
 	)
 }
@@ -150,7 +163,7 @@ func mergeLearnings(a, b []todo.Learning) []todo.Learning {
 func mergeTimeEntries(a, b []todo.TimeEntry) []todo.TimeEntry {
 	return mergeChildren(a, b,
 		func(e todo.TimeEntry) string { return e.ID },
-		func(e todo.TimeEntry) bool { return !e.DeletedAt.IsZero() },
+		func(e todo.TimeEntry) time.Time { return e.DeletedAt },
 		func(e todo.TimeEntry) time.Time {
 			if !e.ModifiedAt.IsZero() {
 				return e.ModifiedAt
