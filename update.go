@@ -415,6 +415,7 @@ func (m *model) performUndo() tea.Cmd {
 			}
 		}
 		m.restoreFromUndo(entry)
+		m.touchRestored(restored)
 		for _, id := range removed {
 			m.markTombstone(id)
 		}
@@ -435,12 +436,28 @@ func (m *model) performUndo() tea.Cmd {
 		restoredIDs = append(restoredIDs, id)
 		delete(before, id)
 	}
+	m.touchRestored(restoredIDs)
 	for id := range before {
 		m.markTombstone(id)
 	}
 	m.markModified(restoredIDs...)
 	m.err = fmt.Sprintf(tr("Undid: %s"), entry.desc)
 	return clearErrAfter()
+}
+
+// touchRestored stamps ModifiedAt=now on each task an undo just restored. The
+// restored state carries its original (old) ModifiedAt, and the sync merge is
+// last-writer-wins by that timestamp — without the bump, the state being undone
+// (a delete's tombstone with a newer DeletedAt, or an already-synced edit with a
+// newer ModifiedAt) wins the merge and silently re-applies itself on the next
+// sync. Stamping now makes the undo the latest writer, so it propagates.
+func (m *model) touchRestored(ids []string) {
+	now := time.Now()
+	for _, id := range ids {
+		if t := m.get(id); t != nil {
+			t.ModifiedAt = now
+		}
+	}
 }
 
 // ── Help overlay ──────────────────────────────────────────────────────────────

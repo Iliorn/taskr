@@ -214,6 +214,52 @@ func TestDeleteCascadesToSubtasks(t *testing.T) {
 	}
 }
 
+// ── Undo vs. sync ────────────────────────────────────────────────────────────
+
+// Undoing a delete must survive the next sync: the restored task carries a
+// fresh ModifiedAt so it out-times the delete's tombstone in the last-writer-
+// wins merge. Without the bump the tombstone (already propagated to the
+// server) wins and silently re-deletes the task.
+func TestUndoDeleteSurvivesSyncMerge(t *testing.T) {
+	task := todo.New("keep me")
+	task.ID = "k"
+	task.ModifiedAt = time.Now().Add(-time.Hour) // last edited well before the delete
+	m := modelWithTasks(t, task)
+
+	m = sendKey(t, m, "x")
+	m = sendKey(t, m, "y")
+	if m.get("k") != nil {
+		t.Fatal("task should be deleted after x/y")
+	}
+	deletedAt := time.Now()
+
+	m = sendKey(t, m, "u")
+	got := m.get("k")
+	if got == nil {
+		t.Fatal("undo should restore the task")
+	}
+	if !got.ModifiedAt.After(deletedAt) {
+		t.Errorf("restored ModifiedAt = %v, want after the deletion (%v) so the undo wins the merge",
+			got.ModifiedAt, deletedAt)
+	}
+
+	// The server still holds the tombstone from before the undo. The restored
+	// version must win the merge or the next sync would re-delete it.
+	tombstone := task
+	tombstone.Deleted = true
+	tombstone.DeletedAt = deletedAt
+	merged := Merge([]todo.Todo{tombstone}, []todo.Todo{*got})
+	for _, mt := range merged {
+		if mt.ID == "k" {
+			if mt.Deleted {
+				t.Error("merge picked the tombstone over the undo-restored task")
+			}
+			return
+		}
+	}
+	t.Error("restored task missing from merge output")
+}
+
 // ── Toggle done ──────────────────────────────────────────────────────────────
 
 func TestDKeyTogglesDone(t *testing.T) {
