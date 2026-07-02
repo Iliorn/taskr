@@ -89,7 +89,7 @@ func TestSyncConcurrentLocalWriteSurvives(t *testing.T) {
 		withComment := a
 		withComment.AddComment("added mid-flight")
 		saveTodos(t, ch, []todo.Todo{withComment})
-		if err := json.NewEncoder(w).Encode(syncResponse{Tasks: req.Tasks}); err != nil {
+		if err := json.NewEncoder(w).Encode(syncResponse(req)); err != nil {
 			t.Errorf("encode response: %v", err)
 		}
 	})
