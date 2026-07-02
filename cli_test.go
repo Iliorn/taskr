@@ -252,6 +252,27 @@ func TestCliAddDependsLinksExistingTask(t *testing.T) {
 	}
 }
 
+func TestCliAddNoteAndComment(t *testing.T) {
+	title := "atomic-note-comment-check"
+	if code := cliAdd([]string{title, "--note", "the freeform body", "--comment", "first log entry"}); code != 0 {
+		t.Fatalf("add with --note/--comment: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, title)
+	if err != nil {
+		t.Fatalf("find task: %v", err)
+	}
+	if got.Notes != "the freeform body" {
+		t.Errorf("Notes = %q, want %q", got.Notes, "the freeform body")
+	}
+	if len(got.Comments) != 1 || got.Comments[0].Text != "first log entry" {
+		t.Errorf("Comments = %+v, want a single comment %q", got.Comments, "first log entry")
+	}
+}
+
 func TestCliAddDependsUnknownRefFails(t *testing.T) {
 	if code := cliAdd([]string{"orphan", "--depends", "no-such-task-zzz"}); code != 2 {
 		t.Errorf("want exit 2 for unknown --depends ref, got %d", code)

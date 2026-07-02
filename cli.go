@@ -110,6 +110,7 @@ func dispatchCLI(args []string) int {
 // `--name=value`), so users can put the title in any position.
 var addValueFlags = map[string]bool{
 	"due": true, "p": true, "size": true, "project": true, "tag": true, "like": true, "recur": true, "depends": true,
+	"note": true, "comment": true,
 }
 
 func cliAdd(args []string) int {
@@ -125,6 +126,8 @@ func cliAdd(args []string) int {
 	recur := fs.String("recur", "", "recurrence rule: daily|weekly|monthly|yearly|weekdays|Nd|Nw|Nm|Ny")
 	depends := fs.String("depends", "", "make the new task depend on an existing task ref (blocks it until that task is done)")
 	like := fs.String("like", "", "clone priority/size/project/tags from an existing task ref")
+	note := fs.String("note", "", "set the task's notes field (freeform body)")
+	comment := fs.String("comment", "", "add an initial timestamped comment to the task")
 	startNow := fs.Bool("start", false, "start the time tracker on the new task (stops any other running timer first)")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: taskr add \"title\" [flags]")
@@ -208,6 +211,16 @@ func cliAdd(args []string) int {
 			return 2
 		}
 		t.AddDependency(dep.ID)
+	}
+	// --note/--comment let a rich task be created in one call instead of a
+	// follow-up `taskr edit`/`taskr comment`. Notes is the freeform body; a
+	// comment is a timestamped log entry — both are supported since they serve
+	// different purposes.
+	if *note != "" {
+		t.SetNotes(*note)
+	}
+	if *comment != "" {
+		t.AddComment(*comment)
 	}
 	// --start collapses the common "add then start tracking" two-call dance
 	// into one. We re-load to find any other running timer (the TUI's
@@ -1492,6 +1505,8 @@ Flags (add):
   --project=NAME  project
   --tag=t1,t2     comma-separated tags
   --like=REF      clone priority/size/project/tags from existing task (flags above override)
+  --note=TEXT     set the notes field (freeform body)
+  --comment=TEXT  add an initial timestamped comment
   --start         start the time tracker on the new task (stops any other running timer first)
 
 Flags (list / search):
