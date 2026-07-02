@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -296,6 +297,17 @@ func countLive(ts []todo.Todo) int {
 	return n
 }
 
+// syncTransport is shared by every sync round trip and the SSE listener. The
+// short dial timeout is the point: connecting to an unreachable server (a
+// Tailscale peer that's offline blackholes the SYN rather than refusing it)
+// must fail in seconds, not eat the whole request timeout — otherwise every
+// mutating CLI command stalls its full 10s on a laptop that's off the network.
+// Sharing one transport also reuses keep-alive connections across the periodic
+// syncs instead of re-dialing every tick.
+var syncTransport = &http.Transport{
+	DialContext: (&net.Dialer{Timeout: 3 * time.Second}).DialContext,
+}
+
 func postSync(cfg syncConfig, tasks []todo.Todo, timeout time.Duration) ([]todo.Todo, error) {
 	body, err := json.Marshal(syncRequest{Tasks: tasks})
 	if err != nil {
@@ -309,7 +321,7 @@ func postSync(cfg syncConfig, tasks []todo.Todo, timeout time.Duration) ([]todo.
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
-	resp, err := (&http.Client{Timeout: timeout}).Do(req)
+	resp, err := (&http.Client{Timeout: timeout, Transport: syncTransport}).Do(req)
 	if err != nil {
 		return nil, err
 	}

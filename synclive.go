@@ -100,8 +100,9 @@ func (ls *liveSyncState) stream(cfg syncConfig) bool {
 	req.Header.Set("Accept", "text/event-stream")
 
 	// No client timeout: the stream is long-lived and kept alive by heartbeats;
-	// ctx cancellation (stop) is what ends it.
-	resp, err := (&http.Client{}).Do(req)
+	// ctx cancellation (stop) is what ends it. The shared transport still bounds
+	// the dial, so an unreachable server fails into the backoff loop quickly.
+	resp, err := (&http.Client{Transport: syncTransport}).Do(req)
 	if err != nil {
 		return false
 	}
