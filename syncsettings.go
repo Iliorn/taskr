@@ -32,12 +32,34 @@ func (m *model) toggleSyncAuto() {
 	m.syncCfg.AutoSync = &v
 	m.saveSyncCfg()
 	// Turning auto-sync off: stop the real-time SSE listener so its goroutine
-	// and connection don't linger for the rest of the session. (The syncTick
-	// path restarts it when auto-sync is re-enabled.)
+	// and connection don't linger for the rest of the session. On re-enable the
+	// listener is NOT started here — this runs in void key-handler contexts that
+	// can't arm its reader cmd; the next syncTick starts and arms it instead.
 	if !v && m.liveSync != nil {
 		m.liveSync.close()
 		m.liveSync = nil
 	}
+}
+
+// restartLiveSync tears down the SSE listener and starts a fresh one against
+// the current config, returning the cmd that arms its reader (nil when live
+// sync shouldn't run). Must be called after any edit to the client-side sync
+// config (URL/token): the listener captures the config it was started with, so
+// without a restart it keeps streaming from — or reconnect-hammering — the old
+// server for the rest of the session.
+func (m *model) restartLiveSync() tea.Cmd {
+	if m.liveSync != nil {
+		m.liveSync.close()
+		m.liveSync = nil
+	}
+	if !m.autoSync {
+		return nil
+	}
+	if ls := startLiveSync(m.syncCfg); ls != nil {
+		m.liveSync = ls
+		return waitForSyncEvent(ls.ch)
+	}
+	return nil
 }
 
 // updateEditSyncURL handles the inline server-URL editor.
@@ -52,7 +74,7 @@ func (m model) updateEditSyncURL(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncCfg.URL = strings.TrimSpace(m.textInput.Value())
 			m.saveSyncCfg()
 			m.mode = modeNormal
-			return m, nil
+			return m, m.restartLiveSync()
 		case "esc":
 			m.mode = modeNormal
 			return m, nil
@@ -72,7 +94,7 @@ func (m model) updateEditSyncToken(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncCfg.Token = strings.TrimSpace(m.textInput.Value())
 			m.saveSyncCfg()
 			m.mode = modeNormal
-			return m, nil
+			return m, m.restartLiveSync()
 		case "esc":
 			m.mode = modeNormal
 			return m, nil

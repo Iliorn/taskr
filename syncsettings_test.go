@@ -61,3 +61,42 @@ func TestToggleSyncAuto(t *testing.T) {
 		t.Errorf("second toggle should turn auto-sync back on")
 	}
 }
+
+func TestRestartLiveSyncSwapsListener(t *testing.T) {
+	m := initialModel(&fakeRepo{})
+	m.syncCfg = syncConfig{URL: "http://127.0.0.1:1", Token: "tok"}
+	m.autoSync = autoSyncEnabled(m.syncCfg)
+
+	cmd := m.restartLiveSync()
+	old := m.liveSync
+	if old == nil || cmd == nil {
+		t.Fatalf("configured sync should start a listener and return an arm cmd")
+	}
+	defer old.close()
+
+	// Editing the URL must swap the listener — the old one captured the old
+	// config and would keep reconnecting to the old server.
+	m.syncCfg.URL = "http://127.0.0.1:2"
+	if cmd := m.restartLiveSync(); cmd == nil || m.liveSync == nil || m.liveSync == old {
+		t.Fatalf("restart should replace the listener with one on the new config")
+	}
+	defer m.liveSync.close()
+	select {
+	case <-old.stop:
+	default:
+		t.Errorf("old listener should be stopped after restart")
+	}
+
+	// Clearing the config must stop the listener and start nothing.
+	running := m.liveSync
+	m.syncCfg = syncConfig{}
+	m.autoSync = autoSyncEnabled(m.syncCfg)
+	if cmd := m.restartLiveSync(); cmd != nil || m.liveSync != nil {
+		t.Errorf("unconfigured sync must not run a listener")
+	}
+	select {
+	case <-running.stop:
+	default:
+		t.Errorf("listener should be stopped when config is cleared")
+	}
+}
