@@ -132,7 +132,7 @@ func cliAdd(args []string) int {
 	asJSON := fs.Bool("json", false, "emit the created task as JSON (includes its id) instead of the human line")
 	quietID := fs.Bool("quiet-id", false, "print only the new task's full id (for scripting / shell capture)")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: taskr add \"title\" [flags]")
+		fmt.Fprintln(os.Stderr, "usage: taskr add \"title\" [flags]   (or `taskr add -` to read one title per line from stdin)")
 		fs.PrintDefaults()
 	}
 	flagArgs, titleParts := splitFlagsAndPositionals(args, addValueFlags)
@@ -150,91 +150,139 @@ func cliAdd(args []string) int {
 	applyBiases(biasesFromSettings(settings))
 	repo := newSQLiteRepo()
 
-	t := todo.New(strings.Join(titleParts, " "))
-	// --like is applied first so explicit flags below override the cloned
-	// values. Skipped when empty to keep the no-clone path a single Save.
-	if *like != "" {
-		existing, err := repo.Load()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "load: %v\n", err)
-			return 1
-		}
-		src, err := findTaskByRef(existing, *like)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 2
-		}
-		t.Priority = src.Priority
-		t.Size = src.Size
-		t.Project = src.Project
-		for _, tag := range src.Tags {
-			t.AddTag(tag)
-		}
-	}
-	if *priority != "" {
-		t.Priority = parsePriorityFlag(*priority)
-	}
-	if *size != "" {
-		t.Size = parseSizeFlag(*size)
-	}
+	// Resolve everything that's shared across all created tasks exactly once
+	// (parsing and ref lookups), so batch add doesn't re-do it per line.
+	var dueDate time.Time
 	if *due != "" {
 		d, err := parseDueDate(*due)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "invalid due date %q: %v\n", *due, err)
 			return 2
 		}
-		t.DueDate = d
+		dueDate = d
 	}
-	if *project != "" {
-		t.Project = *project
-	}
-	if *tags != "" {
-		for _, tag := range strings.Split(*tags, ",") {
-			t.AddTag(tag)
-		}
-	}
+	var recurRule string
 	if *recur != "" {
 		canonical, ok := todo.ParseRecurrence(*recur)
 		if !ok {
 			fmt.Fprintf(os.Stderr, "invalid recurrence %q: use daily|weekly|monthly|yearly|weekdays|Nd|Nw|Nm|Ny\n", *recur)
 			return 2
 		}
-		t.Recurrence = canonical
+		recurRule = canonical
 	}
-	if *depends != "" {
-		existing, err := repo.Load()
+
+	// Titles: the joined positionals, or — when the sole positional is "-" —
+	// one per non-empty stdin line (batch add). Batch shares all flags across
+	// every task and writes them in a single transaction (one save, one sync).
+	batch := len(titleParts) == 1 && titleParts[0] == "-"
+	titles := []string{strings.Join(titleParts, " ")}
+	if batch {
+		if *startNow {
+			fmt.Fprintln(os.Stderr, "taskr add: --start can't be combined with batch stdin add (-)")
+			return 2
+		}
+		lines, err := readTitlesFromStdin(os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "read stdin: %v\n", err)
+			return 1
+		}
+		if len(lines) == 0 {
+			fmt.Fprintln(os.Stderr, "taskr add: no titles on stdin")
+			return 2
+		}
+		titles = lines
+	}
+
+	// --like / --depends / --start all need the existing set; load it once.
+	var (
+		existing []todo.Todo
+		likeSrc  *todo.Todo
+		depID    string
+	)
+	if *like != "" || *depends != "" || *startNow {
+		loaded, err := repo.Load()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "load: %v\n", err)
 			return 1
 		}
+		existing = loaded
+	}
+	if *like != "" {
+		src, err := findTaskByRef(existing, *like)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
+		likeSrc = src
+	}
+	if *depends != "" {
 		dep, err := findTaskByRef(existing, *depends)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		t.AddDependency(dep.ID)
+		depID = dep.ID
 	}
-	// --note/--comment let a rich task be created in one call instead of a
-	// follow-up `taskr edit`/`taskr comment`. Notes is the freeform body; a
-	// comment is a timestamped log entry — both are supported since they serve
-	// different purposes.
-	if *note != "" {
-		t.SetNotes(*note)
-	}
-	if *comment != "" {
-		t.AddComment(*comment)
-	}
-	// --start collapses the common "add then start tracking" two-call dance
-	// into one. We re-load to find any other running timer (the TUI's
-	// single-timer invariant applies to the CLI too), then stop those + start
-	// the new task + persist in one Save.
-	if *startNow {
-		existing, err := repo.Load()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "load: %v\n", err)
-			return 1
+
+	// buildTask stamps one task from the shared flags. --like is applied first
+	// so explicit flags override the cloned values; --note is the freeform body
+	// and --comment a timestamped log entry (both supported, distinct purposes).
+	buildTask := func(title string) todo.Todo {
+		t := todo.New(title)
+		if likeSrc != nil {
+			t.Priority = likeSrc.Priority
+			t.Size = likeSrc.Size
+			t.Project = likeSrc.Project
+			for _, tag := range likeSrc.Tags {
+				t.AddTag(tag)
+			}
 		}
-		dirty := []*todo.Todo{&t}
+		if *priority != "" {
+			t.Priority = parsePriorityFlag(*priority)
+		}
+		if *size != "" {
+			t.Size = parseSizeFlag(*size)
+		}
+		if *due != "" {
+			t.DueDate = dueDate
+		}
+		if *project != "" {
+			t.Project = *project
+		}
+		if *tags != "" {
+			for _, tag := range strings.Split(*tags, ",") {
+				t.AddTag(tag)
+			}
+		}
+		if recurRule != "" {
+			t.Recurrence = recurRule
+		}
+		if depID != "" {
+			t.AddDependency(depID)
+		}
+		if *note != "" {
+			t.SetNotes(*note)
+		}
+		if *comment != "" {
+			t.AddComment(*comment)
+		}
+		return t
+	}
+
+	created := make([]todo.Todo, len(titles))
+	for i, title := range titles {
+		created[i] = buildTask(title)
+	}
+	dirty := make([]*todo.Todo, 0, len(created)+1)
+	for i := range created {
+		dirty = append(dirty, &created[i])
+	}
+
+	// --start collapses the common "add then start tracking" two-call dance
+	// into one (single-task only; rejected above for batch). Stop any other
+	// running timer to keep the single-timer invariant, then start + save.
+	started := false
+	if *startNow {
 		for i := range existing {
 			if existing[i].IsTimerRunning() {
 				x := existing[i]
@@ -243,18 +291,52 @@ func cliAdd(args []string) int {
 				fmt.Fprintf(os.Stderr, "stopped: %s  %s\n", x.ID[:8], x.Title)
 			}
 		}
-		t.StartTimer()
-		if err := repo.Save(dirty, nil); err != nil {
-			fmt.Fprintf(os.Stderr, "save: %v\n", err)
-			return 1
-		}
-		return emitAddResult(&t, true, *asJSON, *quietID)
+		created[0].StartTimer()
+		started = true
 	}
-	if err := repo.Save([]*todo.Todo{&t}, nil); err != nil {
+
+	if err := repo.Save(dirty, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
 		return 1
 	}
-	return emitAddResult(&t, false, *asJSON, *quietID)
+	if batch {
+		return emitAddResultsBatch(created, *asJSON, *quietID)
+	}
+	return emitAddResult(&created[0], started, *asJSON, *quietID)
+}
+
+// readTitlesFromStdin returns one trimmed, non-empty title per line of r. Used
+// by `taskr add -` for batch creation from a pipe or heredoc.
+func readTitlesFromStdin(r io.Reader) ([]string, error) {
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	var titles []string
+	for _, line := range strings.Split(string(b), "\n") {
+		if s := strings.TrimSpace(line); s != "" {
+			titles = append(titles, s)
+		}
+	}
+	return titles, nil
+}
+
+// emitAddResultsBatch renders the outcome of a batch `taskr add -`: a JSON array
+// under --json, one bare id per line under --quiet-id, else one human line each.
+func emitAddResultsBatch(tasks []todo.Todo, asJSON, quietID bool) int {
+	switch {
+	case asJSON:
+		return emitJSON(tasks)
+	case quietID:
+		for i := range tasks {
+			fmt.Println(tasks[i].ID)
+		}
+	default:
+		for i := range tasks {
+			fmt.Printf("added %s  %s\n", tasks[i].ID[:8], tasks[i].Title)
+		}
+	}
+	return 0
 }
 
 // emitAddResult renders the outcome of `taskr add`. --json emits the full
@@ -1476,6 +1558,7 @@ Usage:
 
 Tasks:
   taskr add "title" [flags]            add a new task (--like <ref> clones, --depends <ref> blocks on, --start tracks)
+  taskr add -                          batch add: one task per stdin line (flags apply to all)
   taskr list [flags]                   list pending top-level tasks (filters below)
   taskr search "term" [flags]          title-substring search (includes done by default)
   taskr top [-n=N] [--json] [--wide]   show top-N by sequence score

@@ -339,6 +339,76 @@ func TestCliAddJSONEmitsCreatedTask(t *testing.T) {
 	}
 }
 
+func TestReadTitlesFromStdin(t *testing.T) {
+	in := "  first task \n\n second task\n\t\nthird\n"
+	got, err := readTitlesFromStdin(strings.NewReader(in))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	want := []string{"first task", "second task", "third"}
+	if len(got) != len(want) {
+		t.Fatalf("got %d titles %v, want %d %v", len(got), got, len(want), want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("title[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestCliAddBatchFromStdinSharesFlags(t *testing.T) {
+	// Redirect stdin so `add -` reads our lines; shared flags must land on every
+	// created task, and all should be written (one save).
+	orig := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdin = r
+	go func() {
+		io.WriteString(w, "batch-alpha\nbatch-beta\nbatch-gamma\n")
+		w.Close()
+	}()
+	code := cliAdd([]string{"-", "--project", "batchproj", "--p", "h"})
+	os.Stdin = orig
+	if code != 0 {
+		t.Fatalf("batch add: exit %d", code)
+	}
+
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	seen := map[string]*todo.Todo{}
+	for i := range todos {
+		seen[todos[i].Title] = &todos[i]
+	}
+	for _, want := range []string{"Batch-alpha", "Batch-beta", "Batch-gamma"} {
+		got, ok := seen[want]
+		if !ok {
+			t.Fatalf("missing batch task %q", want)
+		}
+		if got.Project != "batchproj" {
+			t.Errorf("%q project = %q, want batchproj", want, got.Project)
+		}
+		if got.Priority != todo.PriorityHigh {
+			t.Errorf("%q priority = %v, want high", want, got.Priority)
+		}
+	}
+}
+
+func TestCliAddBatchRejectsStart(t *testing.T) {
+	orig := os.Stdin
+	r, w, _ := os.Pipe()
+	os.Stdin = r
+	go func() { io.WriteString(w, "x\n"); w.Close() }()
+	code := cliAdd([]string{"-", "--start"})
+	os.Stdin = orig
+	if code != 2 {
+		t.Errorf("batch add --start: want exit 2, got %d", code)
+	}
+}
+
 func TestCliAddDependsUnknownRefFails(t *testing.T) {
 	if code := cliAdd([]string{"orphan", "--depends", "no-such-task-zzz"}); code != 2 {
 		t.Errorf("want exit 2 for unknown --depends ref, got %d", code)
