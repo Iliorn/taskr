@@ -260,6 +260,62 @@ func TestUndoDeleteSurvivesSyncMerge(t *testing.T) {
 	t.Error("restored task missing from merge output")
 }
 
+// An external reload (watcher/sync) rebuilds the Store from a DB snapshot.
+// It must not wipe what only exists in memory: the undo stack, an edit still
+// inside the save debounce, a pending tombstone, or a just-created task the
+// snapshot predates.
+func TestReloadPreservesUndoAndUnsavedChanges(t *testing.T) {
+	a := todo.New("alpha")
+	a.ID = "a"
+	b := todo.New("beta")
+	b.ID = "b"
+	m := modelWithTasks(t, a, b)
+	// initialModel may have loaded persisted delete-undo entries written by
+	// other tests in this binary's shared temp HOME — measure relative to it.
+	baseUndo := len(m.undoStack)
+
+	// Unflushed local state: an undoable title edit on a, a pending delete of
+	// b, and a brand-new task c — none of it in the snapshot below.
+	m.pushUndo("edit title", "a")
+	m.get("a").Title = "alpha edited"
+	m.markDirty("a")
+	m.remove("b")
+	m.markTombstone("b")
+	created := todo.New("gamma")
+	created.ID = "c"
+	m.add(created)
+	m.markDirty("c")
+
+	// Snapshot as the DB looked before any of that flushed, plus a task d
+	// written externally (the reason the reload fired).
+	external := todo.New("delta")
+	external.ID = "d"
+	next, _ := m.Update(reloadedMsg{todos: []todo.Todo{a, b, external}})
+	m = next.(model)
+
+	if len(m.undoStack) != baseUndo+1 {
+		t.Errorf("undo stack len = %d after reload, want %d", len(m.undoStack), baseUndo+1)
+	}
+	if got := m.get("a"); got == nil || got.Title != "alpha edited" {
+		t.Errorf("unsaved edit lost: a = %+v, want title %q", got, "alpha edited")
+	}
+	if _, ok := m.dirtyIDs["a"]; !ok {
+		t.Error("a should stay dirty so the scheduled save still flushes the edit")
+	}
+	if m.get("b") != nil {
+		t.Error("pending-tombstoned b resurrected by the reload snapshot")
+	}
+	if _, ok := m.tombstones["b"]; !ok {
+		t.Error("b's tombstone should survive the reload so the delete flushes")
+	}
+	if m.get("c") == nil {
+		t.Error("locally-created unflushed c lost in the reload")
+	}
+	if m.get("d") == nil {
+		t.Error("externally-written d should appear after the reload")
+	}
+}
+
 // ── Toggle done ──────────────────────────────────────────────────────────────
 
 func TestDKeyTogglesDone(t *testing.T) {

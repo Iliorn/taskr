@@ -191,11 +191,42 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Atomic swap: rebuild the Store from the freshly-loaded task set,
 		// invalidate caches, and follow the same task ID across the new
 		// ordering so the cursor stays anchored where the user expected.
+		//
+		// The swap must not wipe what only exists in memory: the undo stack,
+		// and any mutation still inside the save debounce (dirty tasks and
+		// pending tombstones the snapshot predates). Those local changes are
+		// newer than anything on disk — overlay them on the loaded set and
+		// carry the change set across so the scheduled save still flushes it.
 		taskID := m.currentTaskID()
+		undo := m.undoStack
+		dirtyIDs := m.dirtyIDs
+		tombstones := m.tombstones
+		dirtyTasks := make(map[string]todo.Todo, len(dirtyIDs))
+		for id := range dirtyIDs {
+			if t := m.get(id); t != nil {
+				dirtyTasks[id] = copyTodo(*t)
+			}
+		}
 		m.Store = Store{}
 		m.Store.ensureTasks()
+		m.undoStack = undo
+		m.dirtyIDs = dirtyIDs
+		m.tombstones = tombstones
 		for i := range msg.todos {
-			m.Store.add(msg.todos[i])
+			t := msg.todos[i]
+			if _, dead := tombstones[t.ID]; dead {
+				continue // deleted locally, deletion not yet flushed — stays dead
+			}
+			if d, ok := dirtyTasks[t.ID]; ok {
+				t = d // unsaved local edit is newer than the DB snapshot
+			}
+			m.Store.add(t)
+		}
+		// Dirty tasks the snapshot doesn't know yet (created locally, unflushed).
+		for id, d := range dirtyTasks {
+			if m.get(id) == nil {
+				m.Store.add(d)
+			}
 		}
 		m.markCacheDirty()
 		m.refreshCaches()
