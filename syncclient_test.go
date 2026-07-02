@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -61,6 +64,55 @@ func TestPrintSyncStatus(t *testing.T) {
 	if !strings.Contains(out, "sent 3, received 4, 1 conflict") {
 		t.Errorf("status = %q, want the sync summary", out)
 	}
+}
+
+// A local write landing while the sync round trip is in flight must survive
+// the apply. Before the re-merge fix, runClientSync saved the server's merged
+// set blind: a comment added after the client loaded its push set was missing
+// from the response, so saveChildren tombstoned it as "vanished" — and that
+// deletion then propagated. The test's server handler plays the concurrent
+// writer: it mutates the client DB before responding.
+func TestSyncConcurrentLocalWriteSurvives(t *testing.T) {
+	ch := openTestDB(t)
+	a := todo.New("task")
+	a.ID = "a"
+	saveTodos(t, ch, []todo.Todo{a})
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/sync", func(w http.ResponseWriter, r *http.Request) {
+		var req syncRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode push: %v", err)
+		}
+		// The concurrent local write: a comment added mid-flight, so it is
+		// absent from both the push and the response.
+		withComment := a
+		withComment.AddComment("added mid-flight")
+		saveTodos(t, ch, []todo.Todo{withComment})
+		if err := json.NewEncoder(w).Encode(syncResponse{Tasks: req.Tasks}); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
+	})
+	ts := httptest.NewServer(mux)
+	t.Cleanup(ts.Close)
+
+	if _, err := runClientSync(ch, syncConfig{URL: ts.URL, Token: "tok"}, 5*time.Second); err != nil {
+		t.Fatalf("client sync: %v", err)
+	}
+
+	live, err := loadTodosFromDB(ch)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	for _, task := range live {
+		if task.ID == "a" {
+			if len(task.Comments) != 1 {
+				t.Fatalf("comment added during the round trip was lost: %d live comments, want 1", len(task.Comments))
+			}
+			return
+		}
+	}
+	t.Fatal("task a missing after sync")
 }
 
 func TestDroppedLocalEditsDeletionVsEdit(t *testing.T) {
