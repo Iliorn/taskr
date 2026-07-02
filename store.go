@@ -314,8 +314,19 @@ func (s *Store) restoreFromUndo(entry undoEntry) {
 		for _, id := range entry.ids {
 			if before, ok := captured[id]; ok {
 				// Restore prior state in place by replacing the map entry.
+				// remove() wipes subtaskOf[id], but this task's children are
+				// not part of the entry — without re-attaching the bucket they
+				// stay live in the map yet unreachable from every subtask view
+				// until restart. (Children that ARE in the entry re-insert
+				// themselves via their own add.)
+				children := s.subtaskOf[id]
 				s.remove(id)
 				s.add(*before)
+				for _, cid := range children {
+					if c := s.tasks[cid]; c != nil && c.ParentID == id {
+						s.addSubtaskOf(id, c)
+					}
+				}
 			} else {
 				// Created after the push — undo means remove.
 				s.remove(id)

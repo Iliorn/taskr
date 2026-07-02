@@ -260,6 +260,75 @@ func TestUndoDeleteSurvivesSyncMerge(t *testing.T) {
 	t.Error("restored task missing from merge output")
 }
 
+// ── Undo vs. the subtaskOf index ─────────────────────────────────────────────
+
+// Undoing an edit on a parent restores it via remove+add, and remove() wipes
+// subtaskOf[parent]. The restore must re-attach the bucket, or the subtasks
+// stay live in the map but vanish from every subtask view until restart.
+func TestUndoEditKeepsSubtaskIndex(t *testing.T) {
+	now := time.Now()
+	parent := todo.New("parent")
+	parent.ID = "p"
+	parent.CreatedAt = now
+	s1 := todo.New("s1")
+	s1.ID = "s1"
+	s1.ParentID = "p"
+	s1.CreatedAt = now.Add(time.Second)
+	s2 := todo.New("s2")
+	s2.ID = "s2"
+	s2.ParentID = "p"
+	s2.CreatedAt = now.Add(2 * time.Second)
+	m := modelWithTasks(t, parent, s1, s2)
+
+	origTitle := parent.Title
+	m.pushUndo("edit title", "p")
+	m.get("p").Title = "renamed"
+	m.performUndo()
+
+	if got := m.get("p").Title; got != origTitle {
+		t.Errorf("undo should restore the title to %q, got %q", origTitle, got)
+	}
+	if got := m.subtaskIDs("p"); len(got) != 2 || got[0] != "s1" || got[1] != "s2" {
+		t.Errorf("subtaskOf[p] after undo = %v, want [s1 s2]", got)
+	}
+}
+
+// Undoing a subtask deletion captures the parent too (its subtask list
+// changed), so the parent's restore must not drop the surviving siblings
+// from the index while re-inserting the deleted subtask.
+func TestUndoDeleteSubtaskKeepsSiblingIndex(t *testing.T) {
+	now := time.Now()
+	parent := todo.New("parent")
+	parent.ID = "p"
+	parent.CreatedAt = now
+	s1 := todo.New("s1")
+	s1.ID = "s1"
+	s1.ParentID = "p"
+	s1.CreatedAt = now.Add(time.Second)
+	s2 := todo.New("s2")
+	s2.ID = "s2"
+	s2.ParentID = "p"
+	s2.CreatedAt = now.Add(2 * time.Second)
+	m := modelWithTasks(t, parent, s1, s2)
+
+	// Mirror updateConfirmDeleteSubtask: undo entry = parent + deleted subtree.
+	m.pushUndo("delete subtask", "p", "s1")
+	m.markTombstone("s1")
+	m.remove("s1")
+	if got := m.subtaskIDs("p"); len(got) != 1 || got[0] != "s2" {
+		t.Fatalf("precondition: subtaskOf[p] after delete = %v, want [s2]", got)
+	}
+
+	m.performUndo()
+
+	if m.get("s1") == nil {
+		t.Fatal("undo should restore the deleted subtask")
+	}
+	if got := m.subtaskIDs("p"); len(got) != 2 || got[0] != "s1" || got[1] != "s2" {
+		t.Errorf("subtaskOf[p] after undo = %v, want [s1 s2]", got)
+	}
+}
+
 // An external reload (watcher/sync) rebuilds the Store from a DB snapshot.
 // It must not wipe what only exists in memory: the undo stack, an edit still
 // inside the save debounce, a pending tombstone, or a just-created task the
