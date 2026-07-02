@@ -109,3 +109,31 @@ func TestLoadTodosClampsCorruptRow(t *testing.T) {
 		t.Errorf("expected warnings to reference the corrupt task id, got:\n%s", buf.String())
 	}
 }
+
+// TestParseTimeWarnsOnMalformed: a non-empty timestamp that doesn't parse is
+// corruption and must warn (loud like the enum clamps), while "" is the normal
+// unset encoding and stays silent.
+func TestParseTimeWarnsOnMalformed(t *testing.T) {
+	buf, restore := captureValidationWarnings(t)
+	defer restore()
+
+	if !parseTime("").IsZero() {
+		t.Errorf("empty string should parse to the zero time")
+	}
+	if buf.Len() > 0 {
+		t.Fatalf("empty string is the unset encoding and must not warn, got:\n%s", buf.String())
+	}
+	if !parseTime("not-a-timestamp").IsZero() {
+		t.Errorf("malformed timestamp should fall back to the zero time")
+	}
+	if !strings.Contains(buf.String(), "not-a-timestamp") {
+		t.Errorf("malformed timestamp should warn with the offending value, got:\n%s", buf.String())
+	}
+	buf.Reset()
+	if parseTime("2026-07-02T10:00:00.123456789Z").IsZero() {
+		t.Errorf("RFC3339Nano must parse")
+	}
+	if buf.Len() > 0 {
+		t.Errorf("valid timestamps must not warn, got:\n%s", buf.String())
+	}
+}

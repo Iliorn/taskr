@@ -216,6 +216,10 @@ func parseTime(s string) time.Time {
 	}
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
+		// Loud like the enum clamps below: a non-empty value that doesn't parse
+		// means corruption (manual SQL edit, bad migration), and silently
+		// treating it as unset would make e.g. a due date quietly vanish.
+		validationWarn("taskr: invalid timestamp %q — treated as unset\n", s)
 		return time.Time{}
 	}
 	return t
