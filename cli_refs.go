@@ -38,9 +38,24 @@ func loadForCLI() (Repository, []todo.Todo, error) {
 //
 // Both comparisons are case-insensitive.
 func findTaskByRef(todos []todo.Todo, ref string) (*todo.Todo, error) {
+	t, _, err := findTaskByRefKind(todos, ref)
+	return t, err
+}
+
+// refMatch reports which pass of findTaskByRefKind resolved the ref. Verbs
+// with destructive semantics (delete) use it to require confirmation on the
+// fuzzy title path while keeping exact id/prefix refs script-fast.
+type refMatch int
+
+const (
+	refMatchID refMatch = iota
+	refMatchTitle
+)
+
+func findTaskByRefKind(todos []todo.Todo, ref string) (*todo.Todo, refMatch, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return nil, fmt.Errorf("empty task reference (need id-prefix or title substring)")
+		return nil, refMatchID, fmt.Errorf("empty task reference (need id-prefix or title substring)")
 	}
 	q := strings.ToLower(ref)
 
@@ -53,11 +68,11 @@ func findTaskByRef(todos []todo.Todo, ref string) (*todo.Todo, error) {
 	}
 	switch len(idMatches) {
 	case 1:
-		return &todos[idMatches[0]], nil
+		return &todos[idMatches[0]], refMatchID, nil
 	case 0:
 		// fall through to title-substring
 	default:
-		return nil, ambiguousMatchError("id prefix", ref, todos, idMatches)
+		return nil, refMatchID, ambiguousMatchError("id prefix", ref, todos, idMatches)
 	}
 
 	// Pass 2: title substring (case-insensitive).
@@ -69,11 +84,11 @@ func findTaskByRef(todos []todo.Todo, ref string) (*todo.Todo, error) {
 	}
 	switch len(titleMatches) {
 	case 0:
-		return nil, fmt.Errorf("no task matches %q (tried id-prefix and title substring)", ref)
+		return nil, refMatchTitle, fmt.Errorf("no task matches %q (tried id-prefix and title substring)", ref)
 	case 1:
-		return &todos[titleMatches[0]], nil
+		return &todos[titleMatches[0]], refMatchTitle, nil
 	default:
-		return nil, ambiguousMatchError("title", ref, todos, titleMatches)
+		return nil, refMatchTitle, ambiguousMatchError("title", ref, todos, titleMatches)
 	}
 }
 

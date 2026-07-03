@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -25,7 +26,7 @@ func isCLICommand(arg string) bool {
 	case "add", "list", "ls", "done", "top",
 		"show", "edit", "delete", "rm", "comment",
 		"stats", "start", "stop", "log", "export", "subtask",
-		"search", "tags", "projects", "serve", "sync",
+		"search", "tags", "projects", "serve", "sync", "undo",
 		"help", "-h", "--help", "--version":
 		return true
 	}
@@ -50,7 +51,7 @@ func runCLI(args []string) int {
 // trigger an auto-sync afterward).
 func cliMutates(cmd string) bool {
 	switch cmd {
-	case "add", "done", "edit", "delete", "rm", "comment", "start", "stop", "log", "subtask":
+	case "add", "done", "edit", "delete", "rm", "comment", "start", "stop", "log", "subtask", "undo":
 		return true
 	}
 	return false
@@ -83,6 +84,8 @@ func dispatchCLI(args []string) int {
 		return cliStop(rest)
 	case "log":
 		return cliLog(rest)
+	case "undo":
+		return cliUndo(rest)
 	case "export":
 		return cliExport(rest)
 	case "subtask":
@@ -993,11 +996,13 @@ func cliEdit(args []string) int {
 func cliDelete(args []string) int {
 	fs := flag.NewFlagSet("delete", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
+	force := fs.Bool("f", false, "skip the confirmation prompt (title-substring matches only; id refs never prompt)")
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
+	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
-	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr delete <id-prefix>")
+	if len(positionals) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: taskr delete <ref> [-f]")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -1005,20 +1010,52 @@ func cliDelete(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, err := findByPrefix(todos, fs.Arg(0))
+	t, kind, err := findTaskByRefKind(todos, positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
+	}
+	children, get := sliceTaskLookups(todos)
+	ids := descendantIDsFrom(children, t.ID)
+	// A title-substring ref is fuzzy — the match may not be the task the user
+	// meant, and delete is the one verb where that's expensive. Confirm on the
+	// fuzzy path only; exact id/prefix refs stay script-fast, and -f opts out.
+	if kind == refMatchTitle && !*force {
+		what := fmt.Sprintf("delete %s  %q", t.ID[:8], t.Title)
+		if extra := len(ids) - 1; extra > 0 {
+			what += fmt.Sprintf(" (+%d subtask(s))", extra)
+		}
+		if !stdinIsTTY() {
+			fmt.Fprintf(os.Stderr, "taskr delete: %q matched by title substring and confirmation needs a terminal — use the id prefix %s, or -f\n",
+				positionals[0], t.ID[:8])
+			return 2
+		}
+		if !confirmStdin(what + "?") {
+			fmt.Fprintln(os.Stderr, "aborted")
+			return 1
+		}
 	}
 	// Soft delete via the Repository contract — the row is tombstoned and
 	// will not load again. Matches the TUI's delete semantics: cascade to
 	// every descendant so subtasks don't get stranded with a parent_id
 	// pointing at a tombstone.
-	children, _ := sliceTaskLookups(todos)
-	ids := descendantIDsFrom(children, t.ID)
 	if err := repo.Save(nil, ids); err != nil {
 		fmt.Fprintf(os.Stderr, "delete: %v\n", err)
 		return 1
+	}
+	// Record the pre-delete states in the undo sidecar so `taskr undo` (and
+	// the TUI, which seeds its undo stack from the same file) can restore
+	// this. Best-effort: a persist failure must not fail the delete.
+	entry := undoEntry{desc: undoDescDeleteTask, ids: ids}
+	for _, id := range ids {
+		if x := get(id); x != nil {
+			entry.partial = append(entry.partial, copyTodo(*x))
+		}
+	}
+	if entries, lerr := loadPersistedUndoEntries(); lerr == nil {
+		if perr := savePersistedUndoEntries(append(entries, entry)); perr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not record undo entry: %v\n", perr)
+		}
 	}
 	if extra := len(ids) - 1; extra > 0 {
 		noun := "subtask"
@@ -1029,7 +1066,114 @@ func cliDelete(args []string) int {
 	} else {
 		fmt.Printf("deleted %s  %s\n", t.ID[:8], t.Title)
 	}
+	fmt.Fprintln(os.Stderr, "(recoverable with `taskr undo`)")
 	return 0
+}
+
+// ── undo ─────────────────────────────────────────────────────────────────────
+
+// cliUndo restores the most recent persisted deletion (task or subtask, with
+// its captured descendants) from the undo sidecar — the same file the TUI
+// seeds its cross-restart undo stack from, so a delete made in either surface
+// is recoverable from either. Only deletions are persisted; everything else
+// stays TUI-session undo.
+func cliUndo(args []string) int {
+	fs := flag.NewFlagSet("undo", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	list := fs.Bool("list", false, "show the restorable deletions and exit")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	entries, err := loadPersistedUndoEntries()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "taskr undo: %v\n", err)
+		return 1
+	}
+	if len(entries) == 0 {
+		fmt.Fprintln(os.Stderr, "taskr undo: nothing to restore — only deletions are undoable from the CLI (last 5 kept)")
+		return 1
+	}
+	if *list {
+		for i := len(entries) - 1; i >= 0; i-- {
+			e := entries[i]
+			title := "(no captured tasks)"
+			if len(e.partial) > 0 {
+				title = e.partial[0].Title
+			}
+			marker := " "
+			if i == len(entries)-1 {
+				marker = "*" // next `taskr undo` restores this one
+			}
+			fmt.Printf("%s %s  %q  (%d task(s))\n", marker, e.desc, title, len(e.partial))
+		}
+		return 0
+	}
+
+	repo, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	live := make(map[string]bool, len(todos))
+	for i := range todos {
+		live[todos[i].ID] = true
+	}
+	entry := entries[len(entries)-1]
+	now := time.Now()
+	var restore []*todo.Todo
+	for i := range entry.partial {
+		t := &entry.partial[i]
+		if live[t.ID] {
+			// Already back (restored in the TUI, or re-created): overwriting
+			// the live row with the old snapshot would destroy newer edits.
+			fmt.Fprintf(os.Stderr, "skipping %s  %s — already exists\n", t.ID[:8], t.Title)
+			continue
+		}
+		// Stamp the restore as the latest write. The tombstone in the store
+		// (and on other devices) carries a newer DeletedAt than the captured
+		// pre-delete state, so without the bump the deletion would win the
+		// next sync merge and quietly re-apply itself.
+		t.ModifiedAt = now
+		restore = append(restore, t)
+	}
+	if len(restore) == 0 {
+		fmt.Fprintln(os.Stderr, "taskr undo: every task in the newest entry already exists — nothing to do")
+		if perr := savePersistedUndoEntries(entries[:len(entries)-1]); perr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not update undo history: %v\n", perr)
+		}
+		return 0
+	}
+	if err := repo.Save(restore, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "restore: %v\n", err)
+		return 1
+	}
+	// Pop the consumed entry so the next undo reaches the one before it.
+	if perr := savePersistedUndoEntries(entries[:len(entries)-1]); perr != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not update undo history: %v\n", perr)
+	}
+	for _, t := range restore {
+		fmt.Printf("restored %s  %s\n", t.ID[:8], t.Title)
+	}
+	return 0
+}
+
+// stdinIsTTY reports whether stdin is an interactive terminal — the gate for
+// asking a y/N question at all.
+func stdinIsTTY() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
+// confirmStdin prompts on stderr (stdout stays machine-clean) and accepts
+// y/yes case-insensitively; anything else, or EOF, declines.
+func confirmStdin(prompt string) bool {
+	fmt.Fprintf(os.Stderr, "%s [y/N] ", prompt)
+	sc := bufio.NewScanner(os.Stdin)
+	if !sc.Scan() {
+		return false
+	}
+	ans := strings.ToLower(strings.TrimSpace(sc.Text()))
+	return ans == "y" || ans == "yes"
 }
 
 // ── comment ──────────────────────────────────────────────────────────────────
@@ -1508,7 +1652,8 @@ Tasks:
   taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
   taskr edit <ref> [flags]             change fields on one task
   taskr done <ref>... [-m "why"]       mark one or more tasks done (-m/--comment adds a closing comment to each)
-  taskr delete <ref>                   soft-delete a task (alias: rm)
+  taskr delete <ref> [-f]              soft-delete a task (alias: rm; substring matches confirm first)
+  taskr undo [--list]                  restore the most recent deletion (task + subtasks)
   taskr subtask <parent> "title"       create a subtask (--each for multiple titles)
 
 Discovery:

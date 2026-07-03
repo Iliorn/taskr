@@ -865,3 +865,21 @@ func TestCommentTextFromPositionals(t *testing.T) {
 		t.Errorf("multiline stdin: got=%q err=%v", got, err)
 	}
 }
+
+// findTaskByRefKind must report WHICH pass matched: cliDelete only prompts
+// for confirmation on the fuzzy title path, so a kind mix-up either nags on
+// exact ids or (worse) deletes a fuzzy match silently.
+func TestFindTaskByRefKindReportsMatchPath(t *testing.T) {
+	a := todo.New("Buy milk")
+	a.ID = "1aaaaa00-aaaa"
+	b := todo.New("Call landlord")
+	b.ID = "2bbbbb00-bbbb"
+	todos := []todo.Todo{a, b}
+
+	if _, kind, err := findTaskByRefKind(todos, "1aaa"); err != nil || kind != refMatchID {
+		t.Errorf("id prefix: kind=%v err=%v, want refMatchID", kind, err)
+	}
+	if _, kind, err := findTaskByRefKind(todos, "landlord"); err != nil || kind != refMatchTitle {
+		t.Errorf("title substring: kind=%v err=%v, want refMatchTitle", kind, err)
+	}
+}
