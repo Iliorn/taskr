@@ -8,65 +8,15 @@ import (
 	"testing"
 	"time"
 
+	"taskr/tasksync"
 	"taskr/todo"
 )
 
-func TestStoreDigestOrderIndependent(t *testing.T) {
-	a := todo.New("alpha")
-	a.Tags = []string{"x", "y"}
-	b := todo.New("beta")
-
-	// Same content, different task order and different tag order → same digest.
-	a2 := a
-	a2.Tags = []string{"y", "x"}
-	set1 := []todo.Todo{a, b}
-	set2 := []todo.Todo{b, a2}
-	if storeDigest(set1) != storeDigest(set2) {
-		t.Errorf("digest should ignore task/tag ordering")
-	}
-
-	// A real change → different digest.
-	changed := a
-	changed.Title = "alpha edited"
-	if storeDigest([]todo.Todo{a, b}) == storeDigest([]todo.Todo{changed, b}) {
-		t.Errorf("digest should change when a title changes")
-	}
-}
-
-func TestStoreDigestDoesNotMutateInput(t *testing.T) {
-	a := todo.New("alpha")
-	a.Tags = []string{"z", "a"}
-	_ = storeDigest([]todo.Todo{a})
-	if a.Tags[0] != "z" || a.Tags[1] != "a" {
-		t.Errorf("storeDigest must not reorder the caller's slices, got %v", a.Tags)
-	}
-}
-
-func TestSSEHubCapAndNonBlocking(t *testing.T) {
-	h := newSSEHub()
-	for i := 0; i < sseMaxClients; i++ {
-		if h.subscribe() == nil {
-			t.Fatalf("subscribe %d should succeed under the cap", i)
-		}
-	}
-	if h.subscribe() != nil {
-		t.Errorf("subscribe past the cap must return nil")
-	}
-
-	// Broadcast must not block even when every buffer is already full.
-	done := make(chan struct{})
-	go func() { h.broadcast(); h.broadcast(); close(done) }()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("broadcast blocked on full subscriber buffers")
-	}
-}
-
 func TestSSEEventsRequireToken(t *testing.T) {
-	srv := &syncServer{db: openTestDB(t), token: "tok", hub: newSSEHub()}
+	h := openTestDB(t)
+	srv := &tasksync.Server{Token: "tok", Store: dbStore{h}, Hub: tasksync.NewHub()}
 	w := httptest.NewRecorder()
-	srv.handleEvents(w, httptest.NewRequest(http.MethodGet, "/v1/events", nil))
+	srv.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/events", nil))
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("unauthenticated events stream: want 401, got %d", w.Code)
 	}
@@ -76,8 +26,9 @@ func TestSSEEventsRequireToken(t *testing.T) {
 // /v1/events is nudged when a sync changes the store, and is NOT nudged by a
 // no-op sync (the skip-write guard).
 func TestSSEPushOnChange(t *testing.T) {
-	srv := &syncServer{db: openTestDB(t), token: "tok", hub: newSSEHub()}
-	ts := httptest.NewServer(srv.handler())
+	h := openTestDB(t)
+	srv := &tasksync.Server{Token: "tok", Store: dbStore{h}, Hub: tasksync.NewHub()}
+	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
 	events := make(chan string, 8)
@@ -101,10 +52,10 @@ func TestSSEPushOnChange(t *testing.T) {
 	}()
 
 	// Give the subscriber a moment to register before the first broadcast.
-	waitFor(t, func() bool { return srv.hub.subscriberCount() == 1 })
+	waitFor(t, func() bool { return srv.Hub.SubscriberCount() == 1 })
 
 	// A real change → exactly one "changed" event.
-	if _, err := srv.sync([]todo.Todo{todo.New("brand new")}); err != nil {
+	if _, err := srv.Sync([]todo.Todo{todo.New("brand new")}); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
 	select {
@@ -117,7 +68,7 @@ func TestSSEPushOnChange(t *testing.T) {
 	}
 
 	// A no-op sync (client already in sync) must not nudge.
-	if _, err := srv.sync(nil); err != nil {
+	if _, err := srv.Sync(nil); err != nil {
 		t.Fatalf("no-op sync: %v", err)
 	}
 	select {

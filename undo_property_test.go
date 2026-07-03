@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"taskr/tasksync"
 	"taskr/todo"
 )
 
@@ -27,7 +28,7 @@ func undoDigest(m model) [32]byte {
 	for i := range ts {
 		ts[i].ModifiedAt = time.Time{}
 	}
-	return storeDigest(ts)
+	return tasksync.StoreDigest(ts)
 }
 
 // normalize escs the model back to the list pane in normal mode, cancelling

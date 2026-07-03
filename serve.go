@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"flag"
@@ -12,11 +10,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
+	"taskr/tasksync"
 	"taskr/todo"
 )
 
@@ -41,16 +38,16 @@ func startSyncServer(listen, token string) (*http.Server, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	srv := &syncServer{db: db, token: token, hub: newSSEHub()}
+	srv := newAppSyncServer(token)
 	// Watch the store so out-of-process writes (a CLI taskr add on this host)
 	// also push to clients. Non-fatal if it can't start.
 	stopWatch := func() {}
-	if stop, werr := startChangeWatcher(srv.hub, taskrDir()); werr == nil {
+	if stop, werr := startChangeWatcher(srv.Hub, taskrDir()); werr == nil {
 		stopWatch = stop
 	}
 	// Addr is informational here (Serve uses ln); it reflects the actually-bound
 	// address, which matters when the configured port was 0 (OS-assigned).
-	httpServer := &http.Server{Addr: ln.Addr().String(), Handler: srv.handler(), ReadHeaderTimeout: 10 * time.Second}
+	httpServer := &http.Server{Addr: ln.Addr().String(), Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		// Serve blocks until the listener fails or Shutdown/Close is called;
 		// ErrServerClosed is the expected stop signal, anything else is a real
@@ -74,42 +71,6 @@ func startSyncServer(listen, token string) (*http.Server, func(), error) {
 // Anyone can run their own instance; the transport (Tailscale IP, localhost
 // behind a reverse proxy, LAN) is a deployment choice via --listen.
 
-type syncRequest struct {
-	Tasks []todo.Todo `json:"tasks"`
-}
-
-type syncResponse struct {
-	Tasks []todo.Todo `json:"tasks"`
-	// ServerTime lets the client detect a skewed local clock (see
-	// clockSkewWarning): the LWW merge runs on wall-clock timestamps, so a
-	// device with a bad clock silently loses or wrongly wins conflicts, and
-	// nothing else in the protocol would ever tell the user. Zero when the
-	// server predates the field; clients skip the check then.
-	ServerTime time.Time `json:"server_time,omitempty"`
-}
-
-// syncServer holds the store handle and serializes merges so concurrent client
-// syncs can't interleave load→merge→save and drop a write. hub fans real-time
-// change notifications out to subscribed clients (see ssehub.go).
-// lastStateWrite (guarded by mu) throttles the serve-state file writes.
-type syncServer struct {
-	db             *sql.DB
-	token          string
-	hub            *sseHub
-	mu             sync.Mutex
-	lastStateWrite time.Time
-}
-
-// handler builds the route set. Shared by both entry points (headless cliServe
-// and the in-process startSyncServer) so they never drift.
-func (s *syncServer) handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/health", s.handleHealth)
-	mux.HandleFunc("/v1/sync", s.handleSync)
-	mux.HandleFunc("/v1/events", s.handleEvents)
-	return mux
-}
-
 func cliServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	listen := fs.String("listen", "127.0.0.1:8765",
@@ -127,10 +88,10 @@ func cliServe(args []string) int {
 		fmt.Fprintf(os.Stderr, "taskr serve: open store: %v\n", err)
 		return 1
 	}
-	srv := &syncServer{db: db, token: *token, hub: newSSEHub()}
+	srv := newAppSyncServer(*token)
 	// Watch the store so out-of-process writes (a CLI taskr add on this host)
 	// also push to clients in real time, not just client-initiated merges.
-	if stop, werr := startChangeWatcher(srv.hub, taskrDir()); werr != nil {
+	if stop, werr := startChangeWatcher(srv.Hub, taskrDir()); werr != nil {
 		fmt.Fprintf(os.Stderr, "taskr serve: change watcher unavailable (%v); out-of-process writes won't push in real time\n", werr)
 	} else {
 		defer stop()
@@ -138,7 +99,7 @@ func cliServe(args []string) int {
 
 	httpServer := &http.Server{
 		Addr:              *listen,
-		Handler:           srv.handler(),
+		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	fmt.Fprintf(os.Stderr, "taskr serve: listening on %s (POST /v1/sync)\n", *listen)
@@ -149,76 +110,43 @@ func cliServe(args []string) int {
 	return 0
 }
 
-func (s *syncServer) handleHealth(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "ok")
+// dbStore adapts the app's SQLite store to tasksync.Store: MergeIn is the
+// transactional load+merge+save (mergeIntoStore), the one write path a sync
+// is allowed to use.
+type dbStore struct{ h *sql.DB }
+
+func (d dbStore) MergeIn(incoming []todo.Todo) ([]todo.Todo, bool, error) {
+	return mergeIntoStore(d.h, incoming)
 }
 
-func (s *syncServer) authorized(r *http.Request) bool {
-	const prefix = "Bearer "
-	h := r.Header.Get("Authorization")
-	if !strings.HasPrefix(h, prefix) {
-		return false
-	}
-	got := strings.TrimPrefix(h, prefix)
-	// Constant-time compare so the token can't be guessed by timing.
-	return subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) == 1
-}
-
-func (s *syncServer) handleSync(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !s.authorized(r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-	var req syncRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<20)).Decode(&req); err != nil {
-		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	merged, err := s.sync(req.Tasks)
-	if err != nil {
-		http.Error(w, "merge failed: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(syncResponse{Tasks: merged, ServerTime: time.Now().UTC()}); err != nil {
-		log.Printf("taskr serve: encode response: %v", err)
+// newAppSyncServer wires a tasksync.Server to this app: the shared SQLite
+// store, a fresh SSE hub, and the serve-state file (throttled) so
+// `taskr sync --status` on this host can report the last client contact.
+func newAppSyncServer(token string) *tasksync.Server {
+	return &tasksync.Server{
+		Token:        token,
+		Store:        dbStore{db},
+		Hub:          tasksync.NewHub(),
+		OnClientSync: noteClientSync,
 	}
 }
 
-// sync merges the client's tasks into the authoritative set, persists the
-// result, and returns it. Serialized by mu so concurrent syncs are atomic.
-func (s *syncServer) sync(clientTasks []todo.Todo) ([]todo.Todo, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// noteClientSync records an inbound client sync for `sync --status`,
+// throttled to once a minute. Best-effort — a write failure must never fail
+// the sync that triggered it.
+var (
+	serveStateMu        sync.Mutex
+	lastServeStateWrite time.Time
+)
 
-	clampFutureEventTimes(clientTasks, time.Now())
-	// Note the client contact for `sync --status` on this host: a hub with no
-	// client URL of its own otherwise reports "last sync: never", reading as
-	// broken while it serves every other device daily. Throttled + best-effort.
-	if now := time.Now(); now.Sub(s.lastStateWrite) > time.Minute {
-		s.lastStateWrite = now
-		_ = writeServeState(now)
+func noteClientSync(now time.Time) {
+	serveStateMu.Lock()
+	defer serveStateMu.Unlock()
+	if now.Sub(lastServeStateWrite) < time.Minute {
+		return
 	}
-	// Load, merge and save run inside one transaction (mergeIntoStore): mu only
-	// serializes HTTP-level syncs, and a CLI write on this host is a different
-	// process that mu cannot see — transactionality is what keeps such a write
-	// from being overwritten (or its fresh comment tombstoned) mid-merge.
-	merged, changed, err := mergeIntoStore(s.db, clientTasks)
-	if err != nil {
-		return nil, err
-	}
-	// Nudge every connected client to pull — only when something was actually
-	// written (a no-op pull must not broadcast, or syncs would feed back). The
-	// change watcher would also catch the write, but broadcasting here makes
-	// client→client propagation immediate and independent of fsnotify.
-	if changed && s.hub != nil {
-		s.hub.broadcast()
-	}
-	return merged, nil
+	lastServeStateWrite = now
+	_ = writeServeState(now)
 }
 
 // serveState records hub-side sync facts, currently just the last time any
@@ -257,91 +185,4 @@ func readServeState() (serveState, bool) {
 		return serveState{}, false
 	}
 	return st, true
-}
-
-// maxClientClockSkew bounds how far ahead of the server's clock a client's
-// merge-ordering timestamps may run. The merge is last-writer-wins by
-// ModifiedAt/DeletedAt, all stamped from device wall clocks — a device with a
-// clock hours in the future would win every conflict it touches until real
-// time catches up (and its edits would be unbeatable by devices with correct
-// clocks). Five minutes tolerates ordinary NTP drift without letting a broken
-// clock own the store.
-const maxClientClockSkew = 5 * time.Minute
-
-// clampFutureEventTimes pulls any merge-ordering timestamp (task and child
-// ModifiedAt/DeletedAt) that is more than maxClientClockSkew ahead of now back
-// to now, in place. Domain dates (DueDate, StartDate, time-entry bounds) are
-// deliberately untouched — a future due date is data, not clock skew.
-func clampFutureEventTimes(tasks []todo.Todo, now time.Time) {
-	limit := now.Add(maxClientClockSkew)
-	clamp := func(t *time.Time) {
-		if t.After(limit) {
-			*t = now
-		}
-	}
-	for i := range tasks {
-		t := &tasks[i]
-		clamp(&t.ModifiedAt)
-		clamp(&t.DeletedAt)
-		for j := range t.Comments {
-			clamp(&t.Comments[j].ModifiedAt)
-			clamp(&t.Comments[j].DeletedAt)
-		}
-		for j := range t.Learnings {
-			clamp(&t.Learnings[j].ModifiedAt)
-			clamp(&t.Learnings[j].DeletedAt)
-		}
-		for j := range t.TimeEntries {
-			clamp(&t.TimeEntries[j].ModifiedAt)
-			clamp(&t.TimeEntries[j].DeletedAt)
-		}
-	}
-}
-
-// storeDigest is an order-independent fingerprint of a task set: identical
-// content hashes identically regardless of slice ordering, so sync() can tell
-// whether a merge actually changed the store. It must have no false positives —
-// a stable order is imposed on the task slice and every child/tag slice before
-// hashing — or the no-op-write guard could loop.
-func storeDigest(ts []todo.Todo) [32]byte {
-	cp := make([]todo.Todo, len(ts))
-	copy(cp, ts)
-	for i := range cp {
-		canonicalizeForDigest(&cp[i])
-	}
-	sort.Slice(cp, func(i, j int) bool { return cp[i].ID < cp[j].ID })
-	b, _ := json.Marshal(cp)
-	return sha256.Sum256(b)
-}
-
-// canonicalizeForDigest replaces a task's order-insensitive slices with sorted
-// copies — never mutating the caller's backing arrays — so storeDigest is stable
-// across the reordering a merge may introduce.
-func canonicalizeForDigest(t *todo.Todo) {
-	t.Tags = sortedStrings(t.Tags)
-	t.Dependencies = sortedStrings(t.Dependencies)
-	if len(t.Comments) > 1 {
-		c := append([]todo.Comment(nil), t.Comments...)
-		sort.Slice(c, func(i, j int) bool { return c[i].ID < c[j].ID })
-		t.Comments = c
-	}
-	if len(t.Learnings) > 1 {
-		l := append([]todo.Learning(nil), t.Learnings...)
-		sort.Slice(l, func(i, j int) bool { return l[i].ID < l[j].ID })
-		t.Learnings = l
-	}
-	if len(t.TimeEntries) > 1 {
-		e := append([]todo.TimeEntry(nil), t.TimeEntries...)
-		sort.Slice(e, func(i, j int) bool { return e[i].ID < e[j].ID })
-		t.TimeEntries = e
-	}
-}
-
-func sortedStrings(s []string) []string {
-	if len(s) < 2 {
-		return s
-	}
-	c := append([]string(nil), s...)
-	sort.Strings(c)
-	return c
 }

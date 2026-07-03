@@ -72,7 +72,7 @@ func TestRestartLiveSyncSwapsListener(t *testing.T) {
 	if old == nil || cmd == nil {
 		t.Fatalf("configured sync should start a listener and return an arm cmd")
 	}
-	defer old.close()
+	defer old.Close()
 
 	// Editing the URL must swap the listener — the old one captured the old
 	// config and would keep reconnecting to the old server.
@@ -80,9 +80,9 @@ func TestRestartLiveSyncSwapsListener(t *testing.T) {
 	if cmd := m.restartLiveSync(); cmd == nil || m.liveSync == nil || m.liveSync == old {
 		t.Fatalf("restart should replace the listener with one on the new config")
 	}
-	defer m.liveSync.close()
+	defer m.liveSync.Close()
 	select {
-	case <-old.stop:
+	case <-old.Done():
 	default:
 		t.Errorf("old listener should be stopped after restart")
 	}
@@ -95,7 +95,7 @@ func TestRestartLiveSyncSwapsListener(t *testing.T) {
 		t.Errorf("unconfigured sync must not run a listener")
 	}
 	select {
-	case <-running.stop:
+	case <-running.Done():
 	default:
 		t.Errorf("listener should be stopped when config is cleared")
 	}

@@ -1,4 +1,4 @@
-package main
+package tasksync
 
 import (
 	"reflect"
@@ -148,7 +148,7 @@ func TestMergeChildBothTombstonesSymmetric(t *testing.T) {
 	// either way — or each client's sync flips the server's copy back and
 	// forth, and the resulting write+broadcast per sync ping-pongs forever.
 	a := []todo.Comment{delComment("c1", at(time.Hour))}
-	b := []todo.Comment{delComment("c1", at(2 * time.Hour))}
+	b := []todo.Comment{delComment("c1", at(2*time.Hour))}
 	ab := mergeComments(a, b)
 	ba := mergeComments(b, a)
 	if len(ab) != 1 || len(ba) != 1 {

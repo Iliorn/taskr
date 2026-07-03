@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"taskr/tasksync"
 	"taskr/todo"
 )
 
@@ -248,7 +249,7 @@ func TestUndoDeleteSurvivesSyncMerge(t *testing.T) {
 	tombstone := task
 	tombstone.Deleted = true
 	tombstone.DeletedAt = deletedAt
-	merged := Merge([]todo.Todo{tombstone}, []todo.Todo{*got})
+	merged := tasksync.Merge([]todo.Todo{tombstone}, []todo.Todo{*got})
 	for _, mt := range merged {
 		if mt.ID == "k" {
 			if mt.Deleted {

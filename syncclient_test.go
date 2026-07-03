@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"taskr/tasksync"
 	"taskr/todo"
 )
 
@@ -80,7 +81,7 @@ func TestSyncConcurrentLocalWriteSurvives(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/sync", func(w http.ResponseWriter, r *http.Request) {
-		var req syncRequest
+		var req tasksync.Request
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Errorf("decode push: %v", err)
 		}
@@ -89,7 +90,7 @@ func TestSyncConcurrentLocalWriteSurvives(t *testing.T) {
 		withComment := a
 		withComment.AddComment("added mid-flight")
 		saveTodos(t, ch, []todo.Todo{withComment})
-		if err := json.NewEncoder(w).Encode(syncResponse{Tasks: req.Tasks}); err != nil {
+		if err := json.NewEncoder(w).Encode(tasksync.Response{Tasks: req.Tasks}); err != nil {
 			t.Errorf("encode response: %v", err)
 		}
 	})
@@ -131,7 +132,7 @@ func TestDroppedLocalEditsDeletionVsEdit(t *testing.T) {
 	delAfter := live
 	delAfter.Deleted = true
 	delAfter.DeletedAt = base.Add(time.Hour)
-	if d := droppedLocalEdits([]todo.Todo{live}, []todo.Todo{delAfter}, since); len(d) != 0 {
+	if d := tasksync.DroppedLocalEdits([]todo.Todo{live}, []todo.Todo{delAfter}, since); len(d) != 0 {
 		t.Errorf("remote deletion of an unedited live task should not be a conflict, got %d", len(d))
 	}
 
@@ -142,13 +143,13 @@ func TestDroppedLocalEditsDeletionVsEdit(t *testing.T) {
 	delBefore := live
 	delBefore.Deleted = true
 	delBefore.DeletedAt = base.Add(time.Hour)
-	if d := droppedLocalEdits([]todo.Todo{edited}, []todo.Todo{delBefore}, since); len(d) != 1 {
+	if d := tasksync.DroppedLocalEdits([]todo.Todo{edited}, []todo.Todo{delBefore}, since); len(d) != 1 {
 		t.Errorf("a local edit newer than the deletion should be a conflict, got %d", len(d))
 	}
 
 	// Case 3: both sides live, scalar fields differ, local edited since the
 	// last sync → conflict.
-	if d := droppedLocalEdits([]todo.Todo{live}, []todo.Todo{contested(live)}, since); len(d) != 1 {
+	if d := tasksync.DroppedLocalEdits([]todo.Todo{live}, []todo.Todo{contested(live)}, since); len(d) != 1 {
 		t.Errorf("a contested live edit should still be a conflict, got %d", len(d))
 	}
 }
@@ -175,12 +176,12 @@ func TestDroppedLocalEditsBaseline(t *testing.T) {
 
 	// Last sync happened after our copy's ModifiedAt → we haven't touched it →
 	// the overwrite is plain propagation, not a conflict.
-	if d := droppedLocalEdits([]todo.Todo{local}, []todo.Todo{remote}, base.Add(time.Hour)); len(d) != 0 {
+	if d := tasksync.DroppedLocalEdits([]todo.Todo{local}, []todo.Todo{remote}, base.Add(time.Hour)); len(d) != 0 {
 		t.Errorf("inbound remote edit of an untouched task logged as conflict, got %d", len(d))
 	}
 
 	// Zero baseline (no sync ever recorded) → conservative: log it.
-	if d := droppedLocalEdits([]todo.Todo{local}, []todo.Todo{remote}, time.Time{}); len(d) != 1 {
+	if d := tasksync.DroppedLocalEdits([]todo.Todo{local}, []todo.Todo{remote}, time.Time{}); len(d) != 1 {
 		t.Errorf("with no baseline the overwrite should be logged, got %d", len(d))
 	}
 }
@@ -227,7 +228,7 @@ func TestInsecureSyncURLWarning(t *testing.T) {
 		"http://hoth.tail1234.ts.net:8765",
 	}
 	for _, u := range quiet {
-		if w := insecureSyncURLWarning(u); w != "" {
+		if w := tasksync.InsecureURLWarning(u); w != "" {
 			t.Errorf("unexpected warning for %q: %s", u, w)
 		}
 	}
@@ -237,7 +238,7 @@ func TestInsecureSyncURLWarning(t *testing.T) {
 		"http://100.32.1.1:8765",      // 100.x but below CGNAT range
 	}
 	for _, u := range loud {
-		if w := insecureSyncURLWarning(u); w == "" {
+		if w := tasksync.InsecureURLWarning(u); w == "" {
 			t.Errorf("expected warning for %q, got none", u)
 		}
 	}
@@ -249,16 +250,16 @@ func TestInsecureSyncURLWarning(t *testing.T) {
 func TestClockSkewWarning(t *testing.T) {
 	now := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)
 
-	if w := clockSkewWarning(time.Time{}, now); w != "" {
+	if w := tasksync.ClockSkewWarning(time.Time{}, now); w != "" {
 		t.Errorf("zero server time should skip the check, got %q", w)
 	}
-	if w := clockSkewWarning(now.Add(-2*time.Minute), now); w != "" {
+	if w := tasksync.ClockSkewWarning(now.Add(-2*time.Minute), now); w != "" {
 		t.Errorf("2m skew is inside tolerance, got %q", w)
 	}
-	if w := clockSkewWarning(now.Add(-20*time.Minute), now); w == "" {
+	if w := tasksync.ClockSkewWarning(now.Add(-20*time.Minute), now); w == "" {
 		t.Error("client 20m ahead of server should warn")
 	}
-	if w := clockSkewWarning(now.Add(20*time.Minute), now); w == "" {
+	if w := tasksync.ClockSkewWarning(now.Add(20*time.Minute), now); w == "" {
 		t.Error("client 20m behind server should warn")
 	}
 }

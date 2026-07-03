@@ -11,6 +11,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"taskr/tasksync"
 	"taskr/todo"
 )
 
@@ -315,7 +316,7 @@ type model struct {
 	inprocServer   *http.Server
 	inprocStop     func() // stops the in-process server's change watcher
 	serverExternal bool
-	liveSync       *liveSyncState // SSE listener for real-time inbound push
+	liveSync       *tasksync.Listener // SSE listener for real-time inbound push
 	// lastTimerHeartbeat throttles how often the running timer's last_seen is
 	// written to the DB (see the timer tick) so a live timer stays "fresh"
 	// against the stale-timer recoverer without writing every second.
@@ -478,7 +479,7 @@ func (m model) Init() tea.Cmd {
 		cmds = append(cmds, waitForDBChange(m.watcher.ch))
 	}
 	if m.liveSync != nil {
-		cmds = append(cmds, waitForSyncEvent(m.liveSync.ch))
+		cmds = append(cmds, waitForSyncEvent(m.liveSync.C))
 	}
 	// Keep a periodic sync tick running for the whole session so enabling sync
 	// from Settings mid-session takes effect; only sync immediately on launch

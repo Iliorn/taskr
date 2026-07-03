@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fsnotify/fsnotify"
+	"taskr/tasksync"
 	"taskr/todo"
 )
 
@@ -191,4 +192,30 @@ func waitForDBChange(ch chan dbChangedMsg) tea.Cmd {
 	return func() tea.Msg {
 		return <-ch
 	}
+}
+
+// startChangeWatcher watches the storage directory and nudges the hub whenever
+// tasks.db changes, so a direct CLI write on the server host (taskr add/done…)
+// reaches connected clients in real time — not only client-initiated merges. It
+// reuses the same fsnotify plumbing the TUI uses for live reload. Returns a stop
+// func; if the watcher can't start the server still works, it just loses
+// real-time push for out-of-process writes (client syncs still nudge directly).
+func startChangeWatcher(hub *tasksync.Hub, dir string) (stop func(), err error) {
+	state := newWatcherState()
+	cleanup, err := startWatcher(state, dir)
+	if err != nil {
+		return nil, err
+	}
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case <-state.ch:
+				hub.Broadcast()
+			}
+		}
+	}()
+	return func() { close(done); cleanup() }, nil
 }

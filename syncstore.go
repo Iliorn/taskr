@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"database/sql"
-	"encoding/json"
 	"strings"
 	"time"
 
+	"taskr/tasksync"
 	"taskr/todo"
 )
 
@@ -65,7 +65,7 @@ func mergeIntoStoreOnce(h *sql.DB, incoming []todo.Todo) ([]todo.Todo, bool, err
 	if mergeStoreTestHook != nil {
 		mergeStoreTestHook()
 	}
-	merged := Merge(current, incoming)
+	merged := tasksync.Merge(current, incoming)
 	// Write only the rows the merge actually changed. Previously every merged
 	// task was rewritten — O(whole store) of DB churn per sync, and every
 	// untouched row was still a potential clobber surface. An empty change set
@@ -86,7 +86,7 @@ func mergeIntoStoreOnce(h *sql.DB, incoming []todo.Todo) ([]todo.Todo, bool, err
 
 // changedTasks returns pointers to the merged tasks whose canonical form
 // differs from their pre-merge counterpart, or that are new. Canonicalization
-// reuses storeDigest's ordering rules, so slice reordering introduced by the
+// reuses the sync digest's ordering rules, so slice reordering introduced by the
 // merge never reads as a change (no false positives to loop the watcher), and
 // json.Marshal is deterministic, so a real change is never missed. Merge only
 // unions IDs — a task present in current is always present in merged — so
@@ -94,24 +94,16 @@ func mergeIntoStoreOnce(h *sql.DB, incoming []todo.Todo) ([]todo.Todo, bool, err
 func changedTasks(current, merged []todo.Todo) []*todo.Todo {
 	prev := make(map[string][]byte, len(current))
 	for i := range current {
-		prev[current[i].ID] = canonicalJSON(current[i])
+		prev[current[i].ID] = tasksync.CanonicalJSON(current[i])
 	}
 	var dirty []*todo.Todo
 	for i := range merged {
-		if b, ok := prev[merged[i].ID]; ok && bytes.Equal(b, canonicalJSON(merged[i])) {
+		if b, ok := prev[merged[i].ID]; ok && bytes.Equal(b, tasksync.CanonicalJSON(merged[i])) {
 			continue
 		}
 		dirty = append(dirty, &merged[i])
 	}
 	return dirty
-}
-
-// canonicalJSON is a task's order-insensitive fingerprint source: a value copy
-// with its unordered slices sorted (canonicalizeForDigest), marshalled.
-func canonicalJSON(t todo.Todo) []byte {
-	canonicalizeForDigest(&t)
-	b, _ := json.Marshal(t)
-	return b
 }
 
 // isBusyErr reports whether err is SQLite telling us another writer got in the

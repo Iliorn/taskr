@@ -123,7 +123,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.liveSync == nil {
 				if ls := startLiveSync(m.syncCfg); ls != nil {
 					m.liveSync = ls
-					cmds = append(cmds, waitForSyncEvent(ls.ch))
+					cmds = append(cmds, waitForSyncEvent(ls.C))
 				}
 			}
 		}
@@ -135,7 +135,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Server signalled a change. Re-arm the listener and pull now.
 		var cmds []tea.Cmd
 		if m.liveSync != nil {
-			cmds = append(cmds, waitForSyncEvent(m.liveSync.ch))
+			cmds = append(cmds, waitForSyncEvent(m.liveSync.C))
 		}
 		if m.autoSync {
 			cmds = append(cmds, m.backgroundSync())

@@ -67,6 +67,7 @@ Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file co
 - **`storage.go`** — settings load/save, the legacy JSON envelope (`taskFile`/`migrate`/`decodeTaskFile`), `loadTodosJSON` (now only the import source + corruption fallback), and task sorting.
 - **`helpers.go`** — parsing (quick-add syntax, dates, time-entry edits), formatting, column layout, editor resolution, self-update file ops.
 - **`layout.go` / `styles.go` / `constants.go`** — width/height math, theming, magic numbers.
+- **`tasksync/`** — the **sync engine package**: the pure merge fold (`Merge`), the `/v1/sync` wire protocol (`Request`/`Response`, `PostSync`), the HTTP `Server`, real-time push (`Hub` for SSE fan-out, `Listener` for the client stream), conflict detection (`DroppedLocalEdits`), and the digest/canonicalization helpers. Storage- and UI-free by contract: its only demand on the app is the one-method `Store` interface (fold a task set into storage atomically — implemented by `dbStore` over `mergeIntoStore` in main). SQL, file paths (`sync.json`, `sync-state.json`, `sync.log`), config, and Bubble Tea glue stay in main; keep it that way.
 - **`todo/`** — the **domain package**, framework-free. `todo.Todo` and its methods (`Toggle`, `AddTag`, `StartTimer`, `IsOverdue`, subtask/learning/comment/time-entry mutations). No Bubble Tea or rendering here; keep it that way.
 
 ### Two patterns that matter most

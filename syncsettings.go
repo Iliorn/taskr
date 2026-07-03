@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"taskr/tasksync"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -37,7 +39,7 @@ func (m *model) toggleSyncAuto() {
 	// listener is NOT started here — this runs in void key-handler contexts that
 	// can't arm its reader cmd; the next syncTick starts and arms it instead.
 	if !v && m.liveSync != nil {
-		m.liveSync.close()
+		m.liveSync.Close()
 		m.liveSync = nil
 	}
 }
@@ -50,7 +52,7 @@ func (m *model) toggleSyncAuto() {
 // server for the rest of the session.
 func (m *model) restartLiveSync() tea.Cmd {
 	if m.liveSync != nil {
-		m.liveSync.close()
+		m.liveSync.Close()
 		m.liveSync = nil
 	}
 	if !m.autoSync {
@@ -58,7 +60,7 @@ func (m *model) restartLiveSync() tea.Cmd {
 	}
 	if ls := startLiveSync(m.syncCfg); ls != nil {
 		m.liveSync = ls
-		return waitForSyncEvent(ls.ch)
+		return waitForSyncEvent(ls.C)
 	}
 	return nil
 }
@@ -74,7 +76,7 @@ func (m model) updateEditSyncURL(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// deliberate clear, not an accidental no-op.
 			m.syncCfg.URL = strings.TrimSpace(m.textInput.Value())
 			m.saveSyncCfg()
-			if w := insecureSyncURLWarning(m.syncCfg.URL); w != "" {
+			if w := tasksync.InsecureURLWarning(m.syncCfg.URL); w != "" {
 				m.syncStatus = tr("Plain http to a public host — token travels unencrypted")
 			}
 			m.mode = modeNormal
