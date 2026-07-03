@@ -303,6 +303,68 @@ func TestSortTodosByMode(t *testing.T) {
 	})
 }
 
+// TestSequenceTieBreakChain pins the documented tie-break chain on the
+// sequence sort: score → due proximity → size → CreatedAt → ID. Each subtest
+// constructs a genuine score tie and checks the next key decides.
+func TestSequenceTieBreakChain(t *testing.T) {
+	created := time.Now().Add(-24 * time.Hour)
+
+	t.Run("due proximity: sooner due first, no due last", func(t *testing.T) {
+		// Dues beyond 7 days score urgency 0, so all three tie on score and
+		// only the due tie-break separates them.
+		todos := []todo.Todo{
+			{ID: "none", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created},
+			{ID: "far", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created, DueDate: time.Now().AddDate(0, 0, 20)},
+			{ID: "near", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created, DueDate: time.Now().AddDate(0, 0, 10)},
+		}
+		sortTodosBySequenceWithRollup(todos, nil)
+		if got := []string{todos[0].ID, todos[1].ID, todos[2].ID}; got[0] != "near" || got[1] != "far" || got[2] != "none" {
+			t.Fatalf("want near/far/none, got %v", got)
+		}
+	})
+
+	t.Run("size: quick win first when rollup ties the scores", func(t *testing.T) {
+		// Two blockers boosted to the same inherited score — the case where
+		// tasks of different sizes genuinely tie — sort small first.
+		todos := []todo.Todo{
+			{ID: "big", Priority: todo.PriorityMedium, Size: todo.SizeLarge, CreatedAt: created},
+			{ID: "small", Priority: todo.PriorityMedium, Size: todo.SizeSmall, CreatedAt: created},
+		}
+		rollup := map[string]float64{"big": 50, "small": 50}
+		sortTodosBySequenceWithRollup(todos, rollup)
+		if todos[0].ID != "small" {
+			t.Fatalf("want small first, got %s", todos[0].ID)
+		}
+	})
+
+	t.Run("created: burst entry order is kept", func(t *testing.T) {
+		// Aging off so the differing CreatedAt doesn't leak into the score —
+		// the tie must be broken by the CreatedAt key itself.
+		saved := activeBiases
+		applyBiases(biases{Aging: false})
+		defer applyBiases(saved)
+		todos := []todo.Todo{
+			{ID: "later", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created.Add(time.Minute)},
+			{ID: "earlier", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created},
+		}
+		sortTodosBySequenceWithRollup(todos, nil)
+		if todos[0].ID != "earlier" {
+			t.Fatalf("want earlier first, got %s", todos[0].ID)
+		}
+	})
+
+	t.Run("id: absolute backstop", func(t *testing.T) {
+		todos := []todo.Todo{
+			{ID: "b", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created},
+			{ID: "a", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created},
+		}
+		sortTodosBySequenceWithRollup(todos, nil)
+		if todos[0].ID != "a" {
+			t.Fatalf("want a first, got %s", todos[0].ID)
+		}
+	})
+}
+
 // ── sortTodosByStartDate ──────────────────────────────────────────────────────
 
 func TestSortTodosByStartDate(t *testing.T) {

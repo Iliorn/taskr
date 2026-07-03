@@ -240,19 +240,9 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 			return todos[i].ID < todos[j].ID
 		})
 	case taskSortSize:
-		// Small first, then Medium, then Large — matches the Momentum axis
-		// (Small=10, Medium=5, Large=0) so "sort by Size" is the same intent
-		// as "show me the quick wins". Ties break by CreatedAt for stability.
-		sizeRank := func(s todo.Size) int {
-			switch s {
-			case todo.SizeSmall:
-				return 0
-			case todo.SizeMedium:
-				return 1
-			default: // Large
-				return 2
-			}
-		}
+		// Small first, then Medium, then Large — "sort by Size" is the same
+		// intent as "show me the quick wins". Ties break by CreatedAt for
+		// stability.
 		sort.SliceStable(todos, func(i, j int) bool {
 			ri, rj := sizeRank(todos[i].Size), sizeRank(todos[j].Size)
 			if ri != rj {
@@ -294,17 +284,45 @@ func sortTodosBySequenceWithRollup(todos []todo.Todo, rollup map[string]float64)
 		if si != sj {
 			return si > sj
 		}
-		// Tie on score → CreatedAt → ID. ID is the absolute backstop so
-		// tasks with identical scores AND identical CreatedAt (common in
-		// the Done list, where score is uniformly 0) don't inherit the
-		// random order they came out of Store.allTodos() in — which would
-		// otherwise reshuffle them on every cache rebuild (e.g. while the
-		// search-input cursor blinks).
+		// Tie on score → the documented tie-break chain, each key meaningful
+		// rather than arbitrary:
+		//   1. due proximity (a real due date beats none; sooner beats later)
+		//   2. size ascending (the quick win first)
+		//   3. CreatedAt ascending (tasks entered as a burst — a decomposed
+		//      plan typed in execution order — keep that entry order)
+		//   4. ID — the absolute backstop so tasks identical on every key
+		//      (common in the Done list, where score is uniformly 0) don't
+		//      inherit the random order they came out of Store.allTodos()
+		//      in, which would otherwise reshuffle them on every cache
+		//      rebuild (e.g. while the search-input cursor blinks).
+		iZero, jZero := todos[i].DueDate.IsZero(), todos[j].DueDate.IsZero()
+		if iZero != jZero {
+			return jZero
+		}
+		if !iZero && !todos[i].DueDate.Equal(todos[j].DueDate) {
+			return todos[i].DueDate.Before(todos[j].DueDate)
+		}
+		if ri, rj := sizeRank(todos[i].Size), sizeRank(todos[j].Size); ri != rj {
+			return ri < rj
+		}
 		if !todos[i].CreatedAt.Equal(todos[j].CreatedAt) {
 			return todos[i].CreatedAt.Before(todos[j].CreatedAt)
 		}
 		return todos[i].ID < todos[j].ID
 	})
+}
+
+// sizeRank orders sizes Small < Medium < Large for sorting — smaller first
+// matches the quick-win reading everywhere sizes break a tie.
+func sizeRank(s todo.Size) int {
+	switch s {
+	case todo.SizeSmall:
+		return 0
+	case todo.SizeMedium:
+		return 1
+	default: // Large
+		return 2
+	}
 }
 
 // sortHistory orders the completed-tasks list by its own mode, independent of
