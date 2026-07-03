@@ -31,7 +31,7 @@ func isCLICommand(arg string) bool {
 		"show", "edit", "delete", "rm", "comment",
 		"stats", "start", "stop", "log", "export", "subtask",
 		"search", "tags", "projects", "serve", "sync", "undo",
-		"help", "-h", "--help", "--version":
+		"doctor", "help", "-h", "--help", "--version":
 		return true
 	}
 	return false
@@ -55,7 +55,7 @@ func runCLI(args []string) int {
 // trigger an auto-sync afterward).
 func cliMutates(cmd string) bool {
 	switch cmd {
-	case "add", "done", "edit", "delete", "rm", "comment", "start", "stop", "log", "subtask", "undo":
+	case "add", "done", "edit", "delete", "rm", "comment", "start", "stop", "log", "subtask", "undo", "doctor":
 		return true
 	}
 	return false
@@ -104,6 +104,8 @@ func dispatchCLI(args []string) int {
 		return cliServe(rest)
 	case "sync":
 		return cliSync(rest)
+	case "doctor":
+		return cliDoctor(rest)
 	case "--version":
 		fmt.Println(appVersion)
 		return 0
@@ -1714,6 +1716,7 @@ Tasks:
 Discovery:
   taskr tags [--json]                  pending tags with counts
   taskr projects [--json]              pending projects with counts
+  taskr doctor [--list]                suggest dependency links from note refs + related titles (interactive)
 
 Tracking:
   taskr start <ref>                    start the time tracker, stopping any other task's timer first
