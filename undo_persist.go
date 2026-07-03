@@ -79,6 +79,24 @@ func loadPersistedUndoEntries() ([]undoEntry, error) {
 	return out, nil
 }
 
+// recordDeleteUndo appends one delete entry to the undo sidecar and reports
+// whether it is actually recoverable, so the caller can promise `taskr undo`
+// only when that's true. An unreadable history is replaced, not obeyed:
+// silently skipping the write when the sidecar is corrupt would disable the
+// safety net for the one irreversible CLI verb exactly when it's needed.
+func recordDeleteUndo(entry undoEntry) bool {
+	entries, err := loadPersistedUndoEntries()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: undo history unreadable (%v) — starting a fresh one\n", err)
+		entries = nil
+	}
+	if err := savePersistedUndoEntries(append(entries, entry)); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not record undo entry: %v\n", err)
+		return false
+	}
+	return true
+}
+
 // savePersistedUndoEntries writes the most recent delete entries from `stack`
 // to the sidecar (up to undoPersistMaxEntries, newest last). Non-delete entries
 // are skipped. Write errors are returned but most callers swallow them with a

@@ -165,3 +165,55 @@ func TestUndoPersistCorruptFileReportsError(t *testing.T) {
 		t.Errorf("want error for corrupt JSON, got nil")
 	}
 }
+
+// TestRecordDeleteUndoReplacesCorruptHistory: a corrupt undo.json must not
+// silently disable recording for a CLI delete — the entry lands in a fresh
+// history and the function reports the delete as recoverable.
+func TestRecordDeleteUndoReplacesCorruptHistory(t *testing.T) {
+	path := undoPersistPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("{not json"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(path) })
+
+	victim := todo.New("deleted while history corrupt")
+	entry := undoEntry{desc: undoDescDeleteTask, ids: []string{victim.ID}, partial: []todo.Todo{victim}}
+	if !recordDeleteUndo(entry) {
+		t.Fatal("recordDeleteUndo = false, want true (entry should land in a fresh history)")
+	}
+
+	got, err := loadPersistedUndoEntries()
+	if err != nil {
+		t.Fatalf("history still unreadable after record: %v", err)
+	}
+	if len(got) != 1 || len(got[0].partial) != 1 || got[0].partial[0].ID != victim.ID {
+		t.Fatalf("recorded entry not found, got %+v", got)
+	}
+}
+
+// TestRecordDeleteUndoAppendsToHealthyHistory: the ordinary path keeps prior
+// entries and appends the new one newest-last.
+func TestRecordDeleteUndoAppendsToHealthyHistory(t *testing.T) {
+	t.Cleanup(func() { _ = os.Remove(undoPersistPath()) })
+	_ = os.Remove(undoPersistPath())
+
+	first := todo.New("first delete")
+	if !recordDeleteUndo(undoEntry{desc: undoDescDeleteTask, ids: []string{first.ID}, partial: []todo.Todo{first}}) {
+		t.Fatal("first record failed")
+	}
+	second := todo.New("second delete")
+	if !recordDeleteUndo(undoEntry{desc: undoDescDeleteTask, ids: []string{second.ID}, partial: []todo.Todo{second}}) {
+		t.Fatal("second record failed")
+	}
+
+	got, err := loadPersistedUndoEntries()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 2 || got[1].partial[0].ID != second.ID {
+		t.Fatalf("want 2 entries newest-last, got %+v", got)
+	}
+}

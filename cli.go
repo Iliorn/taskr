@@ -1082,18 +1082,15 @@ func cliDelete(args []string) int {
 	}
 	// Record the pre-delete states in the undo sidecar so `taskr undo` (and
 	// the TUI, which seeds its undo stack from the same file) can restore
-	// this. Best-effort: a persist failure must not fail the delete.
+	// this. Best-effort: a persist failure must not fail the delete — but the
+	// "(recoverable…)" hint below is printed only when recording succeeded.
 	entry := undoEntry{desc: undoDescDeleteTask, ids: ids}
 	for _, id := range ids {
 		if x := get(id); x != nil {
 			entry.partial = append(entry.partial, copyTodo(*x))
 		}
 	}
-	if entries, lerr := loadPersistedUndoEntries(); lerr == nil {
-		if perr := savePersistedUndoEntries(append(entries, entry)); perr != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not record undo entry: %v\n", perr)
-		}
-	}
+	recorded := recordDeleteUndo(entry)
 	if extra := len(ids) - 1; extra > 0 {
 		noun := "subtask"
 		if extra != 1 {
@@ -1103,7 +1100,9 @@ func cliDelete(args []string) int {
 	} else {
 		fmt.Printf("deleted %s  %s\n", t.ID[:8], t.Title)
 	}
-	fmt.Fprintln(os.Stderr, "(recoverable with `taskr undo`)")
+	if recorded {
+		fmt.Fprintln(os.Stderr, "(recoverable with `taskr undo`)")
+	}
 	return 0
 }
 
