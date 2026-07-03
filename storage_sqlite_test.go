@@ -42,6 +42,43 @@ func saveTodos(t *testing.T, h *sql.DB, todos []todo.Todo, tombstones ...string)
 	}
 }
 
+// TestSaveDependentBeforeDependency guards the write-ordering fix: a batch that
+// lists a task ahead of the task it depends on must still save, because
+// saveNormalizedIn defers foreign-key enforcement to COMMIT. Before the fix,
+// the task_dependencies insert for the dependent fired while the dependency's
+// todos row didn't yet exist and failed with SQLITE_CONSTRAINT_FOREIGNKEY (787).
+// foreign_keys is forced ON here (openTestDB doesn't set it) so the constraint
+// is actually enforced — otherwise the test couldn't observe the bug.
+func TestSaveDependentBeforeDependency(t *testing.T) {
+	h := openTestDB(t)
+	if _, err := h.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		t.Fatalf("enable foreign_keys: %v", err)
+	}
+
+	dependency := todo.New("Update TTRPG ruleset")
+	dependent := todo.New("Send the new version")
+	dependent.AddDependency(dependency.ID)
+
+	// Dependent first: the hazardous order the map/slice iteration can produce.
+	saveTodos(t, h, []todo.Todo{dependent, dependency})
+
+	got, err := loadTodosFromDB(h)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	byID := make(map[string]todo.Todo, len(got))
+	for _, g := range got {
+		byID[g.ID] = g
+	}
+	d, ok := byID[dependent.ID]
+	if !ok {
+		t.Fatal("dependent task not saved")
+	}
+	if len(d.Dependencies) != 1 || d.Dependencies[0] != dependency.ID {
+		t.Fatalf("dependency link not persisted: got %v", d.Dependencies)
+	}
+}
+
 // TestSQLiteRoundTrip saves todos with nested data and confirms a load
 // reconstructs them losslessly from the JSON blob.
 func TestSQLiteRoundTrip(t *testing.T) {

@@ -265,6 +265,17 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 // the caller commits (or rolls back). Split out so mergeIntoStore can bundle
 // the load, the merge and this write into one atomic unit.
 func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error {
+	// Foreign-key checks are immediate by default, but a batch can hold a task
+	// and the task it depends on in either order (drainDirty iterates a map; the
+	// merge follows slice order), and each task's todos row is written just
+	// before its own dependency rows. Defer FK enforcement to COMMIT — when
+	// every row in the batch exists — so a dependent written ahead of its
+	// dependency no longer fails with SQLITE_CONSTRAINT_FOREIGNKEY (787). A
+	// genuinely dangling reference still fails at COMMIT, correctly. The pragma
+	// is transaction-scoped and resets when this tx ends.
+	if _, err := tx.Exec(`PRAGMA defer_foreign_keys = ON`); err != nil {
+		return err
+	}
 	if len(dirty) > 0 {
 		// `data` is the legacy blob column — still NOT NULL after migration 002
 		// (we deliberately didn't drop it, so a future migration can if/when
