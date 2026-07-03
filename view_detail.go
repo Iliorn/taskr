@@ -184,8 +184,14 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	// be a row of zeros.
 	if t.Status == todo.Pending {
 		sc := sequenceComponentsFor(t)
-		breakdown := fmt.Sprintf(tr("%.1f  (D %.1f · P %.1f · M %.1f · A %.1f)"),
-			sc.Total, sc.Urgency, sc.Importance, sc.Momentum, sc.Age)
+		// Same precision as before but with the ".0" noise trimmed off whole
+		// components — the all-%.1f form overflowed valW at a 120-col
+		// terminal and truncated the tail of the breakdown to "(…)".
+		comp := func(v float64) string {
+			return strings.TrimSuffix(fmt.Sprintf("%.1f", v), ".0")
+		}
+		breakdown := fmt.Sprintf(tr("%.1f  (D %s · P %s · M %s · A %s)"),
+			sc.Total, comp(sc.Urgency), comp(sc.Importance), comp(sc.Momentum), comp(sc.Age))
 		roField(tr("Score:"), plainVal, breakdown)
 	}
 
