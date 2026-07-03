@@ -215,6 +215,7 @@ var daTranslations = map[string]string{
 	"↑/↓ select · ←/→ change theme · enter activate":                                                                          "↑/↓ vælg · ←/→ skift · enter aktivér",
 
 	// Footer / timer
+	"#tag @project due:tomorrow p:high s:l r:weekly": "#mærke @projekt due:tomorrow p:high s:l r:weekly",
 	" · t to stop":         " · t for at stoppe",
 	"create new tag: ":     "opret nyt mærke: ",
 	"create new project: ": "opret nyt projekt: ",
@@ -485,15 +486,15 @@ var daTranslations = map[string]string{
 	"Search learnings... (use # to filter by tag)": "Søg i læring... (brug # for at filtrere på mærke)",
 
 	// Inline edit/add placeholders (set when a text-entry mode opens)
-	"New task (use #tag due:date p:high @project)...": "Ny opgave (brug #mærke due:dato p:high @projekt)...",
-	"HH:MM-HH:MM or duration (45m, 1h30m)...":         "TT:MM-TT:MM eller varighed (45m, 1t30m)...",
-	"Edit tag name...":                                "Rediger mærkenavn...",
-	"Edit task title...":                              "Rediger opgavetitel...",
-	"Edit learning...":                                "Rediger læring...",
-	"Add comment...":                                  "Tilføj kommentar...",
-	"Add learning...":                                 "Tilføj læring...",
-	"Add subtask...":                                  "Tilføj delopgave...",
-	"Edit comment...":                                 "Rediger kommentar...",
+	"New task...": "Ny opgave...",
+	"HH:MM-HH:MM or duration (45m, 1h30m)...": "TT:MM-TT:MM eller varighed (45m, 1t30m)...",
+	"Edit tag name...":                        "Rediger mærkenavn...",
+	"Edit task title...":                      "Rediger opgavetitel...",
+	"Edit learning...":                        "Rediger læring...",
+	"Add comment...":                          "Tilføj kommentar...",
+	"Add learning...":                         "Tilføj læring...",
+	"Add subtask...":                          "Tilføj delopgave...",
+	"Edit comment...":                         "Rediger kommentar...",
 	"Start date (dd-mm-yy, 'today', 'next week', '+3d')...": "Startdato (dd-mm-yy, 'today', 'next week', '+3d')...",
 	"Due date (dd-mm-yy, 'today', 'next week', '+3d')...":   "Forfaldsdato (dd-mm-yy, 'today', 'next week', '+3d')...",
 }

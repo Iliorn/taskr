@@ -234,7 +234,16 @@ func (m model) buildFooterContent(w int) string {
 		modeEditProjectInline, modeEditTimeEntry, modeAddTimeEntry,
 		modeEditSyncURL, modeEditSyncToken,
 		modeEditServerListen, modeEditServerToken:
-		return inputStyle.Width(w).Render(m.textInput.View())
+		field := inputStyle.Width(w).Render(m.textInput.View())
+		if m.mode == modeInput && m.pane == paneList {
+			// Quick-add is the only input with inline syntax; surface it here —
+			// otherwise it's only discoverable in the help overlay. The
+			// keywords themselves stay English in every language (parsing is
+			// locale-free), so only the example words are translated.
+			return field + "\n" +
+				helpStyle.Render("    "+truncate(tr("#tag @project due:tomorrow p:high s:l r:weekly"), w))
+		}
+		return field
 	case modeIdlePrompt, modeConfirmUpdate:
 		return calTodayStyle.Render(m.confirmMsg)
 	case modeSearch:

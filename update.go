@@ -738,7 +738,10 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.tab == tabTasks && !m.showHistory {
 				m.mode = modeInput
 				m.textInput.SetValue("")
-				m.textInput.Placeholder = tr("New task (use #tag due:date p:high @project r:daily)...")
+				// Syntax lives in the persistent hint line under the input
+				// (buildFooterContent) — a placeholder vanishes on the first
+				// keystroke, exactly when the syntax reference is needed.
+				m.textInput.Placeholder = tr("New task...")
 				m.textInput.Focus()
 				return m, textinput.Blink
 			}

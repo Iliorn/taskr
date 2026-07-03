@@ -46,6 +46,18 @@ func TestKeyHintsVisibleSearch(t *testing.T) {
 	}
 }
 
+// TestQuickAddShowsSyntaxHint asserts the quick-add input surfaces the inline
+// syntax, and that other text inputs (e.g. detail-pane comments) don't.
+func TestQuickAddShowsSyntaxHint(t *testing.T) {
+	applyLang(string(langEN))
+	m := newTestModel()
+	m.termWidth, m.termHeight = 100, 30
+	m2 := script(t, m, "a")
+	if !strings.Contains(m2.View(), "#tag @project due:tomorrow") {
+		t.Error("quick-add input should show the syntax hint line")
+	}
+}
+
 // TestNarrowNoWrapDanish guards against translations that overflow a bordered
 // panel the English source fit. Danish words are generally longer, so for every
 // tab/width it asserts the widest Danish line is no wider than the English
