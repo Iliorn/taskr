@@ -34,7 +34,7 @@ type Hub struct {
 
 func NewHub() *Hub { return &Hub{subs: make(map[chan struct{}]struct{})} }
 
-// subscribe registers a client and returns its nudge channel, or nil when the
+// Subscribe registers a client and returns its nudge channel, or nil when the
 // hub is at capacity (the caller rejects the connection).
 func (h *Hub) Subscribe() chan struct{} {
 	h.mu.Lock()
@@ -59,7 +59,7 @@ func (h *Hub) SubscriberCount() int {
 	return len(h.subs)
 }
 
-// broadcast nudges every subscriber without blocking on any of them. A client
+// Broadcast nudges every subscriber without blocking on any of them. A client
 // whose buffer is already full has a nudge pending, so skipping it loses
 // nothing: one sync pulls every change accumulated since.
 func (h *Hub) Broadcast() {
