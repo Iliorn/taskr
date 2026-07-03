@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -454,6 +455,25 @@ func parseQuickAdd(input string) parsedTask {
 
 func startOfDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+// formatDueShort renders a due date for the tasks-list column as its distance
+// in calendar days — "today", "3d", "-2d" (overdue) — because "how soon" is
+// the question the list answers. Beyond four weeks a day count reads worse
+// than a date, so it falls back to the absolute dd-mm-yy form. Detail views
+// keep the absolute form everywhere: it round-trips through the date editor.
+func formatDueShort(due, now time.Time) string {
+	// Round rather than truncate: local midnights straddling a DST switch are
+	// 23 or 25 hours apart and would otherwise land on the wrong day.
+	days := int(math.Round(startOfDay(due).Sub(startOfDay(now)).Hours() / 24))
+	switch {
+	case days == 0:
+		return tr("today")
+	case days < -28 || days > 28:
+		return due.Format("02-01-06")
+	default:
+		return fmt.Sprintf("%dd", days)
+	}
 }
 
 // formatDurationLive renders a running duration with seconds, for the

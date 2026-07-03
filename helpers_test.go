@@ -175,6 +175,33 @@ func TestFormatDuration(t *testing.T) {
 	}
 }
 
+// ── formatDueShort ────────────────────────────────────────────────────────────
+
+func TestFormatDueShort(t *testing.T) {
+	applyLang(string(langEN))
+	now := time.Date(2026, 7, 3, 8, 30, 0, 0, time.Local)
+	cases := []struct {
+		days int
+		want string
+	}{
+		{0, "today"},
+		{1, "1d"},
+		{6, "6d"},
+		{28, "28d"},
+		{-2, "-2d"},
+	}
+	for _, c := range cases {
+		due := now.AddDate(0, 0, c.days)
+		if got := formatDueShort(due, now); got != c.want {
+			t.Errorf("%+d days: got %q, want %q", c.days, got, c.want)
+		}
+	}
+	far := now.AddDate(0, 0, 40)
+	if got := formatDueShort(far, now); got != far.Format("02-01-06") {
+		t.Errorf("far date: got %q, want %q", got, far.Format("02-01-06"))
+	}
+}
+
 // ── parseQuickAdd ─────────────────────────────────────────────────────────────
 
 func TestParseQuickAdd(t *testing.T) {

@@ -834,7 +834,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	}
 	dueVal := ""
 	if !t.DueDate.IsZero() {
-		dueVal = t.DueDate.Format("02-01-06")
+		dueVal = formatDueShort(t.DueDate, m.frameTime)
 	}
 	// Reserve one trailing space inside the column so a truncated title (ending
 	// in "(…)") never butts up against the Score column that follows.

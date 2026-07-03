@@ -319,6 +319,7 @@ var daTranslations = map[string]string{
 	"↓ Low":                 "↓ Lav",
 	"  Completion velocity": "  Afslutningshastighed",
 	"Today":                 "I dag",
+	"today":                 "i dag", // tasks-list Due column (formatDueShort)
 	"This week":             "Denne uge",
 	"This month":            "Denne måned",
 	"  Avg (7d)":            "  Gns. (7d)",
