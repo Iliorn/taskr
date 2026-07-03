@@ -124,3 +124,34 @@ func TestMergeIntoStoreNoOpDoesNotWrite(t *testing.T) {
 		t.Error("no-op merge reported changed=true")
 	}
 }
+
+// TestChangedTasksWritesOnlyTouchedRows: the merge write set must be the tasks
+// the merge actually changed — reordered slices are not changes, new and
+// edited tasks are.
+func TestChangedTasksWritesOnlyTouchedRows(t *testing.T) {
+	a := todo.New("untouched")
+	a.Tags = []string{"x", "y"}
+	b := todo.New("edited")
+	c := todo.New("new on the other side")
+
+	current := []todo.Todo{a, b}
+
+	bEdited := b
+	bEdited.Title = "Edited elsewhere"
+	// a comes back with its tags reordered — canonically identical.
+	aReordered := a
+	aReordered.Tags = []string{"y", "x"}
+	merged := []todo.Todo{aReordered, bEdited, c}
+
+	dirty := changedTasks(current, merged)
+	got := map[string]bool{}
+	for _, d := range dirty {
+		got[d.ID] = true
+	}
+	if len(dirty) != 2 || !got[b.ID] || !got[c.ID] {
+		t.Errorf("want exactly {edited, new}, got %d: %v", len(dirty), got)
+	}
+	if got[a.ID] {
+		t.Error("reordered-but-identical task treated as changed")
+	}
+}
