@@ -24,7 +24,7 @@ func isCLICommand(arg string) bool {
 	switch arg {
 	case "add", "list", "ls", "done", "top",
 		"show", "edit", "delete", "rm", "comment",
-		"stats", "start", "stop", "export", "subtask",
+		"stats", "start", "stop", "log", "export", "subtask",
 		"search", "tags", "projects", "serve", "sync",
 		"help", "-h", "--help", "--version":
 		return true
@@ -50,7 +50,7 @@ func runCLI(args []string) int {
 // trigger an auto-sync afterward).
 func cliMutates(cmd string) bool {
 	switch cmd {
-	case "add", "done", "edit", "delete", "rm", "comment", "start", "stop", "subtask":
+	case "add", "done", "edit", "delete", "rm", "comment", "start", "stop", "log", "subtask":
 		return true
 	}
 	return false
@@ -81,6 +81,8 @@ func dispatchCLI(args []string) int {
 		return cliStart(rest)
 	case "stop":
 		return cliStop(rest)
+	case "log":
+		return cliLog(rest)
 	case "export":
 		return cliExport(rest)
 	case "subtask":
@@ -1356,6 +1358,53 @@ func cliStop(args []string) int {
 	return 0
 }
 
+// ── log ──────────────────────────────────────────────────────────────────────
+
+// cliLog backfills a closed time entry on a task — work the live timer didn't
+// capture (forgot to start it, or the stale-timer recovery under-logged a
+// session). Same input semantics as the TUI's 'T' shortcut via
+// parseManualEntry: a bare duration ends now, a clock range is literal today.
+func cliLog(args []string) int {
+	fs := flag.NewFlagSet("log", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, `usage: taskr log <ref> <45m|1h30m|HH:MM-HH:MM>
+  duration form ends now ("I just spent 45m on this")
+  range form is taken literally on today (crosses midnight if end < start)`)
+	}
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
+	if err := fs.Parse(flagArgs); err != nil {
+		return 2
+	}
+	if len(positionals) != 2 {
+		fs.Usage()
+		return 2
+	}
+	repo, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	t, err := findTaskByRef(todos, positionals[0])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	start, stop, err := parseManualEntry(positionals[1], time.Now())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "taskr log: %v\n", err)
+		return 2
+	}
+	t.AddTimeEntry(start, stop)
+	if err := repo.Save([]*todo.Todo{t}, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "save: %v\n", err)
+		return 1
+	}
+	fmt.Printf("logged %s on %s  %s  (%s–%s)\n", formatDuration(stop.Sub(start)),
+		t.ID[:8], t.Title, start.Format("15:04"), stop.Format("15:04"))
+	return 0
+}
+
 // ── export ───────────────────────────────────────────────────────────────────
 
 func cliExport(args []string) int {
@@ -1469,6 +1518,7 @@ Discovery:
 Tracking:
   taskr start <ref>                    start the time tracker (no-op if already tracking ref)
   taskr stop [<ref>]                   stop the tracker (no ref = whichever's running)
+  taskr log <ref> <45m|10:00-11:30>    backfill a time entry (duration ends now; range is today)
 
 Comments:
   taskr comment <ref> "text"           append a comment

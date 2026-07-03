@@ -519,6 +519,24 @@ func parseEntryEdit(input string, oldStart time.Time, running bool) (time.Time, 
 	return oldStart, oldStart.Add(d), nil
 }
 
+// parseManualEntry resolves user input for a backfilled time entry: a bare
+// duration ("45m") becomes [now-d, now] — "I just spent 45m on this" almost
+// always means it ends now, not starts now — while a clock range
+// ("10:00-11:30") is taken literally on today. Shared by the TUI's
+// modeAddTimeEntry and `taskr log` so the two surfaces can't drift.
+func parseManualEntry(input string, now time.Time) (start, stop time.Time, err error) {
+	start, stop, err = parseEntryEdit(input, now, false)
+	if err != nil {
+		return start, stop, err
+	}
+	if !strings.Contains(input, "-") {
+		d := stop.Sub(start)
+		start = now.Add(-d)
+		stop = now
+	}
+	return start, stop, nil
+}
+
 func parseClockOn(s string, day time.Time) (time.Time, error) {
 	t, err := time.Parse("15:04", s)
 	if err != nil {

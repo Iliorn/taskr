@@ -141,22 +141,10 @@ func (m model) updateAddTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.mode = modeNormal
 				return m, nil
 			}
-			now := time.Now()
-			input := m.textInput.Value()
-			start, stop, err := parseEntryEdit(input, now, false)
+			start, stop, err := parseManualEntry(m.textInput.Value(), time.Now())
 			if err != nil {
 				m.err = err.Error()
 				return m, clearErrAfter()
-			}
-			// A bare duration ("45m") is anchored at the oldStart we passed in
-			// (now) and produces [now, now+d] — a future window. Shift it so
-			// the entry ends now instead, which is what "I just spent 45m on
-			// this" almost always means. Clock-range form (which contains '-')
-			// is left alone; the user spelled out exact times.
-			if !strings.Contains(input, "-") {
-				delta := stop.Sub(start)
-				start = now.Add(-delta)
-				stop = now
 			}
 			m.pushUndo("add time entry", t.ID)
 			t.AddTimeEntry(start, stop)

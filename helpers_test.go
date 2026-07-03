@@ -586,3 +586,31 @@ func TestCopyTodosNilSlices(t *testing.T) {
 		t.Errorf("ID = %q, want %q", cp[0].ID, "bare")
 	}
 }
+
+// parseManualEntry backs both the TUI 'T' shortcut and `taskr log`: bare
+// durations anchor the entry to END now (the "I just spent 45m" reading),
+// clock ranges are literal on today.
+func TestParseManualEntry(t *testing.T) {
+	now := time.Date(2026, 7, 3, 14, 0, 0, 0, time.Local)
+
+	start, stop, err := parseManualEntry("45m", now)
+	if err != nil {
+		t.Fatalf("duration form: %v", err)
+	}
+	if !stop.Equal(now) || !start.Equal(now.Add(-45*time.Minute)) {
+		t.Errorf("45m → [%v, %v], want [now-45m, now]", start, stop)
+	}
+
+	start, stop, err = parseManualEntry("10:00-11:30", now)
+	if err != nil {
+		t.Fatalf("range form: %v", err)
+	}
+	wantStart := time.Date(2026, 7, 3, 10, 0, 0, 0, time.Local)
+	if !start.Equal(wantStart) || stop.Sub(start) != 90*time.Minute {
+		t.Errorf("range → [%v, %v], want literal 10:00 + 90m", start, stop)
+	}
+
+	if _, _, err := parseManualEntry("banana", now); err == nil {
+		t.Error("expected error for junk input")
+	}
+}
