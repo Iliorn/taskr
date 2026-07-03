@@ -330,12 +330,14 @@ func (m model) buildFooterContent(w int) string {
 // ── Key hints ─────────────────────────────────────────────────────────────────
 
 func (m model) renderKeyHints(w int) string {
-	var hints string
+	var hints, short string
 	switch {
 	case m.tab == tabTasks && m.pane == paneDetail:
 		hints = tr("←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back")
+		short = tr("←/→ pages · enter edit · a add · x remove · esc back")
 	case m.tab == tabTasks:
 		hints = tr("enter detail · a add · d done · t track · p prio · r rename · x del · n notes · f focus · s sort · h history · / search")
+		short = tr("a add · d done · t track · x del · s sort · / search · ? more")
 	case m.tab == tabProjects:
 		hints = tr("j/k nav · r rename · x delete · / filter")
 	case m.tab == tabTags:
@@ -350,6 +352,14 @@ func (m model) renderKeyHints(w int) string {
 		hints = tr("←/→ day · ↑/↓ week · [ ] month · t today · enter entries")
 	case m.tab == tabSettings:
 		hints = tr("↑/↓ select · ←/→ change theme · enter activate")
+	}
+	// Prefer the full hint line; when it can't fit, fall back to a curated
+	// short set instead of truncating mid-list — plain truncation always cut
+	// the same trailing keys (e.g. / search on the Tasks tab), hiding them at
+	// common terminal widths. hints is pre-Render plain text, so rune length
+	// is the display width.
+	if short != "" && len([]rune(hints)) > w {
+		hints = short
 	}
 	// 4-space indent aligns the hint under the box's inner content (margin 2 +
 	// border 1 + padding 1) — so it begins at the same column as the task rows.

@@ -32,6 +32,20 @@ func TestNarrowNoWrap(t *testing.T) {
 	}
 }
 
+// TestKeyHintsVisibleSearch asserts the Tasks-tab footer always advertises
+// search: at widths where the full hint list can't fit, renderKeyHints must
+// fall back to the curated short set instead of truncating it away.
+func TestKeyHintsVisibleSearch(t *testing.T) {
+	m := newTestModel()
+	m.tab = tabTasks
+	for _, width := range []int{74, 114, 200} {
+		hint := m.renderKeyHints(width)
+		if !strings.Contains(hint, "/ search") {
+			t.Errorf("width=%d: hint line lost '/ search': %q", width, hint)
+		}
+	}
+}
+
 // TestNarrowNoWrapDanish guards against translations that overflow a bordered
 // panel the English source fit. Danish words are generally longer, so for every
 // tab/width it asserts the widest Danish line is no wider than the English
