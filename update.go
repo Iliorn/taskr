@@ -73,6 +73,9 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// busy_timeout) can't freeze the UI for up to 5s.
 			if time.Since(m.lastTimerHeartbeat) >= time.Minute {
 				m.lastTimerHeartbeat = time.Now()
+				// Keep the in-memory entries in step with the DB heartbeat —
+				// see stampRunningTimersSeen for why saves depend on this.
+				m.stampRunningTimersSeen(m.lastTimerHeartbeat)
 				if m.watcher != nil {
 					m.watcher.recordSelfSave()
 				}

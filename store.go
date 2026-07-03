@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"taskr/todo"
 )
 
@@ -91,6 +93,26 @@ func (s *Store) startTimer(id string) {
 	t.StartTimer()
 	s.ensureTasks()
 	s.runningTimers[id] = struct{}{}
+}
+
+// stampRunningTimersSeen mirrors the DB-side heartbeat (heartbeatRunningTimers)
+// onto the in-memory running entries. The DB heartbeat alone is not enough:
+// the in-memory LastSeen otherwise stays at its StartTimer value, and any
+// debounced save of that task (title edit, new comment) would upsert the row
+// with the stale value — wiping the heartbeat and leaving a live timer looking
+// abandoned to a concurrent CLI's stale-timer recovery once it's been running
+// longer than idleThreshold. Deliberately does NOT mark anything dirty: the
+// stamp only keeps future saves honest, it must not trigger one.
+func (s *Store) stampRunningTimersSeen(now time.Time) {
+	for id := range s.runningTimers {
+		t := s.get(id)
+		if t == nil {
+			continue
+		}
+		if e := t.RunningEntry(); e != nil {
+			e.LastSeen = now
+		}
+	}
 }
 
 func (s *Store) stopTimer(id string) {

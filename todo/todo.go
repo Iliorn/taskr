@@ -392,6 +392,10 @@ func (t *Todo) StartTimer() {
 		ID:         uuid.New().String(),
 		StartedAt:  now,
 		ModifiedAt: now,
+		// Born with a heartbeat: LastSeen starts defined so a save of this task
+		// never writes an empty last_seen over a fresher DB-side heartbeat
+		// before the first tick-driven stamp arrives.
+		LastSeen: now,
 	})
 	t.ModifiedAt = now
 }

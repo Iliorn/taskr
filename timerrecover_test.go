@@ -119,3 +119,54 @@ func TestHeartbeatTouchesOnlyRunningEntries(t *testing.T) {
 		t.Errorf("stopped entry must not be heartbeated")
 	}
 }
+
+// TestSaveDoesNotWipeHeartbeat reproduces the stale-save hazard: the TUI
+// heartbeats last_seen, then an ordinary edit saves the task. If the save
+// carries a stale in-memory LastSeen, the heartbeat is wiped and a concurrent
+// CLI's stale-timer recovery could auto-stop a live timer. The fix is
+// two-sided (StartTimer stamps LastSeen; stampRunningTimersSeen mirrors each
+// heartbeat in memory), so a save after a heartbeat must persist a last_seen
+// at least as fresh as the in-memory stamp.
+func TestSaveDoesNotWipeHeartbeat(t *testing.T) {
+	h := openTestDB(t)
+
+	s := &Store{}
+	s.ensureTasks()
+	task := todo.New("live timer")
+	held := s.add(task)
+	s.startTimer(held.ID)
+	saveTodos(t, h, []todo.Todo{*held})
+
+	// Minute tick: DB heartbeat + in-memory mirror, exactly as Update does.
+	beat := time.Now().Add(time.Minute)
+	if err := heartbeatRunningTimers(h, beat); err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	s.stampRunningTimersSeen(beat)
+
+	// User edits the task → debounced save writes the in-memory copy.
+	held.Title = "live timer (renamed)"
+	saveTodos(t, h, []todo.Todo{*held})
+
+	got, err := loadTodosFromDB(h)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 1 || len(got[0].TimeEntries) != 1 {
+		t.Fatalf("unexpected store shape: %+v", got)
+	}
+	if ls := got[0].TimeEntries[0].LastSeen; ls.Before(beat.Truncate(time.Second)) {
+		t.Errorf("save wiped the heartbeat: last_seen=%v, want >= %v", ls, beat)
+	}
+}
+
+// TestStartTimerStampsLastSeen: a freshly started entry is born with a
+// heartbeat, so the window between start and the first minute tick can't
+// persist an empty last_seen.
+func TestStartTimerStampsLastSeen(t *testing.T) {
+	task := todo.New("fresh")
+	task.StartTimer()
+	if e := task.RunningEntry(); e == nil || e.LastSeen.IsZero() {
+		t.Errorf("running entry should start with LastSeen set, got %+v", e)
+	}
+}
