@@ -118,6 +118,56 @@ func TestDependencyBoostTransitiveChain(t *testing.T) {
 	}
 }
 
+// The fan-out bonus: a blocker gains +0.5 per distinct pending task it
+// directly unblocks, capped at +2, on top of max-inheritance — so unblocking
+// four tasks outranks unblocking one even when every dependent scores the same.
+func TestDependencyFanOutBonus(t *testing.T) {
+	created := time.Now().Add(-time.Hour)
+	mk := func(id string, deps ...string) todo.Todo {
+		d := mkTodo(id, id, todo.Pending)
+		d.CreatedAt = created
+		d.Dependencies = deps
+		return d
+	}
+	wide := mk("wide")
+	narrow := mk("narrow")
+	todos := []todo.Todo{
+		wide, narrow,
+		mk("d1", "wide"), mk("d2", "wide"), mk("d3", "wide"), mk("d4", "wide"),
+		mk("e1", "narrow"),
+	}
+
+	rollup := dependencyScoreRollup(todos, nil)
+	// Same inherited score on both blockers; only the fan-out differs:
+	// wide = +min(4×0.5, 2) = +2, narrow = +0.5 → gap of exactly 1.5.
+	gap := rollup["wide"] - rollup["narrow"]
+	if gap < 1.49 || gap > 1.51 {
+		t.Fatalf("wide-narrow gap = %v, want 1.5 (fan-out 2.0 vs 0.5)", gap)
+	}
+
+	// Five dependents still cap at +2 — no gain over four.
+	todos = append(todos, mk("d5", "wide"))
+	capped := dependencyScoreRollup(todos, nil)
+	if diff := capped["wide"] - rollup["wide"]; diff > 1e-9 {
+		t.Fatalf("fifth dependent raised the bonus by %v, want capped at +2", diff)
+	}
+
+	// And the ranking reflects it: wide sorts above narrow.
+	active, _ := selectActiveDone(todos, "", false, taskSortSequence, historySortCompleted)
+	wideAt, narrowAt := -1, -1
+	for i, id := range ids(active) {
+		switch id {
+		case "wide":
+			wideAt = i
+		case "narrow":
+			narrowAt = i
+		}
+	}
+	if wideAt == -1 || narrowAt == -1 || wideAt > narrowAt {
+		t.Fatalf("wide at %d, narrow at %d — want wide ranked above narrow", wideAt, narrowAt)
+	}
+}
+
 // A dependency cycle must terminate (and not panic) rather than recurse forever.
 func TestDependencyBoostCycleSafe(t *testing.T) {
 	a := mkTodo("a", "a", todo.Pending)

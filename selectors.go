@@ -259,9 +259,22 @@ func descendantScoreRollup(todos []todo.Todo) map[string]float64 {
 // behaviour). Propagation is transitive (a chain lifts end-to-end) and cycle-safe.
 // effBase is max(own score, subtask rollup), so subtask and dependency boosts
 // compose. Returns base unchanged when no task depends on a pending one.
+//
+// On top of the max-inheritance, each blocker earns a fan-out bonus: +0.5 per
+// distinct pending task it directly unblocks, capped at +2. Inheritance alone
+// is max, not sum — unblocking four tasks would score the same as unblocking
+// one — so the bonus is the leverage signal that prefers the wider blocker.
+// It compounds mildly along a chain (each hop adds its own bonus), which reads
+// as intended: a longer chain is more leverage. The cap keeps sheer task count
+// from gaming the ranking.
+//
 // depBoostEpsilon is the per-edge nudge that keeps a boosted blocker strictly
 // ahead of the dependent it inherited from.
-const depBoostEpsilon = 0.001
+const (
+	depBoostEpsilon = 0.001
+	fanOutBonusPer  = 0.5
+	fanOutBonusCap  = 2.0
+)
 
 func dependencyScoreRollup(todos []todo.Todo, base map[string]float64) map[string]float64 {
 	if len(todos) == 0 {
@@ -315,14 +328,21 @@ func dependencyScoreRollup(todos []todo.Todo, base map[string]float64) map[strin
 		visiting[id] = true
 		for _, dep := range dependents[id] {
 			// + epsilon so a blocker sorts strictly above its dependent rather
-			// than merely tying (the score-tie backstop is CreatedAt/ID, which
-			// could otherwise place the dependent first). Compounds per chain
-			// hop; far below the %.1f the score column rounds to, so invisible.
+			// than merely tying (the score-tie backstop is the tie-break chain,
+			// which could otherwise place the dependent first). Compounds per
+			// chain hop; far below the %.1f the score column rounds to, so
+			// invisible.
 			if s := compute(dep) + depBoostEpsilon; s > best {
 				best = s
 			}
 		}
 		visiting[id] = false
+		if bonus := fanOutBonusPer * float64(len(dependents[id])); bonus > 0 {
+			if bonus > fanOutBonusCap {
+				bonus = fanOutBonusCap
+			}
+			best += bonus
+		}
 		eff[id] = best
 		return best
 	}
