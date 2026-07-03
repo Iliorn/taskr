@@ -18,6 +18,10 @@ import (
 // SQLite store as the Bubble Tea app. Designed to be scriptable (--json on
 // every list-shaped command, exit codes 0=ok, 1=runtime, 2=usage) without
 // pulling in a CLI framework — the standard `flag` package is enough.
+//
+// Stream contract: stdout carries only a command's primary result (the thing
+// a pipe or $(...) capture wants); side-effect notices — another timer being
+// stopped, ancestor due dates bumped, recovery hints — go to stderr.
 
 // isCLICommand reports whether the first arg names a subcommand main should
 // route to runCLI instead of launching the TUI.
@@ -1016,8 +1020,10 @@ func cliEdit(args []string) int {
 		return 1
 	}
 	fmt.Printf("edited  %s  %s\n", t.ID[:8], t.Title)
+	// Ancestor due-date bumps are side-effects of the edit, not its result —
+	// stderr, so `edit --json`-style scripting on stdout stays clean.
 	for _, a := range saveSet[1:] {
-		fmt.Printf("bumped  %s  %s  due → %s\n", a.ID[:8], a.Title, a.DueDate.Format("02-01-06"))
+		fmt.Fprintf(os.Stderr, "bumped  %s  %s  due → %s\n", a.ID[:8], a.Title, a.DueDate.Format("02-01-06"))
 	}
 	return 0
 }
@@ -1449,7 +1455,9 @@ func cliStart(args []string) int {
 	dirty := []*todo.Todo{target}
 	for _, t := range stopOtherRunningTimers(todos, target.ID) {
 		dirty = append(dirty, t)
-		fmt.Printf("stopped: %s  %s\n", t.ID[:8], t.Title)
+		// Side-effect notice → stderr, like add --start: stdout carries only
+		// the primary result so scripts can parse it.
+		fmt.Fprintf(os.Stderr, "stopped: %s  %s\n", t.ID[:8], t.Title)
 	}
 	target.StartTimer()
 	if err := repo.Save(dirty, nil); err != nil {
