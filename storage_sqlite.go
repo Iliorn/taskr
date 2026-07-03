@@ -347,6 +347,46 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error
 		}
 		defer upEntry.Close()
 
+		// Guard dependency inserts against a dangling target — a depends_on_id
+		// pointing at a task present in neither this batch nor the DB. Deferred
+		// FK checks would otherwise let the row insert but fail the whole batch
+		// at COMMIT. This can't arise from normal use (the picker and CLI only
+		// ever link existing tasks), but a cross-device delete past the
+		// tombstone-GC window could leave a live dependent pointing at a
+		// hard-deleted target. Drop the broken link instead of failing every
+		// save. The known set is the pre-existing todos rows plus every ID in
+		// this batch (batch rows may not be written yet when their dependent is
+		// processed first). Built lazily: only scan when some dirty task actually
+		// carries dependencies — the common single-edit save touches none.
+		var knownTaskIDs map[string]bool
+		for i := range dirty {
+			if len(dirty[i].Dependencies) == 0 {
+				continue
+			}
+			knownTaskIDs = make(map[string]bool)
+			rows, err := tx.Query(`SELECT id FROM todos`)
+			if err != nil {
+				return err
+			}
+			for rows.Next() {
+				var id string
+				if err := rows.Scan(&id); err != nil {
+					rows.Close()
+					return err
+				}
+				knownTaskIDs[id] = true
+			}
+			if err := rows.Err(); err != nil {
+				rows.Close()
+				return err
+			}
+			rows.Close()
+			for j := range dirty {
+				knownTaskIDs[dirty[j].ID] = true
+			}
+			break
+		}
+
 		for _, t := range dirty {
 			if _, err := upsertTask.Exec(t.ID, t.Title, int(t.Status), int(t.Priority), int(t.Size),
 				t.Project, t.ParentID, fmtTime(t.CreatedAt), fmtTime(t.ModifiedAt),
@@ -368,6 +408,11 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error
 				}
 			}
 			for _, dep := range t.Dependencies {
+				// Skip a dangling link (target task gone from batch and DB)
+				// rather than fail the whole batch at COMMIT — see knownTaskIDs.
+				if knownTaskIDs != nil && !knownTaskIDs[dep] {
+					continue
+				}
 				if _, err := insDep.Exec(t.ID, dep); err != nil {
 					return err
 				}

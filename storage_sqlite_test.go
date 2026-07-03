@@ -79,6 +79,47 @@ func TestSaveDependentBeforeDependency(t *testing.T) {
 	}
 }
 
+// TestSaveDropsDanglingDependency verifies the dangling-reference guard: a
+// depends_on_id pointing at a task that exists in neither the batch nor the DB
+// is dropped so the save still succeeds, while a valid link to a task already
+// in the DB (not re-saved in this batch) is preserved — i.e. the guard drops
+// only the genuinely broken link, never a live one.
+func TestSaveDropsDanglingDependency(t *testing.T) {
+	h := openTestDB(t)
+	if _, err := h.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		t.Fatalf("enable foreign_keys: %v", err)
+	}
+
+	// Real target persisted in its own batch, so it lives in the DB but is not
+	// part of the batch that saves the dependent below.
+	target := todo.New("Update TTRPG ruleset")
+	saveTodos(t, h, []todo.Todo{target})
+
+	dependent := todo.New("Send the new version")
+	dependent.AddDependency(target.ID)                     // valid — target exists in the DB
+	dependent.AddDependency("ghost-task-that-was-deleted") // dangling
+
+	// Must not fail despite the dangling link.
+	saveTodos(t, h, []todo.Todo{dependent})
+
+	got, err := loadTodosFromDB(h)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	var reloaded *todo.Todo
+	for i := range got {
+		if got[i].ID == dependent.ID {
+			reloaded = &got[i]
+		}
+	}
+	if reloaded == nil {
+		t.Fatal("dependent task not saved")
+	}
+	if len(reloaded.Dependencies) != 1 || reloaded.Dependencies[0] != target.ID {
+		t.Fatalf("expected only the live dependency preserved, got %v", reloaded.Dependencies)
+	}
+}
+
 // TestSQLiteRoundTrip saves todos with nested data and confirms a load
 // reconstructs them losslessly from the JSON blob.
 func TestSQLiteRoundTrip(t *testing.T) {
