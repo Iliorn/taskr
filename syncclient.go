@@ -301,7 +301,14 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummar
 		return syncSummary{}, err
 	}
 	// Record dropped local edits before we overwrite, for the recovery log.
-	dropped := droppedLocalEdits(local, merged)
+	// The baseline is the last successful sync: only edits made here since then
+	// can genuinely lose the merge. A missing/corrupt state file reads as zero
+	// → log everything, the conservative recovery-net default.
+	var lastSync time.Time
+	if st, ok, _ := readSyncState(); ok {
+		lastSync = st.LastSync
+	}
+	dropped := droppedLocalEdits(local, merged, lastSync)
 	if err := logDroppedEdits(dropped); err != nil {
 		fmt.Fprintf(os.Stderr, "taskr sync: warning: could not write sync log: %v\n", err)
 	}
@@ -392,8 +399,14 @@ func postSync(cfg syncConfig, tasks []todo.Todo, timeout time.Duration) ([]todo.
 
 // droppedLocalEdits returns the local versions of tasks whose scalar fields were
 // overwritten by the merge — a local edit that lost last-writer-wins. Only tasks
-// the client had live are considered.
-func droppedLocalEdits(local, merged []todo.Todo) []todo.Todo {
+// the client had live are considered, and only ones actually modified here since
+// the last successful sync (`since`). Without that baseline, every remote edit
+// arriving via a pull read as a "conflict" — the local copy differs from the
+// merged result, but it's merely stale, nothing was lost — flooding sync.log
+// (churning real dropped edits out through the size rotation) and inflating the
+// `sync --status` conflict count into noise. A zero `since` (no sync recorded
+// yet) logs everything: when unsure, over-log — it's a recovery net.
+func droppedLocalEdits(local, merged []todo.Todo, since time.Time) []todo.Todo {
 	mergedByID := make(map[string]todo.Todo, len(merged))
 	for _, t := range merged {
 		mergedByID[t.ID] = t
@@ -401,6 +414,11 @@ func droppedLocalEdits(local, merged []todo.Todo) []todo.Todo {
 	var dropped []todo.Todo
 	for _, l := range local {
 		if l.Deleted {
+			continue
+		}
+		if !l.ModifiedAt.After(since) {
+			// Untouched here since the last sync: an overwrite is inbound
+			// propagation of another device's edit, not a lost local one.
 			continue
 		}
 		m, ok := mergedByID[l.ID]

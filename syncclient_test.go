@@ -117,6 +117,10 @@ func TestSyncConcurrentLocalWriteSurvives(t *testing.T) {
 
 func TestDroppedLocalEditsDeletionVsEdit(t *testing.T) {
 	base := time.Date(2026, 6, 25, 12, 0, 0, 0, time.UTC)
+	// Baseline: the last successful sync predates every edit below, so the
+	// since-filter is inert for these cases (they test the delete-vs-edit and
+	// contested-edit rules). TestDroppedLocalEditsBaseline covers the filter.
+	since := base.Add(-time.Hour)
 
 	// A task the client still has live.
 	live := todo.New("task")
@@ -127,7 +131,7 @@ func TestDroppedLocalEditsDeletionVsEdit(t *testing.T) {
 	delAfter := live
 	delAfter.Deleted = true
 	delAfter.DeletedAt = base.Add(time.Hour)
-	if d := droppedLocalEdits([]todo.Todo{live}, []todo.Todo{delAfter}); len(d) != 0 {
+	if d := droppedLocalEdits([]todo.Todo{live}, []todo.Todo{delAfter}, since); len(d) != 0 {
 		t.Errorf("remote deletion of an unedited live task should not be a conflict, got %d", len(d))
 	}
 
@@ -138,15 +142,46 @@ func TestDroppedLocalEditsDeletionVsEdit(t *testing.T) {
 	delBefore := live
 	delBefore.Deleted = true
 	delBefore.DeletedAt = base.Add(time.Hour)
-	if d := droppedLocalEdits([]todo.Todo{edited}, []todo.Todo{delBefore}); len(d) != 1 {
+	if d := droppedLocalEdits([]todo.Todo{edited}, []todo.Todo{delBefore}, since); len(d) != 1 {
 		t.Errorf("a local edit newer than the deletion should be a conflict, got %d", len(d))
 	}
 
-	// Case 3: both sides live, scalar fields differ → conflict (unchanged behavior).
-	server := live
-	server.Title = "server wording"
-	if d := droppedLocalEdits([]todo.Todo{live}, []todo.Todo{server}); len(d) != 1 {
+	// Case 3: both sides live, scalar fields differ, local edited since the
+	// last sync → conflict.
+	if d := droppedLocalEdits([]todo.Todo{live}, []todo.Todo{contested(live)}, since); len(d) != 1 {
 		t.Errorf("a contested live edit should still be a conflict, got %d", len(d))
+	}
+}
+
+func contested(l todo.Todo) todo.Todo {
+	l.Title = "server wording"
+	return l
+}
+
+// TestDroppedLocalEditsBaseline: a task NOT modified locally since the last
+// successful sync is merely stale when the merge replaces it — inbound
+// propagation of another device's edit, not a dropped local edit. Logging it
+// was the false-positive noise that drowned sync.log and made the
+// `sync --status` conflict count meaningless.
+func TestDroppedLocalEditsBaseline(t *testing.T) {
+	base := time.Date(2026, 6, 25, 12, 0, 0, 0, time.UTC)
+
+	local := todo.New("task")
+	local.ModifiedAt = base
+
+	remote := local
+	remote.Title = "edited elsewhere"
+	remote.ModifiedAt = base.Add(2 * time.Hour)
+
+	// Last sync happened after our copy's ModifiedAt → we haven't touched it →
+	// the overwrite is plain propagation, not a conflict.
+	if d := droppedLocalEdits([]todo.Todo{local}, []todo.Todo{remote}, base.Add(time.Hour)); len(d) != 0 {
+		t.Errorf("inbound remote edit of an untouched task logged as conflict, got %d", len(d))
+	}
+
+	// Zero baseline (no sync ever recorded) → conservative: log it.
+	if d := droppedLocalEdits([]todo.Todo{local}, []todo.Todo{remote}, time.Time{}); len(d) != 1 {
+		t.Errorf("with no baseline the overwrite should be logged, got %d", len(d))
 	}
 }
 
