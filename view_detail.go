@@ -190,8 +190,8 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		comp := func(v float64) string {
 			return strings.TrimSuffix(fmt.Sprintf("%.1f", v), ".0")
 		}
-		breakdown := fmt.Sprintf(tr("%.1f  (D %s · P %s · M %s · A %s)"),
-			sc.Total, comp(sc.Urgency), comp(sc.Importance), comp(sc.Momentum), comp(sc.Age))
+		breakdown := fmt.Sprintf(tr("%.1f  (D %s · P %s · M %s · S %s · A %s)"),
+			sc.Total, comp(sc.Urgency), comp(sc.Importance), comp(sc.Momentum), comp(sc.Size), comp(sc.Age))
 		roField(tr("Score:"), plainVal, breakdown)
 	}
 

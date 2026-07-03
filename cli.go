@@ -807,8 +807,8 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo) {
 		// Spelled-out component names instead of single letters — the previous
 		// `D/P/M/A` was a stat-readout cliff for anyone not already steeped in
 		// the sequencing engine's terminology.
-		fmt.Printf("Score:    %.1f  (Deadline %.1f · Priority %.1f · Momentum %.1f · Age %.1f)\n",
-			sc.Total, sc.Urgency, sc.Importance, sc.Momentum, sc.Age)
+		fmt.Printf("Score:    %.1f  (Deadline %.1f · Priority %.1f · Momentum %.1f · Size %.1f · Age %.1f)\n",
+			sc.Total, sc.Urgency, sc.Importance, sc.Momentum, sc.Size, sc.Age)
 	}
 	if len(subs) > 0 {
 		fmt.Printf("\nSubtasks (%d):\n", len(subs))

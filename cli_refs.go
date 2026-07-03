@@ -19,6 +19,11 @@ func loadForCLI() (Repository, []todo.Todo, error) {
 	applyBiases(biasesFromSettings(settings))
 	repo := newSQLiteRepo()
 	todos, err := repo.Load()
+	if err == nil {
+		// Momentum reads recent activity; snapshot it so CLI output ranks
+		// the same way the TUI does after its cache refresh.
+		applyActivityHeat(computeActivityHeat(time.Now(), todos))
+	}
 	return repo, todos, err
 }
 

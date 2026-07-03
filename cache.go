@@ -54,6 +54,10 @@ func (m *model) refreshCaches() {
 
 	all := m.allTodos()
 
+	// Momentum reads recent activity; refresh the snapshot before anything
+	// downstream (selectActiveDone, rollups) computes scores from it.
+	applyActivityHeat(computeActivityHeat(m.frameTime, all))
+
 	for k := range m.cache.overdueSet {
 		delete(m.cache.overdueSet, k)
 	}

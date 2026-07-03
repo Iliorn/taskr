@@ -90,17 +90,113 @@ func TestImportanceDim(t *testing.T) {
 }
 
 func TestMomentumDim(t *testing.T) {
+	heat := activityHeat{
+		tasks:    map[string]bool{"self": true},
+		projects: map[string]bool{"hot-proj": true},
+		tags:     map[string]bool{"hot-tag": true},
+	}
+	mk := func(id, project string, tags ...string) *todo.Todo {
+		tt := todo.New("x")
+		tt.ID = id
+		tt.Project = project
+		tt.Tags = tags
+		return &tt
+	}
+	cases := []struct {
+		name string
+		t    *todo.Todo
+		want float64
+	}{
+		{"own activity", mk("self", ""), 10},
+		{"hot project", mk("other", "hot-proj"), 10},
+		{"hot tag only", mk("other", "cold-proj", "hot-tag"), 5},
+		{"cold", mk("other", "cold-proj", "cold-tag"), 0},
+		{"no project no tags", mk("other", ""), 0},
+	}
+	for _, c := range cases {
+		if got := momentumDim(c.t, heat); got != c.want {
+			t.Errorf("%s = %v, want %v", c.name, got, c.want)
+		}
+	}
+	// Zero-value heat (no snapshot computed) must read as all-cold, not panic.
+	if got := momentumDim(mk("any", "p", "t"), activityHeat{}); got != 0 {
+		t.Errorf("zero-value heat = %v, want 0", got)
+	}
+}
+
+func TestSizeDim(t *testing.T) {
 	cases := []struct {
 		s    todo.Size
 		want float64
 	}{
-		{todo.SizeSmall, 10},
-		{todo.SizeMedium, 5},
+		{todo.SizeSmall, 2},
+		{todo.SizeMedium, 1},
 		{todo.SizeLarge, 0},
 	}
 	for _, c := range cases {
-		if got := momentumDim(c.s); got != c.want {
+		if got := sizeDim(c.s); got != c.want {
 			t.Errorf("size %v = %v, want %v", c.s, got, c.want)
+		}
+	}
+}
+
+// TestComputeActivityHeat pins which signals make a task/project/tag hot and
+// which don't: recency window, deleted tasks, tombstoned comments, running
+// timers.
+func TestComputeActivityHeat(t *testing.T) {
+	now := fixedNow
+	inWindow := now.Add(-24 * time.Hour)
+	stale := now.Add(-3 * 24 * time.Hour)
+
+	fresh := todo.New("finished yesterday")
+	fresh.ID = "fresh"
+	fresh.Status = todo.Done
+	fresh.CompletedAt = inWindow
+	fresh.Project = "alpha"
+	fresh.Tags = []string{"go"}
+
+	old := todo.New("finished last week")
+	old.ID = "old"
+	old.Status = todo.Done
+	old.CompletedAt = stale
+	old.Project = "beta"
+
+	commented := todo.New("discussed this morning")
+	commented.ID = "commented"
+	commented.Comments = []todo.Comment{{CreatedAt: inWindow}}
+	commented.Project = "gamma"
+
+	tracked := todo.New("timer running")
+	tracked.ID = "tracked"
+	tracked.TimeEntries = []todo.TimeEntry{{StartedAt: now.Add(-10 * time.Minute)}}
+	tracked.Project = "delta"
+
+	ghost := todo.New("deleted but recently touched")
+	ghost.ID = "ghost"
+	ghost.CompletedAt = inWindow
+	ghost.Deleted = true
+	ghost.Project = "epsilon"
+
+	h := computeActivityHeat(now, []todo.Todo{fresh, old, commented, tracked, ghost})
+
+	for _, want := range []struct {
+		kind string
+		m    map[string]bool
+		key  string
+		hot  bool
+	}{
+		{"task", h.tasks, "fresh", true},
+		{"task", h.tasks, "old", false},
+		{"task", h.tasks, "commented", true},
+		{"task", h.tasks, "tracked", true},
+		{"task", h.tasks, "ghost", false},
+		{"project", h.projects, "alpha", true},
+		{"project", h.projects, "beta", false},
+		{"project", h.projects, "epsilon", false},
+		{"tag", h.tags, "go", true},
+	} {
+		if got := want.m[want.key]; got != want.hot {
+			t.Errorf("%s %q hot = %v, want %v", want.kind, want.key, got, want.hot)
 		}
 	}
 }
@@ -125,7 +221,7 @@ func TestDoneTaskScoresZero(t *testing.T) {
 	tt.Status = todo.Done
 	tt.Priority = todo.PriorityHigh
 	tt.Size = todo.SizeSmall
-	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true})
+	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true}, activityHeat{})
 	if got.Total != 0 {
 		t.Errorf("done task scored %v, want 0", got.Total)
 	}
@@ -134,12 +230,14 @@ func TestDoneTaskScoresZero(t *testing.T) {
 func TestBalancedBiasGivesUnweightedSum(t *testing.T) {
 	tt := todo.New("balanced")
 	tt.Priority = todo.PriorityHigh // 10
-	tt.Size = todo.SizeSmall        // 10
+	tt.Size = todo.SizeSmall        // size nudge 2
+	tt.Project = "hot"
 	tt.CreatedAt = fixedNow.Add(-1 * 24 * time.Hour)
-	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true})
-	// no due, so urgency=0. importance 10 + momentum 10 + age 0.1 = 20.1
-	if !approxEq(got.Total, 20.1) {
-		t.Errorf("Balanced score = %v, want ~20.1; components=%+v", got.Total, got)
+	heat := activityHeat{projects: map[string]bool{"hot": true}}
+	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}, heat)
+	// no due, so urgency=0. importance 10 + momentum 10 + size 2 + age 0.1 = 22.1
+	if !approxEq(got.Total, 22.1) {
+		t.Errorf("Balanced score = %v, want ~22.1; components=%+v", got.Total, got)
 	}
 }
 
@@ -147,13 +245,16 @@ func TestIntenseBiasDoublesEachAxis(t *testing.T) {
 	tt := todo.New("intense")
 	tt.Priority = todo.PriorityHigh
 	tt.Size = todo.SizeSmall
+	tt.Project = "hot"
 	tt.DueDate = fixedNow.Add(48 * time.Hour) // 2 days out
-	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true})
+	heat := activityHeat{projects: map[string]bool{"hot": true}}
+	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true}, heat)
 	// urgency dim = 10 - 16/7 ≈ 7.714; weighted ×2 ≈ 15.428
 	// importance dim = 10; weighted ×2 = 20
-	// momentum dim = 10; weighted ×2 = 20
+	// momentum dim = 10 (hot project); weighted ×2 = 20
+	// size nudge = 2 (unweighted — the bias must not touch it)
 	// age ≈ 0
-	wantTotal := 2*(10.0-16.0/7.0) + 20 + 20
+	wantTotal := 2*(10.0-16.0/7.0) + 20 + 20 + 2
 	if !approxEq(got.Total, wantTotal) {
 		t.Errorf("Intense score = %v, want ~%v; components=%+v", got.Total, wantTotal, got)
 	}
@@ -163,33 +264,29 @@ func TestRelaxedBiasHalvesEachAxis(t *testing.T) {
 	tt := todo.New("relaxed")
 	tt.Priority = todo.PriorityHigh
 	tt.Size = todo.SizeLarge
-	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasRelaxed, Priority: biasRelaxed, Momentum: biasRelaxed, Aging: true})
-	// urgency 0, importance 10 * 0.5 = 5, momentum 0, age 0
+	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasRelaxed, Priority: biasRelaxed, Momentum: biasRelaxed, Aging: true}, activityHeat{})
+	// urgency 0, importance 10 * 0.5 = 5, momentum 0 (cold), size 0, age 0
 	if !approxEq(got.Total, 5.0) {
 		t.Errorf("Relaxed score = %v, want 5.0; components=%+v", got.Total, got)
 	}
 }
 
-func TestSmallTaskFloorOutranksLargeProject(t *testing.T) {
-	smallWin := todo.New("buy stamps")
-	smallWin.Size = todo.SizeSmall
-	smallWin.Priority = todo.PriorityLow
-
-	bigProject := todo.New("rewrite scheduler")
-	bigProject.Size = todo.SizeLarge
-	bigProject.Priority = todo.PriorityHigh
-
+// TestHotProjectOutranksColdPeer is the new Momentum contract: two otherwise
+// identical tasks — the one whose project saw activity in the window ranks a
+// full axis (10 points, Balanced) above the cold one.
+func TestHotProjectOutranksColdPeer(t *testing.T) {
 	bal := biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}
-	s := sequenceComponentsAt(fixedNow, &smallWin, bal).Total
-	p := sequenceComponentsAt(fixedNow, &bigProject, bal).Total
-	// small (m=10) = 10; big (i=10) = 10 — tied, neither wins by construction.
-	// The contract the test enforces: small is not penalised against the big
-	// project on the Momentum axis alone — they meet at the same total.
-	if !approxEq(s, p) {
-		t.Logf("small=%v big=%v (acceptable if both meet the design's tie)", s, p)
-	}
-	if s == 0 {
-		t.Error("small low-priority task should not score 0")
+	heat := activityHeat{projects: map[string]bool{"active": true}}
+
+	inFlow := todo.New("next step in the active project")
+	inFlow.Project = "active"
+	cold := todo.New("same shape, dormant project")
+	cold.Project = "dormant"
+
+	s := sequenceComponentsAt(fixedNow, &inFlow, bal, heat).Total
+	p := sequenceComponentsAt(fixedNow, &cold, bal, heat).Total
+	if s-p < 9.99 {
+		t.Errorf("hot project lead = %v, want 10 (in-flow=%v cold=%v)", s-p, s, p)
 	}
 }
 
@@ -203,8 +300,8 @@ func TestAgingToggle(t *testing.T) {
 	with := biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}
 	without := biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: false}
 
-	gotWith := sequenceComponentsAt(fixedNow, &tt, with)
-	gotWithout := sequenceComponentsAt(fixedNow, &tt, without)
+	gotWith := sequenceComponentsAt(fixedNow, &tt, with, activityHeat{})
+	gotWithout := sequenceComponentsAt(fixedNow, &tt, without, activityHeat{})
 
 	if !approxEq(gotWith.Age, 9.0) {
 		t.Errorf("aging on: Age = %v, want ~9.0 (60d)", gotWith.Age)
@@ -212,10 +309,11 @@ func TestAgingToggle(t *testing.T) {
 	if gotWithout.Age != 0 {
 		t.Errorf("aging off: Age = %v, want 0", gotWithout.Age)
 	}
-	// Urgency/Importance/Momentum are unaffected by the toggle.
+	// Urgency/Importance/Momentum/Size are unaffected by the toggle.
 	if gotWith.Urgency != gotWithout.Urgency ||
 		gotWith.Importance != gotWithout.Importance ||
-		gotWith.Momentum != gotWithout.Momentum {
+		gotWith.Momentum != gotWithout.Momentum ||
+		gotWith.Size != gotWithout.Size {
 		t.Errorf("non-Age dimensions diverged across toggle: with=%+v without=%+v", gotWith, gotWithout)
 	}
 }
@@ -232,8 +330,8 @@ func TestPersonalityNames(t *testing.T) {
 		{"all balanced", bal, "Copilot"},
 		{"all intense", biases{biasIntense, biasIntense, biasIntense, true}, "Drill Sergeant"},
 		{"all relaxed", biases{biasRelaxed, biasRelaxed, biasRelaxed, true}, "Zen Garden"},
-		{"momentum intense", biases{biasBalanced, biasBalanced, biasIntense, true}, "Quick Wins"},
-		{"momentum relaxed", biases{biasBalanced, biasBalanced, biasRelaxed, true}, "Big Projects"},
+		{"momentum intense", biases{biasBalanced, biasBalanced, biasIntense, true}, "Flow State"},
+		{"momentum relaxed", biases{biasBalanced, biasBalanced, biasRelaxed, true}, "Fresh Eyes"},
 		{"deadline intense", biases{biasIntense, biasBalanced, biasBalanced, true}, "Deadline Hawk"},
 		{"deadline relaxed", biases{biasRelaxed, biasBalanced, biasBalanced, true}, "Deadline Cruise"},
 		{"priority intense", biases{biasBalanced, biasIntense, biasBalanced, true}, "Importance First"},

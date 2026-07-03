@@ -9,16 +9,20 @@ import (
 // sequence.go is the sequencing engine: the rule that decides the "Sequence"
 // sort order and the value persisted in the todos.sequence column on every save.
 //
-// The score is the design's Normalized Power Scale: four dimensions, each on a
-// 0–10 axis, three of them multiplied by a user-tunable bias (Relaxed=0.5,
-// Balanced=1.0, Intense=2.0). The fourth — Age — is added unweighted so old
-// tasks always eventually surface for cleanup or completion.
+// The score is the design's Normalized Power Scale: three 0–10 dimensions,
+// each multiplied by a user-tunable bias (Relaxed=0.5, Balanced=1.0,
+// Intense=2.0), plus two small unweighted terms — Size and Age — so quick
+// wins edge ahead of equal peers and old tasks always eventually surface for
+// cleanup or completion.
 //
-//	Score = U·Wd + I·Wp + M·Wm + Age
+//	Score = U·Wd + I·Wp + M·Wm + Size + Age
 //
 //	U  Urgency    closeness to deadline (0..10+)
 //	I  Importance priority bucket (0/5/10)
-//	M  Momentum   size bucket (S=10, M=5, L=0)
+//	M  Momentum   activity heat: 10 when the task or its project saw activity
+//	              (completion, timer, comment) inside momentumWindow, 5 when
+//	              only one of its tags did, 0 cold
+//	Size          quick-win nudge (S=2, M=1, L=0)
 //	Age           rot-guard: +0.1/day, +0.2/day past 30
 //	Wd Wp Wm      Deadline / Priority / Momentum bias multipliers
 //
@@ -137,7 +141,7 @@ func personality(b biases) (name, descr string) {
 	case all(biasRelaxed):
 		return "Zen Garden", "Stable: tasks stay mostly in the order they were created."
 	case all(biasBalanced):
-		return "Copilot", "Balanced: equally weighs priorities, deadlines, and quick wins."
+		return "Copilot", "Balanced: equally weighs priorities, deadlines, and recent activity."
 	}
 	if name, descr, ok := singleAxisPersonality(b); ok {
 		return name, descr
@@ -172,25 +176,97 @@ func singleAxisPersonality(b biases) (name, descr string, ok bool) {
 	case b.Priority == biasRelaxed:
 		return "Importance Casual", "Priority is treated as a hint, not a driver.", true
 	case b.Momentum == biasIntense:
-		return "Quick Wins", "Small tasks rise to the top so you can finish things fast.", true
+		return "Flow State", "Projects with recent activity dominate — ride the streak.", true
 	case b.Momentum == biasRelaxed:
-		return "Big Projects", "Large tasks aren't penalised as hard against small ones.", true
+		return "Fresh Eyes", "Recent activity barely moves the ranking; cold projects get equal footing.", true
 	}
 	return "", "", false
 }
 
+// ── Activity heat (the Momentum signal) ──────────────────────────────────────
+
+// momentumWindow is how far back an activity signal still counts as "recent".
+const momentumWindow = 48 * time.Hour
+
+// activityHeat is the recent-activity snapshot the Momentum dimension reads:
+// which tasks, projects, and tags saw a completion, a time entry, or a comment
+// inside momentumWindow. The zero value means everything is cold (momentum 0),
+// which is what a process that never computes heat — the sync server
+// persisting merged rows — correctly falls back to; every user-facing surface
+// recomputes it on load or cache refresh.
+type activityHeat struct {
+	tasks    map[string]bool
+	projects map[string]bool
+	tags     map[string]bool
+}
+
+// computeActivityHeat scans the full task set (done tasks included — their
+// completions are the strongest signal) and marks the task, its project, and
+// its tags hot when any signal lands inside the window ending at `now`.
+func computeActivityHeat(now time.Time, todos []todo.Todo) activityHeat {
+	h := activityHeat{
+		tasks:    make(map[string]bool),
+		projects: make(map[string]bool),
+		tags:     make(map[string]bool),
+	}
+	cutoff := now.Add(-momentumWindow)
+	recent := func(ts time.Time) bool { return !ts.IsZero() && ts.After(cutoff) }
+	for i := range todos {
+		t := &todos[i]
+		if t.Deleted {
+			continue
+		}
+		hot := recent(t.CompletedAt)
+		if !hot {
+			for _, c := range t.Comments {
+				if c.DeletedAt.IsZero() && (recent(c.CreatedAt) || recent(c.ModifiedAt)) {
+					hot = true
+					break
+				}
+			}
+		}
+		if !hot {
+			for _, e := range t.TimeEntries {
+				if e.IsRunning() || recent(e.StartedAt) || recent(e.StoppedAt) {
+					hot = true
+					break
+				}
+			}
+		}
+		if !hot {
+			continue
+		}
+		h.tasks[t.ID] = true
+		if t.Project != "" {
+			h.projects[t.Project] = true
+		}
+		for _, tag := range t.Tags {
+			h.tags[tag] = true
+		}
+	}
+	return h
+}
+
+// activeHeat is the package-level snapshot the live score functions read,
+// following the applyTheme/applyLang/applyBiases pattern. Refreshed by
+// refreshCaches (TUI) and loadForCLI (CLI) so both surfaces rank identically.
+var activeHeat activityHeat
+
+func applyActivityHeat(h activityHeat) { activeHeat = h }
+
 // ── Per-dimension contributions ──────────────────────────────────────────────
 
-// dimensionsAt is the pure core of the formula: given `now` and a task, return
-// the four un-weighted dimension scores. Splitting `now` out lets tests pin
-// time without monkey-patching.
-func dimensionsAt(now time.Time, t *todo.Todo) (u, i, m, age float64) {
+// dimensionsAt is the pure core of the formula: given `now`, a task, and the
+// activity-heat snapshot, return the five un-weighted dimension scores.
+// Splitting `now` and `heat` out lets tests pin both without monkey-patching.
+func dimensionsAt(now time.Time, t *todo.Todo, heat activityHeat) (u, i, m, size, age float64) {
 	if t == nil || t.Status == todo.Done {
-		return 0, 0, 0, 0
+		return 0, 0, 0, 0, 0
 	}
 	u = urgencyDim(now, t.DueDate)
 	i = importanceDim(t.Priority)
-	m = momentumDim(t.Size)
+	m = momentumDim(t, heat)
+	size = sizeDim(t.Size)
 	age = ageDim(now, t.CreatedAt)
 	return
 }
@@ -233,17 +309,36 @@ func importanceDim(p todo.Priority) float64 {
 	}
 }
 
-// momentumDim is the "small-task floor": Small=10 so quick wins outrank
-// untyped Mediums and unaddressed Larges, Medium=5 stays neutral, Large=0
-// concedes the floor to the smaller tasks.
-func momentumDim(s todo.Size) float64 {
+// momentumDim is the activity-heat lookup: 10 when the task itself or its
+// project was touched (completion, timer, comment) inside momentumWindow,
+// 5 when only one of its tags was, 0 cold. "The thing you're already deep in
+// comes next" — the informal ordering that dependency edges encode explicitly,
+// available even when no edges were recorded.
+func momentumDim(t *todo.Todo, heat activityHeat) float64 {
+	if heat.tasks[t.ID] || (t.Project != "" && heat.projects[t.Project]) {
+		return 10
+	}
+	for _, tag := range t.Tags {
+		if heat.tags[tag] {
+			return 5
+		}
+	}
+	return 0
+}
+
+// sizeDim is the quick-win nudge that survived the momentum rework: Small=2,
+// Medium=1, Large=0, added unweighted. Size was never momentum — it's a
+// static property — so it stopped claiming that axis and became a small
+// tie-flavored bonus instead: quick wins still edge ahead of equal peers
+// without drowning the real signals.
+func sizeDim(s todo.Size) float64 {
 	switch s {
 	case todo.SizeSmall:
-		return 10
+		return 2
 	case todo.SizeLarge:
 		return 0
 	default:
-		return 5
+		return 1
 	}
 }
 
@@ -268,20 +363,21 @@ func ageDim(now, created time.Time) float64 {
 // ── Score assembly ────────────────────────────────────────────────────────────
 
 // sequenceComponents is the breakdown shown in the detail view. Each field is
-// already weighted (i.e. multiplied by its bias) so the four values sum to
+// already weighted (i.e. multiplied by its bias) so the five values sum to
 // Total — the user sees the actual contributions, not the raw 0..10 axes.
 type sequenceComponents struct {
 	Urgency    float64
 	Importance float64
 	Momentum   float64
+	Size       float64
 	Age        float64
 	Total      float64
 }
 
-// sequenceComponentsAt is the testable assembly: pure, takes `now` and biases
-// explicitly.
-func sequenceComponentsAt(now time.Time, t *todo.Todo, b biases) sequenceComponents {
-	u, i, m, age := dimensionsAt(now, t)
+// sequenceComponentsAt is the testable assembly: pure, takes `now`, biases,
+// and the heat snapshot explicitly.
+func sequenceComponentsAt(now time.Time, t *todo.Todo, b biases, heat activityHeat) sequenceComponents {
+	u, i, m, size, age := dimensionsAt(now, t, heat)
 	if !b.Aging {
 		age = 0
 	}
@@ -289,16 +385,18 @@ func sequenceComponentsAt(now time.Time, t *todo.Todo, b biases) sequenceCompone
 		Urgency:    u * b.Deadline.weight(),
 		Importance: i * b.Priority.weight(),
 		Momentum:   m * b.Momentum.weight(),
+		Size:       size,
 		Age:        age,
 	}
-	out.Total = out.Urgency + out.Importance + out.Momentum + out.Age
+	out.Total = out.Urgency + out.Importance + out.Momentum + out.Size + out.Age
 	return out
 }
 
 // sequenceComponentsFor is the live form used by callers that want the
-// breakdown for display (detail view). Reads activeBiases and time.Now.
+// breakdown for display (detail view). Reads activeBiases, activeHeat, and
+// time.Now.
 func sequenceComponentsFor(t *todo.Todo) sequenceComponents {
-	return sequenceComponentsAt(time.Now(), t, activeBiases)
+	return sequenceComponentsAt(time.Now(), t, activeBiases, activeHeat)
 }
 
 // sequenceScore is the total persisted score: written into todos.sequence on
@@ -306,5 +404,5 @@ func sequenceComponentsFor(t *todo.Todo) sequenceComponents {
 // invoke this directly; the per-dimension breakdown is exposed via
 // sequenceComponentsFor for the detail view.
 func sequenceScore(t *todo.Todo) float64 {
-	return sequenceComponentsAt(time.Now(), t, activeBiases).Total
+	return sequenceComponentsAt(time.Now(), t, activeBiases, activeHeat).Total
 }
