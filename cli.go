@@ -1689,7 +1689,8 @@ Tasks:
   taskr top [-n=N] [--json] [--wide]   show top-N by sequence score
   taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
   taskr edit <ref> [flags]             change fields on one task (incl. --note/--append-note/--clear-note)
-  taskr done <ref>... [-m "why"]       mark one or more tasks done (-m/--comment adds a closing comment to each)
+  taskr done <ref>... [-m "why"]       mark one or more tasks done, stopping any running timer on them
+                                       (-m/--comment adds a closing comment to each)
   taskr delete <ref> [-f]              soft-delete a task (alias: rm; substring matches confirm first)
   taskr undo [--list]                  restore the most recent deletion (task + subtasks)
   taskr subtask <parent> "title"       create a subtask (--each for multiple titles)
@@ -1699,7 +1700,8 @@ Discovery:
   taskr projects [--json]              pending projects with counts
 
 Tracking:
-  taskr start <ref>                    start the time tracker (no-op if already tracking ref)
+  taskr start <ref>                    start the time tracker, stopping any other task's timer first
+                                       (no-op if already tracking ref)
   taskr stop [<ref>]                   stop the tracker (no ref = whichever's running)
   taskr log <ref> <45m|10:00-11:30>    backfill a time entry (duration ends now; range is today)
 
