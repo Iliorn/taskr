@@ -165,7 +165,12 @@ func printSyncStatus(cfg syncConfig) int {
 		if listen == "" {
 			listen = defaultServerListen
 		}
-		fmt.Printf("serving: this machine is a sync server (%s)\n", listen)
+		if st, ok := readServeState(); ok {
+			fmt.Printf("serving: this machine is a sync server (%s) — last client sync %s ago\n",
+				listen, shortDur(time.Since(st.LastClientSync)))
+		} else {
+			fmt.Printf("serving: this machine is a sync server (%s) — no client sync recorded yet\n", listen)
+		}
 	}
 	if cfg.URL != "" {
 		fmt.Printf("server: %s\n", cfg.URL)

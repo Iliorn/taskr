@@ -288,3 +288,26 @@ func TestClampFutureEventTimes(t *testing.T) {
 		t.Errorf("within-allowance ModifiedAt = %v, want untouched %v", tasks[1].ModifiedAt, slightlyAhead)
 	}
 }
+
+// The hub-side serve state must round-trip and gate on "ever recorded":
+// sync --status uses ok=false to print "no client sync recorded yet" instead
+// of a zero-time ago.
+func TestServeStateRoundTrip(t *testing.T) {
+	// The test binary shares one HOME; another test's sync round trip may
+	// already have recorded a client contact. Start from a clean slate.
+	_ = os.Remove(serveStatePath())
+	if _, ok := readServeState(); ok {
+		t.Fatal("no-file case reports a recorded client sync")
+	}
+	now := time.Now().Truncate(time.Second)
+	if err := writeServeState(now); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	st, ok := readServeState()
+	if !ok {
+		t.Fatal("state not readable after write")
+	}
+	if !st.LastClientSync.Equal(now.UTC()) {
+		t.Errorf("LastClientSync = %v, want %v", st.LastClientSync, now.UTC())
+	}
+}

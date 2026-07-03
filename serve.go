@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -84,11 +85,13 @@ type syncResponse struct {
 // syncServer holds the store handle and serializes merges so concurrent client
 // syncs can't interleave load→merge→save and drop a write. hub fans real-time
 // change notifications out to subscribed clients (see ssehub.go).
+// lastStateWrite (guarded by mu) throttles the serve-state file writes.
 type syncServer struct {
-	db    *sql.DB
-	token string
-	hub   *sseHub
-	mu    sync.Mutex
+	db             *sql.DB
+	token          string
+	hub            *sseHub
+	mu             sync.Mutex
+	lastStateWrite time.Time
 }
 
 // handler builds the route set. Shared by both entry points (headless cliServe
@@ -187,6 +190,13 @@ func (s *syncServer) sync(clientTasks []todo.Todo) ([]todo.Todo, error) {
 	defer s.mu.Unlock()
 
 	clampFutureEventTimes(clientTasks, time.Now())
+	// Note the client contact for `sync --status` on this host: a hub with no
+	// client URL of its own otherwise reports "last sync: never", reading as
+	// broken while it serves every other device daily. Throttled + best-effort.
+	if now := time.Now(); now.Sub(s.lastStateWrite) > time.Minute {
+		s.lastStateWrite = now
+		_ = writeServeState(now)
+	}
 	server, err := loadTodosForSync(s.db)
 	if err != nil {
 		return nil, err
@@ -212,6 +222,44 @@ func (s *syncServer) sync(clientTasks []todo.Todo) ([]todo.Todo, error) {
 		s.hub.broadcast()
 	}
 	return merged, nil
+}
+
+// serveState records hub-side sync facts, currently just the last time any
+// authenticated client completed a /v1/sync against this host. Written by the
+// serve process (headless or in-process), read by `taskr sync --status`.
+type serveState struct {
+	LastClientSync time.Time `json:"last_client_sync"`
+}
+
+func serveStatePath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".taskr", "serve-state.json")
+}
+
+func writeServeState(now time.Time) error {
+	if err := ensureStorageDir(); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(serveState{LastClientSync: now.UTC()}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(serveStatePath(), b, 0600)
+}
+
+// readServeState returns the recorded state; ok is false when no client has
+// ever synced (or the file is unreadable/corrupt — treated the same, since
+// the only consumer is a status line).
+func readServeState() (serveState, bool) {
+	b, err := os.ReadFile(serveStatePath())
+	if err != nil {
+		return serveState{}, false
+	}
+	var st serveState
+	if err := json.Unmarshal(b, &st); err != nil || st.LastClientSync.IsZero() {
+		return serveState{}, false
+	}
+	return st, true
 }
 
 // maxClientClockSkew bounds how far ahead of the server's clock a client's
