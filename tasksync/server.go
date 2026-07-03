@@ -249,23 +249,49 @@ func CanonicalJSON(t todo.Todo) []byte {
 
 // canonicalizeForDigest replaces a task's order-insensitive slices with sorted
 // copies — never mutating the caller's backing arrays — so digests are stable
-// across the reordering a merge may introduce.
+// across the reordering a merge may introduce. Timestamps are normalized to
+// UTC: json.Marshal embeds the zone offset, and times are compared as
+// instants, so two loads of the same store must hash identically even when
+// one rehydrated in a different zone (parseTime returns local time).
 func canonicalizeForDigest(t *todo.Todo) {
 	t.Tags = sortedStrings(t.Tags)
 	t.Dependencies = sortedStrings(t.Dependencies)
-	if len(t.Comments) > 1 {
+	t.CreatedAt = t.CreatedAt.UTC()
+	t.ModifiedAt = t.ModifiedAt.UTC()
+	t.CompletedAt = t.CompletedAt.UTC()
+	t.StartDate = t.StartDate.UTC()
+	t.DueDate = t.DueDate.UTC()
+	t.DeletedAt = t.DeletedAt.UTC()
+	if len(t.Comments) > 0 {
 		c := append([]todo.Comment(nil), t.Comments...)
 		sort.Slice(c, func(i, j int) bool { return c[i].ID < c[j].ID })
+		for i := range c {
+			c[i].CreatedAt = c[i].CreatedAt.UTC()
+			c[i].ModifiedAt = c[i].ModifiedAt.UTC()
+			c[i].DeletedAt = c[i].DeletedAt.UTC()
+		}
 		t.Comments = c
 	}
-	if len(t.Learnings) > 1 {
+	if len(t.Learnings) > 0 {
 		l := append([]todo.Learning(nil), t.Learnings...)
 		sort.Slice(l, func(i, j int) bool { return l[i].ID < l[j].ID })
+		for i := range l {
+			l[i].CreatedAt = l[i].CreatedAt.UTC()
+			l[i].ModifiedAt = l[i].ModifiedAt.UTC()
+			l[i].DeletedAt = l[i].DeletedAt.UTC()
+		}
 		t.Learnings = l
 	}
-	if len(t.TimeEntries) > 1 {
+	if len(t.TimeEntries) > 0 {
 		e := append([]todo.TimeEntry(nil), t.TimeEntries...)
 		sort.Slice(e, func(i, j int) bool { return e[i].ID < e[j].ID })
+		for i := range e {
+			e[i].StartedAt = e[i].StartedAt.UTC()
+			e[i].StoppedAt = e[i].StoppedAt.UTC()
+			e[i].ModifiedAt = e[i].ModifiedAt.UTC()
+			e[i].DeletedAt = e[i].DeletedAt.UTC()
+			e[i].LastSeen = e[i].LastSeen.UTC()
+		}
 		t.TimeEntries = e
 	}
 }

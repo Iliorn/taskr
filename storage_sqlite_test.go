@@ -109,6 +109,40 @@ func TestSQLiteColumnsMirrorBlob(t *testing.T) {
 	}
 }
 
+// TestDueDateRoundTripKeepsCalendarDay pins the process zone east of UTC and
+// asserts a local-midnight due date still formats to the same calendar day
+// after a save+load round-trip: fmtTime stores UTC, so without parseTime
+// rehydrating in local time the UTC form renders the previous day.
+func TestDueDateRoundTripKeepsCalendarDay(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Copenhagen")
+	if err != nil {
+		t.Skipf("tzdata unavailable: %v", err)
+	}
+	oldLocal := time.Local
+	time.Local = loc
+	t.Cleanup(func() { time.Local = oldLocal })
+
+	h := openTestDB(t)
+	due := time.Date(2030, 5, 20, 0, 0, 0, 0, time.Local)
+	x := todo.New("tz round trip")
+	x.SetDueDate(due)
+	saveTodos(t, h, []todo.Todo{x})
+
+	got, err := loadTodosFromDB(h)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d todos, want 1", len(got))
+	}
+	if !got[0].DueDate.Equal(due) {
+		t.Errorf("due instant changed: %s vs %s", got[0].DueDate, due)
+	}
+	if g, w := got[0].DueDate.Format("02-01-06"), due.Format("02-01-06"); g != w {
+		t.Errorf("due renders as %s after round-trip, want %s", g, w)
+	}
+}
+
 // TestSQLiteSizeRoundTrip confirms the size column populated by migration 003
 // round-trips: a Small task saves as 1 and loads back as todo.SizeSmall, and a
 // task with no explicit size loads as the zero value (SizeMedium) so existing

@@ -222,7 +222,11 @@ func parseTime(s string) time.Time {
 		validationWarn("taskr: invalid timestamp %q — treated as unset\n", s)
 		return time.Time{}
 	}
-	return t
+	// Stored timestamps are UTC (fmtTime); rehydrate in local time so
+	// date-only fields (due/start) render and compare on the calendar day
+	// the user set — a midnight-CEST due date formatted in its UTC form
+	// shows the previous day.
+	return t.In(time.Local)
 }
 
 func boolToInt(b bool) int {
