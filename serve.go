@@ -80,6 +80,12 @@ type syncRequest struct {
 
 type syncResponse struct {
 	Tasks []todo.Todo `json:"tasks"`
+	// ServerTime lets the client detect a skewed local clock (see
+	// clockSkewWarning): the LWW merge runs on wall-clock timestamps, so a
+	// device with a bad clock silently loses or wrongly wins conflicts, and
+	// nothing else in the protocol would ever tell the user. Zero when the
+	// server predates the field; clients skip the check then.
+	ServerTime time.Time `json:"server_time,omitempty"`
 }
 
 // syncServer holds the store handle and serializes merges so concurrent client
@@ -178,7 +184,7 @@ func (s *syncServer) handleSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(syncResponse{Tasks: merged}); err != nil {
+	if err := json.NewEncoder(w).Encode(syncResponse{Tasks: merged, ServerTime: time.Now().UTC()}); err != nil {
 		log.Printf("taskr serve: encode response: %v", err)
 	}
 }

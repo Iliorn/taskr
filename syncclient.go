@@ -296,9 +296,16 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummar
 	if err != nil {
 		return syncSummary{}, err
 	}
-	merged, err := postSync(cfg, local, timeout)
+	resp, err := postSync(cfg, local, timeout)
 	if err != nil {
 		return syncSummary{}, err
+	}
+	merged := resp.Tasks
+	// A skewed clock silently corrupts LWW conflict resolution and nothing
+	// else in the protocol surfaces it — warn loudly on every sync until the
+	// user fixes the clock.
+	if w := clockSkewWarning(resp.ServerTime, time.Now()); w != "" {
+		fmt.Fprintln(os.Stderr, "taskr sync: "+w)
 	}
 	// Record dropped local edits before we overwrite, for the recovery log.
 	// The baseline is the last successful sync: only edits made here since then
@@ -354,33 +361,55 @@ var syncTransport = &http.Transport{
 	DialContext: (&net.Dialer{Timeout: 3 * time.Second}).DialContext,
 }
 
-func postSync(cfg syncConfig, tasks []todo.Todo, timeout time.Duration) ([]todo.Todo, error) {
+func postSync(cfg syncConfig, tasks []todo.Todo, timeout time.Duration) (syncResponse, error) {
 	body, err := json.Marshal(syncRequest{Tasks: tasks})
 	if err != nil {
-		return nil, err
+		return syncResponse{}, err
 	}
 	endpoint := strings.TrimRight(cfg.URL, "/") + "/v1/sync"
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return syncResponse{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 
 	resp, err := (&http.Client{Timeout: timeout, Transport: syncTransport}).Do(req)
 	if err != nil {
-		return nil, err
+		return syncResponse{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("server returned %s: %s", resp.Status, strings.TrimSpace(string(msg)))
+		return syncResponse{}, fmt.Errorf("server returned %s: %s", resp.Status, strings.TrimSpace(string(msg)))
 	}
 	var out syncResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, err
+		return syncResponse{}, err
 	}
-	return out.Tasks, nil
+	return out, nil
+}
+
+// clockSkewWarning returns a human warning when this device's clock and the
+// server's differ by more than maxClientClockSkew. The LWW merge orders edits
+// by device wall clocks: a clock behind silently loses every conflict it
+// touches, a clock ahead wrongly wins (until the server's clamp catches the
+// worst of it) — and no error ever surfaces either way. A zero serverTime (a
+// server from before the field existed) skips the check. The measurement
+// includes the network round trip, which is noise at a five-minute threshold.
+func clockSkewWarning(serverTime, now time.Time) string {
+	if serverTime.IsZero() {
+		return ""
+	}
+	skew := now.Sub(serverTime)
+	if skew < 0 {
+		skew = -skew
+	}
+	if skew <= maxClientClockSkew {
+		return ""
+	}
+	return fmt.Sprintf("warning: this device's clock is about %s off from the sync server's — edits made here can silently lose (or wrongly win) against other devices until the clock is fixed",
+		skew.Round(time.Minute))
 }
 
 // droppedLocalEdits returns the local versions of tasks whose scalar fields were

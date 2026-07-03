@@ -89,7 +89,7 @@ func TestSyncConcurrentLocalWriteSurvives(t *testing.T) {
 		withComment := a
 		withComment.AddComment("added mid-flight")
 		saveTodos(t, ch, []todo.Todo{withComment})
-		if err := json.NewEncoder(w).Encode(syncResponse(req)); err != nil {
+		if err := json.NewEncoder(w).Encode(syncResponse{Tasks: req.Tasks}); err != nil {
 			t.Errorf("encode response: %v", err)
 		}
 	})
@@ -240,5 +240,25 @@ func TestInsecureSyncURLWarning(t *testing.T) {
 		if w := insecureSyncURLWarning(u); w == "" {
 			t.Errorf("expected warning for %q, got none", u)
 		}
+	}
+}
+
+// TestClockSkewWarning: skew beyond the merge tolerance must warn (both
+// directions), skew within it must not, and a server that predates the
+// server_time field (zero) must skip the check entirely.
+func TestClockSkewWarning(t *testing.T) {
+	now := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)
+
+	if w := clockSkewWarning(time.Time{}, now); w != "" {
+		t.Errorf("zero server time should skip the check, got %q", w)
+	}
+	if w := clockSkewWarning(now.Add(-2*time.Minute), now); w != "" {
+		t.Errorf("2m skew is inside tolerance, got %q", w)
+	}
+	if w := clockSkewWarning(now.Add(-20*time.Minute), now); w == "" {
+		t.Error("client 20m ahead of server should warn")
+	}
+	if w := clockSkewWarning(now.Add(20*time.Minute), now); w == "" {
+		t.Error("client 20m behind server should warn")
 	}
 }
