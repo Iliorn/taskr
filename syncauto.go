@@ -32,6 +32,11 @@ func syncTick() tea.Cmd {
 func (m model) backgroundSync() tea.Cmd {
 	cfg := m.syncCfg
 	return func() tea.Msg {
+		// Stale-device guard — same rule as the CLI path; the Settings footer
+		// carries the pointer to the manual override.
+		if gap, stale := staleSyncGap(time.Now()); stale {
+			return syncDoneMsg{err: fmt.Errorf("paused: no sync in %s — run `taskr sync --accept-stale` in a shell to rejoin", shortDur(gap))}
+		}
 		sum, err := runClientSync(db, cfg, 20*time.Second)
 		return syncDoneMsg{summary: sum, err: err}
 	}

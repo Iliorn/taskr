@@ -263,3 +263,63 @@ func TestClockSkewWarning(t *testing.T) {
 		t.Error("client 20m behind server should warn")
 	}
 }
+
+// TestStaleSyncGuard: a device whose last successful sync predates the
+// deletion-memory window must be flagged stale (auto-sync pauses; manual sync
+// needs --accept-stale), a recently-synced device must not, and a device that
+// has never synced must not (first-sync onboarding holds nothing the fleet
+// ever deleted).
+func TestStaleSyncGuard(t *testing.T) {
+	t.Cleanup(func() { _ = os.Remove(syncStatePath()) })
+	now := time.Now()
+
+	// Never synced → not stale.
+	_ = os.Remove(syncStatePath())
+	if _, stale := staleSyncGap(now); stale {
+		t.Error("device with no sync history must not be stale")
+	}
+
+	// Synced recently → not stale.
+	if err := writeSyncState(syncSummary{}); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+	if gap, stale := staleSyncGap(now); stale {
+		t.Errorf("freshly synced device flagged stale (gap %s)", gap)
+	}
+
+	// Fake a last sync from beyond the window → stale.
+	old := syncState{LastSync: now.Add(-staleSyncThreshold - 24*time.Hour)}
+	b, _ := json.Marshal(old)
+	if err := os.WriteFile(syncStatePath(), b, 0600); err != nil {
+		t.Fatalf("write old state: %v", err)
+	}
+	gap, stale := staleSyncGap(now)
+	if !stale {
+		t.Fatalf("device %s past threshold not flagged stale", gap)
+	}
+	if notice := staleSyncNotice(gap); !strings.Contains(notice, "hasn't synced") {
+		t.Errorf("notice should explain the situation, got %q", notice)
+	}
+}
+
+// TestCLISyncRefusesStale: without --accept-stale a stale device's manual sync
+// exits 2 before touching the network; with the flag it proceeds (and fails on
+// the unreachable test URL with exit 1, proving it got past the guard).
+func TestCLISyncRefusesStale(t *testing.T) {
+	t.Cleanup(func() { _ = os.Remove(syncStatePath()) })
+	old := syncState{LastSync: time.Now().Add(-staleSyncThreshold - 24*time.Hour)}
+	b, _ := json.Marshal(old)
+	if err := os.WriteFile(syncStatePath(), b, 0600); err != nil {
+		t.Fatalf("write old state: %v", err)
+	}
+
+	// 127.0.0.1:1 refuses instantly, so the --accept-stale path fails fast at
+	// the network layer rather than hanging the test.
+	args := []string{"--url=http://127.0.0.1:1", "--token=tok"}
+	if rc := cliSync(args); rc != 2 {
+		t.Errorf("stale sync without flag: want exit 2, got %d", rc)
+	}
+	if rc := cliSync(append(args, "--accept-stale")); rc != 1 {
+		t.Errorf("stale sync with flag should pass the guard and fail on network: want 1, got %d", rc)
+	}
+}

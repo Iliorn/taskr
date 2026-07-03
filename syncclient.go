@@ -55,6 +55,12 @@ func maybeAutoSyncCLI() {
 	if err := openStore(); err != nil {
 		return
 	}
+	// Stale-device guard: auto-sync must never be the thing that resurrects
+	// long-deleted tasks. Manual `taskr sync --accept-stale` is the way back in.
+	if gap, stale := staleSyncGap(time.Now()); stale {
+		fmt.Fprintf(os.Stderr, "taskr sync: auto-sync paused: %s; run `taskr sync --accept-stale` to rejoin\n", staleSyncNotice(gap))
+		return
+	}
 	_, _ = runClientSync(db, cfg, 10*time.Second)
 }
 
@@ -148,6 +154,44 @@ func readSyncState() (st syncState, ok bool, err error) {
 	return st, true, nil
 }
 
+// ── Stale-device guard ────────────────────────────────────────────────────────
+//
+// The tombstone GC (pruneOldTombstones) hard-deletes deletion markers after
+// tombstoneRetention. A device that last synced within that window is provably
+// safe: every deletion made anywhere since its last sync happened after that
+// sync, so its marker is younger than the window and still alive — nothing the
+// device holds can resurrect. Past the window the proof is gone: the device
+// may hold live copies of tasks whose deletion markers no longer exist, and a
+// blind full-set merge would bring them back on every device. The guard turns
+// that silent resurrection into an explicit, explained choice.
+
+// staleSyncThreshold is tombstoneRetention minus two weeks of margin, covering
+// the edge where a marker is pruned at the very moment the returning device
+// syncs (both sides prune on open, so an exact-boundary race is real).
+const staleSyncThreshold = tombstoneRetention - 14*24*time.Hour
+
+// staleSyncGap reports how long ago the last successful sync was and whether
+// that exceeds staleSyncThreshold. A device with no recorded sync is NOT
+// stale: it has never exchanged tasks, so the rest of the fleet never saw
+// (and so never deleted) anything it holds — first-sync onboarding must not
+// be blocked. (Corollary: don't hand-delete sync-state.json on a device that
+// HAS synced; that file is what this guard reasons from.)
+func staleSyncGap(now time.Time) (time.Duration, bool) {
+	st, ok, err := readSyncState()
+	if !ok || err != nil {
+		return 0, false
+	}
+	gap := now.Sub(st.LastSync)
+	return gap, gap > staleSyncThreshold
+}
+
+// staleSyncNotice is the shared explanation, phrased for a human who has just
+// plugged in a long-dormant machine.
+func staleSyncNotice(gap time.Duration) string {
+	return fmt.Sprintf("this device hasn't synced in %s — longer than the %s deletion-memory window, so tasks deleted elsewhere in the meantime could come back everywhere if it syncs blind",
+		shortDur(gap), shortDur(staleSyncThreshold))
+}
+
 // printSyncStatus reports the configured server and the last successful sync,
 // reading only local state (no network). Returns a process exit code.
 func printSyncStatus(cfg syncConfig) int {
@@ -193,6 +237,7 @@ func cliSync(args []string) int {
 	save := fs.Bool("save", false, "persist --url/--token to ~/.taskr/sync.json for future syncs")
 	quiet := fs.Bool("quiet", false, "print nothing on success")
 	status := fs.Bool("status", false, "print the last sync time/result and exit (local only, no network)")
+	acceptStale := fs.Bool("accept-stale", false, "sync even though this device has been offline longer than the deletion-memory window (tasks deleted elsewhere may resurrect)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -233,6 +278,14 @@ func cliSync(args []string) int {
 	if err := openStore(); err != nil {
 		fmt.Fprintf(os.Stderr, "taskr sync: open store: %v\n", err)
 		return 1
+	}
+	if gap, stale := staleSyncGap(time.Now()); stale && !*acceptStale {
+		fmt.Fprintf(os.Stderr, `taskr sync: refusing: %s.
+Options:
+  taskr sync --accept-stale     merge anyway (long-deleted tasks may return; back up first with taskr export)
+  or reset this device to re-pull clean: back up, then rm ~/.taskr/tasks.db and sync again
+`, staleSyncNotice(gap))
+		return 2
 	}
 	sum, err := runClientSync(db, cfg, 30*time.Second)
 	if err != nil {

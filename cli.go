@@ -1719,6 +1719,8 @@ Sync (cross-device):
                                             auto-sync runs on its own once configured (set "auto_sync":false in
                                             ~/.taskr/sync.json to disable); conflicts log to ~/.taskr/sync.log
   taskr sync --status                        print the last sync time/result (local only, no network)
+  taskr sync --accept-stale                  rejoin after being offline past the deletion-memory window
+                                            (~6 months; auto-sync pauses then so deleted tasks can't resurrect)
 
 Meta:
   taskr --version                      print build version
