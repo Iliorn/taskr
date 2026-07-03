@@ -638,6 +638,7 @@ func (m model) updateConfirmCloseParent(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if t.IsTimerRunning() {
 						m.stopTimer(t.ID)
 					}
+					captureSeqRankAtDone(m.allTodos(), t)
 					t.Toggle()
 					ids := []string{t.ID}
 					if t.IsRecurring() {

@@ -318,6 +318,73 @@ func TestAgingToggle(t *testing.T) {
 	}
 }
 
+func TestCaptureSeqRankAtDone(t *testing.T) {
+	created := time.Now().Add(-time.Hour)
+	mk := func(id string, p todo.Priority) todo.Todo {
+		tt := todo.New(id)
+		tt.ID = id
+		tt.Priority = p
+		tt.CreatedAt = created
+		return tt
+	}
+	top := mk("top", todo.PriorityHigh)
+	mid := mk("mid", todo.PriorityMedium)
+	low := mk("low", todo.PriorityLow)
+	sub := mk("sub", todo.PriorityHigh)
+	sub.ParentID = "top"
+	todos := []todo.Todo{low, mid, top, sub}
+
+	captureSeqRankAtDone(todos, &top)
+	if top.SeqRankAtDone != 1 {
+		t.Errorf("top rank = %d, want 1", top.SeqRankAtDone)
+	}
+	captureSeqRankAtDone(todos, &low)
+	if low.SeqRankAtDone != 3 {
+		t.Errorf("low rank = %d, want 3", low.SeqRankAtDone)
+	}
+	captureSeqRankAtDone(todos, &sub)
+	if sub.SeqRankAtDone != 0 {
+		t.Errorf("subtask rank = %d, want 0 (not recorded)", sub.SeqRankAtDone)
+	}
+}
+
+func TestToggleReopenClearsSeqRank(t *testing.T) {
+	tt := todo.New("x")
+	tt.SeqRankAtDone = 0
+	tt.Toggle() // pending → done
+	tt.SeqRankAtDone = 3
+	tt.Toggle() // done → pending: the reading is void
+	if tt.SeqRankAtDone != 0 {
+		t.Errorf("reopened task rank = %d, want 0", tt.SeqRankAtDone)
+	}
+}
+
+func TestSequenceHitStats(t *testing.T) {
+	now := time.Now()
+	mkDone := func(id string, rank int, doneAgo time.Duration) todo.Todo {
+		tt := todo.New(id)
+		tt.ID = id
+		tt.Status = todo.Done
+		tt.CompletedAt = now.Add(-doneAgo)
+		tt.SeqRankAtDone = rank
+		return tt
+	}
+	todos := []todo.Todo{
+		mkDone("hit1", 1, 1*time.Hour),
+		mkDone("hit2", 5, 2*time.Hour),
+		mkDone("miss", 9, 3*time.Hour),
+		mkDone("old-hit", 2, 4*time.Hour), // pushed out by window=3
+		mkDone("legacy", 0, 30*time.Minute), // no rank recorded — not rated
+	}
+	pendingNoise := todo.New("pending")
+	todos = append(todos, pendingNoise)
+
+	hits, rated := sequenceHitStats(todos, 3)
+	if rated != 3 || hits != 2 {
+		t.Errorf("hits/rated = %d/%d, want 2/3 (window keeps the 3 newest rated)", hits, rated)
+	}
+}
+
 // TestPersonalityNames spans the user-visible personality matrix to keep the
 // "single axis named, multi-axis falls back to Custom" contract honest.
 func TestPersonalityNames(t *testing.T) {

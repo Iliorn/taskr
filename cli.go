@@ -606,6 +606,7 @@ func cliDone(args []string) int {
 			t.StopTimer()
 			stopped = append(stopped, t)
 		}
+		captureSeqRankAtDone(todos, t)
 		t.Toggle()
 		dirty = append(dirty, t)
 		if t.IsRecurring() {
@@ -1349,6 +1350,10 @@ type statsSummary struct {
 	DoneToday           int `json:"done_today"`
 	DoneThisWeek        int `json:"done_this_week"`
 	TrackedTodayMinutes int `json:"tracked_today_minutes"`
+	// Sequence hit rate inputs: of the last seqHitWindow rank-stamped
+	// completions, how many closed while in the engine's top seqHitTopN.
+	SeqHitsRecent  int `json:"seq_hits_recent"`
+	SeqRatedRecent int `json:"seq_rated_recent"`
 }
 
 func computeStats(todos []todo.Todo, now time.Time) statsSummary {
@@ -1402,6 +1407,7 @@ func cliStats(args []string) int {
 		return 1
 	}
 	s := computeStats(todos, time.Now())
+	s.SeqHitsRecent, s.SeqRatedRecent = sequenceHitStats(todos, seqHitWindow)
 	switch strings.ToLower(*format) {
 	case "json":
 		return emitJSON(s)
@@ -1428,8 +1434,15 @@ func cliStats(args []string) int {
 		return emitJSON(map[string]string{"text": text, "tooltip": tooltip, "class": class})
 	default:
 		tracked := formatDurationCompact(time.Duration(s.TrackedTodayMinutes) * time.Minute)
-		fmt.Printf("active %d · overdue %d · due today %d · due this week %d · done today %d · tracked today %s\n",
+		line := fmt.Sprintf("active %d · overdue %d · due today %d · due this week %d · done today %d · tracked today %s",
 			s.Active, s.Overdue, s.DueToday, s.DueThisWeek, s.DoneToday, tracked)
+		// Hidden until rank-stamped completions exist, so a fresh install
+		// doesn't advertise a 0/0 metric.
+		if s.SeqRatedRecent > 0 {
+			line += fmt.Sprintf(" · seq hit %d%% (%d/%d top-%d)",
+				100*s.SeqHitsRecent/s.SeqRatedRecent, s.SeqHitsRecent, s.SeqRatedRecent, seqHitTopN)
+		}
+		fmt.Println(line)
 		return 0
 	}
 }

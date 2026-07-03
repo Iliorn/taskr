@@ -411,6 +411,12 @@ func (m model) renderStatsList() string {
 		stat(sb, tr("Due today"), dueToday, 0, false)
 		stat(sb, tr("Due this week"), dueThisWeek, 0, false)
 		stat(sb, tr("Active total"), activeTasks, 0, false)
+		// How often a completed task sat in the engine's top-5 at close —
+		// the feedback loop for tuning the sequence biases. Hidden until
+		// rank-stamped completions exist.
+		if hits, rated := sequenceHitStats(m.allTodos(), seqHitWindow); rated > 0 {
+			stat(sb, tr("Seq hit (top-5)"), hits, rated, true)
+		}
 	})
 
 	// flowSection renders a created/completed/net-backlog block with a trend

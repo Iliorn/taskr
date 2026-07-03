@@ -608,6 +608,27 @@ func TestCliAddChainRequiresBatch(t *testing.T) {
 	}
 }
 
+func TestCliDoneStampsSeqRank(t *testing.T) {
+	if code := cliAdd([]string{"seq-rank-probe", "--p", "h", "--due", "today"}); code != 0 {
+		t.Fatalf("add: exit %d", code)
+	}
+	if code := cliDone([]string{"seq-rank-probe"}); code != 0 {
+		t.Fatalf("done: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	probe := findByTitle(t, todos, "Seq-rank-probe")
+	if probe.SeqRankAtDone < 1 {
+		t.Errorf("SeqRankAtDone = %d, want >= 1 (stamped at completion)", probe.SeqRankAtDone)
+	}
+	// And the stat pipeline sees it.
+	if hits, rated := sequenceHitStats(todos, seqHitWindow); rated < 1 || hits < 1 {
+		t.Errorf("hit stats = %d/%d, want at least 1/1 (high-pri due-today closes as a top-5 hit)", hits, rated)
+	}
+}
+
 func TestCliEditAddDepLinksAndRefusesLoop(t *testing.T) {
 	if code := cliAdd([]string{"edit-dep-base"}); code != 0 {
 		t.Fatalf("add base: exit %d", code)

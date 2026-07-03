@@ -297,6 +297,7 @@ var daTranslations = map[string]string{
 	"Due today":             "Forfalder i dag",
 	"Due this week":         "Forfalder denne uge",
 	"Active total":          "Aktive i alt",
+	"Seq hit (top-5)":       "Sekvens-hit (top-5)",
 	"Created":               "Oprettet",
 	"Completed":             "Afsluttet",
 	"  Net backlog":         "  Netto-efterslæb",

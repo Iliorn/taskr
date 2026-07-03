@@ -776,6 +776,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						m.pushUndo("toggle done", t.ID)
 					}
+					if wasPending {
+						captureSeqRankAtDone(m.allTodos(), t)
+					}
 					t.Toggle()
 					ids := []string{t.ID}
 					if wasPending && t.IsRecurring() {

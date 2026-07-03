@@ -187,6 +187,13 @@ type Todo struct {
 	ParentID     string      `json:"parent_id,omitempty"`
 	Recurrence   string      `json:"recurrence,omitempty"`
 
+	// SeqRankAtDone records the 1-based position this task held in the
+	// top-level sequence ranking at the moment a user completed it (0 = not
+	// recorded: legacy completions, subtasks, auto-closed parents). Feeds the
+	// "sequence hit rate" stat — how often what you finish is what the engine
+	// had on top.
+	SeqRankAtDone int `json:"seq_rank_done,omitempty"`
+
 	// Tombstone fields for cross-device sync: a deleted task is retained as a
 	// tombstone (Deleted=true, DeletedAt set) so the deletion propagates during
 	// sync instead of reappearing from another device. Storage already keeps
@@ -240,6 +247,7 @@ func (t *Todo) Toggle() {
 	} else {
 		t.Status = Pending
 		t.CompletedAt = time.Time{}
+		t.SeqRankAtDone = 0 // the rank is a completion-time reading; reopening voids it
 	}
 	t.ModifiedAt = time.Now()
 }

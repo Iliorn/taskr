@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"time"
 
 	"taskr/todo"
@@ -405,4 +406,60 @@ func sequenceComponentsFor(t *todo.Todo) sequenceComponents {
 // sequenceComponentsFor for the detail view.
 func sequenceScore(t *todo.Todo) float64 {
 	return sequenceComponentsAt(time.Now(), t, activeBiases, activeHeat).Total
+}
+
+// ── Sequence hit rate ─────────────────────────────────────────────────────────
+
+const (
+	seqHitWindow = 50 // completions the hit-rate stat looks back over
+	seqHitTopN   = 5  // a "hit" closed while ranked in the top N
+)
+
+// captureSeqRankAtDone stamps t.SeqRankAtDone with the task's 1-based
+// position in the ranking `taskr top` would have shown at this moment. The
+// user-initiated close paths (CLI done, TUI toggle, confirm-close-parent)
+// call it just before Toggle flips the status; auto-closed parents and
+// recurrence spawns don't, so the metric only reads deliberate picks —
+// "when you finished something, was it what the engine suggested".
+func captureSeqRankAtDone(todos []todo.Todo, t *todo.Todo) {
+	t.SeqRankAtDone = 0
+	if t.ParentID != "" {
+		return
+	}
+	for i, row := range rankTopBySequence(todos) {
+		if row.ID == t.ID {
+			t.SeqRankAtDone = i + 1
+			return
+		}
+	}
+}
+
+// sequenceHitStats reports, over the `window` most recent rank-stamped
+// completions, how many closed inside the top seqHitTopN. rated counts the
+// completions considered, so callers can render "39/50" and hide the stat
+// entirely while no history exists.
+func sequenceHitStats(todos []todo.Todo, window int) (hits, rated int) {
+	type reading struct {
+		at   time.Time
+		rank int
+	}
+	var recent []reading
+	for i := range todos {
+		t := &todos[i]
+		if t.Status != todo.Done || t.ParentID != "" || t.SeqRankAtDone <= 0 || t.CompletedAt.IsZero() {
+			continue
+		}
+		recent = append(recent, reading{t.CompletedAt, t.SeqRankAtDone})
+	}
+	sort.Slice(recent, func(i, j int) bool { return recent[i].at.After(recent[j].at) })
+	if len(recent) > window {
+		recent = recent[:window]
+	}
+	for _, r := range recent {
+		rated++
+		if r.rank <= seqHitTopN {
+			hits++
+		}
+	}
+	return hits, rated
 }
