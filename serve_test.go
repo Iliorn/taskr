@@ -227,6 +227,11 @@ func TestSyncConflictLogged(t *testing.T) {
 
 	logPath := syncLogPath()
 	_ = os.Remove(logPath)
+	// Clear the sync-state baseline: another test's runClientSync may have
+	// recorded a LastSync newer than this test's backdated edit, which would
+	// (correctly) classify the overwrite as inbound propagation. This test
+	// wants the first-sync path where every dropped edit is logged.
+	_ = os.Remove(syncStatePath())
 
 	cfg := syncConfig{URL: ts.URL, Token: "tok"}
 	sum, err := runClientSync(ch, cfg, 5*time.Second)
