@@ -215,7 +215,7 @@ var daTranslations = map[string]string{
 	"↑/↓ select · ←/→ change theme · enter activate":                                                                          "↑/↓ vælg · ←/→ skift · enter aktivér",
 
 	// Footer / timer
-	"#tag @project due:tomorrow p:high s:l r:weekly": "#mærke @projekt due:tomorrow p:high s:l r:weekly",
+	"#tag @project due:tomorrow p:high s:l r:weekly dep:^": "#mærke @projekt due:tomorrow p:high s:l r:weekly dep:^",
 	" · t to stop":         " · t for at stoppe",
 	"create new tag: ":     "opret nyt mærke: ",
 	"create new project: ": "opret nyt projekt: ",
@@ -465,6 +465,7 @@ var daTranslations = map[string]string{
 	"No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish": "Ingen editor fundet — sæt $EDITOR permanent, f.eks: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish",
 	"Editor failed — falling back to notepad":                                                                               "Editor fejlede — falder tilbage til notepad",
 	"Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'":                                     "Ugyldig dato - brug dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday' eller '+3d'",
+	"Dependency not linked": "Afhængighed ikke koblet",
 
 	// Confirm prompts
 	"Delete '%s'? (y/n)":                        "Slet '%s'? (y/n)",

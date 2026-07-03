@@ -388,6 +388,10 @@ type parsedTask struct {
 	priority   todo.Priority
 	size       todo.Size
 	recurrence string
+	// deps holds raw, unresolved refs from dep: tokens (id-prefixes or the
+	// `^` last-added shorthand). Resolution needs the live task set, so it
+	// happens at the call site, not here.
+	deps []string
 }
 
 func parseQuickAdd(input string) parsedTask {
@@ -439,6 +443,14 @@ func parseQuickAdd(input string) parsedTask {
 			spec := strings.TrimPrefix(strings.TrimPrefix(lower, "recur:"), "r:")
 			if canonical, ok := todo.ParseRecurrence(spec); ok && canonical != "" {
 				result.recurrence = canonical
+			} else {
+				titleWords = append(titleWords, word)
+			}
+		case strings.HasPrefix(lower, "dep:"):
+			// Whitespace-delimited, so only id-prefix refs (or ^) fit here —
+			// title-substring refs have spaces and stay a CLI/edit affair.
+			if ref := word[len("dep:"):]; ref != "" {
+				result.deps = append(result.deps, ref)
 			} else {
 				titleWords = append(titleWords, word)
 			}

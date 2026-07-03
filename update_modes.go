@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -35,9 +36,27 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if parsed.recurrence != "" {
 						t.Recurrence = parsed.recurrence
 					}
+					// Resolve dep: refs before the add so `^` still points at
+					// the previous task, not the one being created. A bad ref
+					// doesn't block the add — the task lands, the toast says
+					// which link didn't.
+					var depErr error
+					for _, ref := range parsed.deps {
+						dep, err := resolveDepRef(m.allTodos(), ref)
+						if err != nil {
+							depErr = err
+							continue
+						}
+						t.AddDependency(dep.ID)
+					}
 					m.pushUndo("add task", t.ID)
 					m.add(t)
 					m.markModified(t.ID)
+					saveLastAddedID(t.ID)
+					if depErr != nil {
+						m.err = fmt.Sprintf("%s: %v", tr("Dependency not linked"), depErr)
+						return m, clearErrAfter()
+					}
 				}
 			} else if t := m.currentTodo(); t != nil {
 				if m.detail.page == 2 {

@@ -385,6 +385,35 @@ func TestParseQuickAddRecurrence(t *testing.T) {
 	}
 }
 
+func TestParseQuickAddDeps(t *testing.T) {
+	cases := []struct {
+		input     string
+		wantTitle string
+		wantDeps  []string
+	}{
+		{"Deploy dep:^", "Deploy", []string{"^"}},
+		{"Deploy dep:fd8502d1", "Deploy", []string{"fd8502d1"}},
+		{"Deploy dep:a1b2 dep:^ #ops", "Deploy", []string{"a1b2", "^"}},
+		{"Keep dep: in title", "Keep dep: in title", nil},
+		{"No deps here", "No deps here", nil},
+	}
+	for _, c := range cases {
+		got := parseQuickAdd(c.input)
+		if got.title != c.wantTitle {
+			t.Errorf("input %q: title = %q, want %q", c.input, got.title, c.wantTitle)
+		}
+		if len(got.deps) != len(c.wantDeps) {
+			t.Errorf("input %q: deps = %v, want %v", c.input, got.deps, c.wantDeps)
+			continue
+		}
+		for i := range c.wantDeps {
+			if got.deps[i] != c.wantDeps[i] {
+				t.Errorf("input %q: deps[%d] = %q, want %q", c.input, i, got.deps[i], c.wantDeps[i])
+			}
+		}
+	}
+}
+
 // ── nameColWidth ──────────────────────────────────────────────────────────────
 
 func TestNameColWidth(t *testing.T) {

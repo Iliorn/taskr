@@ -241,7 +241,7 @@ func (m model) buildFooterContent(w int) string {
 			// keywords themselves stay English in every language (parsing is
 			// locale-free), so only the example words are translated.
 			return field + "\n" +
-				helpStyle.Render("    "+truncate(tr("#tag @project due:tomorrow p:high s:l r:weekly"), w))
+				helpStyle.Render("    "+truncate(tr("#tag @project due:tomorrow p:high s:l r:weekly dep:^"), w))
 		}
 		return field
 	case modeIdlePrompt, modeConfirmUpdate:

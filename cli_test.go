@@ -522,6 +522,92 @@ func TestCliAddDependsUnknownRefFails(t *testing.T) {
 	}
 }
 
+// findByTitle is a small lookup for the chain/caret tests; titles are stored
+// capitalized by todo.New.
+func findByTitle(t *testing.T, todos []todo.Todo, title string) *todo.Todo {
+	t.Helper()
+	for i := range todos {
+		if todos[i].Title == title {
+			return &todos[i]
+		}
+	}
+	t.Fatalf("task %q not found", title)
+	return nil
+}
+
+func TestCliAddDependsCaretChainsOnLastAdded(t *testing.T) {
+	if code := cliAdd([]string{"caret-root"}); code != 0 {
+		t.Fatalf("add root: exit %d", code)
+	}
+	if code := cliAdd([]string{"caret-next", "--depends", "^"}); code != 0 {
+		t.Fatalf("add next --depends ^: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	root := findByTitle(t, todos, "Caret-root")
+	next := findByTitle(t, todos, "Caret-next")
+	if len(next.Dependencies) != 1 || next.Dependencies[0] != root.ID {
+		t.Errorf("next.Dependencies = %v, want [%s]", next.Dependencies, root.ID)
+	}
+}
+
+func TestCliAddDependsCaretWithoutHistoryFails(t *testing.T) {
+	if err := os.Remove(lastAddedPath()); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("clear last-added: %v", err)
+	}
+	if code := cliAdd([]string{"caret-orphan", "--depends", "^"}); code != 2 {
+		t.Errorf("want exit 2 for ^ with no last-added recorded, got %d", code)
+	}
+}
+
+func TestCliAddBatchChain(t *testing.T) {
+	orig := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdin = r
+	go func() {
+		if _, err := io.WriteString(w, "chain-one\nchain-two\nchain-three\n"); err != nil {
+			t.Errorf("write stdin: %v", err)
+		}
+		w.Close()
+	}()
+	code := cliAdd([]string{"-", "--chain"})
+	os.Stdin = orig
+	if code != 0 {
+		t.Fatalf("batch chain add: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	one := findByTitle(t, todos, "Chain-one")
+	two := findByTitle(t, todos, "Chain-two")
+	three := findByTitle(t, todos, "Chain-three")
+	if len(one.Dependencies) != 0 {
+		t.Errorf("first line got dependencies %v, want none", one.Dependencies)
+	}
+	if len(two.Dependencies) != 1 || two.Dependencies[0] != one.ID {
+		t.Errorf("two.Dependencies = %v, want [%s]", two.Dependencies, one.ID)
+	}
+	if len(three.Dependencies) != 1 || three.Dependencies[0] != two.ID {
+		t.Errorf("three.Dependencies = %v, want [%s]", three.Dependencies, two.ID)
+	}
+	// The sidecar now points at the last line, ready for a follow-up ^.
+	if got := loadLastAddedID(); got != three.ID {
+		t.Errorf("last-added = %q, want %s", got, three.ID)
+	}
+}
+
+func TestCliAddChainRequiresBatch(t *testing.T) {
+	if code := cliAdd([]string{"solo", "--chain"}); code != 2 {
+		t.Errorf("want exit 2 for --chain without batch stdin, got %d", code)
+	}
+}
+
 func TestCliEditAddDepLinksAndRefusesLoop(t *testing.T) {
 	if code := cliAdd([]string{"edit-dep-base"}); code != 0 {
 		t.Fatalf("add base: exit %d", code)

@@ -27,6 +27,25 @@ func loadForCLI() (Repository, []todo.Todo, error) {
 	return repo, todos, err
 }
 
+// resolveDepRef resolves a dependency ref, expanding the `^` shorthand — the
+// most recently added task, per the last-added sidecar — before the usual
+// id-prefix/title lookup. Cheap dependency capture: a decomposed plan gets
+// typed as "step one", "step two dep:^", ... without ever looking up an id.
+func resolveDepRef(todos []todo.Todo, ref string) (*todo.Todo, error) {
+	if strings.TrimSpace(ref) == "^" {
+		id := loadLastAddedID()
+		if id == "" {
+			return nil, fmt.Errorf("^: no last-added task recorded yet")
+		}
+		t, err := findTaskByRef(todos, id)
+		if err != nil {
+			return nil, fmt.Errorf("^: last-added task %.8s no longer resolves", id)
+		}
+		return t, nil
+	}
+	return findTaskByRef(todos, ref)
+}
+
 // findTaskByRef matches a task by either an id-prefix or a title substring,
 // in that order. The id path takes precedence so scripts and aliases remain
 // deterministic: a hex-shaped query that happens to appear in a task title

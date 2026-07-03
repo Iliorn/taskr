@@ -125,7 +125,8 @@ func cliAdd(args []string) int {
 	project := fs.String("project", "", "project name")
 	tags := fs.String("tag", "", "comma-separated tags")
 	recur := fs.String("recur", "", "recurrence rule: daily|weekly|monthly|yearly|weekdays|Nd|Nw|Nm|Ny")
-	depends := fs.String("depends", "", "make the new task depend on an existing task ref (blocks it until that task is done)")
+	depends := fs.String("depends", "", "make the new task depend on an existing task ref, or ^ for the last-added task")
+	chain := fs.Bool("chain", false, "batch add (-) only: each line depends on the previous line's task")
 	like := fs.String("like", "", "clone priority/size/project/tags from an existing task ref")
 	note := fs.String("note", "", "set the task's notes field (freeform body)")
 	comment := fs.String("comment", "", "add an initial timestamped comment to the task")
@@ -177,6 +178,10 @@ func cliAdd(args []string) int {
 	// every task and writes them in a single transaction (one save, one sync).
 	batch := len(titleParts) == 1 && titleParts[0] == "-"
 	titles := []string{strings.Join(titleParts, " ")}
+	if *chain && !batch {
+		fmt.Fprintln(os.Stderr, "taskr add: --chain only applies to batch stdin add (-); for a single task use --depends ^")
+		return 2
+	}
 	if batch {
 		if *startNow {
 			fmt.Fprintln(os.Stderr, "taskr add: --start can't be combined with batch stdin add (-)")
@@ -217,7 +222,7 @@ func cliAdd(args []string) int {
 		likeSrc = src
 	}
 	if *depends != "" {
-		dep, err := findTaskByRef(existing, *depends)
+		dep, err := resolveDepRef(existing, *depends)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
@@ -274,6 +279,14 @@ func cliAdd(args []string) int {
 	for i, title := range titles {
 		created[i] = buildTask(title)
 	}
+	// --chain turns a batch brain-dump into a recorded sequence: a decomposed
+	// plan is usually typed in execution order, so each line blocks on the
+	// one before it (--depends, if also given, still applies to every line).
+	if *chain {
+		for i := 1; i < len(created); i++ {
+			created[i].AddDependency(created[i-1].ID)
+		}
+	}
 	dirty := make([]*todo.Todo, 0, len(created)+1)
 	for i := range created {
 		dirty = append(dirty, &created[i])
@@ -296,6 +309,8 @@ func cliAdd(args []string) int {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
 		return 1
 	}
+	// Record the newest task so the next add can chain onto it via ^.
+	saveLastAddedID(created[len(created)-1].ID)
 	if batch {
 		return emitAddResultsBatch(created, *asJSON, *quietID)
 	}
@@ -1682,8 +1697,9 @@ Usage:
   taskr                                launch the TUI (no args)
 
 Tasks:
-  taskr add "title" [flags]            add a new task (--like <ref> clones, --depends <ref> blocks on, --start tracks)
-  taskr add -                          batch add: one task per stdin line (flags apply to all)
+  taskr add "title" [flags]            add a new task (--like <ref> clones, --depends <ref>|^ blocks on, --start tracks)
+  taskr add -                          batch add: one task per stdin line (flags apply to all; --chain links each
+                                       line as depending on the previous — a plan typed in execution order)
   taskr list [flags]                   list pending top-level tasks (filters below)
   taskr search "term" [flags]          title-substring search (includes done by default)
   taskr top [-n=N] [--json] [--wide]   show top-N by sequence score
