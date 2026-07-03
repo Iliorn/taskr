@@ -860,6 +860,9 @@ func cliEdit(args []string) int {
 	removeTag := fs.String("remove-tag", "", "comma-separated tags to remove")
 	addDep := fs.String("add-dep", "", "add a dependency (ref to an existing task; refused if it would loop)")
 	removeDep := fs.String("remove-dep", "", "remove a dependency (ref to a currently-depended-on task)")
+	note := fs.String("note", "", "replace the task's notes ('-' reads from stdin)")
+	appendNote := fs.String("append-note", "", "append a paragraph to the task's notes ('-' reads from stdin)")
+	clearNote := fs.Bool("clear-note", false, "drop the notes")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: taskr edit <id-prefix> [flags]")
 		fs.PrintDefaults()
@@ -967,6 +970,34 @@ func cliEdit(args []string) int {
 			return 2
 		}
 		t.RemoveDependency(dep.ID)
+		changed = true
+	}
+	// Notes: clear wins, then replace, then append (a new paragraph). Notes
+	// were previously settable only at `add` and editable only via the TUI's
+	// $EDITOR flow. '-' reads the text from stdin, mirroring `comment -`.
+	switch {
+	case *clearNote:
+		t.SetNotes("")
+		changed = true
+	case *note != "":
+		text, terr := noteFlagText(*note, os.Stdin)
+		if terr != nil {
+			fmt.Fprintf(os.Stderr, "stdin: %v\n", terr)
+			return 1
+		}
+		t.SetNotes(text)
+		changed = true
+	case *appendNote != "":
+		text, terr := noteFlagText(*appendNote, os.Stdin)
+		if terr != nil {
+			fmt.Fprintf(os.Stderr, "stdin: %v\n", terr)
+			return 1
+		}
+		if t.Notes == "" {
+			t.SetNotes(text)
+		} else {
+			t.SetNotes(t.Notes + "\n\n" + text)
+		}
 		changed = true
 	}
 	if !changed {
@@ -1650,7 +1681,7 @@ Tasks:
   taskr search "term" [flags]          title-substring search (includes done by default)
   taskr top [-n=N] [--json] [--wide]   show top-N by sequence score
   taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
-  taskr edit <ref> [flags]             change fields on one task
+  taskr edit <ref> [flags]             change fields on one task (incl. --note/--append-note/--clear-note)
   taskr done <ref>... [-m "why"]       mark one or more tasks done (-m/--comment adds a closing comment to each)
   taskr delete <ref> [-f]              soft-delete a task (alias: rm; substring matches confirm first)
   taskr undo [--list]                  restore the most recent deletion (task + subtasks)
@@ -1883,4 +1914,18 @@ func printTaskTable(rows []todo.Todo) {
 				t.ID[:8], st, sz, priorityLetter(t.Priority), due, t.Title)
 		}
 	}
+}
+
+// noteFlagText resolves a --note/--append-note flag value: the "-" sentinel
+// reads the whole of r (piped or heredoc input for long notes), anything else
+// is taken literally. Trailing newlines are trimmed like comment stdin input.
+func noteFlagText(v string, r io.Reader) (string, error) {
+	if v != "-" {
+		return v, nil
+	}
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(string(b), "\n"), nil
 }
