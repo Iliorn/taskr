@@ -232,6 +232,13 @@ func boolToInt(b bool) int {
 	return 0
 }
 
+// querier is the read surface shared by *sql.DB and *sql.Tx, so the loaders
+// can run standalone or inside a caller-owned transaction (mergeIntoStore
+// needs load+merge+save atomic against writers in other processes).
+type querier interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
 // saveNormalized writes the dirty tasks and tombstones to the normalized
 // schema. One transaction; per task the scalars go into `todos` and the
 // children replace the previous child rows. Untouched tasks are not rewritten.
@@ -244,7 +251,16 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 		return err
 	}
 	defer tx.Rollback()
+	if err := saveNormalizedIn(tx, dirty, tombstones); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 
+// saveNormalizedIn is saveNormalized's body on a caller-owned transaction —
+// the caller commits (or rolls back). Split out so mergeIntoStore can bundle
+// the load, the merge and this write into one atomic unit.
+func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error {
 	if len(dirty) > 0 {
 		// `data` is the legacy blob column — still NOT NULL after migration 002
 		// (we deliberately didn't drop it, so a future migration can if/when
@@ -382,7 +398,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 		}
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // saveChildren upserts a task's identified child records (comments, learnings
@@ -432,21 +448,21 @@ func saveChildren[T any](tx *sql.Tx, taskID, now, table string, items []T,
 // loadTodosFromDB reads every live task plus its live children. loadTodosForSync
 // is the sibling that also returns tombstones (deleted tasks, deleted children)
 // with their timestamps, which the sync merge needs to propagate deletions.
-func loadTodosFromDB(h *sql.DB) ([]todo.Todo, error) {
+func loadTodosFromDB(h querier) ([]todo.Todo, error) {
 	return loadTodosCore(h, false)
 }
 
 // loadTodosForSync returns the full task set including tombstones — Deleted /
 // DeletedAt populated on tasks, DeletedAt on child records — so Merge can
 // resolve deletions. Order is unspecified; Merge sorts the result.
-func loadTodosForSync(h *sql.DB) ([]todo.Todo, error) {
+func loadTodosForSync(h querier) ([]todo.Todo, error) {
 	return loadTodosCore(h, true)
 }
 
 // loadTodosCore assembles tasks and their children. When includeDeleted is
 // false (the live TUI/CLI path) tombstoned tasks and children are filtered out;
 // when true (the sync path) they are returned with their tombstone timestamps.
-func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
+func loadTodosCore(h querier, includeDeleted bool) ([]todo.Todo, error) {
 	taskWhere, childWhere := "WHERE deleted = 0", "WHERE deleted_at = ''"
 	if includeDeleted {
 		taskWhere, childWhere = "", ""
@@ -576,7 +592,7 @@ func loadTodosCore(h *sql.DB, includeDeleted bool) ([]todo.Todo, error) {
 	return out, nil
 }
 
-func loadChildren(h *sql.DB, todos map[string]*todo.Todo, table, cols, where string,
+func loadChildren(h querier, todos map[string]*todo.Todo, table, cols, where string,
 	scan func(*sql.Rows) error,
 ) error {
 	rows, err := h.Query(`SELECT ` + cols + ` FROM ` + table + ` ` + where)

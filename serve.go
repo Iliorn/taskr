@@ -197,28 +197,19 @@ func (s *syncServer) sync(clientTasks []todo.Todo) ([]todo.Todo, error) {
 		s.lastStateWrite = now
 		_ = writeServeState(now)
 	}
-	server, err := loadTodosForSync(s.db)
+	// Load, merge and save run inside one transaction (mergeIntoStore): mu only
+	// serializes HTTP-level syncs, and a CLI write on this host is a different
+	// process that mu cannot see — transactionality is what keeps such a write
+	// from being overwritten (or its fresh comment tombstoned) mid-merge.
+	merged, changed, err := mergeIntoStore(s.db, clientTasks)
 	if err != nil {
 		return nil, err
 	}
-	merged := Merge(server, clientTasks)
-	// A no-op pull (client already in sync) must not write: the write would wake
-	// the change watcher into a pointless broadcast and churn the DB. Idempotent
-	// merge plus this guard guarantee convergence with no feedback loop.
-	if storeDigest(server) == storeDigest(merged) {
-		return merged, nil
-	}
-	ptrs := make([]*todo.Todo, len(merged))
-	for i := range merged {
-		ptrs[i] = &merged[i]
-	}
-	if err := saveNormalized(s.db, ptrs, nil); err != nil {
-		return nil, err
-	}
-	// Nudge every connected client to pull. The change watcher would also catch
-	// this write, but broadcasting here makes client→client propagation immediate
-	// and independent of fsnotify being available.
-	if s.hub != nil {
+	// Nudge every connected client to pull — only when something was actually
+	// written (a no-op pull must not broadcast, or syncs would feed back). The
+	// change watcher would also catch the write, but broadcasting here makes
+	// client→client propagation immediate and independent of fsnotify.
+	if changed && s.hub != nil {
 		s.hub.broadcast()
 	}
 	return merged, nil

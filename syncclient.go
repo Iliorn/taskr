@@ -316,27 +316,13 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummar
 	// (the TUI's debounced save, another CLI command) is missing from `merged`.
 	// Saving that blind would overwrite those rows — worse, saveChildren would
 	// tombstone a just-added comment as "vanished", and that deletion would
-	// then propagate to every device. Re-merge against the store as it is NOW
-	// so concurrent local writes survive; Merge is idempotent, and whatever the
-	// server hasn't seen yet goes out on the next sync. (A writer squeezing in
-	// between this load and the commit can still lose — but the window is now
-	// microseconds of local I/O, not a network round trip.)
-	current, err := loadTodosForSync(h)
-	if err != nil {
+	// then propagate to every device. mergeIntoStore re-merges against the
+	// store as it is NOW, transactionally, so even a writer racing this exact
+	// moment either lands before our snapshot or forces a retry; whatever the
+	// server hasn't seen yet goes out on the next sync. Its no-op guard also
+	// keeps the fs watcher from waking the TUI on an unchanged periodic pull.
+	if _, _, err := mergeIntoStore(h, merged); err != nil {
 		return syncSummary{}, err
-	}
-	final := Merge(current, merged)
-	// No-op guard, mirroring the server: if the merge changed nothing locally,
-	// skip the write so the fs watcher isn't woken into a pointless TUI reload
-	// on every periodic sync.
-	if storeDigest(current) != storeDigest(final) {
-		ptrs := make([]*todo.Todo, len(final))
-		for i := range final {
-			ptrs[i] = &final[i]
-		}
-		if err := saveNormalized(h, ptrs, nil); err != nil {
-			return syncSummary{}, err
-		}
 	}
 	// Count live tasks only: the wire sets include every tombstone ever made,
 	// so raw lengths would overstate forever ("received 400" on a no-op sync).
