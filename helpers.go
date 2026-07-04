@@ -156,7 +156,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int) listCo
 
 	// Title column fits its longest entry (+gap), floored to the header label so
 	// it never truncates, capped by the shared responsive width.
-	floor := len([]rune(tr("Task")))
+	floor := len([]rune(tr("Active tasks")))
 	if isHistory {
 		floor = len([]rune(tr("Completed tasks")))
 	}
@@ -234,7 +234,7 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 	lastLabel := padRight(tr("Score"), scoreColW)
 	// The active-sort cue lives in the fixed status line (renderStatusLine),
 	// so column headers stay plain — no >..< decoration to reflow.
-	title := tr("Task")
+	title := tr("Active tasks")
 	if isHistory {
 		title = tr("Completed tasks")
 		lastLabel = padRight(tr("Completed"), 12)

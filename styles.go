@@ -154,7 +154,6 @@ var (
 	// and sync-health glyph on the right. See renderStatusLine.
 	focusChipStyle   lipgloss.Style
 	searchChipStyle  lipgloss.Style
-	historyChipStyle lipgloss.Style
 	statusSortStyle  lipgloss.Style
 	syncOkStyle      lipgloss.Style
 	syncFailStyle    lipgloss.Style
@@ -236,7 +235,6 @@ func applyTheme(t theme) {
 
 	focusChipStyle = lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(t.orange).Padding(0, 1)
 	searchChipStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
-	historyChipStyle = lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(t.blue).Padding(0, 1)
 	statusSortStyle = lipgloss.NewStyle().Foreground(t.dim)
 	syncOkStyle = lipgloss.NewStyle().Foreground(t.dim)
 	syncFailStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)

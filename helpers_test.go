@@ -487,7 +487,7 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 
 			// Never wider than the longest title needs (+gap), but at least the
 			// header label — growth must not produce an empty padded column.
-			floor := len([]rune(tr("Task")))
+			floor := len([]rune(tr("Active tasks")))
 			want := tt.contentMax + 4
 			if want < floor {
 				want = floor

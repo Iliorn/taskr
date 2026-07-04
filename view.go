@@ -144,8 +144,10 @@ func (m model) View() string {
 // ── Status line ────────────────────────────────────────────────────────────────
 
 // renderStatusLine builds the single fixed header status line under the tab
-// bar: filter/history chips on the left, active-sort label and sync-health
-// glyph on the right. A toast (m.err) overlays the whole line for its lifetime
+// bar: filter chips on the left, active-sort label and sync-health glyph on
+// the right. History mode has no chip — the "Completed tasks" column header
+// and the "sort: completed" cue already make it obvious. A toast (m.err)
+// overlays the whole line for its lifetime
 // instead of claiming its own row, so filters and toasts coming and going never
 // reflow the list below.
 func (m model) renderStatusLine() string {
@@ -173,9 +175,6 @@ func (m model) renderStatusLine() string {
 	}
 	if m.tab == tabLearnings && m.learningSearchQuery != "" {
 		chips = append(chips, searchChipStyle.Render("/"+m.learningSearchQuery))
-	}
-	if m.showHistory {
-		chips = append(chips, historyChipStyle.Render(tr("HISTORY")))
 	}
 	left := strings.Join(chips, " ")
 
