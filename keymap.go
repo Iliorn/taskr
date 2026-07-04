@@ -69,6 +69,7 @@ const (
 var keymap = []binding{
 	// ── Navigation (global) ──────────────────────────────────────────────
 	{ctxAll, "↑/↓", "navigate", "navigate list", secNavigation, false, false},
+	{ctxAll, "home/end · pgup/pgdn", "listpage", "jump to ends / page through list", secNavigation, false, false},
 	// enter has no global meaning — each context defines its own (open details,
 	// edit field, activate, cycle) — so it is registered per context, not here.
 	{ctxAll, "esc", "back", "go back", secNavigation, false, false},
