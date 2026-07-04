@@ -172,6 +172,24 @@ const (
 	historySortAlpha                            // title A→Z
 )
 
+// toastKind selects the style of a transient toast (m.err). The zero value is
+// toastError so any plain assignment renders as an error; success/info are set
+// via flashSuccess/flashInfo. See renderStatusLine.
+type toastKind int
+
+const (
+	toastError toastKind = iota
+	toastSuccess
+	toastInfo
+)
+
+// flashError/flashSuccess/flashInfo set the toast text and its kind together so
+// the two can't drift — an error can never inherit a prior success's colour.
+// clearErrAfter is still returned by the call site to expire the toast.
+func (m *model) flashError(s string)   { m.err, m.errKind = s, toastError }
+func (m *model) flashSuccess(s string) { m.err, m.errKind = s, toastSuccess }
+func (m *model) flashInfo(s string)    { m.err, m.errKind = s, toastInfo }
+
 // ── Messages ──────────────────────────────────────────────────────────────────
 
 type clearErrMsg struct{}
@@ -262,6 +280,7 @@ type model struct {
 	termWidth            int
 	termHeight           int
 	err                  string
+	errKind              toastKind // styles the toast: error (default) / success / info
 	projectCursor        int
 	tagTabCursor         int
 	learningCursor       int
@@ -436,7 +455,7 @@ func initialModel(repo Repository) model {
 	// so a startup resync keeps the persisted column truthful even when the
 	// user hasn't touched any task since yesterday.
 	if err := m.repo.ResyncScores(); err != nil {
-		m.err = fmt.Sprintf("Score resync failed: %v", err)
+		m.flashError(fmt.Sprintf("Score resync failed: %v", err))
 	}
 	// Spin up the filesystem watcher so CLI writes (and any other process
 	// touching ~/.taskr/tasks.db) refresh the TUI without a restart. If it

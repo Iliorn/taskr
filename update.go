@@ -62,6 +62,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case clearErrMsg:
 		m.err = ""
+		m.errKind = toastError
 		return m, nil
 	case timerTickMsg:
 		if m.anyTimerRunning() {
@@ -90,16 +91,16 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case updateDoneMsg:
 		if msg.err != nil {
-			m.err = fmt.Sprintf("Update failed: %v", msg.err)
+			m.flashError(fmt.Sprintf("Update failed: %v", msg.err))
 			m.updateStatus = tr("Update failed")
 		} else {
-			m.err = tr("Updated! Restart taskr to apply.")
+			m.flashSuccess(tr("Updated! Restart taskr to apply."))
 			m.updateStatus = tr("Updated — restart to apply")
 		}
 		return m, clearErrAfter()
 	case updateCheckMsg:
 		if msg.err != nil {
-			m.err = fmt.Sprintf("Update check failed: %v", msg.err)
+			m.flashError(fmt.Sprintf("Update check failed: %v", msg.err))
 			m.updateStatus = tr("Check failed")
 			return m, clearErrAfter()
 		}
@@ -151,7 +152,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.serverExternal = msg.reachable && m.inprocServer == nil
 		return m, nil
 	case saveErrMsg:
-		m.err = fmt.Sprintf("Error saving tasks: %v", msg.err)
+		m.flashError(fmt.Sprintf("Error saving tasks: %v", msg.err))
 		return m, clearErrAfter()
 	case editorFinishedMsg:
 		return m.handleEditorFinished(msg)
@@ -203,7 +204,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case reloadedMsg:
 		if msg.err != nil {
-			m.err = fmt.Sprintf("External reload failed: %v", msg.err)
+			m.flashError(fmt.Sprintf("External reload failed: %v", msg.err))
 			return m, clearErrAfter()
 		}
 		// Atomic swap: rebuild the Store from the freshly-loaded task set,
@@ -365,16 +366,16 @@ func (m *model) openEditorForNotes() tea.Cmd {
 	taskID := t.ID
 
 	if err := writeNotesFile(taskID, t.Notes); err != nil {
-		m.err = fmt.Sprintf("Error writing notes file: %v", err)
+		m.flashError(fmt.Sprintf("Error writing notes file: %v", err))
 		return clearErrAfter()
 	}
 
 	editorCmd := resolveEditorCmd()
 	if editorCmd == "" {
 		if runtime.GOOS == "windows" {
-			m.err = tr("No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)")
+			m.flashError(tr("No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"))
 		} else {
-			m.err = tr("No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish")
+			m.flashError(tr("No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"))
 		}
 		return clearErrAfter()
 	}
@@ -398,17 +399,17 @@ func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) 
 		// On Windows, fall back to notepad once if the configured editor failed.
 		if runtime.GOOS == "windows" && !msg.fallback {
 			if notepad, lookErr := exec.LookPath("notepad"); lookErr == nil {
-				m.err = tr("Editor failed — falling back to notepad")
+				m.flashError(tr("Editor failed — falling back to notepad"))
 				return m, tea.Batch(clearErrAfter(), execEditor(notepad, msg.taskID, true))
 			}
 		}
-		m.err = fmt.Sprintf("Editor exited with error: %v", msg.err)
+		m.flashError(fmt.Sprintf("Editor exited with error: %v", msg.err))
 		return m, clearErrAfter()
 	}
 	taskID := msg.taskID
 	content, err := readNotesFile(taskID)
 	if err != nil {
-		m.err = fmt.Sprintf("Error reading notes: %v", err)
+		m.flashError(fmt.Sprintf("Error reading notes: %v", err))
 		return m, clearErrAfter()
 	}
 
@@ -444,7 +445,7 @@ func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) 
 func (m *model) performUndo() tea.Cmd {
 	entry, ok := m.popUndo()
 	if !ok {
-		m.err = tr("Nothing to undo")
+		m.flashInfo(tr("Nothing to undo"))
 		return clearErrAfter()
 	}
 	// Partial entries name the IDs they touched. Tasks captured in the entry
@@ -471,7 +472,7 @@ func (m *model) performUndo() tea.Cmd {
 			m.markTombstone(id)
 		}
 		m.markModified(restored...)
-		m.err = fmt.Sprintf(tr("Undid: %s"), entry.desc)
+		m.flashSuccess(fmt.Sprintf(tr("Undid: %s"), entry.desc))
 		return clearErrAfter()
 	}
 
@@ -492,7 +493,7 @@ func (m *model) performUndo() tea.Cmd {
 		m.markTombstone(id)
 	}
 	m.markModified(restoredIDs...)
-	m.err = fmt.Sprintf(tr("Undid: %s"), entry.desc)
+	m.flashSuccess(fmt.Sprintf(tr("Undid: %s"), entry.desc))
 	return clearErrAfter()
 }
 
@@ -1031,7 +1032,7 @@ func (m *model) cycleBias(row, direction int) {
 	m.markCacheDirty()
 	m.persistSettings()
 	if err := m.repo.ResyncScores(); err != nil {
-		m.err = fmt.Sprintf(tr("Score resync failed: %v"), err)
+		m.flashError(fmt.Sprintf(tr("Score resync failed: %v"), err))
 	}
 }
 
@@ -1043,7 +1044,7 @@ func (m *model) toggleAging() {
 	m.markCacheDirty()
 	m.persistSettings()
 	if err := m.repo.ResyncScores(); err != nil {
-		m.err = fmt.Sprintf(tr("Score resync failed: %v"), err)
+		m.flashError(fmt.Sprintf(tr("Score resync failed: %v"), err))
 	}
 }
 
@@ -1080,7 +1081,7 @@ func (m *model) persistSettings() {
 		AutoCloseParent:   m.autoCloseParent,
 		AutoCloseSubtasks: m.autoCloseSubtasks,
 	}); err != nil {
-		m.err = fmt.Sprintf(tr("Error saving settings: %v"), err)
+		m.flashError(fmt.Sprintf(tr("Error saving settings: %v"), err))
 	}
 }
 

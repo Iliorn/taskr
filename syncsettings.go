@@ -20,7 +20,7 @@ import (
 func (m *model) saveSyncCfg() {
 	m.autoSync = autoSyncEnabled(m.syncCfg)
 	if err := saveSyncConfig(m.syncCfg); err != nil {
-		m.err = fmt.Sprintf("Sync config save failed: %v", err)
+		m.flashError(fmt.Sprintf("Sync config save failed: %v", err))
 	}
 }
 

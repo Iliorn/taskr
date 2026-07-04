@@ -156,7 +156,14 @@ func (m model) renderStatusLine() string {
 		width = 1
 	}
 	if m.err != "" {
-		return ansi.Truncate(confirmStyle.Render(m.err), width, "")
+		style := toastErrorStyle
+		switch m.errKind {
+		case toastSuccess:
+			style = toastSuccessStyle
+		case toastInfo:
+			style = toastInfoStyle
+		}
+		return ansi.Truncate(style.Render(m.err), width, "")
 	}
 
 	var chips []string

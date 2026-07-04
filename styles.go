@@ -150,6 +150,12 @@ var (
 	searchStyle  lipgloss.Style
 	dimStyle     lipgloss.Style
 
+	// Toast styles by kind (see toastKind / renderStatusLine). Error reuses the
+	// red confirm colour; success is green, info a calm blue.
+	toastErrorStyle   lipgloss.Style
+	toastSuccessStyle lipgloss.Style
+	toastInfoStyle    lipgloss.Style
+
 	// Fixed status-line pieces: filter chips on the left, sort label and
 	// sync-health glyph on the right. See renderStatusLine.
 	focusChipStyle  lipgloss.Style
@@ -230,6 +236,9 @@ func applyTheme(t theme) {
 
 	inputStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.accent).Padding(0, 1)
 	confirmStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
+	toastErrorStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
+	toastSuccessStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
+	toastInfoStyle = lipgloss.NewStyle().Foreground(t.blue).Bold(true)
 	searchStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.green).Padding(0, 1)
 	dimStyle = lipgloss.NewStyle().Foreground(t.dim)
 

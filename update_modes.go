@@ -54,7 +54,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.markModified(t.ID)
 					saveLastAddedID(t.ID)
 					if depErr != nil {
-						m.err = fmt.Sprintf("%s: %v", tr("Dependency not linked"), depErr)
+						m.flashError(fmt.Sprintf("%s: %v", tr("Dependency not linked"), depErr))
 						return m, clearErrAfter()
 					}
 				}
@@ -76,7 +76,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.pushUndo("set start date", t.ID)
 							t.SetStartDate(d)
 						} else {
-							m.err = tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'")
+							m.flashError(tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'"))
 							return m, clearErrAfter()
 						}
 					case fieldDueDate:
@@ -94,7 +94,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 							t.SetDueDate(d)
 						} else {
-							m.err = tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'")
+							m.flashError(tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'"))
 							return m, clearErrAfter()
 						}
 					}
@@ -162,7 +162,7 @@ func (m model) updateAddTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			start, stop, err := parseManualEntry(m.textInput.Value(), time.Now())
 			if err != nil {
-				m.err = err.Error()
+				m.flashError(err.Error())
 				return m, clearErrAfter()
 			}
 			m.pushUndo("add time entry", t.ID)
@@ -747,7 +747,7 @@ func (m model) updateEditTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
 					e := &t.TimeEntries[i]
 					start, stop, err := parseEntryEdit(m.textInput.Value(), e.StartedAt, e.IsRunning())
 					if err != nil {
-						m.err = err.Error()
+						m.flashError(err.Error())
 						return m, clearErrAfter()
 					}
 					m.pushUndo("edit time entry", t.ID)

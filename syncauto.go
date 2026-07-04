@@ -54,7 +54,7 @@ func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 		firstFailure := !m.lastSyncFailed
 		m.lastSyncFailed = true
 		if firstFailure {
-			m.err = tr("Sync failing — devices may be diverging (see Settings)")
+			m.flashError(tr("Sync failing — devices may be diverging (see Settings)"))
 			return m, clearErrAfter()
 		}
 		return m, nil
@@ -62,7 +62,7 @@ func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	m.lastSyncFailed = false
 	m.syncStatus = fmt.Sprintf(tr("Last sync: sent %d, received %d"), msg.summary.sent, msg.summary.received)
 	if msg.summary.conflicts > 0 {
-		m.err = fmt.Sprintf(tr("Sync: %d conflict(s) resolved — see ~/.taskr/sync.log"), msg.summary.conflicts)
+		m.flashInfo(fmt.Sprintf(tr("Sync: %d conflict(s) resolved — see ~/.taskr/sync.log"), msg.summary.conflicts))
 		return m, clearErrAfter()
 	}
 	return m, nil
