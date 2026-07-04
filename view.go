@@ -414,35 +414,17 @@ func (m model) buildFooterContent(w int) string {
 // ── Key hints ─────────────────────────────────────────────────────────────────
 
 func (m model) renderKeyHints(w int) string {
-	var hints, short string
-	switch {
-	case m.tab == tabTasks && m.pane == paneDetail:
-		hints = tr("←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back")
-		short = tr("←/→ pages · enter edit · a add · x remove · esc back")
-	case m.tab == tabTasks:
-		hints = tr("enter detail · a add · d done · t track · p prio · r rename · x del · n notes · f focus · s sort · h history · / search")
-		short = tr("a add · d done · t track · x del · s sort · / search · ? more")
-	case m.tab == tabProjects:
-		hints = tr("↑/↓ nav · r rename · x delete · / filter")
-	case m.tab == tabTags:
-		hints = tr("↑/↓ nav · r rename · m merge · x delete · s sort · / filter")
-	case m.tab == tabLearnings:
-		hints = tr("↑/↓ nav · r edit · x delete · s sort · / search")
-	case m.tab == tabStats:
-		hints = tr("enter · cycle activity range")
-	case m.tab == tabCalendar && m.calendar.focusTimeline:
-		hints = tr("↑/↓ select entry · r edit times · x delete · esc back")
-	case m.tab == tabCalendar:
-		hints = tr("←/→ day · ↑/↓ week · [ ] month · t today · enter entries")
-	case m.tab == tabSettings:
-		hints = tr("↑/↓ select · ←/→ change theme · enter activate")
-	}
-	// Prefer the full hint line; when it can't fit, fall back to a curated
-	// short set instead of truncating mid-list — plain truncation always cut
-	// the same trailing keys (e.g. / search on the Tasks tab), hiding them at
-	// common terminal widths. hints is pre-Render plain text, so rune length
-	// is the display width.
-	if short != "" && len([]rune(hints)) > w {
+	// Both the hint line and the help overlay are generated from the keymap
+	// registry (keymap.go), so they can't drift from each other or from
+	// dispatch.
+	ctx := m.currentKeyCtx()
+	hints := hintString(ctx, false)
+	// Prefer the full hint line; when it can't fit, fall back to the curated
+	// short (primary-only) set instead of truncating mid-list — plain
+	// truncation always cut the same trailing keys (e.g. / search on the Tasks
+	// tab), hiding them at common terminal widths. hints is pre-Render plain
+	// text, so rune length is the display width.
+	if short := hintString(ctx, true); short != "" && len([]rune(hints)) > w {
 		hints = short
 	}
 	// 4-space indent aligns the hint under the box's inner content (margin 2 +
@@ -590,82 +572,35 @@ func (m model) buildProjectListContent(w, listH int) string {
 // ── Help ──────────────────────────────────────────────────────────────────────
 
 func (m model) renderHelpFullscreen() string {
-	sections := []struct {
+	type helpSec struct {
 		title string
 		keys  [][2]string
-	}{
-		{tr("Navigation"), [][2]string{
-			{"↑/↓", tr("navigate list")},
-			{"enter", tr("open details")},
-			{"esc", tr("go back")},
-			{"tab  or  1-7", tr("switch tabs")},
-			{"?", tr("close help")},
-		}},
-		{tr("Tasks"), [][2]string{
-			{"a", tr("add task (quick-add: #tag due:date p:high @proj s:M)")},
-			{"r", tr("rename task")},
-			{"d", tr("toggle done")},
-			{"t", tr("start/stop time tracking")},
-			{"p", tr("cycle priority low/med/high")},
-			{"x", tr("delete")},
-			{"n", tr("edit notes (opens $EDITOR)")},
-			{"f", tr("focus: today + overdue only")},
-			{"h", tr("toggle history")},
-			{"s", tr("cycle sort order")},
-			{"←/→", tr("expand/collapse subtasks")},
-			{"/", tr("search")},
-		}},
-		{tr("Detail view"), [][2]string{
-			{"←/→", tr("switch pages")},
-			{"enter", tr("edit field / toggle subtask")},
-			{"n", tr("edit notes (opens $EDITOR)")},
-			{"a", tr("add tag / dep / comment / learning / subtask")},
-			{"d", tr("toggle subtask done")},
-			{"t", tr("start/stop subtask timer")},
-			{"x", tr("remove field / delete subtask")},
-		}},
-		{tr("Tags & Projects"), [][2]string{
-			{"r", tr("rename globally")},
-			{"x", tr("delete globally")},
-			{"s", tr("toggle sort")},
-			{"/", tr("filter")},
-		}},
-		{tr("Learnings"), [][2]string{
-			{"r", tr("edit learning")},
-			{"x", tr("delete learning")},
-			{"s", tr("sort date/alpha")},
-		}},
-		{tr("Calendar (tab 2)"), [][2]string{
-			{"←/→  ↑/↓", tr("move by day / week")},
-			{"[ / ]", tr("previous / next month")},
-			{"t", tr("jump to today")},
-			{"enter", tr("focus the day's entries")},
-			{"r", tr("edit entry times (09:12-10:00 or 45m)")},
-			{"x", tr("delete selected entry")},
-		}},
-		{tr("Stats (tab 6)"), [][2]string{
-			{"6 or tab", tr("switch to stats view")},
-		}},
-		{tr("Settings (tab 7)"), [][2]string{
-			{"↑/↓", tr("select setting")},
-			{"←/→", tr("change theme")},
-			{"enter", tr("apply theme / check for updates")},
-			{"y / n", tr("confirm update when one is offered")},
-		}},
-		{tr("App"), [][2]string{
-			{"u", tr("undo last change")},
-			{"q", tr("quit")},
-		}},
-		{tr("Date input"), [][2]string{
-			{"dd-mm-yy", tr("exact date (e.g. 15-06-25)")},
-			{"today", tr("today's date")},
-			{"tomorrow", tr("tomorrow")},
-			{"next week", tr("7 days from now")},
-			{"next month", tr("1 month from now")},
-			{"monday..sunday", tr("next occurrence of weekday")},
-			{"+3d / +2w / +1m", tr("relative days/weeks/months")},
-		}},
 	}
+	// Key sections are generated from the keymap registry (keymap.go), so the
+	// help overlay can't drift from the footer hints or from dispatch.
+	var sections []helpSec
+	for _, title := range helpSectionOrder {
+		var keys [][2]string
+		for i := range keymap {
+			if bd := &keymap[i]; bd.section == title {
+				keys = append(keys, [2]string{bd.key, tr(bd.desc)})
+			}
+		}
+		if len(keys) > 0 {
+			sections = append(sections, helpSec{tr(title), keys})
+		}
+	}
+	// Reference section: date-input grammar. Not key bindings, so it lives
+	// outside the registry and is appended last.
+	sections = append(sections, helpSec{tr("Date input"), [][2]string{
+		{"dd-mm-yy", tr("exact date (e.g. 15-06-25)")},
+		{"today", tr("today's date")},
+		{"tomorrow", tr("tomorrow")},
+		{"next week", tr("7 days from now")},
+		{"next month", tr("1 month from now")},
+		{"monday..sunday", tr("next occurrence of weekday")},
+		{"+3d / +2w / +1m", tr("relative days/weeks/months")},
+	}})
 
 	b := getBuilder()
 	defer putBuilder(b)
