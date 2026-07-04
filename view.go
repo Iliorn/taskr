@@ -309,12 +309,15 @@ func (m model) buildFooterContent(w int) string {
 		modeEditServerListen, modeEditServerToken:
 		field := inputStyle.Width(w).Render(m.textInput.View())
 		if m.mode == modeInput && m.pane == paneList {
-			// Quick-add is the only input with inline syntax; surface it here —
-			// otherwise it's only discoverable in the help overlay. The
-			// keywords themselves stay English in every language (parsing is
-			// locale-free), so only the example words are translated.
-			return field + "\n" +
-				helpStyle.Render("    "+truncate(tr("#tag @project due:tomorrow p:high s:l r:weekly dep:^"), w))
+			// Quick-add: on a blank input show the syntax reference (the keywords
+			// stay English in every language — parsing is locale-free — so only
+			// the example words are translated); once typing, replace it with a
+			// live preview of the parsed fields so a mistyped token is visible.
+			if strings.TrimSpace(m.textInput.Value()) == "" {
+				return field + "\n" +
+					helpStyle.Render("    "+truncate(tr("#tag @project due:tomorrow p:high s:l r:weekly dep:^"), w))
+			}
+			return field + "\n" + renderQuickAddPreview(m.textInput.Value(), w)
 		}
 		return field
 	case modeIdlePrompt, modeConfirmUpdate:
@@ -323,7 +326,16 @@ func (m model) buildFooterContent(w int) string {
 		if m.tab == tabLearnings {
 			return searchStyle.Width(w).Render(m.learningSearchInput.View())
 		}
-		return searchStyle.Width(w).Render(m.searchInput.View())
+		field := searchStyle.Width(w).Render(m.searchInput.View())
+		// The token grammar (compileSearch) only drives the Tasks list; on the
+		// other tabs the query is a plain name substring, so a chip preview
+		// would misrepresent it. Show the preview once the query is non-empty.
+		if m.tab == tabTasks {
+			if val := m.searchInput.Value(); strings.TrimSpace(val) != "" {
+				return field + "\n" + renderSearchPreview(val, w)
+			}
+		}
+		return field
 	case modeSearchTagTab:
 		return searchStyle.Width(w).Render(m.tagTabSearchInput.View())
 	case modeSearchDep:
