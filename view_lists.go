@@ -276,6 +276,11 @@ func (m model) renderStatsList() string {
 	var activeAges []time.Duration
 	var oldestAge time.Duration
 	oldestTitle := ""
+	// Cycle time (created→completed) of every completed task and the count of
+	// pending tasks, both bucketed by size (index = int(todo.Size)). Feed the
+	// "Cycle time by size" and "Projected backlog clear" blocks below.
+	var cycleBySize [3][]time.Duration
+	var pendingBySize [3]int
 
 	for _, t := range m.tasks {
 		if t.ParentID != "" {
@@ -289,6 +294,9 @@ func (m model) renderStatsList() string {
 		}
 		if t.Status == todo.Done {
 			if !t.CompletedAt.IsZero() {
+				if i := int(t.Size); i >= 0 && i < len(cycleBySize) {
+					cycleBySize[i] = append(cycleBySize[i], t.CompletedAt.Sub(t.CreatedAt))
+				}
 				if !t.CompletedAt.Before(today) {
 					doneToday++
 				}
@@ -308,6 +316,9 @@ func (m model) renderStatsList() string {
 			}
 		} else {
 			activeTasks++
+			if i := int(t.Size); i >= 0 && i < len(pendingBySize) {
+				pendingBySize[i]++
+			}
 			age := now.Sub(t.CreatedAt)
 			activeAges = append(activeAges, age)
 			if age > oldestAge {
@@ -330,6 +341,17 @@ func (m model) renderStatsList() string {
 			default:
 				lowPri++
 			}
+		}
+	}
+
+	// Median cycle time per size, computed once (medianDuration sorts in place)
+	// and shared by the cycle-time and projection blocks.
+	var medBySize [3]time.Duration
+	var haveMed [3]bool
+	for i := range cycleBySize {
+		if len(cycleBySize[i]) > 0 {
+			medBySize[i] = medianDuration(cycleBySize[i])
+			haveMed[i] = true
 		}
 	}
 
@@ -492,20 +514,76 @@ func (m model) renderStatsList() string {
 		}
 	})
 
+	// Size rows share one order (Small, Medium, Large) across both size blocks.
+	sizeRows := []struct {
+		label string
+		idx   int
+	}{
+		{tr("Small"), int(todo.SizeSmall)},
+		{tr("Medium"), int(todo.SizeMedium)},
+		{tr("Large"), int(todo.SizeLarge)},
+	}
+
+	// Median calendar time from creation to completion, per size — the "how
+	// long does a task of this size actually take" cue that feeds the estimate.
+	cycleTime := section(func(sb *strings.Builder) {
+		sb.WriteString(statsHeaderStyle.Render(tr("  Cycle time by size")) + "\n")
+		for _, s := range sizeRows {
+			label := detailLabelStyle.Render(padRight("  "+s.label, statsLabelWidth))
+			if haveMed[s.idx] {
+				sb.WriteString(label + normalStyle.Render(formatDaysCompact(medBySize[s.idx])) +
+					dimStyle.Render(fmt.Sprintf(" (n=%d)", len(cycleBySize[s.idx]))) + "\n")
+			} else {
+				sb.WriteString(label + dimStyle.Render(tr("none yet")) + "\n")
+			}
+		}
+	})
+
+	// Rough ETA to clear the pending backlog: median cycle time × pending count
+	// per size, summed. Serial estimate (assumes one task finished after the
+	// next), so it's an upper-bound feel, not a schedule.
+	projection := section(func(sb *strings.Builder) {
+		sb.WriteString(statsHeaderStyle.Render(tr("  Projected backlog clear")) + "\n")
+		var total time.Duration
+		haveTotal := false
+		for _, s := range sizeRows {
+			n := pendingBySize[s.idx]
+			if n == 0 {
+				continue
+			}
+			label := detailLabelStyle.Render(padRight("  "+s.label, statsLabelWidth))
+			if !haveMed[s.idx] {
+				sb.WriteString(label + dimStyle.Render(fmt.Sprintf(tr("%d pending, no pace"), n)) + "\n")
+				continue
+			}
+			sub := time.Duration(n) * medBySize[s.idx]
+			total += sub
+			haveTotal = true
+			sb.WriteString(label + normalStyle.Render(fmt.Sprintf("%d×%s=%s",
+				n, formatDaysCompact(medBySize[s.idx]), formatDaysCompact(sub))) + "\n")
+		}
+		totalLabel := detailLabelStyle.Render(padRight(tr("  Projected clear"), statsLabelWidth))
+		if haveTotal {
+			sb.WriteString(totalLabel + normalStyle.Render("~"+formatDaysCompact(total)) + "\n")
+		} else {
+			sb.WriteString(totalLabel + dimStyle.Render(tr("none yet")) + "\n")
+		}
+	})
+
 	switch cols {
 	case 3:
 		// Keep the two Flow windows together in the middle column.
 		b.WriteString(zipColumns(colW, gap,
-			stackSections(workload, throughput),
-			stackSections(flow, flow30),
+			stackSections(workload, throughput, cycleTime),
+			stackSections(flow, flow30, projection),
 			stackSections(priority, velocity)))
 	case 2:
 		b.WriteString(zipColumns(colW, gap,
-			stackSections(workload, flow, flow30),
-			stackSections(throughput, priority, velocity)))
+			stackSections(workload, flow, flow30, cycleTime),
+			stackSections(throughput, priority, velocity, projection)))
 	default:
 		first := true
-		for _, s := range []string{workload, flow, flow30, throughput, priority, velocity} {
+		for _, s := range []string{workload, flow, flow30, throughput, cycleTime, priority, velocity, projection} {
 			if strings.TrimSpace(s) == "" {
 				continue
 			}
