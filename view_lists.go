@@ -894,12 +894,17 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		}
 	}
 	title := t.Title
-	if t.Priority == todo.PriorityHigh {
+	highPri := t.Priority == todo.PriorityHigh
+	if highPri {
 		title += " !"
 	}
 	hasOverdueDep := t.HasOverdueDependencyFast(overdueSet)
 	if hasOverdueDep {
-		title += " !"
+		if highPri {
+			title += "!" // stack onto the priority "!" → "!!", no gap
+		} else {
+			title += " !"
+		}
 	}
 	if m.cache.blockerSet[t.ID] {
 		title += " ↥" // others depend on this — clearing it unblocks them

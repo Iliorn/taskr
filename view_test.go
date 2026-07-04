@@ -149,3 +149,28 @@ func TestHighPriorityShowsExclamationInList(t *testing.T) {
 		t.Errorf("low-priority row should have no '!': %q", loLine)
 	}
 }
+
+// A high-priority task that also has an overdue dependency stacks both markers
+// into "!!" (no gap) rather than "! !".
+func TestHighPriorityOverdueDepStacksExclamations(t *testing.T) {
+	dep := todo.New("blocking dep")
+	dep.ID = "dep1"
+	dep.DueDate = time.Now().Add(-48 * time.Hour) // overdue, still pending
+	hi := todo.New("Finish the audit")
+	hi.Priority = todo.PriorityHigh
+	hi.Dependencies = []string{"dep1"}
+
+	m := modelWithTasks(t, hi, dep)
+	var hiLine string
+	for _, line := range strings.Split(m.View(), "\n") {
+		if strings.Contains(line, "Finish the audit") {
+			hiLine = line
+		}
+	}
+	if hiLine == "" {
+		t.Fatal("high task row should render")
+	}
+	if !strings.Contains(hiLine, "!!") {
+		t.Errorf("high + overdue-dep row should carry stacked '!!': %q", hiLine)
+	}
+}
