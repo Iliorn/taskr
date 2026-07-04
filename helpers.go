@@ -224,7 +224,24 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int) listCo
 	return c
 }
 
-func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listCols) {
+// listPosLabel formats the "cursor/total" scroll-position indicator for a list
+// header, clamping the cursor into range. Returns "" for an empty list.
+func listPosLabel(cursor, total int) string {
+	if total <= 0 {
+		return ""
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= total {
+		cursor = total - 1
+	}
+	return fmt.Sprintf("%d/%d", cursor+1, total)
+}
+
+// posLabel, when non-empty (e.g. "3/47"), is drawn right-aligned on the header
+// as a scroll-position indicator; pass "" to omit it.
+func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listCols, posLabel string) {
 	dueW := dueColW
 	if isHistory {
 		dueW = 12
@@ -263,7 +280,17 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 	// Row tags are rendered with a leading space (see renderTaskLineWithSet), so
 	// the header label needs the same lead-in to line up with the tag content.
 	tagsLabel := " " + tr("Tags")
-	padW := termWidth - 8 - len([]rune(headerLeft))
+	// Reserve the right end for the position indicator (a leading space + the
+	// label) before the tags label claims the slack, so a full list can't push
+	// the indicator off the edge.
+	// Show the indicator only when it fits within the pane; otherwise drop it
+	// rather than overflow or get truncated mid-label on a narrow terminal.
+	showPos := posLabel != "" && len([]rune(headerLeft))+1+len([]rune(posLabel)) <= termWidth-8
+	posW := 0
+	if showPos {
+		posW = 1 + len([]rune(posLabel))
+	}
+	padW := termWidth - 8 - len([]rune(headerLeft)) - posW
 	if padW >= len([]rune(tagsLabel)) {
 		headerLeft += tagsLabel
 		padW -= len([]rune(tagsLabel))
@@ -271,7 +298,11 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 	if padW < 0 {
 		padW = 0
 	}
-	b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
+	line := headerStyle.Render(headerLeft + strings.Repeat(" ", padW))
+	if showPos {
+		line += " " + pageIndicatorStyle.Render(posLabel)
+	}
+	b.WriteString(line + "\n")
 }
 
 // ── Editor support ────────────────────────────────────────────────────────────

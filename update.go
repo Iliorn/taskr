@@ -721,6 +721,14 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveCursorUp()
 		case "down":
 			m.moveCursorDown()
+		case "home":
+			m.listJumpTop()
+		case "end":
+			m.listJumpBottom()
+		case "pgup":
+			m.listPage(-1)
+		case "pgdown":
+			m.listPage(1)
 
 		case "enter":
 			return m.handleListEnter()
@@ -1178,6 +1186,71 @@ func (m *model) moveCursorDown() {
 		if n := m.currentTaskListLen(); n > 0 {
 			m.cursor = (m.cursor + 1) % n
 		}
+	}
+}
+
+// listNavTarget abstracts the current tab's linear list for the jump/page keys
+// (Home/End/PgUp/PgDn): a pointer to the tab's cursor and the row count.
+// Returns (nil, 0) for tabs without a simple linear list (calendar, settings,
+// stats), where those keys are a no-op.
+func (m *model) listNavTarget() (*int, int) {
+	switch m.tab {
+	case tabTasks:
+		return &m.cursor, m.currentTaskListLen()
+	case tabTags:
+		return &m.tagTabCursor, len(m.getFilteredTagsForTab())
+	case tabLearnings:
+		return &m.learningCursor, len(m.allLearnings())
+	case tabProjects:
+		if m.projectTaskMode {
+			return &m.cursor, m.currentProjectTaskLen()
+		}
+		return &m.projectCursor, len(m.allProjectsForList())
+	}
+	return nil, 0
+}
+
+// moveListCursorTo clamps target into range and applies it to the current tab's
+// list cursor. In the Projects list (not task mode) picking a different project
+// resets the task sub-cursor + its scroll, mirroring moveCursorUp/Down.
+func (m *model) moveListCursorTo(target int) {
+	c, n := m.listNavTarget()
+	if c == nil || n == 0 {
+		return
+	}
+	if target < 0 {
+		target = 0
+	}
+	if target > n-1 {
+		target = n - 1
+	}
+	if m.tab == tabProjects && !m.projectTaskMode && target != *c {
+		m.cursor = 0
+		m.listOffset = 0
+	}
+	*c = target
+}
+
+// listPageStep is roughly one visible page for PgUp/PgDn, keeping one row of
+// overlap for context.
+func (m *model) listPageStep() int {
+	step := m.listVisible() - 1
+	if step < 1 {
+		step = 1
+	}
+	return step
+}
+
+func (m *model) listJumpTop() { m.moveListCursorTo(0) }
+
+func (m *model) listJumpBottom() {
+	_, n := m.listNavTarget()
+	m.moveListCursorTo(n - 1)
+}
+
+func (m *model) listPage(dir int) {
+	if c, _ := m.listNavTarget(); c != nil {
+		m.moveListCursorTo(*c + dir*m.listPageStep())
 	}
 }
 
