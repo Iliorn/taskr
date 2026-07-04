@@ -571,7 +571,18 @@ func (m model) buildProjectListContent(w, listH int) string {
 
 // ── Help ──────────────────────────────────────────────────────────────────────
 
-func (m model) renderHelpFullscreen() string {
+// helpChromeLines is the number of fixed rows renderHelpFullscreen spends on
+// the title block and footer around the scrolling body. Kept in sync with the
+// literal writes below so helpViewportH can size the body to never push the
+// footer off-screen (the final pad/truncate then lands the footer at the
+// bottom exactly).
+const helpChromeLines = 7
+
+// helpBodyLines renders the scrollable body of the help overlay — every key
+// section plus the date-input reference — as one styled line per slice entry,
+// with a blank line between sections. Title and footer are chrome and live in
+// renderHelpFullscreen. Shared with the scroll clamp so both agree on length.
+func (m model) helpBodyLines() []string {
 	type helpSec struct {
 		title string
 		keys  [][2]string
@@ -602,6 +613,56 @@ func (m model) renderHelpFullscreen() string {
 		{"+3d / +2w / +1m", tr("relative days/weeks/months")},
 	}})
 
+	var lines []string
+	for _, section := range sections {
+		lines = append(lines, detailLabelStyle.Render("  "+section.title))
+		for _, kv := range section.keys {
+			key := padRight(kv[0], 24)
+			lines = append(lines,
+				helpStyle.Render("  ")+
+					selectedStyle.Render(key)+
+					normalStyle.Render(kv[1]))
+		}
+		lines = append(lines, "")
+	}
+	return lines
+}
+
+// helpViewportH is how many body rows fit on screen once the title block and
+// footer are reserved. Floored so tiny terminals still show something.
+func (m model) helpViewportH() int {
+	h := m.termHeight - helpChromeLines
+	if h < 3 {
+		h = 3
+	}
+	return h
+}
+
+// clampHelpScroll keeps a proposed scroll offset within [0, maxScroll] for a
+// body of `total` lines shown through a `viewport`-row window.
+func clampHelpScroll(scroll, total, viewport int) int {
+	max := total - viewport
+	if max < 0 {
+		max = 0
+	}
+	if scroll > max {
+		scroll = max
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+	return scroll
+}
+
+func (m model) renderHelpFullscreen() string {
+	body := m.helpBodyLines()
+	vh := m.helpViewportH()
+	scroll := clampHelpScroll(m.helpScroll, len(body), vh)
+	end := scroll + vh
+	if end > len(body) {
+		end = len(body)
+	}
+
 	b := getBuilder()
 	defer putBuilder(b)
 
@@ -609,20 +670,25 @@ func (m model) renderHelpFullscreen() string {
 	b.WriteString(titleStyle.Render("  "+tr("Keyboard shortcuts")) + "\n")
 	b.WriteString("\n")
 
-	for _, section := range sections {
-		b.WriteString(detailLabelStyle.Render("  "+section.title) + "\n")
-		for _, kv := range section.keys {
-			key := padRight(kv[0], 24)
-			b.WriteString(
-				helpStyle.Render("  ") +
-					selectedStyle.Render(key) +
-					normalStyle.Render(kv[1]) + "\n")
-		}
-		b.WriteString("\n")
+	for _, line := range body[scroll:end] {
+		b.WriteString(line + "\n")
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("  "+tr("Press ? or esc to close")) + "\n")
+	hint := tr("Press ? or esc to close")
+	if len(body) > vh {
+		var scrollHint string
+		switch {
+		case scroll > 0 && end < len(body):
+			scrollHint = tr("↑/↓ scroll")
+		case scroll > 0:
+			scrollHint = tr("↑ scroll up")
+		default:
+			scrollHint = tr("↓ scroll down")
+		}
+		hint = scrollHint + "  ·  " + hint
+	}
+	b.WriteString(helpStyle.Render("  "+hint) + "\n")
 
 	lines := strings.Split(b.String(), "\n")
 	target := m.termHeight - 1

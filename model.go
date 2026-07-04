@@ -270,6 +270,7 @@ type model struct {
 	tagTabSearchQuery    string
 	learningSearchQuery  string
 	listOffset           int
+	helpScroll           int
 	projectTaskMode      bool
 	showHistory          bool
 	focusFilter          bool

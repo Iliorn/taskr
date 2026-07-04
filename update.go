@@ -518,6 +518,15 @@ func (m model) updateHelp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "?", "esc", "q":
 			m.mode = modeNormal
+			m.helpScroll = 0
+		case "up":
+			m.helpScroll = clampHelpScroll(m.helpScroll-1, len(m.helpBodyLines()), m.helpViewportH())
+		case "down":
+			m.helpScroll = clampHelpScroll(m.helpScroll+1, len(m.helpBodyLines()), m.helpViewportH())
+		case "pgup":
+			m.helpScroll = clampHelpScroll(m.helpScroll-m.helpViewportH(), len(m.helpBodyLines()), m.helpViewportH())
+		case "pgdown", " ":
+			m.helpScroll = clampHelpScroll(m.helpScroll+m.helpViewportH(), len(m.helpBodyLines()), m.helpViewportH())
 		}
 	}
 	return m, nil
