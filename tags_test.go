@@ -196,7 +196,7 @@ func TestTagStatsAgeAndTracked(t *testing.T) {
 	m.tab = tabTags
 	m.refreshCaches()
 	out := m.renderTagList()
-	for _, want := range []string{"avg age", "⏱ time spent", " · "} {
+	for _, want := range []string{"avg age", "⧗ time spent", " · "} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in tag row, got:\n%s", want, out)
 		}

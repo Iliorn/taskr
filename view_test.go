@@ -150,27 +150,26 @@ func TestHighPriorityShowsExclamationInList(t *testing.T) {
 	}
 }
 
-// A high-priority task that also has an overdue dependency stacks both markers
-// into "!!" (no gap) rather than "! !".
-func TestHighPriorityOverdueDepStacksExclamations(t *testing.T) {
+// An overdue dependency conveys itself through the row color, not a glyph — a
+// normal-priority task whose dependency is overdue carries no "!".
+func TestOverdueDependencyAddsNoGlyph(t *testing.T) {
 	dep := todo.New("blocking dep")
 	dep.ID = "dep1"
 	dep.DueDate = time.Now().Add(-48 * time.Hour) // overdue, still pending
-	hi := todo.New("Finish the audit")
-	hi.Priority = todo.PriorityHigh
-	hi.Dependencies = []string{"dep1"}
+	blocked := todo.New("Finish the audit") // normal priority, depends on dep1
+	blocked.Dependencies = []string{"dep1"}
 
-	m := modelWithTasks(t, hi, dep)
-	var hiLine string
-	for _, line := range strings.Split(m.View(), "\n") {
-		if strings.Contains(line, "Finish the audit") {
-			hiLine = line
+	m := modelWithTasks(t, blocked, dep)
+	var line string
+	for _, l := range strings.Split(m.View(), "\n") {
+		if strings.Contains(l, "Finish the audit") {
+			line = l
 		}
 	}
-	if hiLine == "" {
-		t.Fatal("high task row should render")
+	if line == "" {
+		t.Fatal("blocked task row should render")
 	}
-	if !strings.Contains(hiLine, "!!") {
-		t.Errorf("high + overdue-dep row should carry stacked '!!': %q", hiLine)
+	if strings.Contains(line, "!") {
+		t.Errorf("overdue-dependency row should carry no '!' (color-only): %q", line)
 	}
 }

@@ -354,7 +354,7 @@ var daTranslations = map[string]string{
 	"Progress":                           "Fremskridt",
 	" %3d%% (%d done / %d total)":        " %3d%% (%d færdige / %d i alt)",
 	"avg age ":                           "gns. alder ",
-	"⏱ time spent ":                      "⏱ tid brugt ",
+	"⧗ time spent ":                      "⧗ tid brugt ",
 	"  No tag selected.":                 "  Intet mærke valgt.",
 	"  (untagged)":                       "  (uden mærke)",
 	"%d task":                            "%d opgave",

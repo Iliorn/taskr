@@ -145,7 +145,7 @@ func (m model) renderTagList() string {
 				extras = append(extras, tr("avg age ")+formatDaysCompact(s.ageSum/time.Duration(s.openCount)))
 			}
 			if s.tracked > 0 {
-				extras = append(extras, tr("⏱ time spent ")+formatDurationCompact(s.tracked))
+				extras = append(extras, tr("⧗ time spent ")+formatDurationCompact(s.tracked))
 			}
 			if len(extras) > 0 {
 				pctStr += "  " + strings.Join(extras, " · ")
@@ -845,7 +845,7 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 	}
 	title := truncate(sub.Title, titleW)
 	if sub.IsTimerRunning() {
-		title = "⏱ " + title
+		title = "⧗ " + title
 	}
 	cursorStr := "  "
 	selected := flatIndex == cursor && active
@@ -894,26 +894,16 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		}
 	}
 	title := t.Title
-	highPri := t.Priority == todo.PriorityHigh
-	if highPri {
+	if t.Priority == todo.PriorityHigh {
 		title += " !"
 	}
+	// hasOverdueDep drives the row color (the switch at the end), not a glyph.
 	hasOverdueDep := t.HasOverdueDependencyFast(overdueSet)
-	if hasOverdueDep {
-		if highPri {
-			title += "!" // stack onto the priority "!" → "!!", no gap
-		} else {
-			title += " !"
-		}
-	}
 	if m.cache.blockerSet[t.ID] {
 		title += " ↥" // others depend on this — clearing it unblocks them
 	}
 	if m.cache.blockedSet[t.ID] {
 		title += " ↧" // waiting on an unfinished dependency
-	}
-	if t.Notes != "" {
-		title += " ¶"
 	}
 	if t.IsRecurring() {
 		title += " ↻"
@@ -929,7 +919,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		title += badge
 	}
 	if t.IsTimerRunning() {
-		title = "⏱ " + title
+		title = "⧗ " + title
 	}
 	dueVal := ""
 	if !t.DueDate.IsZero() {

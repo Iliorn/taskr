@@ -623,12 +623,10 @@ func (m model) helpBodyLines() []string {
 	// bindings, so like Date input it lives outside the keymap registry. Keep in
 	// sync with renderTaskLineWithSet.
 	sections = append(sections, helpSec{tr("Row symbols"), [][2]string{
-		{"⏱", tr("timer running")},
-		{"!", tr("high priority, or a dependency is overdue")},
-		{"!!", tr("high priority and a dependency is overdue")},
+		{"⧗", tr("timer running")},
+		{"!", tr("high priority")},
 		{"↥", tr("others depend on this — finishing it unblocks them")},
 		{"↧", tr("blocked — waiting on an unfinished dependency")},
-		{"¶", tr("has notes")},
 		{"↻", tr("recurring task")},
 		{"(2/5)", tr("subtasks done / total")},
 		{"‼", tr("a subtask is overdue")},

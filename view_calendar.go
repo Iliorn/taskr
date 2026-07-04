@@ -26,7 +26,7 @@ type dayActivity struct {
 	completed bool
 	// due marks this as a deadline event (the task's DueDate falls on this
 	// day and it isn't done). start==stop==DueDate and duration is 0; the
-	// timeline renders it as "⌛ due" (orange) or "⌛ overdue" (red) when the
+	// timeline renders it as "⧗ due" (orange) or "⧗ overdue" (red) when the
 	// due day is already past.
 	due bool
 	// parentTitle is set when the activity's task is a subtask; the timeline
@@ -477,9 +477,9 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 		rangeStr = tr("✓ done at ") + a.start.Format("15:04")
 	}
 	if a.due {
-		rangeStr = tr("⌛ due")
+		rangeStr = tr("⧗ due")
 		if a.start.Before(startOfDay(m.frameTime)) {
-			rangeStr = tr("⌛ overdue")
+			rangeStr = tr("⧗ overdue")
 		}
 	}
 	durStr := formatDuration(a.duration())

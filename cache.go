@@ -171,7 +171,7 @@ func (m *model) refreshTaskColMetrics() {
 	active := m.cache.active
 	for i := range active {
 		w := len([]rune(active[i].Title))
-		if active[i].HasOverdueDependencyFast(overdueSet) {
+		if active[i].Priority == todo.PriorityHigh {
 			w += 2 // " !"
 		}
 		if m.cache.blockerSet[active[i].ID] {
@@ -179,9 +179,6 @@ func (m *model) refreshTaskColMetrics() {
 		}
 		if m.cache.blockedSet[active[i].ID] {
 			w += 2 // " ↧"
-		}
-		if active[i].Notes != "" {
-			w += 2 // " ¶"
 		}
 		if active[i].IsRecurring() {
 			w += 2 // " ↻"
@@ -193,7 +190,7 @@ func (m *model) refreshTaskColMetrics() {
 			}
 		}
 		if active[i].IsTimerRunning() {
-			w += 2 // "⏱ " prefix
+			w += 2 // "⧗ " prefix
 		}
 		if w > contentMax {
 			contentMax = w

@@ -112,20 +112,20 @@ func TestActivitiesForDaySurfacesDueTasks(t *testing.T) {
 	}
 
 	line := ansi.Strip(m.renderTimelineEntry(acts[0], 0, 80))
-	if !strings.Contains(line, "⌛ due") || !strings.Contains(line, "Ship release") {
+	if !strings.Contains(line, "⧗ due") || !strings.Contains(line, "Ship release") {
 		t.Fatalf("timeline entry = %q, want due marker + title", line)
 	}
 }
 
 // TestRenderTimelineEntryOverdue asserts a due event whose day is already past
-// renders as "⌛ overdue" rather than "⌛ due".
+// renders as "⧗ overdue" rather than "⧗ due".
 func TestRenderTimelineEntryOverdue(t *testing.T) {
 	m := newTestModel()
 	past := localMidnight(-3)
 	a := dayActivity{title: "file taxes", start: past, stop: past, due: true}
 
 	line := ansi.Strip(m.renderTimelineEntry(a, 0, 80))
-	if !strings.Contains(line, "⌛ overdue") {
+	if !strings.Contains(line, "⧗ overdue") {
 		t.Fatalf("timeline entry = %q, want overdue marker", line)
 	}
 }
