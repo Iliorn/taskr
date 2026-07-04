@@ -150,13 +150,13 @@ var (
 	searchStyle  lipgloss.Style
 	dimStyle     lipgloss.Style
 
-	// Fixed status-line pieces: filter/history chips on the left, sort label
-	// and sync-health glyph on the right. See renderStatusLine.
-	focusChipStyle   lipgloss.Style
-	searchChipStyle  lipgloss.Style
-	statusSortStyle  lipgloss.Style
-	syncOkStyle      lipgloss.Style
-	syncFailStyle    lipgloss.Style
+	// Fixed status-line pieces: filter chips on the left, sort label and
+	// sync-health glyph on the right. See renderStatusLine.
+	focusChipStyle  lipgloss.Style
+	searchChipStyle lipgloss.Style
+	statusSortStyle lipgloss.Style
+	syncOkStyle     lipgloss.Style
+	syncFailStyle   lipgloss.Style
 
 	listPanelStyle   lipgloss.Style
 	detailPanelStyle lipgloss.Style
