@@ -326,6 +326,13 @@ func (m model) buildFooterContent(w int) string {
 			}
 			return field + "\n" + renderQuickAddPreview(m.textInput.Value(), w)
 		}
+		// The single-line comment/learning inputs get a ctrl+e escape hatch to
+		// compose in $EDITOR; advertise it under the field.
+		switch {
+		case m.mode == modeEditComment, m.mode == modeAddLearning, m.mode == modeEditLearning,
+			m.mode == modeInput && m.pane != paneList && m.detail.page == 2:
+			return field + "\n" + helpStyle.Render("    "+tr("ctrl+e  edit in $EDITOR"))
+		}
 		return field
 	case modeIdlePrompt, modeConfirmUpdate:
 		return calTodayStyle.Render(m.confirmMsg)

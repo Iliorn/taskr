@@ -325,6 +325,11 @@ func resolveEditorCmd() string {
 	return ""
 }
 
+// editorDraftKey is the sentinel "task ID" for the scratch file that backs the
+// ctrl+e editor escape from a comment/learning input, keeping it out of any real
+// task's notes file. Task IDs are UUIDs, so it can never collide with one.
+const editorDraftKey = "__taskr_input_draft__"
+
 func notesFilePath(taskID string) string {
 	home, _ := os.UserHomeDir()
 	dir := filepath.Join(home, ".taskr", "notes")

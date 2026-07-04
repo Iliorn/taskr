@@ -801,3 +801,40 @@ func TestPriorityCycleKeepsCursorOnTask(t *testing.T) {
 		t.Errorf("cursor = %d unchanged; the higher-priority task should have moved up", m.cursor)
 	}
 }
+
+// The ctrl+e escape hatch reloads the edited draft back into the active input
+// (collapsing newlines, since these are single-line fields) and leaves the
+// commit to the normal Enter path — nothing is written to the task yet.
+func TestEditorInputReloadsDraftIntoInput(t *testing.T) {
+	task := todo.New("task")
+	task.AddComment("old comment")
+	m := modelWithTasks(t, task)
+	m.cursor = 0
+	m.pane = paneDetail
+	m.detail = detailState{page: 2, commentCursor: 0}
+	m.mode = modeEditComment
+	m.pendingComment = 0
+	m.textInput.SetValue("old comment")
+
+	// Stand in for $EDITOR having written an expanded, multi-line draft.
+	if err := writeNotesFile(editorDraftKey, "expanded\nmultiline\n"); err != nil {
+		t.Fatal(err)
+	}
+	m.editorToInput = true
+
+	updated, _ := m.handleEditorFinished(editorFinishedMsg{taskID: editorDraftKey})
+	m2 := updated.(model)
+
+	if got := m2.textInput.Value(); got != "expanded multiline" {
+		t.Errorf("input value = %q, want flattened draft %q", got, "expanded multiline")
+	}
+	if m2.editorToInput {
+		t.Error("editorToInput should be reset after handling")
+	}
+	if m2.mode != modeEditComment {
+		t.Errorf("mode should stay modeEditComment (draft not yet committed), got %v", m2.mode)
+	}
+	if c := m2.get(task.ID).Comments[0].Text; c != "old comment" {
+		t.Errorf("comment must be unchanged until Enter, got %q", c)
+	}
+}

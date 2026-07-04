@@ -381,7 +381,34 @@ func (m *model) openEditorForNotes() tea.Cmd {
 	}
 
 	m.editorTaskID = taskID
+	m.editorToInput = false
 	return execEditor(editorCmd, taskID, false)
+}
+
+// openEditorForInput backs the ctrl+e escape hatch from the single-line
+// comment/learning inputs: it seeds $EDITOR with the current draft and, on
+// return, reloads the edited text into the input (handleEditorFinished), leaving
+// the existing Enter path to commit it. That reuse is why it doesn't duplicate
+// any of the add/edit commit logic.
+func (m *model) openEditorForInput() tea.Cmd {
+	if err := writeNotesFile(editorDraftKey, m.textInput.Value()); err != nil {
+		m.flashError(fmt.Sprintf("Error writing draft file: %v", err))
+		return clearErrAfter()
+	}
+
+	editorCmd := resolveEditorCmd()
+	if editorCmd == "" {
+		if runtime.GOOS == "windows" {
+			m.flashError(tr("No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"))
+		} else {
+			m.flashError(tr("No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"))
+		}
+		return clearErrAfter()
+	}
+
+	m.editorTaskID = editorDraftKey
+	m.editorToInput = true
+	return execEditor(editorCmd, editorDraftKey, false)
 }
 
 func execEditor(editorCmd, taskID string, isFallback bool) tea.Cmd {
@@ -411,6 +438,21 @@ func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) 
 	if err != nil {
 		m.flashError(fmt.Sprintf("Error reading notes: %v", err))
 		return m, clearErrAfter()
+	}
+
+	// ctrl+e escape hatch: the content is a comment/learning draft, not notes —
+	// reload it into the active input (collapsing the editor's newlines, since
+	// these are single-line fields) and let Enter commit it as usual.
+	if m.editorToInput {
+		m.editorToInput = false
+		cleanupNotesFile(taskID)
+		m.editorTaskID = ""
+		v := strings.TrimSpace(content)
+		v = strings.ReplaceAll(v, "\r\n", " ")
+		v = strings.ReplaceAll(v, "\n", " ")
+		m.textInput.SetValue(v)
+		m.textInput.CursorEnd()
+		return m, nil
 	}
 
 	if t := m.get(taskID); t != nil {

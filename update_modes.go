@@ -109,6 +109,13 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.mode = modeNormal
 			return m, nil
+		case "ctrl+e":
+			// Escape hatch only for the comment-add input (the comments page);
+			// other modeInput uses (quick-add, date fields) keep ctrl+e as the
+			// text input's move-to-end.
+			if m.pane != paneList && m.detail.page == 2 {
+				return m, m.openEditorForInput()
+			}
 		}
 	}
 	m.textInput, cmd = m.textInput.Update(msg)
@@ -229,6 +236,8 @@ func (m model) updateAddLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.mode = modeNormal
 			return m, nil
+		case "ctrl+e":
+			return m, m.openEditorForInput()
 		}
 	}
 	m.textInput, cmd = m.textInput.Update(msg)
@@ -261,6 +270,8 @@ func (m model) updateEditLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.mode = modeNormal
 			return m, nil
+		case "ctrl+e":
+			return m, m.openEditorForInput()
 		}
 	}
 	m.textInput, cmd = m.textInput.Update(msg)
@@ -308,6 +319,8 @@ func (m model) updateEditComment(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.mode = modeNormal
 			return m, nil
+		case "ctrl+e":
+			return m, m.openEditorForInput()
 		}
 	}
 	m.textInput, cmd = m.textInput.Update(msg)

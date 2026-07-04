@@ -327,6 +327,10 @@ type model struct {
 	saveScheduled bool
 	editorTaskID  string
 	editorCmd     string
+	// editorToInput routes the next editor round-trip back into the active text
+	// input (the ctrl+e escape hatch from a comment/learning draft) instead of
+	// committing to a task's notes.
+	editorToInput bool
 
 	// Frame
 	frameTime time.Time

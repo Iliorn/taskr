@@ -237,6 +237,7 @@ var daTranslations = map[string]string{
 	"cycle priority low/med/high": "skift prioritet lav/mel/høj",
 	"delete":                      "slet",
 	"edit notes (opens $EDITOR)":  "rediger noter (åbner $EDITOR)",
+	"ctrl+e  edit in $EDITOR":     "ctrl+e  rediger i $EDITOR",
 	"focus: today + overdue only": "fokus: kun i dag + forfaldne",
 	"toggle history":              "skift historik",
 	"cycle sort order":            "skift sorteringsrækkefølge",
