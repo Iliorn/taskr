@@ -62,6 +62,20 @@ const (
 	paneDetail
 )
 
+// tabView is the slice of UI state that several tabs share the same fields for
+// (the cursor, scroll offset, open pane, and task/project search query).
+// switchTab snapshots it on the way out of a tab and restores it on the way
+// back, so glancing at another tab doesn't wipe your position or filter. Tab-
+// private state (projectCursor, tagTabCursor, showHistory, projectTaskMode, the
+// per-tab search queries, …) lives in its own fields and simply persists —
+// switchTab no longer zeroes it.
+type tabView struct {
+	cursor     int
+	listOffset int
+	pane       pane
+	search     string
+}
+
 type detailField int
 
 const (
@@ -290,6 +304,7 @@ type model struct {
 	learningSearchQuery  string
 	listOffset           int
 	helpScroll           int
+	tabViews             [numTabs]tabView
 	projectTaskMode      bool
 	showHistory          bool
 	focusFilter          bool

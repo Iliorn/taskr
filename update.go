@@ -882,24 +882,27 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 // ── List helper methods ───────────────────────────────────────────────────────
 
 func (m *model) switchTab(t tab) {
-	m.tab = t
-	m.cursor = 0
-	m.projectCursor = 0
-	m.tagTabCursor = 0
-	m.learningCursor = 0
-	m.settingsCursor = settingsLeftCol[0]
-	m.listOffset = 0
-	m.pane = paneList
-	m.searchQuery = ""
-	m.tagTabSearchQuery = ""
-	m.learningSearchQuery = ""
-	m.projectTaskMode = false
-	m.showHistory = false
-	if t == tabCalendar {
-		m.calendar.selected = startOfDay(time.Now())
-		m.calendar.entryCursor = 0
-		m.calendar.focusTimeline = false
+	if t == m.tab {
+		return
 	}
+	// Snapshot the leaving tab's shared UI state and restore the entering
+	// tab's, so a tab switch is non-destructive: your cursor, scroll, open
+	// pane, and search survive a detour to another tab. Tab-private state
+	// (projectCursor, tagTabCursor, showHistory, the calendar day, …) lives in
+	// its own fields and persists on its own — no longer zeroed here.
+	m.tabViews[m.tab] = tabView{
+		cursor:     m.cursor,
+		listOffset: m.listOffset,
+		pane:       m.pane,
+		search:     m.searchQuery,
+	}
+	m.tab = t
+	v := m.tabViews[t]
+	m.cursor = v.cursor
+	m.listOffset = v.listOffset
+	m.pane = v.pane
+	m.searchQuery = v.search
+
 	m.invalidateDetailCache()
 	m.markFilterDirty()
 }
@@ -1306,11 +1309,15 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
 			tag := tags[m.tagTabCursor]
 			m.switchTab(tabTasks)
+			// Drilling in applies a fresh filter, so start at the top rather
+			// than the Tasks cursor switchTab just restored.
 			if tag == untaggedKey {
 				m.searchQuery = untaggedKey
 			} else {
 				m.searchQuery = "#" + tag
 			}
+			m.cursor = 0
+			m.listOffset = 0
 			m.markFilterDirty()
 		}
 	case tabStats:
