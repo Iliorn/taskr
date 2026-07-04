@@ -1068,3 +1068,108 @@ func TestCliAddLikeNotClobberedByTokenlessTitle(t *testing.T) {
 		t.Errorf("clone = (%v, %v), want (High, Large) from --like", got.Priority, got.Size)
 	}
 }
+
+// `taskr undelete <ref>` restores a soft-deleted task from the tombstones.
+// Backlog item e80b30ed (pivoted from a redo stack to undelete-by-ref).
+func TestCliUndeleteRestoresTask(t *testing.T) {
+	if code := cliAdd([]string{"Undelete restore target"}); code != 0 {
+		t.Fatalf("add: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, "Undelete restore target")
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	id := got.ID
+
+	if code := cliDelete([]string{id[:8]}); code != 0 { // id ref → no confirm
+		t.Fatalf("delete: exit %d", code)
+	}
+	_, live, _ := loadForCLI()
+	if _, err := findTaskByRef(live, "Undelete restore target"); err == nil {
+		t.Fatal("task should be gone from the live set after delete")
+	}
+
+	if code := cliUndelete([]string{id[:8]}); code != 0 {
+		t.Fatalf("undelete: exit %d", code)
+	}
+	_, back, _ := loadForCLI()
+	restored, err := findTaskByRef(back, "Undelete restore target")
+	if err != nil {
+		t.Fatalf("task should be restored to the live set: %v", err)
+	}
+	if restored.Deleted {
+		t.Error("restored task should not be marked Deleted")
+	}
+}
+
+// `taskr undelete --list` browses the deleted tasks.
+func TestCliUndeleteListShowsDeleted(t *testing.T) {
+	if code := cliAdd([]string{"Undelete list target"}); code != 0 {
+		t.Fatalf("add: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, "Undelete list target")
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if code := cliDelete([]string{got.ID[:8]}); code != 0 {
+		t.Fatalf("delete: exit %d", code)
+	}
+	out := captureStdout(t, func() {
+		if code := cliUndelete([]string{"--list"}); code != 0 {
+			t.Fatalf("undelete --list: exit %d", code)
+		}
+	})
+	if !strings.Contains(out, "Undelete list target") {
+		t.Errorf("--list should show the deleted task; got %q", out)
+	}
+}
+
+// Deleting a parent cascades to its subtasks; undelete brings the whole subtree
+// back with the parent link intact.
+func TestCliUndeleteRestoresSubtree(t *testing.T) {
+	if code := cliAdd([]string{"Undelete parent target"}); code != 0 {
+		t.Fatalf("add parent: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	parent, err := findTaskByRef(todos, "Undelete parent target")
+	if err != nil {
+		t.Fatalf("find parent: %v", err)
+	}
+	if code := cliSubtask([]string{parent.ID[:8], "child of undelete parent"}); code != 0 {
+		t.Fatalf("subtask: exit %d", code)
+	}
+	if code := cliDelete([]string{parent.ID[:8]}); code != 0 {
+		t.Fatalf("delete parent: exit %d", code)
+	}
+	_, live, _ := loadForCLI()
+	if _, err := findTaskByRef(live, "child of undelete parent"); err == nil {
+		t.Fatal("child should be cascade-deleted with the parent")
+	}
+
+	if code := cliUndelete([]string{parent.ID[:8]}); code != 0 {
+		t.Fatalf("undelete: exit %d", code)
+	}
+	_, back, _ := loadForCLI()
+	p, err := findTaskByRef(back, "Undelete parent target")
+	if err != nil {
+		t.Fatalf("parent should be restored: %v", err)
+	}
+	c, err := findTaskByRef(back, "child of undelete parent")
+	if err != nil {
+		t.Fatalf("child should be restored with the subtree: %v", err)
+	}
+	if c.ParentID != p.ID {
+		t.Errorf("restored child ParentID = %q, want parent %q", c.ParentID, p.ID)
+	}
+}

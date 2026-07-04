@@ -28,7 +28,7 @@ import (
 func isCLICommand(arg string) bool {
 	switch arg {
 	case "add", "list", "ls", "done", "top",
-		"show", "edit", "delete", "rm", "comment",
+		"show", "edit", "delete", "rm", "undelete", "comment",
 		"stats", "start", "stop", "log", "export", "subtask",
 		"search", "tags", "projects", "serve", "sync", "undo",
 		"doctor", "help", "-h", "--help", "--version":
@@ -55,7 +55,7 @@ func runCLI(args []string) int {
 // trigger an auto-sync afterward).
 func cliMutates(cmd string) bool {
 	switch cmd {
-	case "add", "done", "edit", "delete", "rm", "comment", "start", "stop", "log", "subtask", "undo", "doctor":
+	case "add", "done", "edit", "delete", "rm", "undelete", "comment", "start", "stop", "log", "subtask", "undo", "doctor":
 		return true
 	}
 	return false
@@ -78,6 +78,8 @@ func dispatchCLI(args []string) int {
 		return cliEdit(rest)
 	case "delete", "rm":
 		return cliDelete(rest)
+	case "undelete":
+		return cliUndelete(rest)
 	case "comment":
 		return cliComment(rest)
 	case "stats":
@@ -1254,6 +1256,113 @@ func cliDelete(args []string) int {
 	return 0
 }
 
+// ── undelete ─────────────────────────────────────────────────────────────────
+
+// cliUndelete restores a soft-deleted task (and any deleted descendants) from
+// the tombstones the delete verb leaves in SQLite. Where `undo` pops the most
+// recent deletion LIFO, undelete targets a specific task by ref and `--list`
+// browses what's recoverable. Tombstones live for tombstoneRetention (180 days),
+// so anything inside that window can be brought back.
+func cliUndelete(args []string) int {
+	fs := flag.NewFlagSet("undelete", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	list := fs.Bool("list", false, "list the deleted tasks that can be restored instead of restoring one")
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, "usage: taskr undelete <ref>   |   taskr undelete --list")
+		fs.PrintDefaults()
+	}
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
+	if err := fs.Parse(flagArgs); err != nil {
+		return 2
+	}
+
+	if err := openStore(); err != nil {
+		fmt.Fprintf(os.Stderr, "open store: %v\n", err)
+		return 1
+	}
+	all, err := loadTodosForSync(db) // includes tombstones (Deleted/DeletedAt set)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	var deleted []todo.Todo
+	for i := range all {
+		if all[i].Deleted {
+			deleted = append(deleted, all[i])
+		}
+	}
+
+	if *list || len(positionals) == 0 {
+		if len(deleted) == 0 {
+			fmt.Println("(no deleted tasks to restore)")
+			return 0
+		}
+		sort.Slice(deleted, func(i, j int) bool { // newest deletions first
+			return deleted[i].DeletedAt.After(deleted[j].DeletedAt)
+		})
+		for i := range deleted {
+			when := "unknown"
+			if !deleted[i].DeletedAt.IsZero() {
+				when = deleted[i].DeletedAt.Format("2006-01-02 15:04")
+			}
+			fmt.Printf("%s  %s  (deleted %s)\n", deleted[i].ID[:8], deleted[i].Title, when)
+		}
+		return 0
+	}
+
+	t, err := findTaskByRef(deleted, positionals[0])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+
+	// Restore the task and any of its deleted descendants — delete cascades, so a
+	// subtree went down together and comes back together. Bump ModifiedAt so the
+	// un-delete wins over the tombstone in a later sync merge.
+	children, get := sliceTaskLookups(all)
+	now := time.Now()
+	restored := make([]todo.Todo, 0, 1)
+	for _, id := range descendantIDsFrom(children, t.ID) {
+		x := get(id)
+		if x == nil || !x.Deleted {
+			continue
+		}
+		c := copyTodo(*x)
+		c.Deleted = false
+		c.DeletedAt = time.Time{}
+		c.ModifiedAt = now
+		restored = append(restored, c)
+	}
+	// If the restored root's parent is itself still deleted, detach it so it
+	// doesn't come back stranded under a tombstone (descendantIDsFrom yields the
+	// root first, so restored[0] is it).
+	if len(restored) > 0 && restored[0].ParentID != "" {
+		if p := get(restored[0].ParentID); p == nil || p.Deleted {
+			restored[0].ParentID = ""
+		}
+	}
+
+	ptrs := make([]*todo.Todo, len(restored))
+	for i := range restored {
+		ptrs[i] = &restored[i]
+	}
+	repo := newSQLiteRepo()
+	if err := repo.Save(ptrs, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "undelete: %v\n", err)
+		return 1
+	}
+	if extra := len(restored) - 1; extra > 0 {
+		noun := "subtask"
+		if extra != 1 {
+			noun = "subtasks"
+		}
+		fmt.Printf("restored %s  %s  (+%d %s)\n", t.ID[:8], t.Title, extra, noun)
+	} else {
+		fmt.Printf("restored %s  %s\n", t.ID[:8], t.Title)
+	}
+	return 0
+}
+
 // ── undo ─────────────────────────────────────────────────────────────────────
 
 // cliUndo restores the most recent persisted deletion (task or subtask, with
@@ -1856,6 +1965,7 @@ Tasks:
                                        (-m/--comment adds a closing comment to each)
   taskr delete <ref> [-f]              soft-delete a task (alias: rm; substring matches confirm first)
   taskr undo [--list]                  restore the most recent deletion (task + subtasks)
+  taskr undelete <ref> | --list        restore a specific deleted task by ref (browse with --list)
   taskr subtask <parent> "title"       create a subtask (--each for multiple titles)
 
 Discovery:
