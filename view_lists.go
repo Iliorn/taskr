@@ -276,9 +276,12 @@ func (m model) renderStatsList() string {
 	var activeAges []time.Duration
 	var oldestAge time.Duration
 	oldestTitle := ""
-	// Cycle time (created→completed) of every completed task and the count of
-	// pending tasks, both bucketed by size (index = int(todo.Size)). Feed the
-	// "Cycle time by size" and "Projected backlog clear" blocks below.
+	// Cycle time (start date→completed) of every completed task that had a
+	// start date, plus the count of pending tasks, both bucketed by size
+	// (index = int(todo.Size)). A task can be created well before it's started,
+	// so we measure from StartDate, not CreatedAt; tasks with no start date
+	// don't contribute. Feed the "Cycle time by size" and "Projected backlog
+	// clear" blocks below.
 	var cycleBySize [3][]time.Duration
 	var pendingBySize [3]int
 
@@ -294,8 +297,11 @@ func (m model) renderStatsList() string {
 		}
 		if t.Status == todo.Done {
 			if !t.CompletedAt.IsZero() {
-				if i := int(t.Size); i >= 0 && i < len(cycleBySize) {
-					cycleBySize[i] = append(cycleBySize[i], t.CompletedAt.Sub(t.CreatedAt))
+				if i := int(t.Size); i >= 0 && i < len(cycleBySize) && !t.StartDate.IsZero() {
+					// Skip anomalies where completion predates the start date.
+					if d := t.CompletedAt.Sub(t.StartDate); d >= 0 {
+						cycleBySize[i] = append(cycleBySize[i], d)
+					}
 				}
 				if !t.CompletedAt.Before(today) {
 					doneToday++
@@ -524,8 +530,9 @@ func (m model) renderStatsList() string {
 		{tr("Large"), int(todo.SizeLarge)},
 	}
 
-	// Median calendar time from creation to completion, per size — the "how
-	// long does a task of this size actually take" cue that feeds the estimate.
+	// Median calendar time from start date to completion, per size — the "how
+	// long does a task of this size actually take once started" cue that feeds
+	// the estimate. Only started+completed tasks contribute.
 	cycleTime := section(func(sb *strings.Builder) {
 		sb.WriteString(statsHeaderStyle.Render(tr("  Cycle time by size")) + "\n")
 		for _, s := range sizeRows {

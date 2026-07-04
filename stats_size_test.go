@@ -15,13 +15,18 @@ import (
 // median summed into a rough ETA.
 func TestStatsCycleTimeAndProjection(t *testing.T) {
 	now := time.Now()
-	mk := func(id string, sz todo.Size, done bool, ageCreated, ageCompleted int) todo.Todo {
+	// Cycle time is measured start date→completion, so a completed task only
+	// contributes when it has a start date (ageStarted >= 0).
+	mk := func(id string, sz todo.Size, done bool, ageStarted, ageCompleted int) todo.Todo {
 		td := todo.Todo{
 			ID:        id,
 			Title:     id,
 			Size:      sz,
 			Priority:  todo.PriorityMedium,
-			CreatedAt: now.AddDate(0, 0, -ageCreated),
+			CreatedAt: now.AddDate(0, 0, -60), // created long ago; must not affect cycle time
+		}
+		if ageStarted >= 0 {
+			td.StartDate = now.AddDate(0, 0, -ageStarted)
 		}
 		if done {
 			td.Status = todo.Done
@@ -31,11 +36,14 @@ func TestStatsCycleTimeAndProjection(t *testing.T) {
 	}
 
 	var todos []todo.Todo
-	// Completed small tasks with cycle times 2d and 4d → median 3.0d.
+	// Completed small tasks: started 4d/10d ago, completed 2d/6d ago → cycle
+	// times 2d and 4d → median 3.0d.
 	todos = append(todos, mk("s-done-a", todo.SizeSmall, true, 4, 2))
 	todos = append(todos, mk("s-done-b", todo.SizeSmall, true, 10, 6))
-	// One completed large task, cycle 30d.
+	// One completed large task: started 40d ago, done 10d ago → cycle 30d.
 	todos = append(todos, mk("l-done", todo.SizeLarge, true, 40, 10))
+	// A completed small task with NO start date must be excluded from the median.
+	todos = append(todos, mk("s-done-nostart", todo.SizeSmall, true, -1, 1))
 	// Pending: 3 small, 1 large. Medium has neither history nor pending.
 	for i := 0; i < 3; i++ {
 		todos = append(todos, mk(fmt.Sprintf("s-pend-%d", i), todo.SizeSmall, false, 3, 0))
