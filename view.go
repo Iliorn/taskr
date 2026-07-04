@@ -422,15 +422,15 @@ func (m model) renderKeyHints(w int) string {
 		hints = tr("enter detail · a add · d done · t track · p prio · r rename · x del · n notes · f focus · s sort · h history · / search")
 		short = tr("a add · d done · t track · x del · s sort · / search · ? more")
 	case m.tab == tabProjects:
-		hints = tr("j/k nav · r rename · x delete · / filter")
+		hints = tr("↑/↓ nav · r rename · x delete · / filter")
 	case m.tab == tabTags:
-		hints = tr("j/k nav · r rename · m merge · x delete · s sort · / filter")
+		hints = tr("↑/↓ nav · r rename · m merge · x delete · s sort · / filter")
 	case m.tab == tabLearnings:
-		hints = tr("j/k nav · r edit · x delete · s sort · / search")
+		hints = tr("↑/↓ nav · r edit · x delete · s sort · / search")
 	case m.tab == tabStats:
 		hints = tr("enter · cycle activity range")
 	case m.tab == tabCalendar && m.calendar.focusTimeline:
-		hints = tr("j/k select entry · r edit times · x delete · esc back")
+		hints = tr("↑/↓ select entry · r edit times · x delete · esc back")
 	case m.tab == tabCalendar:
 		hints = tr("←/→ day · ↑/↓ week · [ ] month · t today · enter entries")
 	case m.tab == tabSettings:
@@ -594,7 +594,7 @@ func (m model) renderHelpFullscreen() string {
 		keys  [][2]string
 	}{
 		{tr("Navigation"), [][2]string{
-			{"↑/↓  or  j/k", tr("navigate list")},
+			{"↑/↓", tr("navigate list")},
 			{"enter", tr("open details")},
 			{"esc", tr("go back")},
 			{"tab  or  1-7", tr("switch tabs")},

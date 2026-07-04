@@ -706,9 +706,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.handleListEsc()
 
-		case "up", "k":
+		case "up":
 			m.moveCursorUp()
-		case "down", "j":
+		case "down":
 			m.moveCursorDown()
 
 		case "enter":

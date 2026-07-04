@@ -131,38 +131,38 @@ func TestTabKeyAdvancesThroughTabs(t *testing.T) {
 
 // ── Cursor navigation ────────────────────────────────────────────────────────
 
-func TestCursorJKMovesCursor(t *testing.T) {
+func TestCursorArrowsMoveCursor(t *testing.T) {
 	m := modelWithTasks(t, todo.New("a"), todo.New("b"), todo.New("c"))
 
 	if m.cursor != 0 {
 		t.Fatalf("initial cursor = %d, want 0", m.cursor)
 	}
-	m = sendKey(t, m, "j")
+	m = sendKey(t, m, "down")
 	if m.cursor != 1 {
-		t.Errorf("after j: cursor = %d, want 1", m.cursor)
+		t.Errorf("after down: cursor = %d, want 1", m.cursor)
 	}
-	m = sendKey(t, m, "j")
+	m = sendKey(t, m, "down")
 	if m.cursor != 2 {
-		t.Errorf("after 2×j: cursor = %d, want 2", m.cursor)
+		t.Errorf("after 2×down: cursor = %d, want 2", m.cursor)
 	}
-	m = sendKey(t, m, "k")
+	m = sendKey(t, m, "up")
 	if m.cursor != 1 {
-		t.Errorf("after k: cursor = %d, want 1", m.cursor)
+		t.Errorf("after up: cursor = %d, want 1", m.cursor)
 	}
 }
 
 func TestCursorWrapsAroundListBounds(t *testing.T) {
 	m := modelWithTasks(t, todo.New("a"), todo.New("b"))
 
-	// k at top: cursor wraps to the last row.
-	m = sendKey(t, m, "k")
+	// up at top: cursor wraps to the last row.
+	m = sendKey(t, m, "up")
 	if m.cursor != 1 {
-		t.Errorf("k at top: cursor = %d, want 1 (wraps to bottom)", m.cursor)
+		t.Errorf("up at top: cursor = %d, want 1 (wraps to bottom)", m.cursor)
 	}
-	// j at bottom: cursor wraps back to the top.
-	m = sendKey(t, m, "j")
+	// down at bottom: cursor wraps back to the top.
+	m = sendKey(t, m, "down")
 	if m.cursor != 0 {
-		t.Errorf("j at bottom: cursor = %d, want 0 (wraps to top)", m.cursor)
+		t.Errorf("down at bottom: cursor = %d, want 0 (wraps to top)", m.cursor)
 	}
 }
 

@@ -62,7 +62,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.invalidateDetailCache()
 		}
-	case "right", "l":
+	case "right":
 		if m.detail.page < 2 {
 			m.detail.page++
 			if m.detail.page == 1 {
@@ -74,9 +74,9 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.invalidateDetailCache()
 		}
 
-	case "up", "k":
+	case "up":
 		m.detailCursorUp()
-	case "down", "j":
+	case "down":
 		m.detailCursorDown()
 
 	case "enter":
