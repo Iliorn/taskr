@@ -42,15 +42,21 @@ func (m model) backgroundSync() tea.Cmd {
 	}
 }
 
-// handleSyncDone records the outcome in the Settings footer (m.syncStatus) and,
-// only when a conflict was auto-resolved, flashes a transient toast on the error
-// line — a resolved conflict means a local edit was superseded and logged.
-// Plain failures stay quiet on the toast line (a network blip shouldn't nag);
-// they're still visible in the Settings footer.
+// handleSyncDone records the outcome in the Settings footer (m.syncStatus) and
+// flashes a transient toast on the error line in two cases: when a conflict was
+// auto-resolved (a local edit was superseded and logged), and on the first
+// failure after a run of healthy syncs. Repeated failures stay quiet on the
+// toast line (a network blip shouldn't nag) — the header sync glyph and the
+// Settings footer carry the ongoing outage.
 func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.syncStatus = tr("Last sync failed: ") + truncate(msg.err.Error(), 60)
+		firstFailure := !m.lastSyncFailed
 		m.lastSyncFailed = true
+		if firstFailure {
+			m.err = tr("Sync failing — devices may be diverging (see Settings)")
+			return m, clearErrAfter()
+		}
 		return m, nil
 	}
 	m.lastSyncFailed = false
