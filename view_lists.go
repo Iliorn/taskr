@@ -936,7 +936,17 @@ func (m model) renderProjectListContent(projects []string) string {
 	}
 	b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
 
-	for i, p := range projects {
+	maxVisible := m.projectListVisibleRows()
+	startIdx := m.listOffset
+	if startIdx > len(projects) {
+		startIdx = 0
+	}
+	endIdx := startIdx + maxVisible
+	if endIdx > len(projects) {
+		endIdx = len(projects)
+	}
+	for i := startIdx; i < endIdx; i++ {
+		p := projects[i]
 		tasks := m.getProjectTasks(p)
 		var activeCnt, doneCnt, overdueCnt int
 		for _, t := range tasks {

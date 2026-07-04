@@ -125,7 +125,17 @@ func (m *model) clampListOffset(listLen int) {
 // the visible window. The Tasks/Projects lists track m.cursor; the Tags and
 // Learnings lists keep their own cursor, so they pass it in here.
 func (m *model) clampListOffsetFor(cursor, listLen int) {
-	visible := m.listVisible()
+	m.clampListOffsetVisible(cursor, listLen, m.listVisible())
+}
+
+// clampListOffsetVisible keeps listOffset so `cursor` stays within the next
+// `visible` rows. Most tabs fill the whole list area (visible = listVisible),
+// but the Projects tab's list shares space with the Gantt preview, so it passes
+// its own smaller count via projectListVisibleRows.
+func (m *model) clampListOffsetVisible(cursor, listLen, visible int) {
+	if visible < 1 {
+		visible = 1
+	}
 	if cursor < m.listOffset {
 		m.listOffset = cursor
 	}
@@ -220,6 +230,21 @@ func (m model) estimateListHeight() int {
 		return minListHeight
 	}
 	return available
+}
+
+// projectListVisibleRows is how many project rows the Projects tab shows. The
+// list panel gets a third of the list area (the Gantt preview takes the rest),
+// less one line for the header. Both the render window (renderProjectListContent)
+// and the offset clamp read this, so the project cursor can't scroll below the
+// visible rows. The Projects tab hides the task detail pane, so estimateListHeight
+// (detailH = 0 there) stays at or below the layout's actual list height, which
+// keeps the rendered window from being clipped by the panel's own height cap.
+func (m model) projectListVisibleRows() int {
+	rows := m.estimateListHeight()/3 - 1
+	if rows < minListPanelLines-1 {
+		rows = minListPanelLines - 1
+	}
+	return rows
 }
 
 func (m model) maxDetailHeight() int {

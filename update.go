@@ -827,7 +827,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clampListOffset(m.visibleActiveLen())
 		}
 	case tabProjects:
-		m.clampListOffset(len(m.allProjectsForList()))
+		m.clampListOffsetVisible(m.projectCursor, len(m.allProjectsForList()), m.projectListVisibleRows())
 	case tabTags:
 		m.clampListOffsetFor(m.tagTabCursor, len(m.getFilteredTagsForTab()))
 	case tabLearnings:
