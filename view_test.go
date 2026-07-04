@@ -120,3 +120,32 @@ func TestNarrowNoWrapDanish(t *testing.T) {
 		}
 	}
 }
+
+// A High-priority task carries a trailing "!" in the task list so cycling
+// priority (p) gives visible feedback; a lower-priority task does not.
+func TestHighPriorityShowsExclamationInList(t *testing.T) {
+	hi := todo.New("Finish the audit")
+	hi.Priority = todo.PriorityHigh
+	lo := todo.New("Water the plants")
+	lo.Priority = todo.PriorityLow
+	m := modelWithTasks(t, hi, lo)
+
+	var hiLine, loLine string
+	for _, line := range strings.Split(m.View(), "\n") {
+		if strings.Contains(line, "Finish the audit") {
+			hiLine = line
+		}
+		if strings.Contains(line, "Water the plants") {
+			loLine = line
+		}
+	}
+	if hiLine == "" || loLine == "" {
+		t.Fatalf("both task rows should render; hi=%q lo=%q", hiLine, loLine)
+	}
+	if !strings.Contains(hiLine, "!") {
+		t.Errorf("high-priority row should carry a '!': %q", hiLine)
+	}
+	if strings.Contains(loLine, "!") {
+		t.Errorf("low-priority row should have no '!': %q", loLine)
+	}
+}

@@ -894,6 +894,9 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		}
 	}
 	title := t.Title
+	if t.Priority == todo.PriorityHigh {
+		title += " !"
+	}
 	hasOverdueDep := t.HasOverdueDependencyFast(overdueSet)
 	if hasOverdueDep {
 		title += " !"
