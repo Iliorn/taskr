@@ -587,7 +587,7 @@ func (m model) updateSearchProject(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if id := m.pendingDeleteID; id != "" && m.get(id) != nil {
 				ids := m.descendantIDs(id)
 				m.pushUndo("delete task", ids...)
@@ -627,7 +627,7 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmReopen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if id := m.pendingReopenID; id != "" {
 				if t := m.get(id); t != nil && t.Status == todo.Done {
 					m.pushUndo("reopen task", t.ID)
@@ -658,7 +658,7 @@ func (m model) updateConfirmReopen(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmCloseParent(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if id := m.pendingCloseParentID; id != "" {
 				if t := m.get(id); t != nil && t.Status == todo.Pending {
 					// Full snapshot: spawnNextRecurrence creates a new task,
@@ -695,7 +695,7 @@ func (m model) updateConfirmCloseParent(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmDeleteComment(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if t := m.currentTodo(); t != nil {
 				m.pushUndo("delete comment", t.ID)
 				t.DeleteComment(m.pendingComment)
@@ -715,7 +715,7 @@ func (m model) updateConfirmDeleteComment(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmDeleteDep(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if t := m.currentTodo(); t != nil && m.pendingDep < len(t.Dependencies) {
 				m.pushUndo("remove dependency", t.ID)
 				t.RemoveDependency(t.Dependencies[m.pendingDep])
@@ -804,7 +804,7 @@ func (m model) updateIdlePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmDeleteTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if t := m.findTodoByID(m.pendingEntryTaskID); t != nil {
 				for i := range t.TimeEntries {
 					if t.TimeEntries[i].ID == m.pendingEntryID {
@@ -833,7 +833,7 @@ func (m model) updateConfirmDeleteTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmDeleteTag(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if t := m.currentTodo(); t != nil && m.pendingTag < len(t.Tags) {
 				m.pushUndo("remove tag", t.ID)
 				t.RemoveTag(t.Tags[m.pendingTag])
@@ -853,7 +853,7 @@ func (m model) updateConfirmDeleteTag(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmDeleteTagGlobal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
 				m.pushUndo("delete tag globally")
 				touched := m.deleteTagGlobally(tags[m.tagTabCursor])
@@ -873,7 +873,7 @@ func (m model) updateConfirmDeleteTagGlobal(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmDeleteProject(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if t := m.currentTodo(); t != nil {
 				m.pushUndo("remove project", t.ID)
 				t.SetProject("")
@@ -890,7 +890,7 @@ func (m model) updateConfirmDeleteProject(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmDeleteLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if m.tab == tabLearnings {
 				if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
 					// We don't know the parent ID until deleteLearningByID
@@ -922,7 +922,7 @@ func (m model) updateConfirmDeleteLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateConfirmDeleteSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
-		case "y":
+		case "y", "enter":
 			if t := m.currentTodo(); t != nil && m.pendingSubtask < m.subtaskCount(t.ID) {
 				// Capture the parent (its subtask list will change) plus the
 				// subtask + every transitive descendant (so undo can restore
