@@ -565,11 +565,31 @@ func TestSetDueDate(t *testing.T) {
 
 func TestSetStartDate(t *testing.T) {
 	task := New("Start date test")
-	date := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	// A non-today date has no entry time, so it lands at 09:00 local.
+	date := time.Date(2025, 6, 1, 0, 0, 0, 0, time.Local)
 
 	task.SetStartDate(date)
-	if !task.StartDate.Equal(date) {
-		t.Errorf("StartDate = %v, want %v", task.StartDate, date)
+	want := time.Date(2025, 6, 1, 9, 0, 0, 0, time.Local)
+	if !task.StartDate.Equal(want) {
+		t.Errorf("StartDate = %v, want %v (non-today defaults to 09:00)", task.StartDate, want)
+	}
+}
+
+// Setting the start date to today records the moment of entry (a real time of
+// day), so start→done cycle time is minute-precise rather than day-rounded.
+func TestSetStartDateTodayRecordsTime(t *testing.T) {
+	task := New("start today")
+	n := time.Now()
+	todayMidnight := time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, n.Location())
+	before := time.Now()
+	task.SetStartDate(todayMidnight) // mirrors parseDueDate("today")
+	after := time.Now()
+
+	if task.StartDate.Before(before) || task.StartDate.After(after) {
+		t.Errorf("StartDate = %v, want a timestamp between %v and %v", task.StartDate, before, after)
+	}
+	if !sameDay(task.StartDate, before) {
+		t.Errorf("StartDate = %v, want today", task.StartDate)
 	}
 }
 
@@ -602,6 +622,37 @@ func TestTimeTracking(t *testing.T) {
 	spent := task.TotalTimeSpent()
 	if spent < 10*time.Millisecond {
 		t.Errorf("total time = %v, expected >= 10ms", spent)
+	}
+}
+
+func TestStartTimerBackfillsStartDate(t *testing.T) {
+	task := New("no start date yet")
+	if !task.StartDate.IsZero() {
+		t.Fatal("a fresh task should have no start date")
+	}
+
+	before := time.Now()
+	task.StartTimer()
+	after := time.Now()
+
+	if task.StartDate.IsZero() {
+		t.Fatal("starting the timer should backfill StartDate")
+	}
+	// Backfilled with the actual start moment (time of day, not midnight).
+	if task.StartDate.Before(before) || task.StartDate.After(after) {
+		t.Errorf("StartDate = %v, want a timestamp between %v and %v", task.StartDate, before, after)
+	}
+}
+
+func TestStartTimerKeepsExistingStartDate(t *testing.T) {
+	task := New("already scheduled")
+	task.SetStartDate(time.Date(2026, 1, 15, 0, 0, 0, 0, time.Local))
+	stored := task.StartDate // 2026-01-15 09:00 after SetStartDate's normalization
+
+	task.StartTimer()
+
+	if !task.StartDate.Equal(stored) {
+		t.Errorf("StartDate = %v, a manually-set start date must not be overwritten (want %v)", task.StartDate, stored)
 	}
 }
 

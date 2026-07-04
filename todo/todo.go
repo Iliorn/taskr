@@ -257,9 +257,29 @@ func (t *Todo) SetDueDate(d time.Time) {
 	t.ModifiedAt = time.Now()
 }
 
+// SetStartDate records when work on a task begins. StartDate holds a full
+// timestamp (not just a date) so start→done cycle time is precise: starting
+// "today" stamps the moment of entry, while a start date on any other day —
+// which has no natural time of day — defaults to 09:00 local, a sensible start
+// of the workday rather than midnight. The UI still accepts and shows a plain
+// date, revealing the time only when one is present.
 func (t *Todo) SetStartDate(d time.Time) {
+	now := time.Now()
+	if sameDay(d, now) {
+		d = now
+	} else {
+		d = time.Date(d.Year(), d.Month(), d.Day(), 9, 0, 0, 0, d.Location())
+	}
 	t.StartDate = d
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = now
+}
+
+// sameDay reports whether a and b fall on the same calendar day (each in its
+// own location).
+func sameDay(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
+	return ay == by && am == bm && ad == bd
 }
 
 func (t *Todo) SetPriority(p Priority) {
@@ -396,6 +416,13 @@ func (t *Todo) DeleteLearning(index int) {
 func (t *Todo) StartTimer() {
 	t.StopTimer()
 	now := time.Now()
+	// The first timer start also marks when work began: if no start date was
+	// set manually, backfill it to this moment so start→done cycle-time stats
+	// capture the task, with the precise time of day (same rule as starting
+	// "today" via SetStartDate).
+	if t.StartDate.IsZero() {
+		t.StartDate = now
+	}
 	t.TimeEntries = append(t.TimeEntries, TimeEntry{
 		ID:         uuid.New().String(),
 		StartedAt:  now,

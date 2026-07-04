@@ -454,6 +454,17 @@ func startOfDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
+// formatStartDate renders a start date for display: the day, plus the time of
+// day when one is recorded (see todo.SetStartDate — started tasks carry a
+// real time, so cycle-time reads carry that precision). Legacy midnight values
+// show as a bare date.
+func formatStartDate(t time.Time) string {
+	if t.Equal(startOfDay(t)) {
+		return t.Format("02-01-06")
+	}
+	return t.Format("02-01-06 15:04")
+}
+
 // formatDueShort renders a due date for the tasks-list column as its distance
 // in calendar days — "today", "3d", "-2d" (overdue) — because "how soon" is
 // the question the list answers. Beyond four weeks a day count reads worse

@@ -96,7 +96,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 
 	startVal := tr("not set")
 	if !t.StartDate.IsZero() {
-		startVal = t.StartDate.Format("02-01-06")
+		startVal = formatStartDate(t.StartDate)
 	}
 	dueVal := tr("not set")
 	if !t.DueDate.IsZero() {
