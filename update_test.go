@@ -747,3 +747,57 @@ func TestEnterOnMissingDependencyFlashesToast(t *testing.T) {
 		t.Errorf("got (%q, %d), want (%q, info)", m2.err, m2.errKind, want)
 	}
 }
+
+// Cycling priority from the list pane reorders the sequence-sorted list; the
+// cursor must follow the edited task to its new row rather than stay on the old
+// row index. Guards the "cursor follows the selected task unless moved by
+// arrows" invariant for list-pane edits.
+func TestPriorityCycleKeepsCursorOnTask(t *testing.T) {
+	// Equal CreatedAt and no due dates so the sequence sort's age/deadline dims
+	// are ties — priority is then the only thing that can reorder the two, which
+	// makes the reorder (and thus the cursor-follow) deterministic.
+	when := time.Now().Add(-time.Hour)
+	alpha := todo.New("alpha")
+	alpha.ID, alpha.CreatedAt, alpha.Priority = "alpha", when, todo.PriorityLow
+	bravo := todo.New("bravo")
+	bravo.ID, bravo.CreatedAt, bravo.Priority = "bravo", when, todo.PriorityLow
+
+	m := modelWithTasks(t, alpha, bravo)
+	m.tab = tabTasks
+	m.pane = paneList
+
+	// initialModel derives taskSort and biases from the shared TestMain $HOME,
+	// so another test's saved settings could leave the list sorted by due date
+	// (both tasks have none → no reorder) or zero the Priority weight. Pin both
+	// to the score-based defaults and rebuild the initial ordering.
+	m.taskSort = taskSortSequence
+	applyBiases(defaultBiases())
+	defer applyBiases(defaultBiases())
+	m.cache.dirty = true
+	m.ensureCache()
+
+	// Park the cursor on the bottom row and remember which task that is.
+	m.cursor = len(m.cache.active) - 1
+	target := m.currentTodo()
+	if target == nil {
+		t.Fatal("no task under cursor")
+	}
+	targetID := target.ID
+	startIdx := m.cursor
+
+	m = sendKey(t, m, "p") // Low → Medium: outscores the still-Low sibling
+
+	got := m.currentTodo()
+	if got == nil || got.ID != targetID {
+		t.Fatalf("cursor lost its task after reorder: got %v, want %s", got, targetID)
+	}
+	if got.Priority != todo.PriorityMedium {
+		t.Errorf("priority = %v, want Medium", got.Priority)
+	}
+	// The edit must actually have reordered the list (else the follow is
+	// vacuous): the task started at the bottom and should now sit above its
+	// lower-priority sibling.
+	if m.cursor == startIdx {
+		t.Errorf("cursor = %d unchanged; the higher-priority task should have moved up", m.cursor)
+	}
+}

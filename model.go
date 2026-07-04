@@ -670,7 +670,11 @@ func (m *model) markFilterDirty() {
 }
 
 func (m *model) currentTaskID() string {
-	if m.pane != paneDetail || m.tab != tabTasks {
+	// Anchor to the cursor's task on the Tasks tab in either pane — an edit that
+	// reorders the list (cycling priority, changing due date, …) should keep the
+	// cursor on the same task, not the same row. Arrow/nav keys move the cursor
+	// directly without markModified, so they still move freely.
+	if m.tab != tabTasks {
 		return ""
 	}
 	if t := m.currentTodo(); t != nil {
