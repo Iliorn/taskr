@@ -408,7 +408,12 @@ type parsedTask struct {
 	dueDate    time.Time
 	priority   todo.Priority
 	size       todo.Size
-	recurrence string
+	// hasPriority/hasSize record whether a p:/s: token was actually present, so
+	// a CLI caller can tell "no token" from the Medium default and avoid
+	// clobbering a --like clone. The TUI ignores them (it always starts fresh).
+	hasPriority bool
+	hasSize     bool
+	recurrence  string
 	// deps holds raw, unresolved refs from dep: tokens (id-prefixes or the
 	// `^` last-added shorthand). Resolution needs the live task set, so it
 	// happens at the call site, not here.
@@ -440,11 +445,11 @@ func parseQuickAdd(input string) parsedTask {
 		case strings.HasPrefix(lower, "p:"):
 			switch strings.TrimPrefix(lower, "p:") {
 			case "high", "h":
-				result.priority = todo.PriorityHigh
+				result.priority, result.hasPriority = todo.PriorityHigh, true
 			case "medium", "med", "m":
-				result.priority = todo.PriorityMedium
+				result.priority, result.hasPriority = todo.PriorityMedium, true
 			case "low", "l":
-				result.priority = todo.PriorityLow
+				result.priority, result.hasPriority = todo.PriorityLow, true
 			default:
 				titleWords = append(titleWords, word)
 			}
@@ -452,11 +457,11 @@ func parseQuickAdd(input string) parsedTask {
 			spec := strings.TrimPrefix(strings.TrimPrefix(lower, "size:"), "s:")
 			switch spec {
 			case "s", "small":
-				result.size = todo.SizeSmall
+				result.size, result.hasSize = todo.SizeSmall, true
 			case "m", "med", "medium":
-				result.size = todo.SizeMedium
+				result.size, result.hasSize = todo.SizeMedium, true
 			case "l", "large":
-				result.size = todo.SizeLarge
+				result.size, result.hasSize = todo.SizeLarge, true
 			default:
 				titleWords = append(titleWords, word)
 			}

@@ -990,3 +990,81 @@ func TestFindTaskByRefKindReportsMatchPath(t *testing.T) {
 		t.Errorf("title substring: kind=%v err=%v, want refMatchTitle", kind, err)
 	}
 }
+
+// `taskr add` parses the same quick-add tokens as the TUI, so a line is
+// copy-pasteable between them. Backlog item 52089090.
+func TestCliAddParsesQuickAddTokens(t *testing.T) {
+	if code := cliAdd([]string{"Buy milk #shopping #errand due:friday p:high s:l @home"}); code != 0 {
+		t.Fatalf("add with tokens: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, "Buy milk")
+	if err != nil {
+		t.Fatalf("find task: %v", err)
+	}
+	if got.Title != "Buy milk" {
+		t.Errorf("Title = %q, want %q (tokens stripped)", got.Title, "Buy milk")
+	}
+	if got.Priority != todo.PriorityHigh {
+		t.Errorf("Priority = %v, want High (p:high)", got.Priority)
+	}
+	if got.Size != todo.SizeLarge {
+		t.Errorf("Size = %v, want Large (s:l)", got.Size)
+	}
+	if got.Project != "home" {
+		t.Errorf("Project = %q, want home (@home)", got.Project)
+	}
+	if got.DueDate.IsZero() {
+		t.Error("DueDate should be set from due:friday")
+	}
+	wantTags := map[string]bool{"shopping": true, "errand": true}
+	for _, tg := range got.Tags {
+		delete(wantTags, tg)
+	}
+	if len(wantTags) != 0 {
+		t.Errorf("missing tags %v; got %v", wantTags, got.Tags)
+	}
+}
+
+// An explicit flag overrides the matching token in the title.
+func TestCliAddFlagOverridesToken(t *testing.T) {
+	if code := cliAdd([]string{"Flag wins p:low", "-p", "high"}); code != 0 {
+		t.Fatalf("add: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, "Flag wins")
+	if err != nil {
+		t.Fatalf("find task: %v", err)
+	}
+	if got.Priority != todo.PriorityHigh {
+		t.Errorf("Priority = %v, want High (-p high overrides p:low token)", got.Priority)
+	}
+}
+
+// A token-free title must not clobber a --like clone: the Medium defaults from
+// parseQuickAdd only apply when a p:/s: token was actually present.
+func TestCliAddLikeNotClobberedByTokenlessTitle(t *testing.T) {
+	if code := cliAdd([]string{"Source task p:high s:l"}); code != 0 {
+		t.Fatalf("add source: exit %d", code)
+	}
+	if code := cliAdd([]string{"Cloned task", "--like", "Source task"}); code != 0 {
+		t.Fatalf("add clone: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, "Cloned task")
+	if err != nil {
+		t.Fatalf("find clone: %v", err)
+	}
+	if got.Priority != todo.PriorityHigh || got.Size != todo.SizeLarge {
+		t.Errorf("clone = (%v, %v), want (High, Large) from --like", got.Priority, got.Size)
+	}
+}

@@ -137,6 +137,7 @@ func cliAdd(args []string) int {
 	quietID := fs.Bool("quiet-id", false, "print only the new task's full id (for scripting / shell capture)")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: taskr add \"title\" [flags]   (or `taskr add -` to read one title per line from stdin)")
+		fmt.Fprintln(os.Stderr, "  the title accepts the same quick-add tokens as the TUI: #tag @project due:friday p:high s:l r:weekly dep:^  (flags override tokens)")
 		fs.PrintDefaults()
 	}
 	flagArgs, titleParts := splitFlagsAndPositionals(fs, args)
@@ -201,13 +202,27 @@ func cliAdd(args []string) int {
 		titles = lines
 	}
 
-	// --like / --depends / --start all need the existing set; load it once.
+	// Parse quick-add tokens (#tag @project due: p: s: r: dep:) out of every
+	// title so the CLI understands the same grammar as the TUI — a line is
+	// copy-pasteable between them. Explicit flags below still win; a dep: token
+	// needs the existing set, exactly like --depends.
+	parsedTitles := make([]parsedTask, len(titles))
+	anyTokenDeps := false
+	for i, ti := range titles {
+		parsedTitles[i] = parseQuickAdd(ti)
+		if len(parsedTitles[i].deps) > 0 {
+			anyTokenDeps = true
+		}
+	}
+
+	// --like / --depends / --start (and any dep: token) need the existing set;
+	// load it once.
 	var (
 		existing []todo.Todo
 		likeSrc  *todo.Todo
 		depID    string
 	)
-	if *like != "" || *depends != "" || *startNow {
+	if *like != "" || *depends != "" || *startNow || anyTokenDeps {
 		loaded, err := repo.Load()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "load: %v\n", err)
@@ -231,12 +246,26 @@ func cliAdd(args []string) int {
 		}
 		depID = dep.ID
 	}
+	// Resolve any dep: token refs up front (mirroring --depends), so a bad ref
+	// fails cleanly before anything is written.
+	tokenDepIDs := make([][]string, len(titles))
+	for i := range parsedTitles {
+		for _, ref := range parsedTitles[i].deps {
+			dep, err := resolveDepRef(existing, ref)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return 2
+			}
+			tokenDepIDs[i] = append(tokenDepIDs[i], dep.ID)
+		}
+	}
 
-	// buildTask stamps one task from the shared flags. --like is applied first
-	// so explicit flags override the cloned values; --note is the freeform body
-	// and --comment a timestamped log entry (both supported, distinct purposes).
-	buildTask := func(title string) todo.Todo {
-		t := todo.New(title)
+	// buildTask stamps one task, layering precedence low→high: --like clone,
+	// then the title's quick-add tokens, then explicit flags. --note is the
+	// freeform body and --comment a timestamped log entry (distinct purposes).
+	buildTask := func(i int) todo.Todo {
+		parsed := parsedTitles[i]
+		t := todo.New(parsed.title)
 		if likeSrc != nil {
 			t.Priority = likeSrc.Priority
 			t.Size = likeSrc.Size
@@ -245,6 +274,29 @@ func cliAdd(args []string) int {
 				t.AddTag(tag)
 			}
 		}
+		// Quick-add tokens override the --like clone.
+		if parsed.hasPriority {
+			t.Priority = parsed.priority
+		}
+		if parsed.hasSize {
+			t.Size = parsed.size
+		}
+		if !parsed.dueDate.IsZero() {
+			t.DueDate = parsed.dueDate
+		}
+		if parsed.project != "" {
+			t.Project = parsed.project
+		}
+		for _, tag := range parsed.tags {
+			t.AddTag(tag)
+		}
+		if parsed.recurrence != "" {
+			t.Recurrence = parsed.recurrence
+		}
+		for _, id := range tokenDepIDs[i] {
+			t.AddDependency(id)
+		}
+		// Explicit flags win over both the clone and the tokens.
 		if *priority != "" {
 			t.Priority = parsePriorityFlag(*priority)
 		}
@@ -278,8 +330,8 @@ func cliAdd(args []string) int {
 	}
 
 	created := make([]todo.Todo, len(titles))
-	for i, title := range titles {
-		created[i] = buildTask(title)
+	for i := range titles {
+		created[i] = buildTask(i)
 	}
 	// --chain turns a batch brain-dump into a recorded sequence: a decomposed
 	// plan is usually typed in execution order, so each line blocks on the
