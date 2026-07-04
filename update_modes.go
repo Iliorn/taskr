@@ -597,152 +597,133 @@ func (m model) updateSearchProject(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // ── Confirm-delete handlers ───────────────────────────────────────────────────
 
-func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
+// updateConfirm is the single handler for every modeConfirm prompt: y/enter runs
+// the staged confirmOnYes action, n/esc cancels, and either way the prompt
+// closes. The per-action bodies live in the confirm* methods below, staged at
+// each trigger site — so prompt behavior (Enter-as-yes, cancel) is uniform by
+// construction.
+func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "y", "enter":
-			if id := m.pendingDeleteID; id != "" && m.get(id) != nil {
-				ids := m.descendantIDs(id)
-				m.pushUndo("delete task", ids...)
-				for _, deleteID := range ids {
-					m.markTombstone(deleteID)
-					m.remove(deleteID)
-				}
+			var cmd tea.Cmd
+			if m.confirmOnYes != nil {
+				cmd = m.confirmOnYes(&m)
 			}
-			m.pendingDeleteID = ""
-			// Tombstone already records what to persist; no other rows changed,
-			// so we only need to schedule a save and refresh derived caches.
-			m.dirty = true
-			m.cache.dirty = true
-			m.invalidateDetailCache()
-			m.refreshCaches()
-			var newLen int
-			if m.showHistory {
-				newLen = len(m.cache.done)
-			} else {
-				newLen = m.visibleActiveLen()
-			}
-			if m.cursor >= newLen && m.cursor > 0 {
+			m.mode = modeNormal
+			m.confirmOnYes = nil
+			return m, cmd
+		case "n", "esc":
+			m.mode = modeNormal
+			m.confirmOnYes = nil
+		}
+	}
+	return m, nil
+}
+
+func (m *model) confirmDeleteTask() tea.Cmd {
+	if id := m.pendingDeleteID; id != "" && m.get(id) != nil {
+		ids := m.descendantIDs(id)
+		m.pushUndo("delete task", ids...)
+		for _, deleteID := range ids {
+			m.markTombstone(deleteID)
+			m.remove(deleteID)
+		}
+	}
+	m.pendingDeleteID = ""
+	// Tombstone already records what to persist; no other rows changed, so we
+	// only need to schedule a save and refresh derived caches.
+	m.dirty = true
+	m.cache.dirty = true
+	m.invalidateDetailCache()
+	m.refreshCaches()
+	var newLen int
+	if m.showHistory {
+		newLen = len(m.cache.done)
+	} else {
+		newLen = m.visibleActiveLen()
+	}
+	if m.cursor >= newLen && m.cursor > 0 {
+		m.cursor--
+	}
+	return nil
+}
+
+// confirmReopen backs the "Move to active?" prompt staged by the Tasks-tab 'd'
+// handler when the cursor is on a done task: it reopens the task (voiding the
+// completion-rank reading via Toggle).
+func (m *model) confirmReopen() tea.Cmd {
+	if id := m.pendingReopenID; id != "" {
+		if t := m.get(id); t != nil && t.Status == todo.Done {
+			m.pushUndo("reopen task", t.ID)
+			t.Toggle()
+			m.markModified(t.ID)
+			// The row leaves the done/history list, so the cursor would land on
+			// the next row — decrement so it lands on the previous one instead.
+			// Subtasks stay visible.
+			if t.ParentID == "" && m.cursor > 0 {
 				m.cursor--
 			}
-			m.mode = modeNormal
-		case "n", "esc":
-			m.pendingDeleteID = ""
-			m.mode = modeNormal
 		}
 	}
-	return m, nil
+	m.pendingReopenID = ""
+	return nil
 }
 
-// updateConfirmReopen handles the "Move to active?" prompt staged by the
-// Tasks-tab 'd' handler when the cursor is on a done task. "y" reopens it
-// (voiding the completion-rank reading via Toggle); "n"/esc leaves it done.
-func (m model) updateConfirmReopen(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "y", "enter":
-			if id := m.pendingReopenID; id != "" {
-				if t := m.get(id); t != nil && t.Status == todo.Done {
-					m.pushUndo("reopen task", t.ID)
-					t.Toggle()
-					m.markModified(t.ID)
-					// The row leaves the done/history list, so the cursor
-					// would land on the next row — decrement so it lands on
-					// the previous one instead. Subtasks stay visible.
-					if t.ParentID == "" && m.cursor > 0 {
-						m.cursor--
-					}
+// confirmCloseParent backs the "close parent with open subtasks?" prompt staged
+// by the Tasks-tab 'd' handler: it closes the parent (and spawns next recurrence
+// if the parent was recurring) but does NOT touch the open subtasks — the user
+// opted to close just the parent, not cascade.
+func (m *model) confirmCloseParent() tea.Cmd {
+	if id := m.pendingCloseParentID; id != "" {
+		if t := m.get(id); t != nil && t.Status == todo.Pending {
+			// Full snapshot: spawnNextRecurrence creates a new task, and undo
+			// must remove it plus restore t. Capturing all state is simpler than
+			// tracking the new ID separately.
+			m.pushUndo("close task")
+			if t.IsTimerRunning() {
+				m.stopTimer(t.ID)
+			}
+			captureSeqRankAtDone(m.allTodos(), t)
+			t.Toggle()
+			ids := []string{t.ID}
+			if t.IsRecurring() {
+				if newID := m.spawnNextRecurrence(t); newID != "" {
+					ids = append(ids, newID)
 				}
 			}
-			m.pendingReopenID = ""
-			m.mode = modeNormal
-		case "n", "esc":
-			m.pendingReopenID = ""
-			m.mode = modeNormal
+			m.markModified(ids...)
+			if m.cursor > 0 {
+				m.cursor--
+			}
 		}
 	}
-	return m, nil
+	m.pendingCloseParentID = ""
+	return nil
 }
 
-// updateConfirmCloseParent handles the "close parent with open subtasks?"
-// prompt staged by the Tasks-tab 'd' handler. "y" closes the parent (and
-// spawns next recurrence if the parent was recurring) but does NOT touch
-// the open subtasks — the user opted to close just the parent, not cascade.
-func (m model) updateConfirmCloseParent(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "y", "enter":
-			if id := m.pendingCloseParentID; id != "" {
-				if t := m.get(id); t != nil && t.Status == todo.Pending {
-					// Full snapshot: spawnNextRecurrence creates a new task,
-					// and undo must remove it plus restore t. Capturing all
-					// state is simpler than tracking the new ID separately.
-					m.pushUndo("close task")
-					if t.IsTimerRunning() {
-						m.stopTimer(t.ID)
-					}
-					captureSeqRankAtDone(m.allTodos(), t)
-					t.Toggle()
-					ids := []string{t.ID}
-					if t.IsRecurring() {
-						if newID := m.spawnNextRecurrence(t); newID != "" {
-							ids = append(ids, newID)
-						}
-					}
-					m.markModified(ids...)
-					if m.cursor > 0 {
-						m.cursor--
-					}
-				}
-			}
-			m.pendingCloseParentID = ""
-			m.mode = modeNormal
-		case "n", "esc":
-			m.pendingCloseParentID = ""
-			m.mode = modeNormal
+func (m *model) confirmDeleteComment() tea.Cmd {
+	if t := m.currentTodo(); t != nil {
+		m.pushUndo("delete comment", t.ID)
+		t.DeleteComment(m.pendingComment)
+		if m.detail.commentCursor >= len(t.Comments) && m.detail.commentCursor > 0 {
+			m.detail.commentCursor--
 		}
+		m.markModified(t.ID)
 	}
-	return m, nil
+	return nil
 }
 
-func (m model) updateConfirmDeleteComment(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "y", "enter":
-			if t := m.currentTodo(); t != nil {
-				m.pushUndo("delete comment", t.ID)
-				t.DeleteComment(m.pendingComment)
-				if m.detail.commentCursor >= len(t.Comments) && m.detail.commentCursor > 0 {
-					m.detail.commentCursor--
-				}
-				m.markModified(t.ID)
-			}
-			m.mode = modeNormal
-		case "n", "esc":
-			m.mode = modeNormal
+func (m *model) confirmDeleteDep() tea.Cmd {
+	if t := m.currentTodo(); t != nil && m.pendingDep < len(t.Dependencies) {
+		m.pushUndo("remove dependency", t.ID)
+		t.RemoveDependency(t.Dependencies[m.pendingDep])
+		if m.detail.depCursor >= len(t.Dependencies) && m.detail.depCursor > 0 {
+			m.detail.depCursor--
 		}
+		m.markModified(t.ID)
 	}
-	return m, nil
-}
-
-func (m model) updateConfirmDeleteDep(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "y", "enter":
-			if t := m.currentTodo(); t != nil && m.pendingDep < len(t.Dependencies) {
-				m.pushUndo("remove dependency", t.ID)
-				t.RemoveDependency(t.Dependencies[m.pendingDep])
-				if m.detail.depCursor >= len(t.Dependencies) && m.detail.depCursor > 0 {
-					m.detail.depCursor--
-				}
-				m.markModified(t.ID)
-			}
-			m.mode = modeNormal
-		case "n", "esc":
-			m.mode = modeNormal
-		}
-	}
-	return m, nil
+	return nil
 }
 
 func (m model) updateEditTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -814,156 +795,106 @@ func (m model) updateIdlePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) updateConfirmDeleteTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "y", "enter":
-			if t := m.findTodoByID(m.pendingEntryTaskID); t != nil {
-				for i := range t.TimeEntries {
-					if t.TimeEntries[i].ID == m.pendingEntryID {
-						m.pushUndo("delete time entry", t.ID)
-						t.DeleteTimeEntry(i)
-						m.markModified(t.ID)
-						break
-					}
-				}
-			}
-			acts := m.activitiesForDay(m.calendar.selected)
-			if len(acts) == 0 {
-				m.calendar.focusTimeline = false
-				m.calendar.entryCursor = 0
-			} else if m.calendar.entryCursor >= len(acts) {
-				m.calendar.entryCursor = len(acts) - 1
-			}
-			m.mode = modeNormal
-		case "n", "esc":
-			m.mode = modeNormal
-		}
-	}
-	return m, nil
-}
-
-func (m model) updateConfirmDeleteTag(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "y", "enter":
-			if t := m.currentTodo(); t != nil && m.pendingTag < len(t.Tags) {
-				m.pushUndo("remove tag", t.ID)
-				t.RemoveTag(t.Tags[m.pendingTag])
-				if m.detail.tagCursor >= len(t.Tags) && m.detail.tagCursor > 0 {
-					m.detail.tagCursor--
-				}
+func (m *model) confirmDeleteTimeEntry() tea.Cmd {
+	if t := m.findTodoByID(m.pendingEntryTaskID); t != nil {
+		for i := range t.TimeEntries {
+			if t.TimeEntries[i].ID == m.pendingEntryID {
+				m.pushUndo("delete time entry", t.ID)
+				t.DeleteTimeEntry(i)
 				m.markModified(t.ID)
+				break
 			}
-			m.mode = modeNormal
-		case "n", "esc":
-			m.mode = modeNormal
 		}
 	}
-	return m, nil
+	acts := m.activitiesForDay(m.calendar.selected)
+	if len(acts) == 0 {
+		m.calendar.focusTimeline = false
+		m.calendar.entryCursor = 0
+	} else if m.calendar.entryCursor >= len(acts) {
+		m.calendar.entryCursor = len(acts) - 1
+	}
+	return nil
 }
 
-func (m model) updateConfirmDeleteTagGlobal(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "y", "enter":
-			if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
-				m.pushUndo("delete tag globally")
-				touched := m.deleteTagGlobally(tags[m.tagTabCursor])
-				m.markModified(touched...)
-				if remaining := m.getFilteredTagsForTab(); m.tagTabCursor >= len(remaining) && m.tagTabCursor > 0 {
-					m.tagTabCursor--
-				}
-			}
-			m.mode = modeNormal
-		case "n", "esc":
-			m.mode = modeNormal
+func (m *model) confirmDeleteTag() tea.Cmd {
+	if t := m.currentTodo(); t != nil && m.pendingTag < len(t.Tags) {
+		m.pushUndo("remove tag", t.ID)
+		t.RemoveTag(t.Tags[m.pendingTag])
+		if m.detail.tagCursor >= len(t.Tags) && m.detail.tagCursor > 0 {
+			m.detail.tagCursor--
 		}
+		m.markModified(t.ID)
 	}
-	return m, nil
+	return nil
 }
 
-func (m model) updateConfirmDeleteProject(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "y", "enter":
-			if t := m.currentTodo(); t != nil {
-				m.pushUndo("remove project", t.ID)
-				t.SetProject("")
-				m.markModified(t.ID)
-			}
-			m.mode = modeNormal
-		case "n", "esc":
-			m.mode = modeNormal
+func (m *model) confirmDeleteTagGlobal() tea.Cmd {
+	if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
+		m.pushUndo("delete tag globally")
+		touched := m.deleteTagGlobally(tags[m.tagTabCursor])
+		m.markModified(touched...)
+		if remaining := m.getFilteredTagsForTab(); m.tagTabCursor >= len(remaining) && m.tagTabCursor > 0 {
+			m.tagTabCursor--
 		}
 	}
-	return m, nil
+	return nil
 }
 
-func (m model) updateConfirmDeleteLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "y", "enter":
-			if m.tab == tabLearnings {
-				if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-					// We don't know the parent ID until deleteLearningByID
-					// returns it, so capture the snapshot afterwards via the
-					// no-args fallback.
-					m.pushUndo("delete learning")
-					parentID := m.deleteLearningByID(learnings[m.learningCursor].ID)
-					m.markModified(parentID)
-					if remaining := m.allLearnings(); m.learningCursor >= len(remaining) && m.learningCursor > 0 {
-						m.learningCursor--
-					}
-				}
-			} else if t := m.currentTodo(); t != nil && m.detail.learningCursor < len(t.Learnings) {
-				m.pushUndo("delete learning", t.ID)
-				t.DeleteLearning(m.detail.learningCursor)
-				if m.detail.learningCursor >= len(t.Learnings) && m.detail.learningCursor > 0 {
-					m.detail.learningCursor--
-				}
-				m.markModified(t.ID)
-			}
-			m.mode = modeNormal
-		case "n", "esc":
-			m.mode = modeNormal
-		}
+func (m *model) confirmDeleteProject() tea.Cmd {
+	if t := m.currentTodo(); t != nil {
+		m.pushUndo("remove project", t.ID)
+		t.SetProject("")
+		m.markModified(t.ID)
 	}
-	return m, nil
+	return nil
 }
 
-func (m model) updateConfirmDeleteSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "y", "enter":
-			if t := m.currentTodo(); t != nil && m.pendingSubtask < m.subtaskCount(t.ID) {
-				// Capture the parent (its subtask list will change) plus the
-				// subtask + every transitive descendant (so undo can restore
-				// the whole tree).
-				subID := ""
-				if ids := m.subtaskIDs(t.ID); m.pendingSubtask < len(ids) {
-					subID = ids[m.pendingSubtask]
-				}
-				toDelete := m.descendantIDs(subID)
-				undoIDs := append([]string{t.ID}, toDelete...)
-				m.pushUndo("delete subtask", undoIDs...)
-				for _, id := range toDelete {
-					m.markTombstone(id)
-					m.remove(id)
-				}
-				if m.detail.subtaskCursor >= m.subtaskCount(t.ID) && m.detail.subtaskCursor > 0 {
-					m.detail.subtaskCursor--
-				}
-				// Tombstone already records what to persist; nothing else changed.
-				m.dirty = true
-				m.cache.dirty = true
-				m.invalidateDetailCache()
-				m.refreshCaches()
+func (m *model) confirmDeleteLearning() tea.Cmd {
+	if m.tab == tabLearnings {
+		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
+			// We don't know the parent ID until deleteLearningByID returns it,
+			// so capture the snapshot afterwards via the no-args fallback.
+			m.pushUndo("delete learning")
+			parentID := m.deleteLearningByID(learnings[m.learningCursor].ID)
+			m.markModified(parentID)
+			if remaining := m.allLearnings(); m.learningCursor >= len(remaining) && m.learningCursor > 0 {
+				m.learningCursor--
 			}
-			m.mode = modeNormal
-		case "n", "esc":
-			m.mode = modeNormal
 		}
+	} else if t := m.currentTodo(); t != nil && m.detail.learningCursor < len(t.Learnings) {
+		m.pushUndo("delete learning", t.ID)
+		t.DeleteLearning(m.detail.learningCursor)
+		if m.detail.learningCursor >= len(t.Learnings) && m.detail.learningCursor > 0 {
+			m.detail.learningCursor--
+		}
+		m.markModified(t.ID)
 	}
-	return m, nil
+	return nil
+}
+
+func (m *model) confirmDeleteSubtask() tea.Cmd {
+	if t := m.currentTodo(); t != nil && m.pendingSubtask < m.subtaskCount(t.ID) {
+		// Capture the parent (its subtask list will change) plus the subtask +
+		// every transitive descendant (so undo can restore the whole tree).
+		subID := ""
+		if ids := m.subtaskIDs(t.ID); m.pendingSubtask < len(ids) {
+			subID = ids[m.pendingSubtask]
+		}
+		toDelete := m.descendantIDs(subID)
+		undoIDs := append([]string{t.ID}, toDelete...)
+		m.pushUndo("delete subtask", undoIDs...)
+		for _, id := range toDelete {
+			m.markTombstone(id)
+			m.remove(id)
+		}
+		if m.detail.subtaskCursor >= m.subtaskCount(t.ID) && m.detail.subtaskCursor > 0 {
+			m.detail.subtaskCursor--
+		}
+		// Tombstone already records what to persist; nothing else changed.
+		m.dirty = true
+		m.cache.dirty = true
+		m.invalidateDetailCache()
+		m.refreshCaches()
+	}
+	return nil
 }

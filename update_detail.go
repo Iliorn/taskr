@@ -332,7 +332,8 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 	}
 	if m.detail.page == 2 {
 		if len(t.Comments) > 0 {
-			m.mode = modeConfirmDeleteComment
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteComment
 			m.pendingComment = m.detail.commentCursor
 			m.confirmMsg = tr("Delete this comment? (y/n)")
 		}
@@ -341,7 +342,8 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 	switch m.detail.field {
 	case fieldProject:
 		if t.Project != "" {
-			m.mode = modeConfirmDeleteProject
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteProject
 			m.confirmMsg = fmt.Sprintf(tr("Remove project '%s' from this task? (y/n)"), t.Project)
 		}
 	case fieldNotes:
@@ -352,19 +354,22 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 		}
 	case fieldTags:
 		if len(t.Tags) > 0 && m.detail.tagCursor < len(t.Tags) {
-			m.mode = modeConfirmDeleteTag
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteTag
 			m.pendingTag = m.detail.tagCursor
 			m.confirmMsg = fmt.Sprintf(tr("Remove tag '#%s' from this task? (y/n)"), t.Tags[m.detail.tagCursor])
 		}
 	case fieldDependencies:
 		if len(t.Dependencies) > 0 && m.detail.depCursor < len(t.Dependencies) {
-			m.mode = modeConfirmDeleteDep
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteDep
 			m.pendingDep = m.detail.depCursor
 			m.confirmMsg = tr("Remove this dependency? (y/n)")
 		}
 	case fieldLearnings:
 		if len(t.Learnings) > 0 && m.detail.learningCursor < len(t.Learnings) {
-			m.mode = modeConfirmDeleteLearning
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteLearning
 			m.pendingLearning = m.detail.learningCursor
 			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(t.Learnings[m.detail.learningCursor].Text, 40))
 		}
@@ -375,7 +380,8 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 			if sub := m.findTodoByID(subID); sub != nil {
 				subTitle = sub.Title
 			}
-			m.mode = modeConfirmDeleteSubtask
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteSubtask
 			m.pendingSubtask = m.detail.subtaskCursor
 			m.confirmMsg = fmt.Sprintf(tr("Delete subtask '%s'? (y/n)"), truncate(subTitle, 40))
 		}
@@ -399,7 +405,8 @@ func (m model) updateLearningsDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.switchTab((m.tab + 1) % numTabs)
 	case "x", "delete":
 		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-			m.mode = modeConfirmDeleteLearning
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteLearning
 			m.pendingLearning = m.learningCursor
 			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(learnings[m.learningCursor].Text, 40))
 		}

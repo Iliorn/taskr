@@ -107,8 +107,8 @@ func TestScriptDeleteCascadesAndUndoRestoresSubtree(t *testing.T) {
 	// Cursor sits on the only top-level task. Delete must stage a confirm
 	// that mentions the cascade, then tombstone parent + child on 'y'.
 	m = sendKey(t, m, "x")
-	if m.mode != modeConfirmDelete {
-		t.Fatalf("after 'x': mode = %v, want modeConfirmDelete", m.mode)
+	if m.mode != modeConfirm {
+		t.Fatalf("after 'x': mode = %v, want modeConfirm", m.mode)
 	}
 	m = sendKey(t, m, "y")
 	if m.len() != 0 {

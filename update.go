@@ -263,28 +263,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case modeHelp:
 		newModel, cmd = m.updateHelp(msg)
-	case modeConfirmDelete:
-		newModel, cmd = m.updateConfirmDelete(msg)
-	case modeConfirmDeleteComment:
-		newModel, cmd = m.updateConfirmDeleteComment(msg)
-	case modeConfirmDeleteDep:
-		newModel, cmd = m.updateConfirmDeleteDep(msg)
-	case modeConfirmDeleteTag:
-		newModel, cmd = m.updateConfirmDeleteTag(msg)
-	case modeConfirmDeleteTagGlobal:
-		newModel, cmd = m.updateConfirmDeleteTagGlobal(msg)
-	case modeConfirmDeleteProject:
-		newModel, cmd = m.updateConfirmDeleteProject(msg)
-	case modeConfirmDeleteLearning:
-		newModel, cmd = m.updateConfirmDeleteLearning(msg)
-	case modeConfirmDeleteSubtask:
-		newModel, cmd = m.updateConfirmDeleteSubtask(msg)
-	case modeConfirmDeleteTimeEntry:
-		newModel, cmd = m.updateConfirmDeleteTimeEntry(msg)
-	case modeConfirmCloseParent:
-		newModel, cmd = m.updateConfirmCloseParent(msg)
-	case modeConfirmReopen:
-		newModel, cmd = m.updateConfirmReopen(msg)
+	case modeConfirm:
+		newModel, cmd = m.updateConfirm(msg)
 	case modeConfirmUpdate:
 		newModel, cmd = m.updateConfirmUpdate(msg)
 	case modeEditTimeEntry:
@@ -830,7 +810,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Marking done stays immediate.
 					if !wasPending {
 						m.pendingReopenID = t.ID
-						m.mode = modeConfirmReopen
+						m.mode = modeConfirm
+						m.confirmOnYes = (*model).confirmReopen
 						m.confirmMsg = fmt.Sprintf(tr("Move '%s' to active? (y/n)"), truncate(t.Title, 40))
 						return m, nil
 					}
@@ -844,7 +825,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 								cascadeSubs = true
 							} else {
 								m.pendingCloseParentID = t.ID
-								m.mode = modeConfirmCloseParent
+								m.mode = modeConfirm
+								m.confirmOnYes = (*model).confirmCloseParent
 								m.confirmMsg = fmt.Sprintf(tr("Close '%s' with %d open subtask(s)? (y/n)"), truncate(t.Title, 40), total-done)
 								return m, nil
 							}
@@ -1562,7 +1544,8 @@ func (m model) handleListDelete() (tea.Model, tea.Cmd) {
 			acts := m.activitiesForDay(m.calendar.selected)
 			if m.calendar.entryCursor < len(acts) {
 				a := acts[m.calendar.entryCursor]
-				m.mode = modeConfirmDeleteTimeEntry
+				m.mode = modeConfirm
+				m.confirmOnYes = (*model).confirmDeleteTimeEntry
 				m.pendingEntryTaskID = a.taskID
 				m.pendingEntryID = a.entryID
 				m.confirmMsg = fmt.Sprintf(tr("Delete %s entry for '%s'? (y/n)"),
@@ -1571,12 +1554,14 @@ func (m model) handleListDelete() (tea.Model, tea.Cmd) {
 		}
 	case tabTags:
 		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) && tags[m.tagTabCursor] != untaggedKey {
-			m.mode = modeConfirmDeleteTagGlobal
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteTagGlobal
 			m.confirmMsg = fmt.Sprintf(tr("Delete tag '#%s' from ALL tasks? (y/n)"), tags[m.tagTabCursor])
 		}
 	case tabTasks:
 		if t := m.currentTodo(); t != nil {
-			m.mode = modeConfirmDelete
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteTask
 			m.pendingDeleteID = t.ID
 			if n := len(m.descendantIDs(t.ID)) - 1; n > 0 {
 				m.confirmMsg = fmt.Sprintf(tr("Delete '%s' and %d subtask(s)? (y/n)"), t.Title, n)
@@ -1586,7 +1571,8 @@ func (m model) handleListDelete() (tea.Model, tea.Cmd) {
 		}
 	case tabLearnings:
 		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-			m.mode = modeConfirmDeleteLearning
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteLearning
 			m.pendingLearning = m.learningCursor
 			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(learnings[m.learningCursor].Text, 40))
 		}

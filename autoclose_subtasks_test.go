@@ -44,7 +44,7 @@ func TestAutoCloseSubtasksOnCascadesFromKeypress(t *testing.T) {
 	m.autoCloseSubtasks = true
 	m = sendKey(t, m, "d")
 
-	if m.mode == modeConfirmCloseParent {
+	if m.mode == modeConfirm {
 		t.Fatal("auto-close-subtasks on: closing a parent must not prompt")
 	}
 	if m.get("p").Status != todo.Done {
@@ -66,7 +66,7 @@ func TestAutoCloseSubtasksOffPrompts(t *testing.T) {
 	m.autoCloseSubtasks = false
 	m = sendKey(t, m, "d")
 
-	if m.mode != modeConfirmCloseParent {
+	if m.mode != modeConfirm {
 		t.Fatalf("auto-close-subtasks off: expected confirm-close-parent, got mode %v", m.mode)
 	}
 	if m.get("c").Status != todo.Pending {

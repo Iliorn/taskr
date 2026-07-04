@@ -425,12 +425,7 @@ func (m model) buildFooterContent(w int) string {
 			shown++
 		}
 		return b.String()
-	case modeConfirmDelete, modeConfirmDeleteComment,
-		modeConfirmDeleteDep, modeConfirmDeleteTag,
-		modeConfirmDeleteTagGlobal, modeConfirmDeleteProject,
-		modeConfirmDeleteLearning, modeConfirmDeleteSubtask,
-		modeConfirmDeleteTimeEntry, modeConfirmCloseParent,
-		modeConfirmReopen:
+	case modeConfirm:
 		return confirmStyle.Render(m.confirmMsg)
 	}
 	return ""

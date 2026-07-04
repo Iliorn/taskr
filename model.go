@@ -103,17 +103,10 @@ const (
 	modeSearchTag
 	modeSearchProject
 	modeSearchTagTab
-	modeConfirmDelete
-	modeConfirmDeleteComment
-	modeConfirmDeleteDep
-	modeConfirmDeleteTag
-	modeConfirmDeleteTagGlobal
-	modeConfirmDeleteProject
-	modeConfirmDeleteLearning
-	modeConfirmDeleteSubtask
-	modeConfirmDeleteTimeEntry
-	modeConfirmCloseParent
-	modeConfirmReopen
+	// modeConfirm is the generic yes/no prompt: confirmMsg holds the question
+	// and confirmOnYes the action to run on y/enter. It replaced a dozen
+	// near-identical per-action confirm modes.
+	modeConfirm
 	modeConfirmUpdate
 	modeEditTimeEntry
 	modeIdlePrompt
@@ -281,6 +274,9 @@ type model struct {
 
 	// UI state
 	confirmMsg           string
+	// confirmOnYes is the action modeConfirm runs on y/enter; nil is a no-op.
+	// Reading pending* fields at call time keeps each action a plain method.
+	confirmOnYes func(*model) tea.Cmd
 	pendingDeleteID      string
 	pendingComment       int
 	pendingDep           int

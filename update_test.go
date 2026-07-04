@@ -179,7 +179,7 @@ func TestReopenDoneTaskConfirms(t *testing.T) {
 	m.cursor = 0
 
 	m = sendKey(t, m, "d")
-	if m.mode != modeConfirmReopen {
+	if m.mode != modeConfirm {
 		t.Fatalf("d on a done task should open the reopen confirm; got mode %v", m.mode)
 	}
 	if got := m.get("f"); got == nil || got.Status != todo.Done {
@@ -237,7 +237,7 @@ func TestDeleteCascadesToSubtasks(t *testing.T) {
 	}
 
 	m = sendKey(t, m, "x")
-	if m.mode != modeConfirmDelete {
+	if m.mode != modeConfirm {
 		t.Fatalf("x should open the delete-confirm prompt; got mode %v", m.mode)
 	}
 	m = sendKey(t, m, "y")

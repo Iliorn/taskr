@@ -336,11 +336,7 @@ func (m model) extraOverheadLines() int {
 		return 8
 	case modeSearchTagTab:
 		return 3
-	case modeConfirmDelete, modeConfirmDeleteComment,
-		modeConfirmDeleteDep, modeConfirmDeleteTag,
-		modeConfirmDeleteTagGlobal, modeConfirmDeleteProject,
-		modeConfirmDeleteLearning, modeConfirmDeleteSubtask,
-		modeConfirmDeleteTimeEntry, modeConfirmUpdate, modeIdlePrompt:
+	case modeConfirm, modeConfirmUpdate, modeIdlePrompt:
 		return 1
 	}
 	return 0
