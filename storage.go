@@ -62,6 +62,13 @@ type appSettings struct {
 	// represents review/sign-off work that survives the children. Opt-in
 	// for users who prefer parents as folders.
 	AutoCloseParent bool `json:"auto_close_parent"`
+
+	// AutoCloseSubtasks is the mirror of AutoCloseParent: when on, marking a
+	// parent Done also closes its still-open subtasks, so a done parent never
+	// strands pending children (invisible in every list but export). Off by
+	// default so closing a parent doesn't silently finish work you meant to
+	// keep open — the confirm/prompt path stays the default.
+	AutoCloseSubtasks bool `json:"auto_close_subtasks"`
 }
 
 // migrateSettings brings settings saved under an older schema version up to

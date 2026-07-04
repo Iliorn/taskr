@@ -1009,6 +1009,7 @@ func (m model) renderProjectListContent(projects []string) string {
 // the unrelated app-prefs and system rows.
 var settingsLeftCol = []int{
 	settingAutoCloseParent,
+	settingAutoCloseSubtasks,
 	settingTheme,
 	settingLanguage,
 	settingSyncAuto,
@@ -1068,22 +1069,23 @@ func (m model) renderSettingsList() string {
 	defer putBuilder(b)
 
 	labels := map[int]string{
-		settingBiasDeadline:    tr("Deadline pressure"),
-		settingBiasPriority:    tr("Priority focus"),
-		settingBiasMomentum:    tr("Momentum bias"),
-		settingAging:           tr("Aging increases score"),
-		settingAutoCloseParent: tr("Auto-close parent"),
-		settingTheme:           tr("Theme"),
-		settingLanguage:        tr("Language"),
-		settingSyncAuto:        tr("Sync"),
-		settingSyncServer:      tr("Sync server"),
-		settingSyncToken:       tr("Sync token"),
-		settingSyncNow:         tr("Sync now"),
-		settingServerOn:        tr("Server"),
-		settingServerListen:    tr("Listen"),
-		settingServerToken:     tr("Server token"),
-		settingVersion:         tr("Version"),
-		settingCheckUpdate:     tr("Check for updates"),
+		settingBiasDeadline:      tr("Deadline pressure"),
+		settingBiasPriority:      tr("Priority focus"),
+		settingBiasMomentum:      tr("Momentum bias"),
+		settingAging:             tr("Aging increases score"),
+		settingAutoCloseParent:   tr("Auto-close parent"),
+		settingAutoCloseSubtasks: tr("Auto-close subtasks"),
+		settingTheme:             tr("Theme"),
+		settingLanguage:          tr("Language"),
+		settingSyncAuto:          tr("Sync"),
+		settingSyncServer:        tr("Sync server"),
+		settingSyncToken:         tr("Sync token"),
+		settingSyncNow:           tr("Sync now"),
+		settingServerOn:          tr("Server"),
+		settingServerListen:      tr("Listen"),
+		settingServerToken:       tr("Server token"),
+		settingVersion:           tr("Version"),
+		settingCheckUpdate:       tr("Check for updates"),
 	}
 	agingVal := tr("Off")
 	if activeBiases.Aging {
@@ -1092,6 +1094,10 @@ func (m model) renderSettingsList() string {
 	autoCloseVal := tr("Off")
 	if m.autoCloseParent {
 		autoCloseVal = tr("On")
+	}
+	autoCloseSubsVal := tr("Off")
+	if m.autoCloseSubtasks {
+		autoCloseSubsVal = tr("On")
 	}
 	syncAutoVal := "‹ " + tr("needs server") + " ›"
 	if m.syncCfg.ready() {
@@ -1123,22 +1129,23 @@ func (m model) renderSettingsList() string {
 		serverTokenVal = "•••• " + tr("set")
 	}
 	values := map[int]string{
-		settingBiasDeadline:    biasPickerValue(activeBiases.Deadline),
-		settingBiasPriority:    biasPickerValue(activeBiases.Priority),
-		settingBiasMomentum:    biasPickerValue(activeBiases.Momentum),
-		settingAging:           "‹ " + agingVal + " ›",
-		settingAutoCloseParent: "‹ " + autoCloseVal + " ›",
-		settingTheme:           "‹ " + m.themeName + " ›",
-		settingLanguage:        "‹ " + activeLang.displayName() + " ›",
-		settingSyncAuto:        syncAutoVal,
-		settingSyncServer:      syncServerVal,
-		settingSyncToken:       syncTokenVal,
-		settingSyncNow:         tr("press enter to sync"),
-		settingServerOn:        "‹ " + serverState + " ›",
-		settingServerListen:    m.syncCfg.listenAddr(),
-		settingServerToken:     serverTokenVal,
-		settingVersion:         appVersion,
-		settingCheckUpdate:     tr("press enter to check"),
+		settingBiasDeadline:      biasPickerValue(activeBiases.Deadline),
+		settingBiasPriority:      biasPickerValue(activeBiases.Priority),
+		settingBiasMomentum:      biasPickerValue(activeBiases.Momentum),
+		settingAging:             "‹ " + agingVal + " ›",
+		settingAutoCloseParent:   "‹ " + autoCloseVal + " ›",
+		settingAutoCloseSubtasks: "‹ " + autoCloseSubsVal + " ›",
+		settingTheme:             "‹ " + m.themeName + " ›",
+		settingLanguage:          "‹ " + activeLang.displayName() + " ›",
+		settingSyncAuto:          syncAutoVal,
+		settingSyncServer:        syncServerVal,
+		settingSyncToken:         syncTokenVal,
+		settingSyncNow:           tr("press enter to sync"),
+		settingServerOn:          "‹ " + serverState + " ›",
+		settingServerListen:      m.syncCfg.listenAddr(),
+		settingServerToken:       serverTokenVal,
+		settingVersion:           appVersion,
+		settingCheckUpdate:       tr("press enter to check"),
 	}
 
 	maxLabelW := func(ids []int) int {

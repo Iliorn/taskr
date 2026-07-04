@@ -40,6 +40,7 @@ const (
 	settingBiasMomentum
 	settingAging
 	settingAutoCloseParent
+	settingAutoCloseSubtasks
 	settingTheme
 	settingLanguage
 	settingSyncAuto
@@ -281,6 +282,7 @@ type model struct {
 	themeName            string
 	updateStatus         string
 	autoCloseParent      bool
+	autoCloseSubtasks    bool
 
 	// Persistence
 	dirty         bool
@@ -402,6 +404,7 @@ func initialModel(repo Repository) model {
 		historySort:         settings.HistorySort,
 		learningSort:        settings.LearningSort,
 		autoCloseParent:     settings.AutoCloseParent,
+		autoCloseSubtasks:   settings.AutoCloseSubtasks,
 		themeName:           th.name,
 		expandedTasks:       make(map[string]bool),
 		editorCmd:           resolveEditorCmd(),
@@ -1132,6 +1135,28 @@ func (m *model) autoCloseAncestorsIfAllDone(childID string) []string {
 			}
 		}
 		cur = parent
+	}
+	return closed
+}
+
+// closePendingSubtree closes every still-pending, non-deleted descendant of
+// parentID (the mirror of autoCloseAncestorsIfAllDone), so marking a parent
+// Done doesn't strand open subtasks. Stops any running timers and stamps the
+// sequence rank like a normal close. Returns the closed descendant IDs so the
+// caller can mark them dirty. Does not touch parentID itself.
+func (m *model) closePendingSubtree(parentID string) []string {
+	var closed []string
+	for _, id := range descendantIDsFrom(m.subtaskIDs, parentID)[1:] { // [0] is parentID
+		s := m.get(id)
+		if s == nil || s.Deleted || s.Status != todo.Pending {
+			continue
+		}
+		if s.IsTimerRunning() {
+			m.stopTimer(s.ID)
+		}
+		captureSeqRankAtDone(m.allTodos(), s)
+		s.Toggle()
+		closed = append(closed, s.ID)
 	}
 	return closed
 }

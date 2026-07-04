@@ -602,6 +602,10 @@ func cliDone(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
+	// The auto-close-subtasks preference makes cascade the default, matching
+	// the TUI toggle; --cascade forces it regardless.
+	settings, _ := loadSettings()
+	autoCascade := *cascade || settings.AutoCloseSubtasks
 	children, get := sliceTaskLookups(todos)
 	var dirty, cascaded, skipped, stopped []*todo.Todo
 	var spawned []todo.Todo
@@ -616,8 +620,8 @@ func cliDone(args []string) int {
 		// everywhere but `export`. Decide whether to cascade, close the parent
 		// only, or abort — mirroring the TUI's confirm-close-parent prompt.
 		pending := pendingDescendants(children, get, t.ID)
-		doCascade := *cascade
-		if len(pending) > 0 && !*cascade {
+		doCascade := autoCascade
+		if len(pending) > 0 && !autoCascade {
 			if stdinIsTTY() {
 				if stdinScan == nil {
 					stdinScan = bufio.NewScanner(os.Stdin)

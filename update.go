@@ -584,6 +584,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.toggleAging()
 			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseParent {
 				m.toggleAutoCloseParent()
+			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseSubtasks {
+				m.toggleAutoCloseSubtasks()
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
@@ -606,6 +608,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.toggleAging()
 			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseParent {
 				m.toggleAutoCloseParent()
+			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseSubtasks {
+				m.toggleAutoCloseSubtasks()
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(-1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
@@ -758,20 +762,26 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					isSub := t.ParentID != ""
 					wasPending := t.Status == todo.Pending
-					// Pending parent with open subtasks: stage a confirm
-					// rather than silently close (and hide) open work.
+					// Pending parent with open subtasks: with auto-close-subtasks
+					// on, cascade them closed; otherwise stage a confirm rather
+					// than silently close (and hide) the open work.
+					cascadeSubs := false
 					if wasPending && !isSub {
 						if done, total := m.subtaskProgress(t.ID); total > 0 && done < total {
-							m.pendingCloseParentID = t.ID
-							m.mode = modeConfirmCloseParent
-							m.confirmMsg = fmt.Sprintf(tr("Close '%s' with %d open subtask(s)? (y/n)"), truncate(t.Title, 40), total-done)
-							return m, nil
+							if m.autoCloseSubtasks {
+								cascadeSubs = true
+							} else {
+								m.pendingCloseParentID = t.ID
+								m.mode = modeConfirmCloseParent
+								m.confirmMsg = fmt.Sprintf(tr("Close '%s' with %d open subtask(s)? (y/n)"), truncate(t.Title, 40), total-done)
+								return m, nil
+							}
 						}
 					}
 					// Full snapshot: ancestor cascade + recurrence spawn can
 					// touch arbitrary IDs not knowable until mid-mutation, so
 					// capture all state for a clean undo.
-					if wasPending && (isSub || t.IsRecurring()) {
+					if wasPending && (isSub || cascadeSubs || t.IsRecurring()) {
 						m.pushUndo("close task")
 					} else {
 						m.pushUndo("toggle done", t.ID)
@@ -788,6 +798,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					if wasPending && isSub {
 						ids = append(ids, m.autoCloseAncestorsIfAllDone(t.ID)...)
+					}
+					if cascadeSubs {
+						ids = append(ids, m.closePendingSubtree(t.ID)...)
 					}
 					m.markModified(ids...)
 					// Subtasks stay visible after toggling (dimmed with a
@@ -1013,21 +1026,30 @@ func (m *model) toggleAutoCloseParent() {
 	m.persistSettings()
 }
 
+// toggleAutoCloseSubtasks flips the "close subtasks when the parent is closed"
+// preference. Like its mirror, it's forward-only — it doesn't retroactively
+// close subtasks already stranded under a done parent.
+func (m *model) toggleAutoCloseSubtasks() {
+	m.autoCloseSubtasks = !m.autoCloseSubtasks
+	m.persistSettings()
+}
+
 // persistSettings writes all current preferences to disk, surfacing any write
 // failure so a setting that silently won't stick is at least visible.
 func (m *model) persistSettings() {
 	if err := saveSettings(appSettings{
-		TaskSort:         m.taskSort,
-		HistorySort:      m.historySort,
-		TagSort:          m.tagSort,
-		LearningSort:     m.learningSort,
-		Theme:            m.themeName,
-		Language:         string(activeLang),
-		SeqBiasDeadline:  activeBiases.Deadline,
-		SeqBiasPriority:  activeBiases.Priority,
-		SeqBiasMomentum:  activeBiases.Momentum,
-		SeqAgingDisabled: !activeBiases.Aging,
-		AutoCloseParent:  m.autoCloseParent,
+		TaskSort:          m.taskSort,
+		HistorySort:       m.historySort,
+		TagSort:           m.tagSort,
+		LearningSort:      m.learningSort,
+		Theme:             m.themeName,
+		Language:          string(activeLang),
+		SeqBiasDeadline:   activeBiases.Deadline,
+		SeqBiasPriority:   activeBiases.Priority,
+		SeqBiasMomentum:   activeBiases.Momentum,
+		SeqAgingDisabled:  !activeBiases.Aging,
+		AutoCloseParent:   m.autoCloseParent,
+		AutoCloseSubtasks: m.autoCloseSubtasks,
 	}); err != nil {
 		m.err = fmt.Sprintf(tr("Error saving settings: %v"), err)
 	}
@@ -1212,6 +1234,8 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		m.toggleAging()
 	case settingAutoCloseParent:
 		m.toggleAutoCloseParent()
+	case settingAutoCloseSubtasks:
+		m.toggleAutoCloseSubtasks()
 	case settingTheme:
 		m.cycleTheme(1)
 	case settingLanguage:
