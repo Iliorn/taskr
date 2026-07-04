@@ -705,3 +705,45 @@ func TestDetailCursorWrapsPage2(t *testing.T) {
 		t.Errorf("down at last comment: cursor = %d, want 0", m.detail.commentCursor)
 	}
 }
+
+// Enter on a dependency that isn't in the active list can't scroll to it, so
+// it should explain why via an info toast instead of silently no-oping.
+// Backlog item 1ca152f4.
+func TestEnterOnDoneDependencyFlashesToast(t *testing.T) {
+	dep := todo.New("build the widget")
+	dep.Status = todo.Done
+	dependent := todo.New("ship it")
+	dependent.Dependencies = []string{dep.ID}
+
+	m := modelWithTasks(t, dependent, dep)
+	m.cursor = 0
+	m.pane = paneDetail
+	m.detail = detailState{field: fieldDependencies, depCursor: 0}
+
+	updated, _ := m.startEditing()
+	m2 := updated.(model)
+	want := "Dependency 'Build the widget' is done"
+	if m2.errKind != toastInfo || m2.err != want {
+		t.Errorf("got (%q, %d), want (%q, info)", m2.err, m2.errKind, want)
+	}
+	if m2.pane != paneDetail {
+		t.Errorf("pane = %v, want paneDetail (should not jump)", m2.pane)
+	}
+}
+
+func TestEnterOnMissingDependencyFlashesToast(t *testing.T) {
+	dependent := todo.New("ship it")
+	dependent.Dependencies = []string{"no-such-task"}
+
+	m := modelWithTasks(t, dependent)
+	m.cursor = 0
+	m.pane = paneDetail
+	m.detail = detailState{field: fieldDependencies, depCursor: 0}
+
+	updated, _ := m.startEditing()
+	m2 := updated.(model)
+	want := "Dependency no longer exists"
+	if m2.errKind != toastInfo || m2.err != want {
+		t.Errorf("got (%q, %d), want (%q, info)", m2.err, m2.errKind, want)
+	}
+}

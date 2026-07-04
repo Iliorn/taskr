@@ -525,6 +525,16 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 			}
+			// Not in the active list: it's done, or filtered out of the current
+			// view. Enter can't scroll to it, so explain why instead of no-oping.
+			switch dep := m.findTodoByID(depID); {
+			case dep == nil:
+				m.flashInfo(tr("Dependency no longer exists"))
+			case dep.Status == todo.Done:
+				m.flashInfo(fmt.Sprintf(tr("Dependency '%s' is done"), truncate(dep.Title, 40)))
+			default:
+				m.flashInfo(fmt.Sprintf(tr("Dependency '%s' is hidden by the current filter"), truncate(dep.Title, 40)))
+			}
 		}
 		return m, nil
 	case fieldLearnings:
