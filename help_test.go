@@ -63,3 +63,19 @@ func TestHelpViewportFloor(t *testing.T) {
 		t.Fatalf("viewport should floor at 3, got %d", got)
 	}
 }
+
+// The help overlay documents the task-row annotation glyphs so users don't have
+// to read source to decode them. Backlog item d33d9e6e.
+func TestHelpOverlayListsRowSymbols(t *testing.T) {
+	m := modelWithTasks(t)
+	body := strings.Join(m.helpBodyLines(), "\n")
+
+	if !strings.Contains(body, "Row symbols") {
+		t.Fatal("help body should contain a 'Row symbols' section")
+	}
+	for _, want := range []string{"¶", "↥", "↧", "↻", "‼", "recurring task", "has notes"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Row symbols section missing %q", want)
+		}
+	}
+}

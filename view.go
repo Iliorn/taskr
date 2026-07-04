@@ -619,6 +619,21 @@ func (m model) helpBodyLines() []string {
 			sections = append(sections, helpSec{tr(title), keys})
 		}
 	}
+	// Reference section: the annotation glyphs a task row can carry. Not key
+	// bindings, so like Date input it lives outside the keymap registry. Keep in
+	// sync with renderTaskLineWithSet.
+	sections = append(sections, helpSec{tr("Row symbols"), [][2]string{
+		{"⏱", tr("timer running")},
+		{"!", tr("high priority, or a dependency is overdue")},
+		{"!!", tr("high priority and a dependency is overdue")},
+		{"↥", tr("others depend on this — finishing it unblocks them")},
+		{"↧", tr("blocked — waiting on an unfinished dependency")},
+		{"¶", tr("has notes")},
+		{"↻", tr("recurring task")},
+		{"(2/5)", tr("subtasks done / total")},
+		{"‼", tr("a subtask is overdue")},
+	}})
+
 	// Reference section: date-input grammar. Not key bindings, so it lives
 	// outside the registry and is appended last.
 	sections = append(sections, helpSec{tr("Date input"), [][2]string{
