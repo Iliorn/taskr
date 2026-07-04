@@ -561,18 +561,33 @@ func cliProjects(args []string) int {
 
 // ── done ─────────────────────────────────────────────────────────────────────
 
+// pendingDescendants returns every still-pending, non-deleted subtask beneath
+// rootID (transitive). `done` uses it to avoid silently orphaning open subtasks
+// when their parent is closed — they'd otherwise vanish from every list and the
+// stats until only `export` could see them (e71788f0).
+func pendingDescendants(children func(string) []string, get func(string) *todo.Todo, rootID string) []*todo.Todo {
+	var out []*todo.Todo
+	for _, id := range descendantIDsFrom(children, rootID)[1:] { // [0] is rootID itself
+		if s := get(id); s != nil && s.Status == todo.Pending && !s.Deleted {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func cliDone(args []string) int {
 	fs := flag.NewFlagSet("done", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var comment string
 	fs.StringVar(&comment, "comment", "", "append this comment to each task transitioned to done")
 	fs.StringVar(&comment, "m", "", "shorthand for --comment (git muscle memory)")
+	cascade := fs.Bool("cascade", false, "also close pending subtasks of each target (default: prompt on a TTY, else warn and leave them open)")
 	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
 	if len(positionals) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr done <ref> [<ref>...] [-m \"why\"]")
+		fmt.Fprintln(os.Stderr, "usage: taskr done <ref> [<ref>...] [-m \"why\"] [--cascade]")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -588,12 +603,46 @@ func cliDone(args []string) int {
 		return 2
 	}
 	children, get := sliceTaskLookups(todos)
-	var dirty, skipped, stopped []*todo.Todo
+	var dirty, cascaded, skipped, stopped []*todo.Todo
 	var spawned []todo.Todo
+	closed := make(map[string]bool)
+	var stdinScan *bufio.Scanner
 	for _, t := range targets {
-		if t.Status == todo.Done {
+		if t.Status == todo.Done || closed[t.ID] {
 			skipped = append(skipped, t)
 			continue
+		}
+		// Guard (e71788f0): closing a parent with open subtasks hides them
+		// everywhere but `export`. Decide whether to cascade, close the parent
+		// only, or abort — mirroring the TUI's confirm-close-parent prompt.
+		pending := pendingDescendants(children, get, t.ID)
+		doCascade := *cascade
+		if len(pending) > 0 && !*cascade {
+			if stdinIsTTY() {
+				if stdinScan == nil {
+					stdinScan = bufio.NewScanner(os.Stdin)
+				}
+				fmt.Fprintf(os.Stderr, "%s %q has %d pending subtask(s). Close them too? [y]es / [n]o parent only / [a]bort: ",
+					t.ID[:8], t.Title, len(pending))
+				ans := ""
+				if stdinScan.Scan() {
+					ans = strings.ToLower(strings.TrimSpace(stdinScan.Text()))
+				}
+				switch ans {
+				case "y", "yes":
+					doCascade = true
+				case "n", "no":
+					// close the parent only
+				default:
+					fmt.Fprintf(os.Stderr, "aborted: %s left open\n", t.ID[:8])
+					continue
+				}
+			} else {
+				// Non-interactive: don't break scripts, but surface it loudly
+				// so the subtasks aren't silently orphaned.
+				fmt.Fprintf(os.Stderr, "warning: closing %s %q leaves %d pending subtask(s) hidden under it — rerun with --cascade to close them, or 'taskr done <subtask>'\n",
+					t.ID[:8], t.Title, len(pending))
+			}
 		}
 		// Comment lands BEFORE Toggle so the timeline reads "added the why,
 		// then closed it" — and the comment timestamp matches the close.
@@ -608,6 +657,7 @@ func cliDone(args []string) int {
 		}
 		captureSeqRankAtDone(todos, t)
 		t.Toggle()
+		closed[t.ID] = true
 		dirty = append(dirty, t)
 		if t.IsRecurring() {
 			if next, ok := buildNextRecurrence(*t); ok {
@@ -622,8 +672,25 @@ func cliDone(args []string) int {
 				spawned = append(spawned, cloneSubtreeResetFrom(children, get, t.ID, next.ID, delta)...)
 			}
 		}
+		if doCascade {
+			for _, s := range pending {
+				if s.Status == todo.Done || closed[s.ID] {
+					continue
+				}
+				if s.IsTimerRunning() {
+					s.StopTimer()
+					stopped = append(stopped, s)
+				}
+				captureSeqRankAtDone(todos, s)
+				s.Toggle()
+				closed[s.ID] = true
+				cascaded = append(cascaded, s)
+			}
+		}
 	}
-	saveSet := dirty
+	saveSet := make([]*todo.Todo, 0, len(dirty)+len(cascaded)+len(spawned))
+	saveSet = append(saveSet, dirty...)
+	saveSet = append(saveSet, cascaded...)
 	for i := range spawned {
 		saveSet = append(saveSet, &spawned[i])
 	}
@@ -638,6 +705,9 @@ func cliDone(args []string) int {
 	}
 	for _, t := range dirty {
 		fmt.Printf("done  %s  %s\n", t.ID[:8], t.Title)
+	}
+	for _, t := range cascaded {
+		fmt.Printf("done  %s  %s  (subtask)\n", t.ID[:8], t.Title)
 	}
 	for _, t := range spawned {
 		due := ""
@@ -1721,6 +1791,8 @@ Tasks:
   taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
   taskr edit <ref> [flags]             change fields on one task (incl. --note/--append-note/--clear-note)
   taskr done <ref>... [-m "why"]       mark one or more tasks done, stopping any running timer on them
+                                       (--cascade also closes pending subtasks; without it a parent with
+                                       open subtasks prompts on a TTY, else warns and leaves them open)
                                        (-m/--comment adds a closing comment to each)
   taskr delete <ref> [-f]              soft-delete a task (alias: rm; substring matches confirm first)
   taskr undo [--list]                  restore the most recent deletion (task + subtasks)
