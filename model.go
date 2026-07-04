@@ -99,6 +99,7 @@ const (
 	modeConfirmDeleteSubtask
 	modeConfirmDeleteTimeEntry
 	modeConfirmCloseParent
+	modeConfirmReopen
 	modeConfirmUpdate
 	modeEditTimeEntry
 	modeIdlePrompt
@@ -255,6 +256,7 @@ type model struct {
 	pendingLearning      int
 	pendingSubtask       int
 	pendingCloseParentID string
+	pendingReopenID      string
 	pendingEntryTaskID   string
 	pendingEntryID       string
 	termWidth            int

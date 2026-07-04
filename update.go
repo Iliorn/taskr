@@ -282,6 +282,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m.updateConfirmDeleteTimeEntry(msg)
 	case modeConfirmCloseParent:
 		newModel, cmd = m.updateConfirmCloseParent(msg)
+	case modeConfirmReopen:
+		newModel, cmd = m.updateConfirmReopen(msg)
 	case modeConfirmUpdate:
 		newModel, cmd = m.updateConfirmUpdate(msg)
 	case modeEditTimeEntry:
@@ -762,6 +764,16 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					isSub := t.ParentID != ""
 					wasPending := t.Status == todo.Pending
+						// Un-marking a done task is a state change the user
+						// rarely means (usually a stray 'd' on a completed row)
+						// and it voids the completion rank — so confirm it.
+						// Marking done stays immediate.
+						if !wasPending {
+							m.pendingReopenID = t.ID
+							m.mode = modeConfirmReopen
+							m.confirmMsg = fmt.Sprintf(tr("Move '%s' to active? (y/n)"), truncate(t.Title, 40))
+							return m, nil
+						}
 					// Pending parent with open subtasks: with auto-close-subtasks
 					// on, cascade them closed; otherwise stage a confirm rather
 					// than silently close (and hide) the open work.

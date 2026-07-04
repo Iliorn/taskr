@@ -621,6 +621,36 @@ func (m model) updateConfirmDelete(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateConfirmReopen handles the "Move to active?" prompt staged by the
+// Tasks-tab 'd' handler when the cursor is on a done task. "y" reopens it
+// (voiding the completion-rank reading via Toggle); "n"/esc leaves it done.
+func (m model) updateConfirmReopen(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "y":
+			if id := m.pendingReopenID; id != "" {
+				if t := m.get(id); t != nil && t.Status == todo.Done {
+					m.pushUndo("reopen task", t.ID)
+					t.Toggle()
+					m.markModified(t.ID)
+					// The row leaves the done/history list, so the cursor
+					// would land on the next row — decrement so it lands on
+					// the previous one instead. Subtasks stay visible.
+					if t.ParentID == "" && m.cursor > 0 {
+						m.cursor--
+					}
+				}
+			}
+			m.pendingReopenID = ""
+			m.mode = modeNormal
+		case "n", "esc":
+			m.pendingReopenID = ""
+			m.mode = modeNormal
+		}
+	}
+	return m, nil
+}
+
 // updateConfirmCloseParent handles the "close parent with open subtasks?"
 // prompt staged by the Tasks-tab 'd' handler. "y" closes the parent (and
 // spawns next recurrence if the parent was recurring) but does NOT touch

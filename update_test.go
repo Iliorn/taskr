@@ -166,6 +166,46 @@ func TestCursorWrapsAroundListBounds(t *testing.T) {
 	}
 }
 
+// ── Reopen confirm ───────────────────────────────────────────────────────────
+
+// Un-marking a done task must go through a "Move to active?" confirm rather
+// than reopening on a single stray 'd'. Marking done stays immediate.
+func TestReopenDoneTaskConfirms(t *testing.T) {
+	task := todo.New("finished")
+	task.ID = "f"
+	task.Status = todo.Done
+	m := modelWithTasks(t, task)
+	m.showHistory = true // done tasks live in the history list
+	m.cursor = 0
+
+	m = sendKey(t, m, "d")
+	if m.mode != modeConfirmReopen {
+		t.Fatalf("d on a done task should open the reopen confirm; got mode %v", m.mode)
+	}
+	if got := m.get("f"); got == nil || got.Status != todo.Done {
+		t.Fatal("task must stay done until the prompt is confirmed")
+	}
+
+	// n leaves it done.
+	m = sendKey(t, m, "n")
+	if m.mode != modeNormal {
+		t.Fatalf("n should dismiss the prompt; got mode %v", m.mode)
+	}
+	if m.get("f").Status != todo.Done {
+		t.Error("n must leave the task done")
+	}
+
+	// d then y reopens it.
+	m = sendKey(t, m, "d")
+	m = sendKey(t, m, "y")
+	if m.mode != modeNormal {
+		t.Fatalf("y should close the prompt; got mode %v", m.mode)
+	}
+	if m.get("f").Status != todo.Pending {
+		t.Error("y must move the task back to active (pending)")
+	}
+}
+
 // ── Cascade delete ───────────────────────────────────────────────────────────
 
 // Deleting a parent must also delete its subtasks (and their subtasks).

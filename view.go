@@ -404,7 +404,8 @@ func (m model) buildFooterContent(w int) string {
 		modeConfirmDeleteDep, modeConfirmDeleteTag,
 		modeConfirmDeleteTagGlobal, modeConfirmDeleteProject,
 		modeConfirmDeleteLearning, modeConfirmDeleteSubtask,
-		modeConfirmDeleteTimeEntry, modeConfirmCloseParent:
+		modeConfirmDeleteTimeEntry, modeConfirmCloseParent,
+		modeConfirmReopen:
 		return confirmStyle.Render(m.confirmMsg)
 	}
 	return ""
