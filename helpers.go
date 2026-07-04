@@ -224,7 +224,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int) listCo
 	return c
 }
 
-func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMode taskSortMode, historyMode historySortMode, c listCols) {
+func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listCols) {
 	dueW := dueColW
 	if isHistory {
 		dueW = 12
@@ -232,27 +232,12 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, sortMod
 	sizeLabel := padCenter(tr("Size"), sizeColW)
 	dueLabel := padRight(tr("Due"), dueW)
 	lastLabel := padRight(tr("Score"), scoreColW)
-	// >..< wraps the active sort column so the user always sees which header
-	// owns the ordering — in both the active and history lists.
+	// The active-sort cue lives in the fixed status line (renderStatusLine),
+	// so column headers stay plain — no >..< decoration to reflow.
 	title := tr("Task")
 	if isHistory {
 		title = tr("Completed tasks")
 		lastLabel = padRight(tr("Completed"), 12)
-		switch historyMode {
-		case historySortCompleted:
-			lastLabel = padRight(tr(">Completed<"), 12)
-		case historySortAlpha:
-			title = tr(">Completed tasks<")
-		}
-	} else {
-		switch sortMode {
-		case taskSortSequence:
-			lastLabel = padRight(tr(">Score<"), scoreColW)
-		case taskSortDueDate:
-			dueLabel = padRight(tr(">Due<"), dueW)
-		case taskSortSize:
-			sizeLabel = padCenter(tr(">Size<"), sizeColW)
-		}
 	}
 
 	const prefix = "      "

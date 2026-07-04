@@ -624,7 +624,7 @@ func (m model) renderTaskList() string {
 	// active set and cached by refreshTaskColMetrics, so the frame doesn't
 	// rescan every task — see cache.go.
 	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax)
-	renderListHeader(b, m.termWidth, false, m.taskSort, m.historySort, cols)
+	renderListHeader(b, m.termWidth, false, cols)
 
 	total := m.visibleActiveLen()
 	maxVisible := m.estimateListHeight()
@@ -681,7 +681,7 @@ func (m model) renderHistoryList() string {
 		}
 	}
 	cols := taskListCols(m.termWidth, true, contentMax, tagsMax)
-	renderListHeader(b, m.termWidth, true, m.taskSort, m.historySort, cols)
+	renderListHeader(b, m.termWidth, true, cols)
 
 	maxVisible := m.estimateListHeight()
 	startIdx := m.listOffset

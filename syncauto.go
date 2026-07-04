@@ -50,8 +50,10 @@ func (m model) backgroundSync() tea.Cmd {
 func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.syncStatus = tr("Last sync failed: ") + truncate(msg.err.Error(), 60)
+		m.lastSyncFailed = true
 		return m, nil
 	}
+	m.lastSyncFailed = false
 	m.syncStatus = fmt.Sprintf(tr("Last sync: sent %d, received %d"), msg.summary.sent, msg.summary.received)
 	if msg.summary.conflicts > 0 {
 		m.err = fmt.Sprintf(tr("Sync: %d conflict(s) resolved — see ~/.taskr/sync.log"), msg.summary.conflicts)

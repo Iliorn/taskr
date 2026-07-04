@@ -150,6 +150,15 @@ var (
 	searchStyle  lipgloss.Style
 	dimStyle     lipgloss.Style
 
+	// Fixed status-line pieces: filter/history chips on the left, sort label
+	// and sync-health glyph on the right. See renderStatusLine.
+	focusChipStyle   lipgloss.Style
+	searchChipStyle  lipgloss.Style
+	historyChipStyle lipgloss.Style
+	statusSortStyle  lipgloss.Style
+	syncOkStyle      lipgloss.Style
+	syncFailStyle    lipgloss.Style
+
 	listPanelStyle   lipgloss.Style
 	detailPanelStyle lipgloss.Style
 
@@ -224,6 +233,13 @@ func applyTheme(t theme) {
 	confirmStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
 	searchStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.green).Padding(0, 1)
 	dimStyle = lipgloss.NewStyle().Foreground(t.dim)
+
+	focusChipStyle = lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(t.orange).Padding(0, 1)
+	searchChipStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
+	historyChipStyle = lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(t.blue).Padding(0, 1)
+	statusSortStyle = lipgloss.NewStyle().Foreground(t.dim)
+	syncOkStyle = lipgloss.NewStyle().Foreground(t.dim)
+	syncFailStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
 
 	listPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.dim).Padding(0, 1).MarginLeft(2)
 	detailPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.dim).Padding(0, 1).MarginLeft(2)

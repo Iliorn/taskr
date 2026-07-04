@@ -56,19 +56,6 @@ func TestComputeLayout(t *testing.T) {
 			},
 		},
 		{
-			name: "with error and search",
-			input: layoutInput{
-				termW:       120,
-				termH:       40,
-				hasErr:      true,
-				hasSearch:   true,
-				mode:        modeNormal,
-				tab:         tabTasks,
-				detailLines: 10,
-			},
-			wantDetailH: 10,
-		},
-		{
 			name: "detail capped at max pct",
 			input: layoutInput{
 				termW:       120,
@@ -110,16 +97,13 @@ func TestComputeLayoutContentWidth(t *testing.T) {
 	}
 }
 
-func TestComputeLayoutHeaderGrows(t *testing.T) {
-	base := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks})
-	withErr := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks, hasErr: true})
-	withAll := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks, hasErr: true, hasSearch: true, hasFocus: true})
-
-	if withErr.headerH <= base.headerH {
-		t.Error("error should increase header height")
-	}
-	if withAll.headerH <= withErr.headerH {
-		t.Error("search+focus should further increase header height")
+// The header is now a fixed two rows (tab bar + one status line) — filters and
+// toasts render into that single status line instead of stacking their own
+// rows, so the header height never varies and the list never reflows.
+func TestComputeLayoutHeaderFixed(t *testing.T) {
+	l := computeLayout(layoutInput{termW: 100, termH: 40, mode: modeNormal, tab: tabTasks})
+	if l.headerH != minHeaderLines {
+		t.Errorf("headerH = %d, want fixed %d", l.headerH, minHeaderLines)
 	}
 }
 

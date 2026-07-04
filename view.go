@@ -43,27 +43,9 @@ func (m model) View() string {
 		padW = 1
 	}
 	out.WriteString(ansi.Truncate(tabsStr+strings.Repeat(" ", padW)+shortcutHint, m.termWidth-2, "") + "\n")
-	out.WriteString("\n")
-
-	if m.err != "" {
-		out.WriteString(confirmStyle.Render(m.err) + "\n")
-	}
-	if m.focusFilter {
-		out.WriteString(confirmStyle.Render(tr("⚡ FOCUS: today + overdue only (f to toggle)")) + "\n")
-	}
-	if m.searchQuery != "" {
-		label := m.searchQuery
-		if label == untaggedKey {
-			label = tr("(untagged)")
-		}
-		out.WriteString(searchStyle.Render("/ "+label) + "\n")
-	}
-	if m.tab == tabTags && m.tagTabSearchQuery != "" {
-		out.WriteString(searchStyle.Render("/ "+m.tagTabSearchQuery) + "\n")
-	}
-	if m.tab == tabLearnings && m.learningSearchQuery != "" {
-		out.WriteString(searchStyle.Render("/ "+m.learningSearchQuery) + "\n")
-	}
+	// One fixed status line replaces the old stack of banner rows, so filters
+	// and toasts never reflow the list below (see renderStatusLine).
+	out.WriteString(m.renderStatusLine() + "\n")
 
 	// ── FOOTER ───────────────────────────────────────────────────────────
 	footerContent := m.buildFooterContent(w)
@@ -106,16 +88,11 @@ func (m model) View() string {
 
 	// ── LAYOUT ───────────────────────────────────────────────────────────
 	li := computeLayout(layoutInput{
-		termW:             m.termWidth,
-		termH:             m.termHeight,
-		hasErr:            m.err != "",
-		hasSearch:         m.searchQuery != "",
-		hasFocus:          m.focusFilter,
-		hasTagSearch:      m.tab == tabTags && m.tagTabSearchQuery != "",
-		hasLearningSearch: m.tab == tabLearnings && m.learningSearchQuery != "",
-		mode:              m.mode,
-		tab:               m.tab,
-		detailLines:       detailLineCount,
+		termW:       m.termWidth,
+		termH:       m.termHeight,
+		mode:        m.mode,
+		tab:         m.tab,
+		detailLines: detailLineCount,
 	})
 
 	// ── LIST ─────────────────────────────────────────────────────────────
@@ -162,6 +139,103 @@ func (m model) View() string {
 	}
 	return strings.Join(resultLines, "\n")
 
+}
+
+// ── Status line ────────────────────────────────────────────────────────────────
+
+// renderStatusLine builds the single fixed header status line under the tab
+// bar: filter/history chips on the left, active-sort label and sync-health
+// glyph on the right. A toast (m.err) overlays the whole line for its lifetime
+// instead of claiming its own row, so filters and toasts coming and going never
+// reflow the list below.
+func (m model) renderStatusLine() string {
+	width := m.termWidth - 2
+	if width < 1 {
+		width = 1
+	}
+	if m.err != "" {
+		return ansi.Truncate(confirmStyle.Render(m.err), width, "")
+	}
+
+	var chips []string
+	if m.focusFilter {
+		chips = append(chips, focusChipStyle.Render(tr("⚡FOCUS")))
+	}
+	if m.searchQuery != "" {
+		label := m.searchQuery
+		if label == untaggedKey {
+			label = tr("(untagged)")
+		}
+		chips = append(chips, searchChipStyle.Render("/"+label))
+	}
+	if m.tab == tabTags && m.tagTabSearchQuery != "" {
+		chips = append(chips, searchChipStyle.Render("/"+m.tagTabSearchQuery))
+	}
+	if m.tab == tabLearnings && m.learningSearchQuery != "" {
+		chips = append(chips, searchChipStyle.Render("/"+m.learningSearchQuery))
+	}
+	if m.showHistory {
+		chips = append(chips, historyChipStyle.Render(tr("HISTORY")))
+	}
+	left := strings.Join(chips, " ")
+
+	var right []string
+	if m.tab == tabTasks {
+		right = append(right, statusSortStyle.Render(tr("sort: ")+m.sortLabel()))
+	}
+	if g := m.syncGlyph(); g != "" {
+		right = append(right, g)
+	}
+
+	return statusLineJoin(left, strings.Join(right, "  "), width)
+}
+
+// statusLineJoin left-aligns left, right-aligns right, and fills the gap so the
+// result is exactly width display cells. When both can't fit, the left chips
+// win (the filter you just toggled is the more urgent cue) and the line is
+// truncated.
+func statusLineJoin(left, right string, width int) string {
+	if right == "" {
+		return ansi.Truncate(left, width, "")
+	}
+	lw := ansi.StringWidth(left)
+	rw := ansi.StringWidth(right)
+	if lw+1+rw > width {
+		return ansi.Truncate(left, width, "")
+	}
+	return left + strings.Repeat(" ", width-lw-rw) + right
+}
+
+// sortLabel names the ordering currently applied to the visible task list.
+// History mode has its own two sorts.
+func (m model) sortLabel() string {
+	if m.showHistory {
+		if m.historySort == historySortAlpha {
+			return tr("alpha")
+		}
+		return tr("completed")
+	}
+	switch m.taskSort {
+	case taskSortDueDate:
+		return tr("due")
+	case taskSortSize:
+		return tr("size")
+	default:
+		return tr("score")
+	}
+}
+
+// syncGlyph reports background-sync health for the status line: a quiet dim
+// tick when sync is configured and healthy, a red mark after a failure, and
+// nothing when sync isn't configured.
+func (m model) syncGlyph() string {
+	if !m.autoSync {
+		return ""
+	}
+	if m.lastSyncFailed {
+		return syncFailStyle.Render(tr("✕ sync"))
+	}
+	return syncOkStyle.Render("✓")
 }
 
 // ── Detail scroll ────────────────────────────────────────────────────────────

@@ -312,6 +312,10 @@ type model struct {
 	syncCfg    syncConfig
 	autoSync   bool
 	syncStatus string
+	// lastSyncFailed drives the header sync-health glyph: true after a failed
+	// background sync, cleared on the next success. syncStatus keeps the full
+	// message for the Settings footer.
+	lastSyncFailed bool
 	// inprocServer is the in-process sync server when "Server" is toggled on
 	// (nil otherwise). serverExternal is set by probeServer when a headless
 	// `taskr serve` is answering at the configured address.

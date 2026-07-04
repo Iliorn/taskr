@@ -43,16 +43,11 @@ type layout struct {
 }
 
 type layoutInput struct {
-	termW             int
-	termH             int
-	hasErr            bool
-	hasSearch         bool
-	hasFocus          bool
-	hasTagSearch      bool
-	hasLearningSearch bool
-	mode              appMode
-	tab               tab
-	detailLines       int
+	termW       int
+	termH       int
+	mode        appMode
+	tab         tab
+	detailLines int
 }
 
 func computeLayout(in layoutInput) layout {
@@ -60,22 +55,11 @@ func computeLayout(in layoutInput) layout {
 		contentW: in.termW - 4,
 	}
 
+	// Header is a fixed height: the tab bar plus one always-present status
+	// line (filter/history chips + sync glyph). Filters and toasts render
+	// into that single line instead of stacking their own rows, so the list
+	// never reflows as they come and go.
 	l.headerH = minHeaderLines
-	if in.hasErr {
-		l.headerH++
-	}
-	if in.hasFocus {
-		l.headerH++
-	}
-	if in.hasSearch {
-		l.headerH++
-	}
-	if in.hasTagSearch {
-		l.headerH++
-	}
-	if in.hasLearningSearch {
-		l.headerH++
-	}
 
 	l.footerH = footerHeight
 
