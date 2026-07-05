@@ -44,9 +44,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "esc":
-		m.pane = paneList
-		m.detail = detailState{field: fieldStartDate}
-		m.invalidateDetailCache()
+		m.popFocus()
 
 	case "tab":
 		m.switchTab((m.tab + 1) % numTabs)
@@ -400,7 +398,7 @@ func (m model) updateLearningsDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "u":
 		return m, m.performUndo()
 	case "esc":
-		m.pane = paneList
+		m.popFocus()
 	case "tab":
 		m.switchTab((m.tab + 1) % numTabs)
 	case "x", "delete":
@@ -525,6 +523,9 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 			depID := t.Dependencies[m.detail.depCursor]
 			for i, candidate := range m.cache.active {
 				if candidate.ID == depID {
+					// Leaving the detail pane without esc — drop its entry
+					// before m.tab changes so it's removed from the right tab.
+					m.dropFocus(stateDetailPane)
 					m.pane = paneList
 					m.cursor = i
 					m.tab = tabTasks

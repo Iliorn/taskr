@@ -597,6 +597,11 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "h":
 			if m.tab == tabTasks {
 				m.showHistory = !m.showHistory
+				if m.showHistory {
+					m.pushFocus(stateHistory)
+				} else {
+					m.dropFocus(stateHistory)
+				}
 				m.cursor = 0
 				m.listOffset = 0
 			}
@@ -604,6 +609,11 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f":
 			if m.tab == tabTasks && !m.showHistory {
 				m.focusFilter = !m.focusFilter
+				if m.focusFilter {
+					m.pushFocus(stateFocusFilter)
+				} else {
+					m.dropFocus(stateFocusFilter)
+				}
 				m.cursor = 0
 				m.listOffset = 0
 				m.markFilterDirty()
@@ -738,7 +748,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cycleSortMode()
 
 		case "esc":
-			m.handleListEsc()
+			m.popFocus()
 
 		case "up":
 			m.moveCursorUp()
@@ -1112,37 +1122,6 @@ func (m *model) persistSettings() {
 	}
 }
 
-func (m *model) handleListEsc() {
-	switch {
-	case m.tab == tabCalendar && m.calendar.focusTimeline:
-		m.calendar.focusTimeline = false
-	case m.tab == tabTasks && m.focusFilter:
-		m.focusFilter = false
-		m.cursor = 0
-		m.listOffset = 0
-		m.markFilterDirty()
-	case m.tab == tabTasks && m.searchQuery != "":
-		m.searchQuery = ""
-		m.searchInput.SetValue("")
-		m.cursor = 0
-		m.listOffset = 0
-		m.markFilterDirty()
-	case m.tab == tabTags && m.tagTabSearchQuery != "":
-		m.tagTabSearchQuery = ""
-		m.tagTabCursor = 0
-	case m.tab == tabLearnings && m.learningSearchQuery != "":
-		m.learningSearchQuery = ""
-		m.learningCursor = 0
-	case m.tab == tabProjects && m.projectTaskMode:
-		m.projectTaskMode = false
-		m.cursor = 0
-	case m.tab == tabTasks && m.showHistory:
-		m.showHistory = false
-		m.cursor = 0
-		m.listOffset = 0
-	}
-}
-
 func (m *model) moveCursorUp() {
 	switch m.tab {
 	case tabCalendar:
@@ -1307,27 +1286,32 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 		if len(m.activitiesForDay(m.calendar.selected)) > 0 {
 			m.calendar.focusTimeline = true
 			m.calendar.entryCursor = 0
+			m.pushFocus(stateCalTimeline)
 		}
 	case tabLearnings:
 		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
 			m.pane = paneDetail
+			m.pushFocus(stateDetailPane)
 		}
 	case tabProjects:
 		if !m.projectTaskMode {
 			if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
 				m.projectTaskMode = true
 				m.cursor = 0
+				m.pushFocus(stateProjectDrill)
 			}
 		} else if m.currentTodo() != nil {
 			m.pane = paneDetail
 			m.detail = detailState{field: fieldStartDate}
 			m.invalidateDetailCache()
+			m.pushFocus(stateDetailPane)
 		}
 	case tabTasks:
 		if m.currentTodo() != nil {
 			m.pane = paneDetail
 			m.detail = detailState{field: fieldStartDate}
 			m.invalidateDetailCache()
+			m.pushFocus(stateDetailPane)
 		}
 	case tabTags:
 		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
@@ -1340,6 +1324,9 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 			} else {
 				m.searchQuery = "#" + tag
 			}
+			// switchTab already moved us to Tasks, so the entry lands on
+			// the tab the search filters.
+			m.pushFocus(stateSearch)
 			m.cursor = 0
 			m.listOffset = 0
 			m.markFilterDirty()

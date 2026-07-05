@@ -304,6 +304,7 @@ type model struct {
 	projectTaskMode      bool
 	showHistory          bool
 	focusFilter          bool
+	focusStack           []focusEntry
 	expandedTasks        map[string]bool
 	editingTagName       string
 	editingProjectName   string

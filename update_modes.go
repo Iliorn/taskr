@@ -386,8 +386,18 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.tab == tabLearnings {
 				m.learningSearchQuery = m.learningSearchInput.Value()
 				m.learningCursor = 0
+				if m.learningSearchQuery != "" {
+					m.pushFocus(stateLearningSearch)
+				} else {
+					m.dropFocus(stateLearningSearch)
+				}
 			} else {
 				m.searchQuery = m.searchInput.Value()
+				if m.searchQuery != "" {
+					m.pushFocus(stateSearch)
+				} else {
+					m.dropFocus(stateSearch)
+				}
 				m.cursor = 0
 				m.projectCursor = 0
 				m.listOffset = 0
@@ -444,6 +454,11 @@ func (m model) updateSearchTagTab(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.mode = modeNormal
 			m.tagTabCursor = 0
+			if m.tagTabSearchQuery != "" {
+				m.pushFocus(stateTagSearch)
+			} else {
+				m.dropFocus(stateTagSearch)
+			}
 			return m, nil
 		case "esc":
 			// Cancel: discard the filter and restore the full tag list.
