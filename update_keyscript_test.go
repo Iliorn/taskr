@@ -162,13 +162,15 @@ func TestScriptRenameTaskViaR(t *testing.T) {
 	}
 }
 
-func TestScriptAddCommentOnDetailPage2(t *testing.T) {
+func TestScriptAddCommentOnDetailComments(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Task with comments"))
 	target := m.currentTodo()
 
-	m = script(t, m, "enter", "right", "right") // detail pane → page 2
-	if m.pane != paneDetail || m.detail.page != 2 {
-		t.Fatalf("pane=%v page=%d, want detail page 2", m.pane, m.detail.page)
+	// Detail pane → jump sections to comments (tags → subtasks → deps →
+	// learnings → comments).
+	m = script(t, m, "enter", "right", "right", "right", "right", "right")
+	if m.pane != paneDetail || m.detail.field != fieldComments {
+		t.Fatalf("pane=%v field=%v, want detail fieldComments", m.pane, m.detail.field)
 	}
 	m = script(t, m, "a", "looks good", "enter")
 
@@ -188,7 +190,7 @@ func TestScriptAddSubtaskFromDetail(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Parent task"))
 	target := m.currentTodo()
 
-	m = script(t, m, "enter", "right") // detail page 1, field = subtasks
+	m = script(t, m, "enter", "right", "right") // sections: tags → subtasks
 	if m.mode != modeNormal || m.detail.field != fieldSubtasks {
 		t.Fatalf("field = %v, want fieldSubtasks", m.detail.field)
 	}

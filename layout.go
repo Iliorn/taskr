@@ -83,7 +83,6 @@ func computeLayout(in layoutInput) layout {
 
 type detailRenderCache struct {
 	taskID        string
-	page          int
 	field         detailField
 	tagCursor     int
 	depCursor     int
@@ -109,7 +108,6 @@ func (m *model) getCachedDetailContent() string {
 	rc := &m.detailRC
 	if rc.valid &&
 		rc.taskID == t.ID &&
-		rc.page == m.detail.page &&
 		rc.field == m.detail.field &&
 		rc.tagCursor == m.detail.tagCursor &&
 		rc.depCursor == m.detail.depCursor &&
@@ -123,7 +121,6 @@ func (m *model) getCachedDetailContent() string {
 
 	content := m.buildDetailContent()
 	rc.taskID = t.ID
-	rc.page = m.detail.page
 	rc.field = m.detail.field
 	rc.tagCursor = m.detail.tagCursor
 	rc.depCursor = m.detail.depCursor

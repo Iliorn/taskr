@@ -93,7 +93,7 @@ var keymap = []binding{
 	{ctxTasksList, "/", "search", "search", secTasks, true, true},
 
 	// ── Tasks detail pane ────────────────────────────────────────────────
-	{ctxTasksDetail, "←/→", "detailpage", "switch pages", secDetail, true, false},
+	{ctxTasksDetail, "←/→", "detailsection", "jump section", secDetail, true, false},
 	{ctxTasksDetail, "enter", "editfield", "edit field / toggle subtask", secDetail, true, false},
 	{ctxTasksDetail, "a", "add", "add tag / dep / comment / learning / subtask", secDetail, true, false},
 	{ctxTasksDetail, "d", "done", "toggle subtask done", secDetail, true, false},

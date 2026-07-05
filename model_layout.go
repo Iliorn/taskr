@@ -10,109 +10,58 @@ func (m model) estimateDetailCursorLine() int {
 		return 0
 	}
 	twoCol := (m.termWidth - 8) >= twoColumnDetailMinWidth
-	switch m.detail.page {
-	case 0:
-		line := 2 // title + blank
-		switch m.detail.field {
-		case fieldStartDate:
-			return line
-		case fieldDueDate:
-			return line + 1
-		case fieldRecurrence:
-			return line + 2
-		case fieldPriority:
-			return line + 3
-		case fieldSize:
-			return line + 4
-		case fieldProject:
-			return line + 5
-		case fieldNotes:
-			return line + 6
-		default: // fieldTags
-			if twoCol {
-				// Two-col mode: left has 7 rows (start..notes); right has
-				// 3 + optional (time, completed|score) rows. Tags label sits
-				// below the longer of the two.
-				leftRows := 7
-				rightRows := 3 // id, created, modified
-				if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
-					rightRows++
-				}
-				if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-					rightRows++
-				}
-				if t.Status == todo.Pending {
-					rightRows++ // score
-				}
-				rows := leftRows
-				if rightRows > rows {
-					rows = rightRows
-				}
-				line += rows + 2 // block + blank + tags label
-				return line + m.detail.tagCursor
-			}
-			// Single column: fields stack as before.
-			line += 10 // start, due, recurrence, priority, size, project, notes, id, created, modified
-			if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
-				line++
-			}
-			if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-				line++
-			}
-			if t.Status == todo.Pending {
-				line++ // score
-			}
-			line += 2 // blank + tags label
-			return line + m.detail.tagCursor
-		}
-	case 1:
-		line := 3 // title + blank + subtasks label
-		switch m.detail.field {
-		case fieldSubtasks:
-			return line + m.detail.subtaskCursor
-		case fieldDependencies:
-			if twoCol {
-				// In two-col mode subtasks (left) and deps (right) share the
-				// same top, so the deps cursor sits next to its own list head.
-				return line + m.detail.depCursor
-			}
-			if m.subtaskCount(t.ID) == 0 {
-				line++
-			} else {
-				line += m.subtaskCount(t.ID)
-			}
-			line += 2 // blank + deps label
-			return line + m.detail.depCursor
-		default: // fieldLearnings
-			if twoCol {
-				// Right column = deps + blank + learnings. Learnings label
-				// sits right below deps, regardless of subtasks count.
-				if len(t.Dependencies) == 0 {
-					line++
-				} else {
-					line += len(t.Dependencies)
-				}
-				line += 2 // blank + learnings label
-				return line + m.detail.learningCursor
-			}
-			if m.subtaskCount(t.ID) == 0 {
-				line++
-			} else {
-				line += m.subtaskCount(t.ID)
-			}
-			line++
-			if len(t.Dependencies) == 0 {
-				line++
-			} else {
-				line += len(t.Dependencies)
-			}
-			line += 2 // blank + learnings label
-			return line + m.detail.learningCursor
-		}
-	case 2:
-		return 3 + m.detail.commentCursor // title + blank + comments label
+
+	line := 2 // title + blank
+	switch m.detail.field {
+	case fieldStartDate:
+		return line
+	case fieldDueDate:
+		return line + 1
+	case fieldRecurrence:
+		return line + 2
+	case fieldPriority:
+		return line + 3
+	case fieldSize:
+		return line + 4
+	case fieldProject:
+		return line + 5
+	case fieldNotes:
+		return line + 6
+	case fieldTags:
+		// Tags label sits below the fields block; +1 skips the label row.
+		return m.detailMainHeight(t, twoCol) - m.detailTagsRows(t) + m.detail.tagCursor
 	}
-	return 0
+
+	// Relations section: one blank line after the main block, label first.
+	relStart := m.detailMainHeight(t, twoCol) + 1
+	subRows := m.subtaskCount(t.ID)
+	if subRows == 0 {
+		subRows = 1
+	}
+	depRows := len(t.Dependencies)
+	if depRows == 0 {
+		depRows = 1
+	}
+	switch m.detail.field {
+	case fieldSubtasks:
+		return relStart + 1 + m.detail.subtaskCursor
+	case fieldDependencies:
+		if twoCol {
+			// Two-col: subtasks (left) and deps (right) share the same top.
+			return relStart + 1 + m.detail.depCursor
+		}
+		return relStart + 1 + subRows + 2 + m.detail.depCursor
+	case fieldLearnings:
+		if twoCol {
+			// Right column = deps + blank + learnings.
+			return relStart + 1 + depRows + 2 + m.detail.learningCursor
+		}
+		return relStart + 1 + subRows + 2 + depRows + 2 + m.detail.learningCursor
+	}
+
+	// Comments section: blank after the relations block, label first.
+	comStart := relStart + m.detailRelationsHeight(t, twoCol) + 1
+	return comStart + 1 + m.detail.commentCursor
 }
 
 // ── List offset clamping ──────────────────────────────────────────────────────
@@ -184,15 +133,7 @@ func (m model) detailVisible() bool {
 func (m model) listVisible() int {
 	detailTotal := 0
 	if m.detailVisible() {
-		var contentH int
-		switch m.detail.page {
-		case 1:
-			contentH = m.detailPage2ContentHeight()
-		case 2:
-			contentH = m.detailPage3ContentHeight()
-		default:
-			contentH = m.detailPage1ContentHeight()
-		}
+		contentH := m.detailContentHeight()
 		if maxH := m.maxDetailHeight(); contentH > maxH {
 			contentH = maxH
 		}
@@ -266,73 +207,100 @@ func (m model) maxDetailHeight() int {
 	return available
 }
 
-func (m model) detailPage1ContentHeight() int {
-	t := m.currentTodo()
-	if t == nil {
-		return 1
-	}
-	lines := 12 // 10 fixed + Size row + ID row
-	if t.Status == todo.Pending {
-		lines++ // Score breakdown row, rendered only for pending tasks
-	}
+// detailTagsRows is the number of rows below the tags label: the tag list,
+// or the one-line "no tags" hint.
+func (m model) detailTagsRows(t *todo.Todo) int {
 	if len(t.Tags) == 0 {
-		lines += 2
-	} else {
-		lines += 1 + len(t.Tags)
-	}
-	if len(t.TimeEntries) > 0 {
-		lines++
-	}
-	if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-		lines++
-	}
-	return lines
-}
-
-func (m model) detailPage2ContentHeight() int {
-	t := m.currentTodo()
-	if t == nil {
 		return 1
 	}
-	lines := 3 // title + blank + subtasks label
-	if m.subtaskCount(t.ID) == 0 {
-		lines += 2
-	} else {
-		lines += 1 + m.subtaskCount(t.ID)
-	}
-	lines++ // blank
-	if len(t.Dependencies) == 0 {
-		lines += 2
-	} else {
-		lines += 1 + len(t.Dependencies)
-	}
-	lines++ // blank
-	if len(t.Learnings) == 0 {
-		lines += 2
-	} else {
-		lines += 1 + len(t.Learnings)
-	}
-	return lines
+	return len(t.Tags)
 }
 
-func (m model) detailPage3ContentHeight() int {
-	t := m.currentTodo()
-	if t == nil {
-		return 1
+// detailMainHeight is the rendered height of the detail column's first
+// section: title, blank, the fields block (one or two columns), blank, tags
+// label, tag rows.
+func (m model) detailMainHeight(t *todo.Todo, twoCol bool) int {
+	h := 2 // title + blank
+	if twoCol {
+		leftRows := 7  // start..notes
+		rightRows := 3 // id, created, modified
+		if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
+			rightRows++
+		}
+		if t.Status == todo.Done && !t.CompletedAt.IsZero() {
+			rightRows++
+		}
+		if t.Status == todo.Pending {
+			rightRows++ // score
+		}
+		if rightRows > leftRows {
+			h += rightRows
+		} else {
+			h += leftRows
+		}
+	} else {
+		h += 10 // start, due, recurrence, priority, size, project, notes, id, created, modified
+		if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
+			h++
+		}
+		if t.Status == todo.Done && !t.CompletedAt.IsZero() {
+			h++
+		}
+		if t.Status == todo.Pending {
+			h++ // score
+		}
 	}
-	lines := 3
+	h += 2 // blank + tags label
+	return h + m.detailTagsRows(t)
+}
+
+// detailRelationsHeight is the rendered height of the subtasks/dependencies/
+// learnings section, starting at its first label row.
+func (m model) detailRelationsHeight(t *todo.Todo, twoCol bool) int {
+	rows := func(n int) int {
+		if n == 0 {
+			return 1
+		}
+		return n
+	}
+	leftH := 1 + rows(m.subtaskCount(t.ID))
+	rightH := 1 + rows(len(t.Dependencies)) + 1 + 1 + rows(len(t.Learnings))
+	if twoCol {
+		if rightH > leftH {
+			return rightH
+		}
+		return leftH
+	}
+	return leftH + 1 + rightH
+}
+
+// detailCommentsHeight is the rendered height of the comments section:
+// label plus wrapped comment lines (or the one-line empty hint).
+func (m model) detailCommentsHeight(t *todo.Todo) int {
+	lines := 1 // label
 	if len(t.Comments) == 0 {
-		lines++
-	} else {
-		available := m.termWidth - 32
-		if available < 10 {
-			available = 10
-		}
-		for _, c := range t.Comments {
-			lines += commentLineCount(c.Text, available)
-		}
+		return lines + 1
+	}
+	available := m.termWidth - 32
+	if available < 10 {
+		available = 10
+	}
+	for _, c := range t.Comments {
+		lines += commentLineCount(c.Text, available)
 	}
 	return lines
+}
+
+// detailContentHeight is the full single-column detail document height.
+func (m model) detailContentHeight() int {
+	t := m.currentTodo()
+	if t == nil {
+		return 1
+	}
+	twoCol := (m.termWidth - 8) >= twoColumnDetailMinWidth
+	return m.detailMainHeight(t, twoCol) + 1 +
+		m.detailRelationsHeight(t, twoCol) + 1 +
+		m.detailCommentsHeight(t)
 }
 
 func (m model) extraOverheadLines() int {

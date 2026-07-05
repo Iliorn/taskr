@@ -59,7 +59,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			} else if t := m.currentTodo(); t != nil {
-				if m.detail.page == 2 {
+				if m.detail.field == fieldComments {
 					if val != "" {
 						m.pushUndo("add comment", t.ID)
 						t.AddComment(val)
@@ -113,7 +113,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Escape hatch only for the comment-add input (the comments page);
 			// other modeInput uses (quick-add, date fields) keep ctrl+e as the
 			// text input's move-to-end.
-			if m.pane != paneList && m.detail.page == 2 {
+			if m.pane != paneList && m.detail.field == fieldComments {
 				return m, m.openEditorForInput()
 			}
 		}

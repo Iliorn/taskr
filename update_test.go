@@ -617,9 +617,11 @@ func TestModalMutationSchedulesSaveImmediately(t *testing.T) {
 
 // ── Detail-pane wrap-around ──────────────────────────────────────────────────
 
-// up at the top of a detail page should jump to the bottom of that same page,
-// and down at the bottom should jump back to the top. Backlog item 37e22859.
-func TestDetailCursorWrapsPage0(t *testing.T) {
+// The detail cursor walks one continuous chain over the whole column
+// (originally per-page wrap, backlog item 37e22859; chain since the [1/3]
+// pages were removed): up at the very top wraps to the last comment, down
+// past the tags continues into subtasks.
+func TestDetailCursorChainAtTop(t *testing.T) {
 	task := todo.New("wrap p0")
 	task.AddTag("alpha")
 	task.AddTag("beta")
@@ -629,60 +631,57 @@ func TestDetailCursorWrapsPage0(t *testing.T) {
 	m.detail = detailState{field: fieldStartDate}
 
 	m.detailCursorUp()
-	if m.detail.field != fieldTags {
-		t.Fatalf("up at StartDate: field = %v, want fieldTags", m.detail.field)
-	}
-	if m.detail.tagCursor != 1 {
-		t.Errorf("tagCursor = %d, want 1 (last tag)", m.detail.tagCursor)
+	if m.detail.field != fieldComments {
+		t.Fatalf("up at StartDate: field = %v, want fieldComments (column wrap)", m.detail.field)
 	}
 
 	m.detail = detailState{field: fieldTags, tagCursor: 1}
 	m.detailCursorDown()
-	if m.detail.field != fieldStartDate {
-		t.Errorf("down at last tag: field = %v, want fieldStartDate", m.detail.field)
+	if m.detail.field != fieldSubtasks {
+		t.Errorf("down at last tag: field = %v, want fieldSubtasks (chain)", m.detail.field)
 	}
 }
 
-func TestDetailCursorWrapsPage0NoTags(t *testing.T) {
+func TestDetailCursorChainTagsUpToNotes(t *testing.T) {
 	task := todo.New("wrap p0 no tags")
 	m := modelWithTasks(t, task)
 	m.cursor = 0
 	m.pane = paneDetail
-	m.detail = detailState{field: fieldStartDate}
+	m.detail = detailState{field: fieldTags, tagCursor: 0}
 
 	m.detailCursorUp()
-	if m.detail.field != fieldTags || m.detail.tagCursor != 0 {
-		t.Errorf("up with no tags: field=%v cursor=%d, want fieldTags / 0",
-			m.detail.field, m.detail.tagCursor)
+	if m.detail.field != fieldNotes {
+		t.Errorf("up at first tag row: field = %v, want fieldNotes", m.detail.field)
 	}
 }
 
-func TestDetailCursorWrapsPage1(t *testing.T) {
+func TestDetailCursorChainAtRelations(t *testing.T) {
 	task := todo.New("wrap p1")
 	task.AddLearning("first lesson")
 	task.AddLearning("second lesson")
 	m := modelWithTasks(t, task)
 	m.cursor = 0
 	m.pane = paneDetail
-	m.detail = detailState{page: 1, field: fieldSubtasks, subtaskCursor: 0}
+	m.detail = detailState{field: fieldSubtasks, subtaskCursor: 0}
 
+	// Up from the first subtask continues the chain into the tags section
+	// (cursor 0 when the task has no tags).
 	m.detailCursorUp()
-	if m.detail.field != fieldLearnings {
-		t.Fatalf("up at Subtasks#0: field = %v, want fieldLearnings", m.detail.field)
-	}
-	if m.detail.learningCursor != 1 {
-		t.Errorf("learningCursor = %d, want 1 (last learning)", m.detail.learningCursor)
+	if m.detail.field != fieldTags || m.detail.tagCursor != 0 {
+		t.Fatalf("up at Subtasks#0: field=%v tagCursor=%d, want fieldTags / 0",
+			m.detail.field, m.detail.tagCursor)
 	}
 
-	m.detail = detailState{page: 1, field: fieldLearnings, learningCursor: 1}
+	// Down from the last learning continues into comments.
+	m.detail = detailState{field: fieldLearnings, learningCursor: 1}
 	m.detailCursorDown()
-	if m.detail.field != fieldSubtasks || m.detail.subtaskCursor != 0 {
-		t.Errorf("down at last learning: field=%v cursor=%d, want fieldSubtasks / 0",
-			m.detail.field, m.detail.subtaskCursor)
+	if m.detail.field != fieldComments || m.detail.commentCursor != 0 {
+		t.Errorf("down at last learning: field=%v cursor=%d, want fieldComments / 0",
+			m.detail.field, m.detail.commentCursor)
 	}
 }
 
-func TestDetailCursorWrapsPage2(t *testing.T) {
+func TestDetailCursorChainAtComments(t *testing.T) {
 	task := todo.New("wrap p2")
 	task.AddComment("c1")
 	task.AddComment("c2")
@@ -690,19 +689,25 @@ func TestDetailCursorWrapsPage2(t *testing.T) {
 	m := modelWithTasks(t, task)
 	m.cursor = 0
 	m.pane = paneDetail
-	m.detail = detailState{commentCursor: 0}
-	// Page 2 is the comments page.
-	m.detail.page = 2
+	m.detail = detailState{field: fieldComments, commentCursor: 0}
 
+	// Up from the first comment continues the chain into learnings.
 	m.detailCursorUp()
-	if m.detail.commentCursor != 2 {
-		t.Errorf("up at commentCursor 0: cursor = %d, want 2 (last)", m.detail.commentCursor)
+	if m.detail.field != fieldLearnings {
+		t.Errorf("up at first comment: field = %v, want fieldLearnings", m.detail.field)
 	}
 
-	m.detail.commentCursor = 2
+	// Down from the last comment wraps the whole column to the top.
+	m.detail = detailState{field: fieldComments, commentCursor: 2}
 	m.detailCursorDown()
-	if m.detail.commentCursor != 0 {
-		t.Errorf("down at last comment: cursor = %d, want 0", m.detail.commentCursor)
+	if m.detail.field != fieldStartDate {
+		t.Errorf("down at last comment: field = %v, want fieldStartDate (wrap)", m.detail.field)
+	}
+
+	// Up from the very top wraps to the last comment.
+	m.detailCursorUp()
+	if m.detail.field != fieldComments || m.detail.commentCursor != 2 {
+		t.Errorf("up at top: field=%v cursor=%d, want fieldComments/2", m.detail.field, m.detail.commentCursor)
 	}
 }
 
@@ -811,7 +816,7 @@ func TestEditorInputReloadsDraftIntoInput(t *testing.T) {
 	m := modelWithTasks(t, task)
 	m.cursor = 0
 	m.pane = paneDetail
-	m.detail = detailState{page: 2, commentCursor: 0}
+	m.detail = detailState{field: fieldComments, commentCursor: 0}
 	m.mode = modeEditComment
 	m.pendingComment = 0
 	m.textInput.SetValue("old comment")

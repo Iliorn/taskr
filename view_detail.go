@@ -52,7 +52,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	defer putBuilder(b)
 
 	availableW := m.termWidth - 8
-	isDetailFocused := m.pane == paneDetail && m.detail.page == 0
+	isDetailFocused := m.pane == paneDetail
 	twoCol := availableW >= twoColumnDetailMinWidth
 
 	// Column widths: split the available width with a 4-char gap between
@@ -84,15 +84,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		return cur + paddedLabel + v
 	}
 
-	indicator := "[1/3]"
-	titleText := truncate(t.Title, availableW-len(indicator)-2)
-	padW := availableW - len([]rune(titleText)) - len([]rune(indicator))
-	if padW < 1 {
-		padW = 1
-	}
-	b.WriteString(detailTitleStyle.Render(titleText) +
-		strings.Repeat(" ", padW) +
-		pageIndicatorStyle.Render(indicator) + "\n\n")
+	b.WriteString(detailTitleStyle.Render(truncate(t.Title, availableW)) + "\n\n")
 
 	startVal := tr("not set")
 	if !t.StartDate.IsZero() {
@@ -230,7 +222,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	defer putBuilder(b)
 
 	availableW := m.termWidth - 8
-	isDetailFocused := m.pane == paneDetail && m.detail.page == 1
+	isDetailFocused := m.pane == paneDetail
 	twoCol := availableW >= twoColumnDetailMinWidth
 
 	gap := 4
@@ -243,16 +235,6 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	if itemW < 4 {
 		itemW = 4
 	}
-
-	indicator := "[2/3]"
-	titleText := truncate(t.Title, availableW-len(indicator)-2)
-	padW := availableW - len([]rune(titleText)) - len([]rune(indicator))
-	if padW < 1 {
-		padW = 1
-	}
-	b.WriteString(detailTitleStyle.Render(titleText) +
-		strings.Repeat(" ", padW) +
-		pageIndicatorStyle.Render(indicator) + "\n\n")
 
 	// Left: subtasks. Right: dependencies + learnings stacked. Each section
 	// renders into its own builder so joinColumns can align them in two-col
@@ -381,21 +363,11 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 	b := getBuilder()
 	defer putBuilder(b)
 
-	availableW := m.termWidth - 8
 	innerW := m.termWidth - 10
 	if innerW < minInnerWidth {
 		innerW = minInnerWidth
 	}
-	indicator := "[3/3]"
-	titleText := truncate(t.Title, availableW-len(indicator)-2)
-	padW := availableW - len([]rune(titleText)) - len([]rune(indicator))
-	if padW < 1 {
-		padW = 1
-	}
-	b.WriteString(detailTitleStyle.Render(titleText) +
-		strings.Repeat(" ", padW) +
-		pageIndicatorStyle.Render(indicator) + "\n\n")
-	isDetailFocused := m.pane == paneDetail && m.detail.page == 2
+	isDetailFocused := m.pane == paneDetail
 	commentCur := "  "
 	if isDetailFocused {
 		commentCur = "▶ "

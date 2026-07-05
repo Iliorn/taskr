@@ -51,26 +51,9 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "left":
-		if m.detail.page > 0 {
-			m.detail.page--
-			if m.detail.page == 0 {
-				m.detail.field = fieldStartDate
-			} else {
-				m.detail.field = fieldSubtasks
-			}
-			m.invalidateDetailCache()
-		}
+		m.detailSectionJump(-1)
 	case "right":
-		if m.detail.page < 2 {
-			m.detail.page++
-			if m.detail.page == 1 {
-				m.detail.field = fieldSubtasks
-				m.detail.subtaskCursor = 0
-			} else {
-				m.detail.commentCursor = 0
-			}
-			m.invalidateDetailCache()
-		}
+		m.detailSectionJump(+1)
 
 	case "up":
 		m.detailCursorUp()
@@ -81,7 +64,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.startEditing()
 
 	case "d":
-		if m.detail.page == 1 && m.detail.field == fieldSubtasks {
+		if m.detail.field == fieldSubtasks {
 			if t := m.currentTodo(); t != nil {
 				if m.detail.subtaskCursor < m.subtaskCount(t.ID) {
 					// Full snapshot: toggleSubtask cascades up through
@@ -101,7 +84,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// top-level `t` handler: done + no running timer = no-op,
 		// idle threshold opens the runaway prompt, otherwise
 		// toggleTimer enforces single-task tracking.
-		if m.detail.page == 1 && m.detail.field == fieldSubtasks {
+		if m.detail.field == fieldSubtasks {
 			if parent := m.currentTodo(); parent != nil {
 				ids := m.subtaskIDs(parent.ID)
 				if m.detail.subtaskCursor < len(ids) {
@@ -144,144 +127,166 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// detailSectionJump moves the detail cursor to the next/previous section
+// head — the pageless replacement for the old [1/3] page flip.
+func (m *model) detailSectionJump(dir int) {
+	sections := []detailField{fieldStartDate, fieldTags, fieldSubtasks, fieldDependencies, fieldLearnings, fieldComments}
+	cur := 0
+	for i, s := range sections {
+		if m.detail.field >= s {
+			cur = i
+		}
+	}
+	// Fields before tags all belong to the first section.
+	if m.detail.field < fieldTags {
+		cur = 0
+	}
+	next := cur + dir
+	if next < 0 || next >= len(sections) {
+		return
+	}
+	m.detail.field = sections[next]
+	m.detail.tagCursor = 0
+	m.detail.subtaskCursor = 0
+	m.detail.depCursor = 0
+	m.detail.learningCursor = 0
+	m.detail.commentCursor = 0
+	m.invalidateDetailCache()
+}
+
+// detailCursorUp/Down walk one continuous field chain over the whole detail
+// column: dates → priority/size/project/notes → tags → subtasks →
+// dependencies → learnings → comments, wrapping at the ends.
 func (m *model) detailCursorUp() {
 	m.invalidateDetailCache()
-	if m.detail.page == 0 {
-		t := m.currentTodo()
-		switch m.detail.field {
-		case fieldStartDate:
-			// Wrap to the bottom of the page: last tag, or fieldTags
-			// itself if there are no tags.
+	t := m.currentTodo()
+	switch m.detail.field {
+	case fieldStartDate:
+		// Wrap to the bottom of the column: last comment.
+		m.detail.field = fieldComments
+		m.detail.commentCursor = 0
+		if t != nil && len(t.Comments) > 0 {
+			m.detail.commentCursor = len(t.Comments) - 1
+		}
+	case fieldDueDate:
+		m.detail.field = fieldStartDate
+	case fieldRecurrence:
+		m.detail.field = fieldDueDate
+	case fieldPriority:
+		m.detail.field = fieldRecurrence
+	case fieldSize:
+		m.detail.field = fieldPriority
+	case fieldProject:
+		m.detail.field = fieldSize
+	case fieldNotes:
+		m.detail.field = fieldProject
+	case fieldTags:
+		if m.detail.tagCursor > 0 {
+			m.detail.tagCursor--
+		} else {
+			m.detail.field = fieldNotes
+		}
+	case fieldSubtasks:
+		if m.detail.subtaskCursor > 0 {
+			m.detail.subtaskCursor--
+		} else {
 			m.detail.field = fieldTags
 			m.detail.tagCursor = 0
 			if t != nil && len(t.Tags) > 0 {
 				m.detail.tagCursor = len(t.Tags) - 1
 			}
-		case fieldDueDate:
-			m.detail.field = fieldStartDate
-		case fieldRecurrence:
-			m.detail.field = fieldDueDate
-		case fieldPriority:
-			m.detail.field = fieldRecurrence
-		case fieldSize:
-			m.detail.field = fieldPriority
-		case fieldProject:
-			m.detail.field = fieldSize
-		case fieldNotes:
-			m.detail.field = fieldProject
-		case fieldTags:
-			if m.detail.tagCursor > 0 {
-				m.detail.tagCursor--
-			} else {
-				m.detail.field = fieldNotes
+		}
+	case fieldDependencies:
+		if m.detail.depCursor > 0 {
+			m.detail.depCursor--
+		} else {
+			m.detail.field = fieldSubtasks
+			if t != nil && m.subtaskCount(t.ID) > 0 {
+				m.detail.subtaskCursor = m.subtaskCount(t.ID) - 1
 			}
 		}
-	} else if m.detail.page == 1 {
-		t := m.currentTodo()
-		switch m.detail.field {
-		case fieldSubtasks:
-			if m.detail.subtaskCursor > 0 {
-				m.detail.subtaskCursor--
-			} else {
-				// Wrap to the last learning on this page.
-				m.detail.field = fieldLearnings
-				m.detail.learningCursor = 0
-				if t != nil && len(t.Learnings) > 0 {
-					m.detail.learningCursor = len(t.Learnings) - 1
-				}
-			}
-		case fieldDependencies:
-			if m.detail.depCursor > 0 {
-				m.detail.depCursor--
-			} else {
-				m.detail.field = fieldSubtasks
-				if t != nil && m.subtaskCount(t.ID) > 0 {
-					m.detail.subtaskCursor = m.subtaskCount(t.ID) - 1
-				}
-			}
-		case fieldLearnings:
-			if m.detail.learningCursor > 0 {
-				m.detail.learningCursor--
-			} else {
-				m.detail.field = fieldDependencies
-				if t != nil && len(t.Dependencies) > 0 {
-					m.detail.depCursor = len(t.Dependencies) - 1
-				}
+	case fieldLearnings:
+		if m.detail.learningCursor > 0 {
+			m.detail.learningCursor--
+		} else {
+			m.detail.field = fieldDependencies
+			if t != nil && len(t.Dependencies) > 0 {
+				m.detail.depCursor = len(t.Dependencies) - 1
 			}
 		}
-	} else if m.detail.commentCursor > 0 {
-		m.detail.commentCursor--
-	} else if t := m.currentTodo(); t != nil && len(t.Comments) > 0 {
-		// Wrap to the last comment.
-		m.detail.commentCursor = len(t.Comments) - 1
+	case fieldComments:
+		if m.detail.commentCursor > 0 {
+			m.detail.commentCursor--
+		} else {
+			m.detail.field = fieldLearnings
+			m.detail.learningCursor = 0
+			if t != nil && len(t.Learnings) > 0 {
+				m.detail.learningCursor = len(t.Learnings) - 1
+			}
+		}
 	}
 }
 
 func (m *model) detailCursorDown() {
 	m.invalidateDetailCache()
-	if m.detail.page == 0 {
-		t := m.currentTodo()
-		switch m.detail.field {
-		case fieldStartDate:
-			m.detail.field = fieldDueDate
-		case fieldDueDate:
-			m.detail.field = fieldRecurrence
-		case fieldRecurrence:
-			m.detail.field = fieldPriority
-		case fieldPriority:
-			m.detail.field = fieldSize
-		case fieldSize:
-			m.detail.field = fieldProject
-		case fieldProject:
-			m.detail.field = fieldNotes
-		case fieldNotes:
-			m.detail.field = fieldTags
-			m.detail.tagCursor = 0
-		case fieldTags:
-			if t != nil && m.detail.tagCursor < len(t.Tags)-1 {
-				m.detail.tagCursor++
-			} else {
-				// Wrap to the top of the page.
-				m.detail.field = fieldStartDate
-				m.detail.tagCursor = 0
-			}
+	t := m.currentTodo()
+	switch m.detail.field {
+	case fieldStartDate:
+		m.detail.field = fieldDueDate
+	case fieldDueDate:
+		m.detail.field = fieldRecurrence
+	case fieldRecurrence:
+		m.detail.field = fieldPriority
+	case fieldPriority:
+		m.detail.field = fieldSize
+	case fieldSize:
+		m.detail.field = fieldProject
+	case fieldProject:
+		m.detail.field = fieldNotes
+	case fieldNotes:
+		m.detail.field = fieldTags
+		m.detail.tagCursor = 0
+	case fieldTags:
+		if t != nil && m.detail.tagCursor < len(t.Tags)-1 {
+			m.detail.tagCursor++
+		} else {
+			m.detail.field = fieldSubtasks
+			m.detail.subtaskCursor = 0
 		}
-	} else if m.detail.page == 1 {
-		t := m.currentTodo()
-		switch m.detail.field {
-		case fieldSubtasks:
-			if t != nil && m.detail.subtaskCursor < m.subtaskCount(t.ID)-1 {
-				m.detail.subtaskCursor++
-			} else {
-				m.detail.field = fieldDependencies
-				m.detail.depCursor = 0
-			}
-		case fieldDependencies:
-			if t != nil && m.detail.depCursor < len(t.Dependencies)-1 {
-				m.detail.depCursor++
-			} else {
-				m.detail.field = fieldLearnings
-				m.detail.learningCursor = 0
-			}
-		case fieldLearnings:
-			if t != nil && m.detail.learningCursor < len(t.Learnings)-1 {
-				m.detail.learningCursor++
-			} else {
-				// Wrap to the top of the page.
-				m.detail.field = fieldSubtasks
-				m.detail.subtaskCursor = 0
-			}
+	case fieldSubtasks:
+		if t != nil && m.detail.subtaskCursor < m.subtaskCount(t.ID)-1 {
+			m.detail.subtaskCursor++
+		} else {
+			m.detail.field = fieldDependencies
+			m.detail.depCursor = 0
 		}
-	} else if t := m.currentTodo(); t != nil && m.detail.commentCursor < len(t.Comments)-1 {
-		m.detail.commentCursor++
-	} else {
-		// Wrap to the first comment.
-		m.detail.commentCursor = 0
+	case fieldDependencies:
+		if t != nil && m.detail.depCursor < len(t.Dependencies)-1 {
+			m.detail.depCursor++
+		} else {
+			m.detail.field = fieldLearnings
+			m.detail.learningCursor = 0
+		}
+	case fieldLearnings:
+		if t != nil && m.detail.learningCursor < len(t.Learnings)-1 {
+			m.detail.learningCursor++
+		} else {
+			m.detail.field = fieldComments
+			m.detail.commentCursor = 0
+		}
+	case fieldComments:
+		if t != nil && m.detail.commentCursor < len(t.Comments)-1 {
+			m.detail.commentCursor++
+		} else {
+			// Wrap to the top of the column.
+			m.detail.field = fieldStartDate
+			m.detail.commentCursor = 0
+		}
 	}
 }
 
 func (m model) detailAdd() (tea.Model, tea.Cmd) {
-	if m.detail.page == 2 {
+	if m.detail.field == fieldComments {
 		m.mode = modeInput
 		m.textInput.SetValue("")
 		m.textInput.Placeholder = tr("Add comment...")
@@ -328,7 +333,7 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 	if t == nil {
 		return m, nil
 	}
-	if m.detail.page == 2 {
+	if m.detail.field == fieldComments {
 		if len(t.Comments) > 0 {
 			m.mode = modeConfirm
 			m.confirmOnYes = (*model).confirmDeleteComment
@@ -426,7 +431,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.detail.page == 2 {
+	if m.detail.field == fieldComments {
 		if len(t.Comments) > 0 {
 			m.mode = modeEditComment
 			m.pendingComment = m.detail.commentCursor

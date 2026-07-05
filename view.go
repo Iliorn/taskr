@@ -347,7 +347,7 @@ func (m model) buildFooterContent(w int) string {
 		// compose in $EDITOR; advertise it under the field.
 		switch {
 		case m.mode == modeEditComment, m.mode == modeAddLearning, m.mode == modeEditLearning,
-			m.mode == modeInput && m.pane != paneList && m.detail.page == 2:
+			m.mode == modeInput && m.pane != paneList && m.detail.field == fieldComments:
 			return field + "\n" + helpStyle.Render("    "+tr("ctrl+e  edit in $EDITOR"))
 		}
 		return field
@@ -492,13 +492,11 @@ func (m model) buildDetailContent() string {
 		if t == nil {
 			return dimStyle.Render("  No task selected.")
 		}
-		if m.detail.page == 0 {
-			return m.renderDetailPage1(t)
-		}
-		if m.detail.page == 1 {
-			return m.renderDetailPage2(t)
-		}
-		return m.renderDetailPage3(t)
+		// One continuous column: fields+tags, relations, comments. Sections
+		// scroll as a single document; left/right jump between section heads.
+		return m.renderDetailPage1(t) + "\n" +
+			m.renderDetailPage2(t) + "\n" +
+			m.renderDetailPage3(t)
 	}
 }
 

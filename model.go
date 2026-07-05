@@ -90,6 +90,7 @@ const (
 	fieldDependencies
 	fieldLearnings
 	fieldSubtasks
+	fieldComments
 )
 
 type appMode int
@@ -224,7 +225,6 @@ type searchState struct {
 
 type detailState struct {
 	field          detailField
-	page           int
 	commentCursor  int
 	depCursor      int
 	tagCursor      int

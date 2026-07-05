@@ -244,7 +244,7 @@ var daTranslations = map[string]string{
 	"expand/collapse subtasks":    "fold deludtryk ud/ind",
 	"search":                      "søg",
 	"Detail view":                 "Detaljevisning",
-	"switch pages":                "skift sider",
+	"jump section":                "hop til sektion",
 	"edit field / toggle subtask": "rediger felt / skift delopgave",
 	"add tag / dep / comment / learning / subtask": "tilføj mærke / afh. / kommentar / læring / delopgave",
 	"toggle subtask done":                          "skift delopgave færdig",
