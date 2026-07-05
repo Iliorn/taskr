@@ -426,6 +426,7 @@ var daTranslations = map[string]string{
 	"No subtasks. Press 'a' to add one.":     "Ingen delopgaver. Tryk 'a' for at tilføje en.",
 	"%s[?] unknown subtask":                  "%s[?] ukendt delopgave",
 	"Dependencies:":                          "Afhængigheder:",
+	"Blocks:":                                "Blokerer:",
 	"No dependencies. Press 'a' to add one.": "Ingen afhængigheder. Tryk 'a' for at tilføje en.",
 	"%s[?] unknown task":                     "%s[?] ukendt opgave",
 	"Learnings:":                             "Læring:",

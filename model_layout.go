@@ -52,11 +52,16 @@ func (m model) estimateDetailCursorLine() int {
 		}
 		return relStart + 1 + subRows + 2 + m.detail.depCursor
 	case fieldLearnings:
-		if twoCol {
-			// Right column = deps + blank + learnings.
-			return relStart + 1 + depRows + 2 + m.detail.learningCursor
+		// The display-only Blocks list renders between deps and learnings.
+		blocksExtra := 0
+		if n := len(dependentsOf(m.allTodos(), t.ID)); n > 0 {
+			blocksExtra = 2 + n
 		}
-		return relStart + 1 + subRows + 2 + depRows + 2 + m.detail.learningCursor
+		if twoCol {
+			// Right column = deps (+ blocks) + blank + learnings.
+			return relStart + 1 + depRows + blocksExtra + 2 + m.detail.learningCursor
+		}
+		return relStart + 1 + subRows + 2 + depRows + blocksExtra + 2 + m.detail.learningCursor
 	}
 
 	// Comments section: blank after the relations block, label first.
@@ -264,7 +269,11 @@ func (m model) detailRelationsHeight(t *todo.Todo, twoCol bool) int {
 		return n
 	}
 	leftH := 1 + rows(m.subtaskCount(t.ID))
-	rightH := 1 + rows(len(t.Dependencies)) + 1 + 1 + rows(len(t.Learnings))
+	depH := 1 + rows(len(t.Dependencies))
+	if n := len(dependentsOf(m.allTodos(), t.ID)); n > 0 {
+		depH += 2 + n // blank + Blocks label + rows
+	}
+	rightH := depH + 1 + 1 + rows(len(t.Learnings))
 	if twoCol {
 		if rightH > leftH {
 			return rightH

@@ -237,3 +237,37 @@ func TestOverdueDependencyAddsNoGlyph(t *testing.T) {
 		t.Errorf("overdue-dependency row should carry no '!' (color-only): %q", line)
 	}
 }
+
+// The detail pane shows the inbound side of the dependency graph: a task
+// that others depend on lists them under "Blocks:". The dependent's own
+// detail shows no Blocks section (its edge is outbound).
+func TestDetailShowsInboundDependents(t *testing.T) {
+	blocker := todo.New("build the widget")
+	blocker.ID = "blk1"
+	dependent := todo.New("ship the widget")
+	dependent.Dependencies = []string{"blk1"}
+	m := modelWithTasks(t, blocker, dependent)
+	m.termWidth, m.termHeight = 120, 40 // side-by-side: detail previews the cursor task
+
+	setCursorOn := func(id string) {
+		for i := range m.cache.active {
+			if m.cache.active[i].ID == id {
+				m.cursor = i
+				return
+			}
+		}
+		t.Fatalf("task %s not in active list", id)
+	}
+
+	setCursorOn("blk1")
+	out := m.View()
+	if !strings.Contains(out, tr("Blocks:")) || !strings.Contains(out, "↥ Ship the widget") {
+		t.Errorf("blocker detail should list its dependents under Blocks:\n%s", out)
+	}
+
+	setCursorOn(dependent.ID)
+	m.invalidateDetailCache()
+	if strings.Contains(m.View(), tr("Blocks:")) {
+		t.Error("dependent's detail should have no Blocks section")
+	}
+}

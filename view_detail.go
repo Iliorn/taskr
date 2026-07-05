@@ -321,6 +321,14 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 			}
 		}
 	}
+	// Inbound dependents ("Blocks") — display-only: the list row's ↥ glyph
+	// says a task blocks others, this says which. Omitted when empty.
+	if blocks := dependentsOf(m.allTodos(), t.ID); len(blocks) > 0 {
+		depB.WriteString("\n  " + detailLabelStyle.Render(tr("Blocks:")) + "\n")
+		for _, d := range blocks {
+			depB.WriteString("  " + detailValueStyle.Render("↥ "+truncate(d.Title, itemW)) + "\n")
+		}
+	}
 
 	learningCur := "  "
 	if isDetailFocused && m.detail.field == fieldLearnings {

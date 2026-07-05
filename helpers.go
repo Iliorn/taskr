@@ -849,3 +849,22 @@ func parsePositiveInt(s string) (int, bool) {
 	}
 	return n, true
 }
+
+// dependentsOf returns the pending tasks that depend on id — the inbound
+// side of the dependency graph ("Blocks"). Outbound dependencies live on the
+// task itself; the inbound list only exists by scanning the full set.
+func dependentsOf(todos []todo.Todo, id string) []*todo.Todo {
+	var out []*todo.Todo
+	for i := range todos {
+		if todos[i].Status != todo.Pending {
+			continue
+		}
+		for _, dep := range todos[i].Dependencies {
+			if dep == id {
+				out = append(out, &todos[i])
+				break
+			}
+		}
+	}
+	return out
+}

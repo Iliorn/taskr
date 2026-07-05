@@ -916,11 +916,11 @@ func cliShow(args []string) int {
 		}
 	}
 	sort.Slice(subs, func(i, j int) bool { return subs[i].CreatedAt.Before(subs[j].CreatedAt) })
-	printTaskDetail(t, subs)
+	printTaskDetail(t, subs, todos)
 	return 0
 }
 
-func printTaskDetail(t *todo.Todo, subs []todo.Todo) {
+func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo) {
 	fmt.Printf("ID:       %s\n", t.ID)
 	fmt.Printf("Title:    %s\n", t.Title)
 	status := "pending"
@@ -973,7 +973,27 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo) {
 	if len(t.Dependencies) > 0 {
 		fmt.Printf("\nDependencies (%d):\n", len(t.Dependencies))
 		for _, dep := range t.Dependencies {
-			fmt.Printf("  - %s\n", dep)
+			// Resolve to a title where possible; fall back to the raw id for
+			// dangling references.
+			line := "  - " + dep
+			for i := range todos {
+				if todos[i].ID == dep {
+					marker := "[ ]"
+					if todos[i].Status == todo.Done {
+						marker = "[✓]"
+					}
+					line = fmt.Sprintf("  %.8s  %s  %s", dep, marker, todos[i].Title)
+					break
+				}
+			}
+			fmt.Println(line)
+		}
+	}
+	if blocks := dependentsOf(todos, t.ID); len(blocks) > 0 {
+		// The inbound side: pending tasks waiting on this one.
+		fmt.Printf("\nBlocks (%d):\n", len(blocks))
+		for _, d := range blocks {
+			fmt.Printf("  %.8s  %s\n", d.ID, d.Title)
 		}
 	}
 	if len(t.Learnings) > 0 {
