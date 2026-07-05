@@ -57,12 +57,74 @@ func (m model) renderTagList() string {
 	}
 	tagHdr := tr("  Tag")
 	nameW := contentFitWidth(m.termWidth, labelW, 4, len([]rune(tagHdr)))
-	headerLeft := padRight(tagHdr, nameW) + tr("Progress")
-	padW := m.termWidth - 6 - len([]rune(headerLeft)) - barW
+
+	// Right-aligned numeric columns after the bar: Done (done/total), Age (avg
+	// age of open tasks), Time (total tracked). Values are formatted for every
+	// filtered tag — not just the visible window — so column widths hold steady
+	// while scrolling. On narrow terminals whole columns are dropped right to
+	// left: a missing column reads better than a value chopped mid-word.
+	type tagRow struct {
+		s                tagStats
+		label            string
+		done, age, spent string
+	}
+	rows := make([]tagRow, len(tags))
+	doneHdr, ageHdr, timeHdr := tr("Done"), tr("Age"), tr("Time")
+	doneW := len([]rune(doneHdr))
+	ageW := len([]rune(ageHdr))
+	timeW := len([]rune(timeHdr))
+	for i, tag := range tags {
+		r := tagRow{label: "#" + tag}
+		if tag == untaggedKey {
+			// The virtual row only triages counts; age/time stay blank.
+			r.s = tagStats{total: m.cache.untaggedTotal, done: m.cache.untaggedDone}
+			r.label = tr("(untagged)")
+		} else {
+			r.s = stats[tag]
+			r.age, r.spent = "—", "—"
+			if r.s.openCount > 0 {
+				r.age = formatDaysCompact(r.s.ageSum / time.Duration(r.s.openCount))
+			}
+			if r.s.tracked > 0 {
+				r.spent = formatDurationCompact(r.s.tracked)
+			}
+		}
+		r.done = fmt.Sprintf("%d/%d", r.s.done, r.s.total)
+		doneW = max(doneW, len([]rune(r.done)))
+		ageW = max(ageW, len([]rune(r.age)))
+		timeW = max(timeW, len([]rune(r.spent)))
+		rows[i] = r
+	}
+
+	const pctW = 5 // " 100%"
+	const colGap = 2
+	avail := m.termWidth - 8
+	used := nameW + barW + pctW
+	showDone := used+colGap+doneW <= avail
+	if showDone {
+		used += colGap + doneW
+	}
+	showAge := showDone && used+colGap+ageW <= avail
+	if showAge {
+		used += colGap + ageW
+	}
+	showTime := showAge && used+colGap+timeW <= avail
+
+	headerLeft := padRight(tagHdr, nameW) + padRight(tr("Progress"), barW+pctW)
+	if showDone {
+		headerLeft += strings.Repeat(" ", colGap) + padLeft(doneHdr, doneW)
+	}
+	if showAge {
+		headerLeft += strings.Repeat(" ", colGap) + padLeft(ageHdr, ageW)
+	}
+	if showTime {
+		headerLeft += strings.Repeat(" ", colGap) + padLeft(timeHdr, timeW)
+	}
+	padW := m.termWidth - 6 - len([]rune(headerLeft))
 	if padW < 1 {
 		padW = 1
 	}
-	b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW+barW)) + "\n")
+	b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
 
 	maxVisible := m.estimateListHeight()
 	startIdx := m.listOffset
@@ -79,15 +141,8 @@ func (m model) renderTagList() string {
 
 	for i := startIdx; i < endIdx; i++ {
 		tag := tags[i]
-		var s tagStats
-		label := "#" + tag
-		if tag == untaggedKey {
-			s = tagStats{total: m.cache.untaggedTotal, done: m.cache.untaggedDone}
-			label = tr("(untagged)")
-		} else {
-			s = stats[tag]
-		}
-		total, done := s.total, s.done
+		r := rows[i]
+		total, done := r.s.total, r.s.done
 
 		pct := 0.0
 		if total > 0 {
@@ -98,7 +153,7 @@ func (m model) renderTagList() string {
 		if i == m.tagTabCursor {
 			cur = "▶ "
 		}
-		tagLabel := padRight(truncate(label, nameW-4), nameW-2)
+		tagLabel := padRight(truncate(r.label, nameW-4), nameW-2)
 
 		barStr.Reset()
 		// Group consecutive cells that share a gradient color into a single
@@ -135,33 +190,27 @@ func (m model) renderTagList() string {
 			continue
 		}
 
-		pctStr := fmt.Sprintf(tr(" %3d%% (%d done / %d total)"), int(pct*100), done, total)
-		// Extra columns (clipped first on narrow terminals): average age of open
-		// tasks, then total tracked time. Labelled inline so they're self-
-		// explanatory, dot-separated. Skipped for the virtual untagged row.
-		if tag != untaggedKey {
-			var extras []string
-			if s.openCount > 0 {
-				extras = append(extras, tr("avg age ")+formatDaysCompact(s.ageSum/time.Duration(s.openCount)))
-			}
-			if s.tracked > 0 {
-				extras = append(extras, tr("⧗ time spent ")+formatDurationCompact(s.tracked))
-			}
-			if len(extras) > 0 {
-				pctStr += "  " + strings.Join(extras, " · ")
-			}
+		right := fmt.Sprintf(" %3d%%", int(pct*100))
+		if showDone {
+			right += strings.Repeat(" ", colGap) + padLeft(r.done, doneW)
+		}
+		if showAge {
+			right += strings.Repeat(" ", colGap) + padLeft(r.age, ageW)
+		}
+		if showTime {
+			right += strings.Repeat(" ", colGap) + padLeft(r.spent, timeW)
 		}
 		if i == m.tagTabCursor {
 			b.WriteString(
 				tagSelectedStyle.Render(cur+tagLabel) +
 					barStr.String() +
-					selectedStyle.Render(pctStr) + "\n",
+					selectedStyle.Render(right) + "\n",
 			)
 		} else {
 			b.WriteString(
 				tagStyle.Render(cur+tagLabel) +
 					barStr.String() +
-					normalStyle.Render(pctStr) + "\n",
+					normalStyle.Render(right) + "\n",
 			)
 		}
 	}

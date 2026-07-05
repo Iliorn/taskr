@@ -196,10 +196,33 @@ func TestTagStatsAgeAndTracked(t *testing.T) {
 	m.tab = tabTags
 	m.refreshCaches()
 	out := m.renderTagList()
-	for _, want := range []string{"avg age", "⧗ time spent", " · "} {
+	// Header columns plus the formatted values: done/total, avg age of the two
+	// open tasks (~7d), and the tracked 90m.
+	for _, want := range []string{"Done", "Age", "Time", "1/3", "7.0d", "1h30m"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("expected %q in tag row, got:\n%s", want, out)
+			t.Errorf("expected %q in tag list, got:\n%s", want, out)
 		}
+	}
+}
+
+// TestTagListDropsColumnsWhenNarrow asserts the numeric columns disappear
+// whole on a narrow terminal instead of being clipped mid-value by the panel.
+func TestTagListDropsColumnsWhenNarrow(t *testing.T) {
+	a := todo.New("open with time")
+	a.Tags = []string{"work"}
+	a.CreatedAt = time.Now().AddDate(0, 0, -12)
+	a.TimeEntries = []todo.TimeEntry{{
+		StartedAt: time.Now().Add(-90 * time.Minute),
+		StoppedAt: time.Now(),
+	}}
+
+	m := newTagModel(a)
+	m.termWidth = 44
+	m.tab = tabTags
+	m.refreshCaches()
+	out := m.renderTagList()
+	if strings.Contains(out, "Time") || strings.Contains(out, "1h30m") {
+		t.Errorf("narrow tag list should drop the Time column whole, got:\n%s", out)
 	}
 }
 

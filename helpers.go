@@ -55,6 +55,14 @@ func padRight(s string, width int) string {
 	return s + strings.Repeat(" ", width-len(r))
 }
 
+func padLeft(s string, width int) string {
+	r := []rune(s)
+	if len(r) >= width {
+		return string(r[:width])
+	}
+	return strings.Repeat(" ", width-len(r)) + s
+}
+
 func padCenter(s string, width int) string {
 	r := []rune(s)
 	if len(r) >= width {
