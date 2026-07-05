@@ -63,9 +63,9 @@ func (m model) View() string {
 	// mode the Tasks detail renders inside buildListContent's right column
 	// instead of as a stacked panel.
 	switch m.tab {
-	case tabTasks:
+	case tabTasks, tabLearnings:
 		showDetail = showDetail && m.pane == paneDetail && !m.sideBySide()
-	case tabProjects, tabLearnings:
+	case tabProjects:
 		showDetail = showDetail && m.pane == paneDetail
 	}
 
@@ -527,7 +527,7 @@ func (m model) buildListContent(w, outerH int) string {
 		return m.buildCalendarContent(w, outerH)
 	}
 	if m.sideBySide() {
-		return m.buildTasksSideBySide(w, outerH)
+		return m.buildSideBySide(w, outerH)
 	}
 
 	innerH := outerH - 2 // subtract top and bottom border lines
@@ -545,14 +545,14 @@ func (m model) buildListContent(w, outerH int) string {
 	return listPanelStyle.Width(w).Render(strings.Join(rawList, "\n"))
 }
 
-// buildTasksSideBySide renders the Tasks tab as two columns: the list keeps
-// full height on the left and the detail pane is an always-on preview of the
-// cursor task on the right. Mirrors buildCalendarContent's approach — each
+// buildSideBySide renders the Tasks/Learnings tabs as two columns: the list
+// keeps full height on the left and the detail pane is an always-on preview of
+// the cursor item on the right. Mirrors buildCalendarContent's approach — each
 // column is rendered through a model copy whose termWidth is the column's
 // share, so the existing width math (list columns, tag fitting, the no-wrap
 // contract, the detail's own two-column threshold) applies per column
 // unchanged. The focused pane carries the accent border.
-func (m model) buildTasksSideBySide(w, outerH int) string {
+func (m model) buildSideBySide(w, outerH int) string {
 	innerH := outerH - 2
 	if innerH < 1 {
 		innerH = 1
@@ -576,7 +576,7 @@ func (m model) buildTasksSideBySide(w, outerH int) string {
 	dm := m
 	dm.termWidth = detailW + 6
 	var detailLines []string
-	if m.currentTodo() != nil {
+	if m.tab == tabLearnings || m.currentTodo() != nil {
 		detailLines = strings.Split(dm.applyDetailScrollN(dm.buildDetailContent(), innerH), "\n")
 	} else {
 		detailLines = []string{"", dimStyle.Render(tr("  No task selected."))}

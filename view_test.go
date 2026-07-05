@@ -175,6 +175,31 @@ func TestSideBySideDetailPreview(t *testing.T) {
 	}
 }
 
+// The Learnings tab shares the Tasks tab's side-by-side contract: at wide
+// widths the cursor learning's detail previews in the right column without
+// Enter, and narrow terminals fall back to the stacked enter-to-open layout.
+func TestLearningsSideBySide(t *testing.T) {
+	task := todo.New("ship the release")
+	task.AddLearning("tag the release before pushing")
+	m := modelWithTasks(t, task)
+	m.tab = tabLearnings
+	m.termHeight = 40
+
+	m.termWidth = sideBySideMinWidth + 10
+	if !strings.Contains(m.View(), tr("Source task:  ")) {
+		t.Error("side-by-side: learning detail should render without Enter")
+	}
+
+	m.termWidth = sideBySideMinWidth - 10
+	if strings.Contains(m.View(), tr("Source task:  ")) {
+		t.Error("stacked fallback: learning detail should stay hidden until Enter")
+	}
+	m2 := script(t, m, "enter")
+	if !strings.Contains(m2.View(), tr("Source task:  ")) {
+		t.Error("stacked fallback: Enter should open the learning detail pane")
+	}
+}
+
 // A selected overdue row must show both states: the overdue foreground and the
 // selection background. Before the combined styles, the status colour won the
 // style switch outright and the only cursor cue on an overdue-heavy list was
