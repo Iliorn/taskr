@@ -287,7 +287,9 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 			if dep.IsOverdue() {
 				warn = " !"
 			}
-			line := fmt.Sprintf("%s%s %s%s", pfx, status, truncate(dep.Title, itemW-len(warn)), warn)
+			// ↧ mirrors the list-row "waiting on this" glyph, and the ↥ on
+			// the Blocks lines below — outbound vs inbound at a glance.
+			line := fmt.Sprintf("%s%s ↧ %s%s", pfx, status, truncate(dep.Title, itemW-len(warn)-2), warn)
 			switch {
 			case dep.IsOverdue():
 				depB.WriteString(overdueStyle.Render(line) + "\n")

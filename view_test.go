@@ -268,8 +268,13 @@ func TestDetailShowsInboundDependents(t *testing.T) {
 
 	setCursorOn(dependent.ID)
 	m.invalidateDetailCache()
-	if strings.Contains(m.View(), tr("Blocks:")) {
+	out = m.View()
+	if strings.Contains(out, tr("Blocks:")) {
 		t.Error("dependent's detail should have no Blocks section")
+	}
+	// The outbound side carries the ↧ glyph, mirroring the list rows.
+	if !strings.Contains(out, "↧ Build the widget") {
+		t.Errorf("outbound dependency line should carry the ↧ glyph:\n%s", out)
 	}
 }
 
