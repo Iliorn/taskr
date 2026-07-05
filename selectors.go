@@ -3,6 +3,7 @@ package main
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"taskr/todo"
 )
@@ -360,7 +361,7 @@ func dependencyScoreRollup(todos []todo.Todo, base map[string]float64) map[strin
 
 // selectSortedTags returns the unique tags across all tasks (sorted by mode)
 // plus the count of untagged tasks (total and done) shown as a virtual row.
-func selectSortedTags(todos []todo.Todo, mode tagSortMode, stats map[string]tagStats) (sorted []string, untaggedTotal, untaggedDone int) {
+func selectSortedTags(todos []todo.Todo, mode tagSortMode, stats map[string]tagStats, lastUsed map[string]time.Time) (sorted []string, untaggedTotal, untaggedDone int) {
 	seen := make(map[string]struct{}, len(stats))
 	for i := range todos {
 		// The Tasks tab list excludes subtasks, so counting them here
@@ -385,7 +386,7 @@ func selectSortedTags(todos []todo.Todo, mode tagSortMode, stats map[string]tagS
 			sorted = append(sorted, tag)
 		}
 	}
-	sortTags(sorted, mode, stats)
+	sortTags(sorted, mode, stats, lastUsed)
 	return sorted, untaggedTotal, untaggedDone
 }
 

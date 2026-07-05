@@ -1003,9 +1003,15 @@ func (m model) startSearch() (tea.Model, tea.Cmd) {
 func (m *model) cycleSortMode() {
 	switch m.tab {
 	case tabTags:
-		if m.tagSort == tagSortAlpha {
+		// Four-state cycle: Alpha → Count → Progress → Recent → Alpha.
+		switch m.tagSort {
+		case tagSortAlpha:
 			m.tagSort = tagSortCount
-		} else {
+		case tagSortCount:
+			m.tagSort = tagSortProgress
+		case tagSortProgress:
+			m.tagSort = tagSortRecent
+		default:
 			m.tagSort = tagSortAlpha
 		}
 		m.tagTabCursor = 0

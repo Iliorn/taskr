@@ -284,7 +284,7 @@ func TestSelectSortedTags(t *testing.T) {
 	todos := []todo.Todo{t1, t2, t3}
 	stats := computeTagStats(todos)
 
-	sorted, ut, ud := selectSortedTags(todos, tagSortAlpha, stats)
+	sorted, ut, ud := selectSortedTags(todos, tagSortAlpha, stats, nil)
 	if len(sorted) != 2 || sorted[0] != "urgent" || sorted[1] != "work" {
 		t.Fatalf("alpha tags = %v, want [urgent work]", sorted)
 	}
@@ -292,9 +292,40 @@ func TestSelectSortedTags(t *testing.T) {
 		t.Fatalf("untagged total=%d done=%d, want 1/1", ut, ud)
 	}
 
-	byCount, _, _ := selectSortedTags(todos, tagSortCount, stats)
+	byCount, _, _ := selectSortedTags(todos, tagSortCount, stats, nil)
 	if byCount[0] != "work" {
 		t.Fatalf("count tags = %v, want work first (2 > 1)", byCount)
+	}
+}
+
+func TestSelectSortedTagsProgressAndRecent(t *testing.T) {
+	halfDone := mkTodo("a", "open half", todo.Pending)
+	halfDone.Tags = []string{"half"}
+	halfDone2 := mkTodo("b", "done half", todo.Done)
+	halfDone2.Tags = []string{"half"}
+	allDone := mkTodo("c", "done", todo.Done)
+	allDone.Tags = []string{"finished"}
+	noneDone := mkTodo("d", "open", todo.Pending)
+	noneDone.Tags = []string{"untouched"}
+	todos := []todo.Todo{halfDone, halfDone2, allDone, noneDone}
+	stats := computeTagStats(todos)
+
+	byProgress, _, _ := selectSortedTags(todos, tagSortProgress, stats, nil)
+	if len(byProgress) != 3 || byProgress[0] != "untouched" ||
+		byProgress[1] != "half" || byProgress[2] != "finished" {
+		t.Fatalf("progress tags = %v, want [untouched half finished]", byProgress)
+	}
+
+	now := time.Now()
+	lastUsed := map[string]time.Time{
+		"half":      now.Add(-2 * time.Hour),
+		"finished":  now,
+		"untouched": now.Add(-1 * time.Hour),
+	}
+	byRecent, _, _ := selectSortedTags(todos, tagSortRecent, stats, lastUsed)
+	if len(byRecent) != 3 || byRecent[0] != "finished" ||
+		byRecent[1] != "untouched" || byRecent[2] != "half" {
+		t.Fatalf("recent tags = %v, want [finished untouched half]", byRecent)
 	}
 }
 
@@ -311,7 +342,7 @@ func TestSelectSortedTagsSkipsSubtasks(t *testing.T) {
 	subOnlyTag.Tags = []string{"orphan"}
 
 	sorted, ut, ud := selectSortedTags(
-		[]todo.Todo{parent, untaggedSub, subOnlyTag}, tagSortAlpha, nil)
+		[]todo.Todo{parent, untaggedSub, subOnlyTag}, tagSortAlpha, nil, nil)
 	if ut != 0 || ud != 0 {
 		t.Fatalf("untagged total=%d done=%d, want 0/0 (subtask must not count)", ut, ud)
 	}

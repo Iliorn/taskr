@@ -199,6 +199,9 @@ func (m model) renderStatusLine() string {
 	if m.tab == tabTasks {
 		right = append(right, statusSortStyle.Render(tr("sort: ")+m.sortLabel()))
 	}
+	if m.tab == tabTags {
+		right = append(right, statusSortStyle.Render(tr("sort: ")+m.tagSortLabel()))
+	}
 	if g := m.syncGlyph(); g != "" {
 		right = append(right, g)
 	}
@@ -238,6 +241,20 @@ func (m model) sortLabel() string {
 		return tr("size")
 	default:
 		return tr("score")
+	}
+}
+
+// tagSortLabel names the ordering currently applied to the Tags-tab list.
+func (m model) tagSortLabel() string {
+	switch m.tagSort {
+	case tagSortCount:
+		return tr("count")
+	case tagSortProgress:
+		return tr("progress")
+	case tagSortRecent:
+		return tr("recent")
+	default:
+		return tr("alpha")
 	}
 }
 

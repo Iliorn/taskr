@@ -72,6 +72,9 @@ func (m *model) refreshCaches() {
 	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 
 	m.cache.tags = computeTagStats(all)
+	// Recency feeds the Tags-tab recent sort, so refresh it before the sorted
+	// tag list is rebuilt from it.
+	m.refreshUsageRecency(all)
 	m.rebuildSortedTagsFrom(all)
 
 	// subtaskOf is maintained incrementally by Store.add / Store.remove, so
@@ -88,8 +91,6 @@ func (m *model) refreshCaches() {
 	for p, tasks := range m.cache.projectTasks {
 		m.cache.projectTasks[p] = sortTodosByStartDate(tasks)
 	}
-
-	m.refreshUsageRecency(all)
 
 	m.cache.projects = nil
 	m.cache.projectSearch = "\x00"
@@ -223,18 +224,18 @@ func (m *model) refreshFilteredCaches() {
 // the same way (on data change, and on sort-mode toggle via sortCachedTags).
 func (m *model) rebuildSortedTagsFrom(todos []todo.Todo) {
 	m.cache.tagsSorted, m.cache.untaggedTotal, m.cache.untaggedDone =
-		selectSortedTags(todos, m.tagSort, m.cache.tags)
+		selectSortedTags(todos, m.tagSort, m.cache.tags, m.cache.tagLastUsed)
 	m.cache.tagsSortMode = m.tagSort
 }
 
 // sortCachedTags re-sorts the cached tag list in place for the current sort
 // mode without rescanning todos — used when only the sort mode changes.
 func (m *model) sortCachedTags() {
-	sortTags(m.cache.tagsSorted, m.tagSort, m.cache.tags)
+	sortTags(m.cache.tagsSorted, m.tagSort, m.cache.tags, m.cache.tagLastUsed)
 	m.cache.tagsSortMode = m.tagSort
 }
 
-func sortTags(tags []string, mode tagSortMode, stats map[string]tagStats) {
+func sortTags(tags []string, mode tagSortMode, stats map[string]tagStats, lastUsed map[string]time.Time) {
 	switch mode {
 	case tagSortCount:
 		sort.Slice(tags, func(i, j int) bool {
@@ -245,6 +246,24 @@ func sortTags(tags []string, mode tagSortMode, stats map[string]tagStats) {
 			}
 			return tags[i] < tags[j]
 		})
+	case tagSortProgress:
+		// Least-finished first: the tags still needing attention float to the
+		// top, fully-done tags sink to the bottom. Ties break alphabetically.
+		pct := func(s tagStats) float64 {
+			if s.total == 0 {
+				return 0
+			}
+			return float64(s.done) / float64(s.total)
+		}
+		sort.Slice(tags, func(i, j int) bool {
+			pi, pj := pct(stats[tags[i]]), pct(stats[tags[j]])
+			if pi != pj {
+				return pi < pj
+			}
+			return tags[i] < tags[j]
+		})
+	case tagSortRecent:
+		sortByRecency(tags, lastUsed)
 	default:
 		sort.Strings(tags)
 	}

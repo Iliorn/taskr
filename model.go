@@ -131,6 +131,8 @@ type tagSortMode int
 const (
 	tagSortAlpha tagSortMode = iota
 	tagSortCount
+	tagSortProgress
+	tagSortRecent
 )
 
 // untaggedKey is a sentinel used both as the Tags-tab virtual row for tasks
@@ -1339,7 +1341,7 @@ func (m model) getAllTagsSorted() []string {
 			}
 		}
 	}
-	sortTags(tags, m.tagSort, m.cache.tags)
+	sortTags(tags, m.tagSort, m.cache.tags, m.cache.tagLastUsed)
 	return tags
 }
 

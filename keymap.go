@@ -107,7 +107,7 @@ var keymap = []binding{
 	{ctxProjects | ctxTags, "r", "edit", "rename globally", secTagsProjects, true, false},
 	{ctxTags, "m", "merge", "merge tags (Tags tab)", secTagsProjects, true, false},
 	{ctxProjects | ctxTags, "x", "delete", "delete globally", secTagsProjects, true, false},
-	{ctxTags, "s", "sort", "toggle sort", secTagsProjects, true, false},
+	{ctxTags, "s", "sort", "cycle sort order", secTagsProjects, true, false},
 	{ctxProjects | ctxTags, "/", "search", "filter", secTagsProjects, true, true},
 
 	// ── Learnings ────────────────────────────────────────────────────────
