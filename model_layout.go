@@ -9,8 +9,6 @@ func (m model) estimateDetailCursorLine() int {
 	if t == nil {
 		return 0
 	}
-	twoCol := (m.termWidth - 8) >= twoColumnDetailMinWidth
-
 	line := 2 // title + blank
 	switch m.detail.field {
 	case fieldStartDate:
@@ -29,11 +27,11 @@ func (m model) estimateDetailCursorLine() int {
 		return line + 6
 	case fieldTags:
 		// Tags label sits below the fields block; +1 skips the label row.
-		return m.detailMainHeight(t, twoCol) - m.detailTagsRows(t) + m.detail.tagCursor
+		return m.detailMainHeight(t) - m.detailTagsRows(t) + m.detail.tagCursor
 	}
 
 	// Relations section: one blank line after the main block, label first.
-	relStart := m.detailMainHeight(t, twoCol) + 1
+	relStart := m.detailMainHeight(t) + 1
 	subRows := m.subtaskCount(t.ID)
 	if subRows == 0 {
 		subRows = 1
@@ -46,20 +44,12 @@ func (m model) estimateDetailCursorLine() int {
 	case fieldSubtasks:
 		return relStart + 1 + m.detail.subtaskCursor
 	case fieldDependencies:
-		if twoCol {
-			// Two-col: subtasks (left) and deps (right) share the same top.
-			return relStart + 1 + m.detail.depCursor
-		}
 		return relStart + 1 + subRows + 2 + m.detail.depCursor
 	case fieldLearnings:
 		// The display-only Blocks list renders between deps and learnings.
 		blocksExtra := 0
 		if n := len(dependentsOf(m.allTodos(), t.ID)); n > 0 {
 			blocksExtra = 2 + n
-		}
-		if twoCol {
-			// Right column = deps (+ blocks) + blank + learnings.
-			return relStart + 1 + depRows + blocksExtra + 2 + m.detail.learningCursor
 		}
 		return relStart + 1 + subRows + 2 + depRows + blocksExtra + 2 + m.detail.learningCursor
 	}
@@ -68,7 +58,7 @@ func (m model) estimateDetailCursorLine() int {
 	// Comments wrap, so sum the rendered line counts of everything above the
 	// cursor — counting one line per comment undershoots in narrow columns
 	// and the scroll window loses the selected comment off the bottom.
-	comStart := relStart + m.detailRelationsHeight(t, twoCol) + 1
+	comStart := relStart + m.detailRelationsHeight(t) + 1
 	line = comStart + 1
 	available := m.termWidth - 32
 	if available < 10 {
@@ -233,38 +223,18 @@ func (m model) detailTagsRows(t *todo.Todo) int {
 }
 
 // detailMainHeight is the rendered height of the detail column's first
-// section: title, blank, the fields block (one or two columns), blank, tags
-// label, tag rows.
-func (m model) detailMainHeight(t *todo.Todo, twoCol bool) int {
-	h := 2 // title + blank
-	if twoCol {
-		leftRows := 7  // start..notes
-		rightRows := 3 // id, created, modified
-		if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
-			rightRows++
-		}
-		if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-			rightRows++
-		}
-		if t.Status == todo.Pending {
-			rightRows++ // score
-		}
-		if rightRows > leftRows {
-			h += rightRows
-		} else {
-			h += leftRows
-		}
-	} else {
-		h += 10 // start, due, recurrence, priority, size, project, notes, id, created, modified
-		if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
-			h++
-		}
-		if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-			h++
-		}
-		if t.Status == todo.Pending {
-			h++ // score
-		}
+// section: title, blank, the fields block, blank, tags label, tag rows.
+func (m model) detailMainHeight(t *todo.Todo) int {
+	h := 2  // title + blank
+	h += 10 // start, due, recurrence, priority, size, project, notes, id, created, modified
+	if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
+		h++
+	}
+	if t.Status == todo.Done && !t.CompletedAt.IsZero() {
+		h++
+	}
+	if t.Status == todo.Pending {
+		h++ // score
 	}
 	h += 2 // blank + tags label
 	return h + m.detailTagsRows(t)
@@ -272,26 +242,19 @@ func (m model) detailMainHeight(t *todo.Todo, twoCol bool) int {
 
 // detailRelationsHeight is the rendered height of the subtasks/dependencies/
 // learnings section, starting at its first label row.
-func (m model) detailRelationsHeight(t *todo.Todo, twoCol bool) int {
+func (m model) detailRelationsHeight(t *todo.Todo) int {
 	rows := func(n int) int {
 		if n == 0 {
 			return 1
 		}
 		return n
 	}
-	leftH := 1 + rows(m.subtaskCount(t.ID))
+	subH := 1 + rows(m.subtaskCount(t.ID))
 	depH := 1 + rows(len(t.Dependencies))
 	if n := len(dependentsOf(m.allTodos(), t.ID)); n > 0 {
 		depH += 2 + n // blank + Blocks label + rows
 	}
-	rightH := depH + 1 + 1 + rows(len(t.Learnings))
-	if twoCol {
-		if rightH > leftH {
-			return rightH
-		}
-		return leftH
-	}
-	return leftH + 1 + rightH
+	return subH + 1 + depH + 1 + 1 + rows(len(t.Learnings))
 }
 
 // detailCommentsHeight is the rendered height of the comments section:
@@ -317,9 +280,8 @@ func (m model) detailContentHeight() int {
 	if t == nil {
 		return 1
 	}
-	twoCol := (m.termWidth - 8) >= twoColumnDetailMinWidth
-	return m.detailMainHeight(t, twoCol) + 1 +
-		m.detailRelationsHeight(t, twoCol) + 1 +
+	return m.detailMainHeight(t) + 1 +
+		m.detailRelationsHeight(t) + 1 +
 		m.detailCommentsHeight(t)
 }
 

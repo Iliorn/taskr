@@ -77,12 +77,10 @@ func TestRenderDetailPage1ShowsShortID(t *testing.T) {
 	}
 }
 
-// TestDetailPagesNoWrap guards the detail pane's no-wrap contract across both
-// layouts: when the available content width is twoColumnDetailMinWidth or more
-// the pane splits into two columns, below it falls back to single column. In
-// either mode no rendered line may exceed (termWidth-8) cells, in any language.
-// Long titles/values exist deliberately to exercise the value-truncation paths
-// in renderField / joinColumns.
+// TestDetailPagesNoWrap guards the detail pane's no-wrap contract: the detail
+// renders one column at every width, and no rendered line may exceed
+// (termWidth-8) cells, in any language. Long titles/values exist deliberately
+// to exercise the value-truncation paths in renderField.
 func TestDetailPagesNoWrap(t *testing.T) {
 	t.Cleanup(func() { applyLang(string(langEN)) })
 

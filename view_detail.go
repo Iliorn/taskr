@@ -10,11 +10,6 @@ import (
 	"taskr/todo"
 )
 
-// twoColumnDetailMinWidth is the minimum *available content width* (termWidth-8)
-// at which the detail pane uses its two-column layout. Below this, each page
-// falls back to the original single-column flow so labels and values still fit.
-const twoColumnDetailMinWidth = 80
-
 // joinColumns merges two pre-rendered column streams into one block. Each left
 // line is padded to leftW cells (counting ANSI escapes correctly via
 // ansi.StringWidth) before a `gap`-wide spacer and the matching right line.
@@ -53,16 +48,9 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 
 	availableW := m.termWidth - 8
 	isDetailFocused := m.pane == paneDetail
-	twoCol := availableW >= twoColumnDetailMinWidth
 
-	// Column widths: split the available width with a 4-char gap between
-	// columns. Value width per column = colW - label - cursor prefix.
-	gap := 4
-	colW := availableW
-	if twoCol {
-		colW = (availableW - gap) / 2
-	}
-	valW := colW - detailLabelColWidth - 2
+	// Value width = content width minus label column and cursor prefix.
+	valW := availableW - detailLabelColWidth - 2
 	if valW < 10 {
 		valW = 10
 	}
@@ -187,12 +175,8 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		roField(tr("Score:"), plainVal, breakdown)
 	}
 
-	if twoCol {
-		b.WriteString(joinColumns(left.String(), right.String(), colW, gap))
-	} else {
-		b.WriteString(left.String())
-		b.WriteString(right.String())
-	}
+	b.WriteString(left.String())
+	b.WriteString(right.String())
 	b.WriteString("\n")
 
 	tagCur := "  "
@@ -223,22 +207,15 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 
 	availableW := m.termWidth - 8
 	isDetailFocused := m.pane == paneDetail
-	twoCol := availableW >= twoColumnDetailMinWidth
 
-	gap := 4
-	colW := availableW
-	if twoCol {
-		colW = (availableW - gap) / 2
-	}
 	// Each row is "  [?] <title>" — 2 cursor cells + 4 bracket+space cells = 6.
-	itemW := colW - 6
+	itemW := availableW - 6
 	if itemW < 4 {
 		itemW = 4
 	}
 
-	// Left: subtasks. Right: dependencies + learnings stacked. Each section
-	// renders into its own builder so joinColumns can align them in two-col
-	// mode and we can fall through to a stacked single-column flow otherwise.
+	// Subtasks, then dependencies (+ inbound Blocks), then learnings, one
+	// stacked flow. Separate builders keep the section boundaries obvious.
 	subB := getBuilder()
 	defer putBuilder(subB)
 	depB := getBuilder()
@@ -344,7 +321,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 			if isLearningSelected {
 				pfx = "▶ "
 			}
-			line := pfx + truncate(l.Text, colW-4)
+			line := pfx + truncate(l.Text, availableW-4)
 			if isLearningSelected {
 				learnB.WriteString(learningSelectedStyle.Render(line) + "\n")
 			} else {
@@ -353,16 +330,11 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 		}
 	}
 
-	if twoCol {
-		right := depB.String() + "\n" + learnB.String()
-		b.WriteString(joinColumns(subB.String(), right, colW, gap))
-	} else {
-		b.WriteString(subB.String())
-		b.WriteString("\n")
-		b.WriteString(depB.String())
-		b.WriteString("\n")
-		b.WriteString(learnB.String())
-	}
+	b.WriteString(subB.String())
+	b.WriteString("\n")
+	b.WriteString(depB.String())
+	b.WriteString("\n")
+	b.WriteString(learnB.String())
 
 	return b.String()
 }
