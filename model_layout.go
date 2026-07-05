@@ -101,11 +101,12 @@ func (m *model) clampListOffsetVisible(cursor, listLen, visible int) {
 }
 
 // sideBySide reports whether the current tab renders list and detail as two
-// columns (list full-height left, always-on detail preview right). Tasks and
-// Learnings share the list+detail shape; below the width threshold both fall
-// back to the stacked enter-to-open layout.
+// columns (list full-height left, always-on detail preview right). The list
+// tabs with a selected-item detail — Tasks, Learnings, Tags — share the shape;
+// below the width threshold each falls back to its stacked layout
+// (enter-to-open for Tasks/Learnings, always-on below the list for Tags).
 func (m model) sideBySide() bool {
-	return (m.tab == tabTasks || m.tab == tabLearnings) &&
+	return (m.tab == tabTasks || m.tab == tabLearnings || m.tab == tabTags) &&
 		m.termWidth >= sideBySideMinWidth
 }
 
@@ -121,6 +122,9 @@ func (m model) detailVisible() bool {
 	switch m.tab {
 	case tabTasks, tabLearnings:
 		return m.pane == paneDetail && !m.sideBySide()
+	case tabTags:
+		// Always-on preview: stacked panel below the threshold, right column above.
+		return !m.sideBySide()
 	case tabProjects:
 		return m.pane == paneDetail
 	case tabSettings:

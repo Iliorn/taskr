@@ -65,6 +65,8 @@ func (m model) View() string {
 	switch m.tab {
 	case tabTasks, tabLearnings:
 		showDetail = showDetail && m.pane == paneDetail && !m.sideBySide()
+	case tabTags:
+		showDetail = showDetail && !m.sideBySide()
 	case tabProjects:
 		showDetail = showDetail && m.pane == paneDetail
 	}
@@ -545,9 +547,10 @@ func (m model) buildListContent(w, outerH int) string {
 	return listPanelStyle.Width(w).Render(strings.Join(rawList, "\n"))
 }
 
-// buildSideBySide renders the Tasks/Learnings tabs as two columns: the list
-// keeps full height on the left and the detail pane is an always-on preview of
-// the cursor item on the right. Mirrors buildCalendarContent's approach — each
+// buildSideBySide renders the side-by-side list tabs (Tasks/Learnings/Tags) as
+// two columns: the list keeps full height on the left and the detail pane is an
+// always-on preview of the cursor item on the right. Mirrors buildCalendarContent's
+// approach — each
 // column is rendered through a model copy whose termWidth is the column's
 // share, so the existing width math (list columns, tag fitting, the no-wrap
 // contract, the detail's own two-column threshold) applies per column
@@ -576,10 +579,10 @@ func (m model) buildSideBySide(w, outerH int) string {
 	dm := m
 	dm.termWidth = detailW + 6
 	var detailLines []string
-	if m.tab == tabLearnings || m.currentTodo() != nil {
-		detailLines = strings.Split(dm.applyDetailScrollN(dm.buildDetailContent(), innerH), "\n")
-	} else {
+	if m.tab == tabTasks && m.currentTodo() == nil {
 		detailLines = []string{"", dimStyle.Render(tr("  No task selected."))}
+	} else {
+		detailLines = strings.Split(dm.applyDetailScrollN(dm.buildDetailContent(), innerH), "\n")
 	}
 
 	fitLines := func(lines []string, h, contentW int) []string {

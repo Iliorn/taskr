@@ -200,6 +200,36 @@ func TestLearningsSideBySide(t *testing.T) {
 	}
 }
 
+// The Tags tab's detail is always-on either way; side-by-side only moves it
+// from the stacked panel below the list into the right column at wide widths.
+// detailVisible gates the stacked panel, so it must flip with the threshold
+// while the summary line stays rendered at both widths.
+func TestTagsSideBySide(t *testing.T) {
+	task := todo.New("fix the fence")
+	task.AddTag("home")
+	m := modelWithTasks(t, task)
+	m.tab = tabTags
+	m.termHeight = 40
+
+	summary := strings.TrimSpace(fmt.Sprintf(tr("  %d active · %d done · %d overdue"), 1, 0, 0))
+
+	m.termWidth = sideBySideMinWidth + 10
+	if !strings.Contains(m.View(), summary) {
+		t.Error("side-by-side: tag detail should render in the right column")
+	}
+	if m.detailVisible() {
+		t.Error("side-by-side: the stacked tag panel should be off")
+	}
+
+	m.termWidth = sideBySideMinWidth - 10
+	if !strings.Contains(m.View(), summary) {
+		t.Error("stacked fallback: tag detail should render below the list")
+	}
+	if !m.detailVisible() {
+		t.Error("stacked fallback: detailVisible should report the stacked panel")
+	}
+}
+
 // A selected overdue row must show both states: the overdue foreground and the
 // selection background. Before the combined styles, the status colour won the
 // style switch outright and the only cursor cue on an overdue-heavy list was
