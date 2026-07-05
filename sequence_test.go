@@ -373,7 +373,7 @@ func TestSequenceHitStats(t *testing.T) {
 		mkDone("hit1", 1, 1*time.Hour),
 		mkDone("hit2", 5, 2*time.Hour),
 		mkDone("miss", 9, 3*time.Hour),
-		mkDone("old-hit", 2, 4*time.Hour), // pushed out by window=3
+		mkDone("old-hit", 2, 4*time.Hour),   // pushed out by window=3
 		mkDone("legacy", 0, 30*time.Minute), // no rank recorded — not rated
 	}
 	pendingNoise := todo.New("pending")

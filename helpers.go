@@ -402,12 +402,12 @@ func computeTagStats(todos []todo.Todo) map[string]tagStats {
 // ── Quick-add parsing ─────────────────────────────────────────────────────────
 
 type parsedTask struct {
-	title      string
-	tags       []string
-	project    string
-	dueDate    time.Time
-	priority   todo.Priority
-	size       todo.Size
+	title    string
+	tags     []string
+	project  string
+	dueDate  time.Time
+	priority todo.Priority
+	size     todo.Size
 	// hasPriority/hasSize record whether a p:/s: token was actually present, so
 	// a CLI caller can tell "no token" from the Medium default and avoid
 	// clobbering a --like clone. The TUI ignores them (it always starts fresh).

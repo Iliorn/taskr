@@ -273,10 +273,10 @@ type model struct {
 	learningSearchInput textinput.Model
 
 	// UI state
-	confirmMsg           string
+	confirmMsg string
 	// confirmOnYes is the action modeConfirm runs on y/enter; nil is a no-op.
 	// Reading pending* fields at call time keeps each action a plain method.
-	confirmOnYes func(*model) tea.Cmd
+	confirmOnYes         func(*model) tea.Cmd
 	pendingDeleteID      string
 	pendingComment       int
 	pendingDep           int
