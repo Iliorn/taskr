@@ -970,30 +970,30 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo) {
 			fmt.Printf("  %s  %s  %s\n", s.ID[:8], marker, s.Title)
 		}
 	}
-	if len(t.Dependencies) > 0 {
-		fmt.Printf("\nDependencies (%d):\n", len(t.Dependencies))
+	// One merged dependency list, direction carried by the glyph: ↧ = this
+	// task waits on it (outbound, stored on t), ↥ = it waits on this task
+	// (inbound, derived). Mirrors the TUI detail pane.
+	inbound := dependentsOf(todos, t.ID)
+	if len(t.Dependencies) > 0 || len(inbound) > 0 {
+		fmt.Printf("\nDependencies (%d):\n", len(t.Dependencies)+len(inbound))
 		for _, dep := range t.Dependencies {
 			// Resolve to a title where possible; fall back to the raw id for
 			// dangling references.
-			line := "  - " + dep
+			line := "  - ↧ " + dep
 			for i := range todos {
 				if todos[i].ID == dep {
 					marker := "[ ]"
 					if todos[i].Status == todo.Done {
 						marker = "[✓]"
 					}
-					line = fmt.Sprintf("  %.8s  %s  %s", dep, marker, todos[i].Title)
+					line = fmt.Sprintf("  %.8s  %s ↧ %s", dep, marker, todos[i].Title)
 					break
 				}
 			}
 			fmt.Println(line)
 		}
-	}
-	if blocks := dependentsOf(todos, t.ID); len(blocks) > 0 {
-		// The inbound side: pending tasks waiting on this one.
-		fmt.Printf("\nBlocks (%d):\n", len(blocks))
-		for _, d := range blocks {
-			fmt.Printf("  %.8s  %s\n", d.ID, d.Title)
+		for _, d := range inbound {
+			fmt.Printf("  %.8s      ↥ %s\n", d.ID, d.Title)
 		}
 	}
 	if len(t.Learnings) > 0 {

@@ -239,9 +239,9 @@ func TestOverdueDependencyAddsNoGlyph(t *testing.T) {
 	}
 }
 
-// The detail pane shows the inbound side of the dependency graph: a task
-// that others depend on lists them under "Blocks:". The dependent's own
-// detail shows no Blocks section (its edge is outbound).
+// The detail pane shows both directions of the dependency graph in one
+// merged Dependencies list: ↧ rows for outbound edges, dimmed ↥ rows for
+// the pending tasks waiting on this one.
 func TestDetailShowsInboundDependents(t *testing.T) {
 	blocker := todo.New("build the widget")
 	blocker.ID = "blk1"
@@ -262,19 +262,48 @@ func TestDetailShowsInboundDependents(t *testing.T) {
 
 	setCursorOn("blk1")
 	out := m.View()
-	if !strings.Contains(out, tr("Blocks:")) || !strings.Contains(out, "↥ Ship the widget") {
-		t.Errorf("blocker detail should list its dependents under Blocks:\n%s", out)
+	if !strings.Contains(out, "↥ Ship the widget") {
+		t.Errorf("blocker detail should list its dependent as a ↥ row:\n%s", out)
 	}
 
 	setCursorOn(dependent.ID)
 	m.invalidateDetailCache()
 	out = m.View()
-	if strings.Contains(out, tr("Blocks:")) {
-		t.Error("dependent's detail should have no Blocks section")
+	// "    ↥ " is the detail pane's inbound-row indent; the bare trailing ↥
+	// on the blocker's list row is a different (expected) glyph.
+	if strings.Contains(out, "    ↥ ") {
+		t.Errorf("dependent's detail should have no ↥ rows:\n%s", out)
 	}
 	// The outbound side carries the ↧ glyph, mirroring the list rows.
 	if !strings.Contains(out, "↧ Build the widget") {
 		t.Errorf("outbound dependency line should carry the ↧ glyph:\n%s", out)
+	}
+}
+
+// Enter on a ↥ row jumps to the task waiting on this one, exactly like
+// enter on a ↧ row jumps to the dependency.
+func TestEnterOnInboundDependentJumps(t *testing.T) {
+	blocker := todo.New("build the widget")
+	blocker.ID = "blk1"
+	dependent := todo.New("ship the widget")
+	dependent.Dependencies = []string{"blk1"}
+	m := modelWithTasks(t, blocker, dependent)
+	for i := range m.cache.active {
+		if m.cache.active[i].ID == "blk1" {
+			m.cursor = i
+		}
+	}
+	m.pane = paneDetail
+	// The blocker has no outbound deps, so row 0 is the inbound ↥ row.
+	m.detail = detailState{field: fieldDependencies, depCursor: 0}
+
+	updated, _ := m.startEditing()
+	m2 := updated.(model)
+	if m2.pane != paneList {
+		t.Fatalf("pane = %v, want paneList after jump", m2.pane)
+	}
+	if cur := m2.currentTodo(); cur == nil || cur.ID != dependent.ID {
+		t.Errorf("cursor should land on the dependent, got %+v", cur)
 	}
 }
 

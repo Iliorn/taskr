@@ -264,9 +264,12 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	if isDetailFocused && m.detail.field == fieldDependencies {
 		depCur = "▶ "
 	}
+	inbound := dependentsOf(m.allTodos(), t.ID)
 	depB.WriteString(depCur + detailLabelStyle.Render(tr("Dependencies:")) + "\n")
 	if len(t.Dependencies) == 0 {
-		depB.WriteString("  " + detailValueStyle.Render(tr("No dependencies. Press 'a' to add one.")) + "\n")
+		if len(inbound) == 0 {
+			depB.WriteString("  " + detailValueStyle.Render(tr("No dependencies. Press 'a' to add one.")) + "\n")
+		}
 	} else {
 		for i, depID := range t.Dependencies {
 			dep := m.findTodoByID(depID)
@@ -300,12 +303,21 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 			}
 		}
 	}
-	// Inbound dependents ("Blocks") — display-only: the list row's ↥ glyph
-	// says a task blocks others, this says which. Omitted when empty.
-	if blocks := dependentsOf(m.allTodos(), t.ID); len(blocks) > 0 {
-		depB.WriteString("\n  " + detailLabelStyle.Render(tr("Blocks:")) + "\n")
-		for _, d := range blocks {
-			depB.WriteString("  " + detailValueStyle.Render("↥ "+truncate(d.Title, itemW)) + "\n")
+	// Inbound edges continue the same list: dimmed ↥ rows are the pending
+	// tasks waiting on this one, aligned so ↥ sits under ↧. Selectable for
+	// enter-to-jump, but the edge itself is editable only from the other task.
+	for i, d := range inbound {
+		sel := isDetailFocused && m.detail.field == fieldDependencies &&
+			len(t.Dependencies)+i == m.detail.depCursor
+		pfx := "  "
+		if sel {
+			pfx = "▶ "
+		}
+		line := pfx + "    ↥ " + truncate(d.Title, itemW-2)
+		if sel {
+			depB.WriteString(detailSelectedStyle.Render(line) + "\n")
+		} else {
+			depB.WriteString(dimStyle.Render(line) + "\n")
 		}
 	}
 

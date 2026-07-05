@@ -36,22 +36,13 @@ func (m model) estimateDetailCursorLine() int {
 	if subRows == 0 {
 		subRows = 1
 	}
-	depRows := len(t.Dependencies)
-	if depRows == 0 {
-		depRows = 1
-	}
 	switch m.detail.field {
 	case fieldSubtasks:
 		return relStart + 1 + m.detail.subtaskCursor
 	case fieldDependencies:
 		return relStart + 1 + subRows + 2 + m.detail.depCursor
 	case fieldLearnings:
-		// The display-only Blocks list renders between deps and learnings.
-		blocksExtra := 0
-		if n := len(dependentsOf(m.allTodos(), t.ID)); n > 0 {
-			blocksExtra = 2 + n
-		}
-		return relStart + 1 + subRows + 2 + depRows + blocksExtra + 2 + m.detail.learningCursor
+		return relStart + 1 + subRows + 2 + m.detailDepRows(t) + 2 + m.detail.learningCursor
 	}
 
 	// Comments section: blank after the relations block, label first.
@@ -250,11 +241,18 @@ func (m model) detailRelationsHeight(t *todo.Todo) int {
 		return n
 	}
 	subH := 1 + rows(m.subtaskCount(t.ID))
-	depH := 1 + rows(len(t.Dependencies))
-	if n := len(dependentsOf(m.allTodos(), t.ID)); n > 0 {
-		depH += 2 + n // blank + Blocks label + rows
+	return subH + 1 + 1 + m.detailDepRows(t) + 1 + 1 + rows(len(t.Learnings))
+}
+
+// detailDepRows is the number of rows under the Dependencies label: outbound
+// ↧ rows, then inbound ↥ rows, or the one-line hint when there are neither.
+func (m model) detailDepRows(t *todo.Todo) int {
+	out := len(t.Dependencies)
+	in := len(dependentsOf(m.allTodos(), t.ID))
+	if out == 0 && in == 0 {
+		return 1
 	}
-	return subH + 1 + depH + 1 + 1 + rows(len(t.Learnings))
+	return out + in
 }
 
 // detailCommentsHeight is the rendered height of the comments section:

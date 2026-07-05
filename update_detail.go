@@ -210,8 +210,10 @@ func (m *model) detailCursorUp() {
 			m.detail.learningCursor--
 		} else {
 			m.detail.field = fieldDependencies
-			if t != nil && len(t.Dependencies) > 0 {
-				m.detail.depCursor = len(t.Dependencies) - 1
+			if t != nil {
+				if n := m.detailDepTotal(t); n > 0 {
+					m.detail.depCursor = n - 1
+				}
 			}
 		}
 	case fieldComments:
@@ -261,7 +263,7 @@ func (m *model) detailCursorDown() {
 			m.detail.depCursor = 0
 		}
 	case fieldDependencies:
-		if t != nil && m.detail.depCursor < len(t.Dependencies)-1 {
+		if t != nil && m.detail.depCursor < m.detailDepTotal(t)-1 {
 			m.detail.depCursor++
 		} else {
 			m.detail.field = fieldLearnings
@@ -363,7 +365,10 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 			m.confirmMsg = fmt.Sprintf(tr("Remove tag '#%s' from this task? (y/n)"), t.Tags[m.detail.tagCursor])
 		}
 	case fieldDependencies:
-		if len(t.Dependencies) > 0 && m.detail.depCursor < len(t.Dependencies) {
+		if m.detail.depCursor >= len(t.Dependencies) {
+			// ↥ row: the edge lives on the other task.
+			m.flashInfo(tr("Inbound dependency — remove it from the other task"))
+		} else if len(t.Dependencies) > 0 {
 			m.mode = modeConfirm
 			m.confirmOnYes = (*model).confirmDeleteDep
 			m.pendingDep = m.detail.depCursor
@@ -524,8 +529,14 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		m.tagSearchInput.Focus()
 		return m, textinput.Blink
 	case fieldDependencies:
-		if len(t.Dependencies) > 0 && m.detail.depCursor < len(t.Dependencies) {
-			depID := t.Dependencies[m.detail.depCursor]
+		if total := m.detailDepTotal(t); total > 0 && m.detail.depCursor < total {
+			depID := ""
+			if m.detail.depCursor < len(t.Dependencies) {
+				depID = t.Dependencies[m.detail.depCursor]
+			} else {
+				// ↥ row: jump to the task waiting on this one.
+				depID = dependentsOf(m.allTodos(), t.ID)[m.detail.depCursor-len(t.Dependencies)].ID
+			}
 			for i, candidate := range m.cache.active {
 				if candidate.ID == depID {
 					// Leaving the detail pane without esc — drop its entry
@@ -576,4 +587,10 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, textinput.Blink
+}
+
+// detailDepTotal is the number of selectable rows in the merged dependency
+// list: outbound ↧ edges first, then inbound ↥ dependents.
+func (m model) detailDepTotal(t *todo.Todo) int {
+	return len(t.Dependencies) + len(dependentsOf(m.allTodos(), t.ID))
 }
