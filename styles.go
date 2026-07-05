@@ -27,6 +27,7 @@ type theme struct {
 	dim  lipgloss.Color // borders, completed/muted text
 	help lipgloss.Color // hint text
 	bg   lipgloss.Color // dark base — used as fg on colored backgrounds
+	sel  lipgloss.Color // selected-row background — subtle, must keep every row foreground readable
 }
 
 // themes holds the built-in palettes. The first entry is the default.
@@ -47,6 +48,7 @@ var themes = []theme{
 		dim:      "#555555",
 		help:     "#888888",
 		bg:       "#1a1a1a",
+		sel:      "#292e42",
 	},
 	{
 		name:   "Catppuccin",
@@ -67,6 +69,7 @@ var themes = []theme{
 		dim:      "#585b70",
 		help:     "#6c7086",
 		bg:       "#1e1e2e",
+		sel:      "#313244",
 	},
 	{
 		name:     "Gruvbox",
@@ -84,6 +87,7 @@ var themes = []theme{
 		dim:      "#665c54",
 		help:     "#928374",
 		bg:       "#1d2021",
+		sel:      "#3c3836",
 	},
 	{
 		name:     "Nord",
@@ -101,6 +105,7 @@ var themes = []theme{
 		dim:      "#4c566a",
 		help:     "#616e88",
 		bg:       "#2e3440",
+		sel:      "#3b4252",
 	},
 }
 
@@ -139,6 +144,14 @@ var (
 	overdueStyle    lipgloss.Style
 	depOverdueStyle lipgloss.Style
 	helpStyle       lipgloss.Style
+
+	// Row-selected variants: base foreground plus the theme's sel background,
+	// so the cursor row stays visible even when a status colour
+	// (overdue/dep-overdue/timer) owns the foreground.
+	selectedRowStyle           lipgloss.Style
+	selectedOverdueRowStyle    lipgloss.Style
+	selectedDepOverdueRowStyle lipgloss.Style
+	selectedTimerRowStyle      lipgloss.Style
 
 	detailTitleStyle    lipgloss.Style
 	detailLabelStyle    lipgloss.Style
@@ -229,6 +242,10 @@ func applyTheme(t theme) {
 	depOverdueStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
 	helpStyle = lipgloss.NewStyle().Foreground(t.help)
 
+	selectedRowStyle = selectedStyle.Background(t.sel)
+	selectedOverdueRowStyle = overdueStyle.Background(t.sel)
+	selectedDepOverdueRowStyle = depOverdueStyle.Background(t.sel)
+
 	detailTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent).Underline(true)
 	detailLabelStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent)
 	detailValueStyle = lipgloss.NewStyle().Foreground(t.fg)
@@ -274,6 +291,7 @@ func applyTheme(t theme) {
 	// in TokyoNight) instead of the structural-dim grey used for the baseline.
 	statsAxisStyle = lipgloss.NewStyle().Foreground(t.fg)
 	timerStyle = lipgloss.NewStyle().Foreground(t.teal).Bold(true)
+	selectedTimerRowStyle = timerStyle.Background(t.sel)
 
 	calHeaderStyle = lipgloss.NewStyle().Foreground(t.teal).Bold(true)
 	calSelectedDayStyle = lipgloss.NewStyle().Foreground(t.bg).Background(t.teal).Bold(true)

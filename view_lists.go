@@ -823,9 +823,9 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	}
 
 	if index == cursor && active {
-		return fastSelected.render(cursorStr+"[") +
+		return fastSelectedRow.render(cursorStr+"[") +
 			fastCheckDone.render("✓") +
-			fastSelected.render("] "+titleCol+dateCols) +
+			fastSelectedRow.render("] "+titleCol+dateCols) +
 			tagsStr + "\n"
 	}
 	return fastNormal.render(cursorStr+"[") +
@@ -861,7 +861,7 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 	body := "   " + connector + " " + check + " " + title
 
 	if selected {
-		return fastSelected.render(cursorStr+body) + "\n"
+		return fastSelectedRow.render(cursorStr+body) + "\n"
 	}
 	if sub.Status == todo.Done {
 		// Keep ✓ in checkDoneStyle so the done marker stays legible
@@ -966,18 +966,30 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		}
 	}
 
+	// Status colour owns the foreground; selection owns the background — so a
+	// selected overdue/timer row shows both instead of the status masking the
+	// cursor.
+	selected := index == cursor && active
+	var st fastStyle
 	switch {
+	case t.IsTimerRunning() && selected:
+		st = fastSelectedTimer
 	case t.IsTimerRunning():
-		return fastTimer.render(line) + tagsStr + "\n"
+		st = fastTimer
+	case t.IsOverdue() && selected:
+		st = fastSelectedOverdue
 	case t.IsOverdue():
-		return fastOverdue.render(line) + tagsStr + "\n"
+		st = fastOverdue
+	case hasOverdueDep && selected:
+		st = fastSelectedDepOverdue
 	case hasOverdueDep:
-		return fastDepOverdue.render(line) + tagsStr + "\n"
-	case index == cursor && active:
-		return fastSelected.render(line) + tagsStr + "\n"
+		st = fastDepOverdue
+	case selected:
+		st = fastSelectedRow
 	default:
-		return fastNormal.render(line) + tagsStr + "\n"
+		st = fastNormal
 	}
+	return st.render(line) + tagsStr + "\n"
 }
 
 // ── Projects ──────────────────────────────────────────────────────────────────

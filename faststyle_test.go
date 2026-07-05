@@ -34,6 +34,10 @@ func TestFastStyleMatchesLipgloss(t *testing.T) {
 		{"dim", dimStyle, fastDim},
 		{"timer", timerStyle, fastTimer},
 		{"checkDone", checkDoneStyle, fastCheckDone},
+		{"selectedRow", selectedRowStyle, fastSelectedRow},
+		{"selectedOverdue", selectedOverdueRowStyle, fastSelectedOverdue},
+		{"selectedDepOverdue", selectedDepOverdueRowStyle, fastSelectedDepOverdue},
+		{"selectedTimer", selectedTimerRowStyle, fastSelectedTimer},
 	}
 	samples := []string{
 		"",

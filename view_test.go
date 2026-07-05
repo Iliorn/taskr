@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 	"taskr/todo"
 )
 
@@ -150,13 +152,53 @@ func TestHighPriorityShowsExclamationInList(t *testing.T) {
 	}
 }
 
+// A selected overdue row must show both states: the overdue foreground and the
+// selection background. Before the combined styles, the status colour won the
+// style switch outright and the only cursor cue on an overdue-heavy list was
+// the arrow glyph.
+func TestSelectedOverdueRowKeepsSelectionBackground(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	applyTheme(themes[0])
+	defer func() {
+		lipgloss.SetColorProfile(before)
+		applyTheme(themes[0])
+	}()
+
+	over := todo.New("Pay the rent")
+	over.DueDate = time.Now().Add(-48 * time.Hour)
+	over2 := todo.New("File the taxes")
+	over2.DueDate = time.Now().Add(-24 * time.Hour)
+	m := modelWithTasks(t, over, over2)
+
+	var selLine, plainLine string
+	for _, line := range strings.Split(m.View(), "\n") {
+		if strings.Contains(line, "Pay the rent") {
+			selLine = line // cursor starts on the first row
+		}
+		if strings.Contains(line, "File the taxes") {
+			plainLine = line
+		}
+	}
+	if selLine == "" || plainLine == "" {
+		t.Fatalf("both overdue rows should render; sel=%q plain=%q", selLine, plainLine)
+	}
+	wantPrefix := newFastStyle(selectedOverdueRowStyle).prefix
+	if !strings.Contains(selLine, wantPrefix) {
+		t.Errorf("selected overdue row should use overdue fg + sel bg (%q): %q", wantPrefix, selLine)
+	}
+	if strings.Contains(plainLine, "48;2;") {
+		t.Errorf("unselected overdue row should have no background: %q", plainLine)
+	}
+}
+
 // An overdue dependency conveys itself through the row color, not a glyph — a
 // normal-priority task whose dependency is overdue carries no "!".
 func TestOverdueDependencyAddsNoGlyph(t *testing.T) {
 	dep := todo.New("blocking dep")
 	dep.ID = "dep1"
 	dep.DueDate = time.Now().Add(-48 * time.Hour) // overdue, still pending
-	blocked := todo.New("Finish the audit") // normal priority, depends on dep1
+	blocked := todo.New("Finish the audit")       // normal priority, depends on dep1
 	blocked.Dependencies = []string{"dep1"}
 
 	m := modelWithTasks(t, blocked, dep)
