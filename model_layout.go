@@ -154,15 +154,26 @@ func (m *model) clampListOffsetVisible(cursor, listLen, visible int) {
 	}
 }
 
-// detailVisible reports whether the detail pane will be rendered for the
-// current tab/mode/pane. Mirrors the showDetail decision in view.View so the
-// list-height math matches what the renderer actually emits.
+// sideBySide reports whether the Tasks tab renders list and detail as two
+// columns (list full-height left, always-on detail preview right). Below the
+// width threshold the tab falls back to the stacked enter-to-open layout.
+func (m model) sideBySide() bool {
+	return m.tab == tabTasks && m.termWidth >= sideBySideMinWidth
+}
+
+// detailVisible reports whether the detail pane will be rendered as its own
+// stacked panel for the current tab/mode/pane. Mirrors the showDetail
+// decision in view.View so the list-height math matches what the renderer
+// actually emits. In side-by-side mode the detail lives inside the list
+// region's right column, so it costs no list rows and reports false here.
 func (m model) detailVisible() bool {
 	if m.mode != modeNormal {
 		return false
 	}
 	switch m.tab {
-	case tabTasks, tabProjects, tabLearnings:
+	case tabTasks:
+		return m.pane == paneDetail && !m.sideBySide()
+	case tabProjects, tabLearnings:
 		return m.pane == paneDetail
 	case tabSettings:
 		return false

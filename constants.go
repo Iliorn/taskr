@@ -26,6 +26,16 @@ const (
 	maxTagBarWidth     = 60
 	minInnerWidth      = 20
 
+	// Tasks tab side-by-side layout: at or above sideBySideMinWidth the list
+	// keeps full height on the left and the detail pane becomes an always-on
+	// preview column on the right; below it the tab falls back to the stacked
+	// enter-to-open layout. The detail column takes sideDetailColPct of the
+	// content width, clamped so neither column gets unusably narrow.
+	sideBySideMinWidth = 110
+	sideDetailColPct   = 38
+	sideDetailColMin   = 36
+	sideDetailColMax   = 56
+
 	ganttSuffixWidth  = 16
 	ganttChartPadding = 8
 

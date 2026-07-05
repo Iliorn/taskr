@@ -59,9 +59,13 @@ func (m model) View() string {
 	detailLineCount := 0
 	showDetail := m.mode == modeNormal
 	// For tabs that open the detail on enter / close on esc, the detail
-	// panel is hidden until the user explicitly opens it.
+	// panel is hidden until the user explicitly opens it. In side-by-side
+	// mode the Tasks detail renders inside buildListContent's right column
+	// instead of as a stacked panel.
 	switch m.tab {
-	case tabTasks, tabProjects, tabLearnings:
+	case tabTasks:
+		showDetail = showDetail && m.pane == paneDetail && !m.sideBySide()
+	case tabProjects, tabLearnings:
 		showDetail = showDetail && m.pane == paneDetail
 	}
 
@@ -76,7 +80,13 @@ func (m model) View() string {
 		}
 
 		if detailContent != "" {
-			detailContent = detailPanelStyle.Width(w).Render(m.applyDetailScroll(detailContent))
+			// The stacked detail only exists while it owns keystrokes on the
+			// enter-to-open tabs; the always-on previews (Tags/Stats) never do.
+			dst := detailPanelStyle
+			if m.pane == paneDetail {
+				dst = detailPanelFocusedStyle
+			}
+			detailContent = dst.Width(w).Render(m.applyDetailScroll(detailContent))
 			detailSplit := strings.Split(detailContent, "\n")
 			for len(detailSplit) > 0 && strings.TrimSpace(detailSplit[len(detailSplit)-1]) == "" {
 				detailSplit = detailSplit[:len(detailSplit)-1]
@@ -251,6 +261,13 @@ func (m model) applyDetailScroll(content string) string {
 	if maxVisible < 3 {
 		maxVisible = 3
 	}
+	return m.applyDetailScrollN(content, maxVisible)
+}
+
+// applyDetailScrollN is applyDetailScroll with an explicit viewport height —
+// the side-by-side detail column scrolls within the full list height rather
+// than the stacked panel's percentage cap.
+func (m model) applyDetailScrollN(content string, maxVisible int) string {
 	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
 	if len(lines) <= maxVisible {
 		return strings.Join(lines, "\n")
@@ -494,6 +511,9 @@ func (m model) buildListContent(w, outerH int) string {
 	if m.tab == tabCalendar {
 		return m.buildCalendarContent(w, outerH)
 	}
+	if m.sideBySide() {
+		return m.buildTasksSideBySide(w, outerH)
+	}
 
 	innerH := outerH - 2 // subtract top and bottom border lines
 	if innerH < 1 {
@@ -508,6 +528,65 @@ func (m model) buildListContent(w, outerH int) string {
 	}
 	truncateLines(rawList, w-2)
 	return listPanelStyle.Width(w).Render(strings.Join(rawList, "\n"))
+}
+
+// buildTasksSideBySide renders the Tasks tab as two columns: the list keeps
+// full height on the left and the detail pane is an always-on preview of the
+// cursor task on the right. Mirrors buildCalendarContent's approach — each
+// column is rendered through a model copy whose termWidth is the column's
+// share, so the existing width math (list columns, tag fitting, the no-wrap
+// contract, the detail's own two-column threshold) applies per column
+// unchanged. The focused pane carries the accent border.
+func (m model) buildTasksSideBySide(w, outerH int) string {
+	innerH := outerH - 2
+	if innerH < 1 {
+		innerH = 1
+	}
+	detailW := w * sideDetailColPct / 100
+	if detailW < sideDetailColMin {
+		detailW = sideDetailColMin
+	}
+	if detailW > sideDetailColMax {
+		detailW = sideDetailColMax
+	}
+	listW := w - detailW - 4
+	if listW < minInnerWidth {
+		listW = minInnerWidth
+	}
+
+	lm := m
+	lm.termWidth = listW + 6 // View hands buildListContent w = termWidth-6
+	listLines := lm.buildListLines()
+
+	dm := m
+	dm.termWidth = detailW + 6
+	var detailLines []string
+	if m.currentTodo() != nil {
+		detailLines = strings.Split(dm.applyDetailScrollN(dm.buildDetailContent(), innerH), "\n")
+	} else {
+		detailLines = []string{"", dimStyle.Render(tr("  No task selected."))}
+	}
+
+	fitLines := func(lines []string, h, contentW int) []string {
+		if len(lines) > h {
+			lines = lines[:h]
+		}
+		for len(lines) < h {
+			lines = append(lines, "")
+		}
+		truncateLines(lines, contentW)
+		return lines
+	}
+	listLines = fitLines(listLines, innerH, listW-2)
+	detailLines = fitLines(detailLines, innerH, detailW-2)
+
+	listStyle, detailStyle := listPanelFocusedStyle, detailPanelStyle
+	if m.pane == paneDetail {
+		listStyle, detailStyle = listPanelStyle, detailPanelFocusedStyle
+	}
+	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
+	detailPanel := detailStyle.Width(detailW).Render(strings.Join(detailLines, "\n"))
+	return lipgloss.JoinHorizontal(lipgloss.Top, listPanel, detailPanel)
 }
 
 func (m model) buildProjectListContent(w, listH int) string {

@@ -179,6 +179,10 @@ var (
 
 	listPanelStyle   lipgloss.Style
 	detailPanelStyle lipgloss.Style
+	// Focused variants: accent border marking the pane that owns keystrokes,
+	// shown whenever two panes are visible at once.
+	listPanelFocusedStyle   lipgloss.Style
+	detailPanelFocusedStyle lipgloss.Style
 
 	ganttTodayStyle lipgloss.Style
 	ganttDoneStyle  lipgloss.Style
@@ -267,6 +271,8 @@ func applyTheme(t theme) {
 
 	listPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.dim).Padding(0, 1).MarginLeft(2)
 	detailPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.dim).Padding(0, 1).MarginLeft(2)
+	listPanelFocusedStyle = listPanelStyle.BorderForeground(t.accent)
+	detailPanelFocusedStyle = detailPanelStyle.BorderForeground(t.accent)
 
 	ganttTodayStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
 	ganttDoneStyle = lipgloss.NewStyle().Foreground(t.dim)

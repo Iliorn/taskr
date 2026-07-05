@@ -152,6 +152,28 @@ func TestHighPriorityShowsExclamationInList(t *testing.T) {
 	}
 }
 
+// At side-by-side widths the Tasks tab always previews the cursor task's
+// detail in the right column — without pressing Enter — and narrow terminals
+// fall back to the stacked enter-to-open layout.
+func TestSideBySideDetailPreview(t *testing.T) {
+	m := modelWithTasks(t, todo.New("pay rent"), todo.New("water plants"))
+	m.termHeight = 40
+
+	m.termWidth = sideBySideMinWidth + 10
+	if !strings.Contains(m.View(), tr("Priority")) {
+		t.Error("side-by-side: detail preview should render without Enter")
+	}
+
+	m.termWidth = sideBySideMinWidth - 10
+	if strings.Contains(m.View(), tr("Priority")) {
+		t.Error("stacked fallback: detail should stay hidden until Enter")
+	}
+	m2 := script(t, m, "enter")
+	if !strings.Contains(m2.View(), tr("Priority")) {
+		t.Error("stacked fallback: Enter should open the detail pane")
+	}
+}
+
 // A selected overdue row must show both states: the overdue foreground and the
 // selection background. Before the combined styles, the status colour won the
 // style switch outright and the only cursor cue on an overdue-heavy list was

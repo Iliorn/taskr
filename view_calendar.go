@@ -201,8 +201,14 @@ func (m model) buildCalendarContent(w, outerH int) string {
 	calLines = fitLines(calLines, innerH, calPanelWidth-2)
 	tlLines = fitLines(tlLines, innerH, tlW-2)
 
-	calPanel := listPanelStyle.Width(calPanelWidth).Render(strings.Join(calLines, "\n"))
-	tlPanel := listPanelStyle.Width(tlW).Render(strings.Join(tlLines, "\n"))
+	// Accent border on the pane that owns keystrokes — same contract as the
+	// Tasks side-by-side layout.
+	calStyle, tlStyle := listPanelFocusedStyle, listPanelStyle
+	if m.calendar.focusTimeline {
+		calStyle, tlStyle = listPanelStyle, listPanelFocusedStyle
+	}
+	calPanel := calStyle.Width(calPanelWidth).Render(strings.Join(calLines, "\n"))
+	tlPanel := tlStyle.Width(tlW).Render(strings.Join(tlLines, "\n"))
 	return lipgloss.JoinHorizontal(lipgloss.Top, tlPanel, calPanel)
 }
 

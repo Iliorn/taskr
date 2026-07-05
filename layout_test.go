@@ -114,6 +114,9 @@ func TestComputeLayoutHeaderFixed(t *testing.T) {
 func TestListHeightFillsWhenDetailHidden(t *testing.T) {
 	m := modelWithTasks(t, todo.New("a"), todo.New("b"))
 	m.termHeight = 40
+	// Stacked mode: below the side-by-side threshold the open detail pane
+	// steals list rows, so hiding it must grow the list.
+	m.termWidth = sideBySideMinWidth - 10
 
 	m.pane = paneDetail
 	withDetail := m.estimateListHeight()
@@ -130,5 +133,17 @@ func TestListHeightFillsWhenDetailHidden(t *testing.T) {
 	if withoutDetailVisible <= withDetailVisible {
 		t.Errorf("listVisible: hiding the pane did not grow the list: with=%d without=%d",
 			withDetailVisible, withoutDetailVisible)
+	}
+
+	// Side-by-side: the detail lives in its own column, so list height must
+	// be pane-independent.
+	m.termWidth = sideBySideMinWidth
+	m.pane = paneDetail
+	sbsWith := m.listVisible()
+	m.pane = paneList
+	sbsWithout := m.listVisible()
+	if sbsWith != sbsWithout {
+		t.Errorf("side-by-side: list height should be pane-independent: focused=%d unfocused=%d",
+			sbsWith, sbsWithout)
 	}
 }
