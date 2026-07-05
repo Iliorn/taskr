@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -269,5 +270,24 @@ func TestDetailShowsInboundDependents(t *testing.T) {
 	m.invalidateDetailCache()
 	if strings.Contains(m.View(), tr("Blocks:")) {
 		t.Error("dependent's detail should have no Blocks section")
+	}
+}
+
+// When comments wrap to multiple lines in a narrow column, the detail scroll
+// must still bring the selected comment into view — counting one line per
+// comment used to undershoot and push the cursor row off the bottom edge.
+func TestDetailScrollReachesWrappedComment(t *testing.T) {
+	task := todo.New("Task with a very long tail")
+	for i := 1; i <= 12; i++ {
+		task.AddComment(fmt.Sprintf("comment number %d with some length to it", i))
+	}
+	m := modelWithTasks(t, task)
+	m.termWidth, m.termHeight = 120, 24
+	m.pane = paneDetail
+	m.detail = detailState{field: fieldComments, commentCursor: 9}
+	m.invalidateDetailCache()
+
+	if !strings.Contains(m.View(), "comment number 10") {
+		t.Error("selected comment should be scrolled into view")
 	}
 }

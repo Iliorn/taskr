@@ -65,8 +65,19 @@ func (m model) estimateDetailCursorLine() int {
 	}
 
 	// Comments section: blank after the relations block, label first.
+	// Comments wrap, so sum the rendered line counts of everything above the
+	// cursor — counting one line per comment undershoots in narrow columns
+	// and the scroll window loses the selected comment off the bottom.
 	comStart := relStart + m.detailRelationsHeight(t, twoCol) + 1
-	return comStart + 1 + m.detail.commentCursor
+	line = comStart + 1
+	available := m.termWidth - 32
+	if available < 10 {
+		available = 10
+	}
+	for i := 0; i < m.detail.commentCursor && i < len(t.Comments); i++ {
+		line += commentLineCount(t.Comments[i].Text, available)
+	}
+	return line
 }
 
 // ── List offset clamping ──────────────────────────────────────────────────────
