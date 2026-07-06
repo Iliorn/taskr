@@ -180,7 +180,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	b.WriteString("\n")
 
 	tagCur := "  "
-	if isDetailFocused && m.detail.field == fieldTags {
+	if isDetailFocused && m.detail.field == fieldTags && len(t.Tags) == 0 {
 		tagCur = "▶ "
 	}
 	b.WriteString(tagCur + detailLabelStyle.Render(tr("Tags:")) + "\n")
@@ -224,7 +224,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	defer putBuilder(learnB)
 
 	subtaskCur := "  "
-	if isDetailFocused && m.detail.field == fieldSubtasks {
+	if isDetailFocused && m.detail.field == fieldSubtasks && m.subtaskCount(t.ID) == 0 {
 		subtaskCur = "▶ "
 	}
 	subB.WriteString(subtaskCur + detailLabelStyle.Render(tr("Subtasks:")) + "\n")
@@ -260,11 +260,11 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 		}
 	}
 
+	inbound := dependentsOf(m.allTodos(), t.ID)
 	depCur := "  "
-	if isDetailFocused && m.detail.field == fieldDependencies {
+	if isDetailFocused && m.detail.field == fieldDependencies && len(t.Dependencies) == 0 && len(inbound) == 0 {
 		depCur = "▶ "
 	}
-	inbound := dependentsOf(m.allTodos(), t.ID)
 	depB.WriteString(depCur + detailLabelStyle.Render(tr("Dependencies:")) + "\n")
 	if len(t.Dependencies) == 0 {
 		if len(inbound) == 0 {
@@ -322,7 +322,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	}
 
 	learningCur := "  "
-	if isDetailFocused && m.detail.field == fieldLearnings {
+	if isDetailFocused && m.detail.field == fieldLearnings && len(t.Learnings) == 0 {
 		learningCur = "▶ "
 	}
 	learnB.WriteString(learningCur + detailLabelStyle.Render(tr("Learnings:")) + "\n")
@@ -363,7 +363,7 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 	}
 	isDetailFocused := m.pane == paneDetail
 	commentCur := "  "
-	if isDetailFocused {
+	if isDetailFocused && len(t.Comments) == 0 {
 		commentCur = "▶ "
 	}
 	b.WriteString(commentCur + detailLabelStyle.Render(tr("Comments:")) + "\n")
