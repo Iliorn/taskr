@@ -363,7 +363,7 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 	}
 	isDetailFocused := m.pane == paneDetail
 	commentCur := "  "
-	if isDetailFocused && len(t.Comments) == 0 {
+	if isDetailFocused && m.detail.field == fieldComments && len(t.Comments) == 0 {
 		commentCur = "▶ "
 	}
 	b.WriteString(commentCur + detailLabelStyle.Render(tr("Comments:")) + "\n")
@@ -375,7 +375,7 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 			available = 10
 		}
 		for i, c := range t.Comments {
-			isSelected := isDetailFocused && i == m.detail.commentCursor
+			isSelected := isDetailFocused && m.detail.field == fieldComments && i == m.detail.commentCursor
 			pfx := "  "
 			if isSelected {
 				pfx = "▶ "
