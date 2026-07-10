@@ -337,3 +337,188 @@ func TestScriptToggleDoneStopsTimerAndMarksDone(t *testing.T) {
 		t.Error("CompletedAt not stamped")
 	}
 }
+
+// ── Time-entries section in the detail pane ───────────────────────────────────
+
+func navToTimeEntries(t *testing.T, m model) model {
+	t.Helper()
+	// enter → detail pane; right×3 → fieldTimeEntries
+	// sections order: startDate(0) → tags(1) → subtasks(2) → timeEntries(3 rights)
+	// The section jump algorithm picks cur by last-matching iota, so the path
+	// from fieldSubtasks(10) skips fieldDependencies(8) and fieldLearnings(9)
+	// (lower iota values) and lands directly on fieldTimeEntries(11).
+	return script(t, m, "enter", "right", "right", "right")
+}
+
+func TestScriptDetailTimeEntriesNavigate(t *testing.T) {
+	task := todo.New("Tracked task")
+	now := time.Now()
+	task.AddTimeEntry(now.Add(-2*time.Hour), now.Add(-time.Hour))
+	task.AddTimeEntry(now.Add(-30*time.Minute), now.Add(-10*time.Minute))
+	m := modelWithTasks(t, task)
+
+	m = navToTimeEntries(t, m)
+	if m.pane != paneDetail {
+		t.Fatalf("pane = %v, want paneDetail", m.pane)
+	}
+	if m.detail.field != fieldTimeEntries {
+		t.Fatalf("field = %v, want fieldTimeEntries", m.detail.field)
+	}
+	if m.detail.timeEntryCursor != 0 {
+		t.Fatalf("timeEntryCursor = %d, want 0", m.detail.timeEntryCursor)
+	}
+
+	// Navigate down to the second entry.
+	m = sendKey(t, m, "down")
+	if m.detail.timeEntryCursor != 1 {
+		t.Fatalf("timeEntryCursor after down = %d, want 1", m.detail.timeEntryCursor)
+	}
+	// Navigate back up.
+	m = sendKey(t, m, "up")
+	if m.detail.timeEntryCursor != 0 {
+		t.Fatalf("timeEntryCursor after up = %d, want 0", m.detail.timeEntryCursor)
+	}
+}
+
+func TestScriptDetailTimeEntryEdit(t *testing.T) {
+	task := todo.New("Editable entry")
+	now := time.Now()
+	task.AddTimeEntry(now.Add(-2*time.Hour), now.Add(-time.Hour))
+	m := modelWithTasks(t, task)
+	target := m.get(task.ID)
+	entryID := target.TimeEntries[0].ID
+
+	m = navToTimeEntries(t, m)
+	if m.detail.field != fieldTimeEntries {
+		t.Fatalf("field = %v, want fieldTimeEntries", m.detail.field)
+	}
+
+	// 'r' must open modeEditTimeEntry with the entry pre-filled.
+	m = sendKey(t, m, "r")
+	if m.mode != modeEditTimeEntry {
+		t.Fatalf("after 'r': mode = %v, want modeEditTimeEntry", m.mode)
+	}
+	if m.pendingEntryID != entryID {
+		t.Fatalf("pendingEntryID = %q, want %q", m.pendingEntryID, entryID)
+	}
+
+	// Submit a new time range.
+	m = script(t, m, "esc") // cancel the input
+	if m.mode != modeNormal {
+		t.Fatalf("after esc: mode = %v, want modeNormal", m.mode)
+	}
+
+	// Now open and confirm an edit.
+	m = sendKey(t, m, "r")
+	m.textInput.SetValue("08:00-09:30")
+	m = sendKey(t, m, "enter")
+
+	got := m.get(task.ID)
+	if len(got.TimeEntries) != 1 {
+		t.Fatalf("entries = %d, want 1", len(got.TimeEntries))
+	}
+	d := got.TimeEntries[0].StoppedAt.Sub(got.TimeEntries[0].StartedAt)
+	if d != 90*time.Minute {
+		t.Errorf("edited duration = %v, want 90m", d)
+	}
+	if len(m.undoStack) == 0 {
+		t.Error("edit must push an undo entry")
+	}
+}
+
+func TestScriptDetailTimeEntryDeleteAndUndoStack(t *testing.T) {
+	task := todo.New("Deletable entry")
+	now := time.Now()
+	task.AddTimeEntry(now.Add(-time.Hour), now)
+	m := modelWithTasks(t, task)
+	target := m.get(task.ID)
+	if len(target.TimeEntries) != 1 {
+		t.Fatalf("setup: %d entries, want 1", len(target.TimeEntries))
+	}
+
+	m = navToTimeEntries(t, m)
+	if m.detail.field != fieldTimeEntries {
+		t.Fatalf("field = %v, want fieldTimeEntries", m.detail.field)
+	}
+
+	// 'x' must open a confirm prompt.
+	m = sendKey(t, m, "x")
+	if m.mode != modeConfirm {
+		t.Fatalf("after 'x': mode = %v, want modeConfirm", m.mode)
+	}
+
+	// Confirm deletion with 'y'.
+	m = sendKey(t, m, "y")
+	if m.mode != modeNormal {
+		t.Fatalf("after 'y': mode = %v, want modeNormal", m.mode)
+	}
+	got := m.get(task.ID)
+	if len(got.TimeEntries) != 0 {
+		t.Fatalf("after delete: %d entries, want 0", len(got.TimeEntries))
+	}
+	if !m.savePending && !m.saveScheduled {
+		t.Error("deletion did not schedule a save")
+	}
+	// Deletion must push an undo entry so it can be reversed.
+	if len(m.undoStack) == 0 {
+		t.Fatal("delete must push an undo entry")
+	}
+	// The undo entry must name the parent task's ID so a partial restore
+	// knows which task to snapshot and mark dirty.
+	top := m.undoStack[len(m.undoStack)-1]
+	if len(top.ids) == 0 || top.ids[0] != task.ID {
+		t.Errorf("undo entry ids = %v, want [%s]", top.ids, task.ID)
+	}
+	// The undo snapshot must capture the pre-delete state (1 entry).
+	if len(top.partial) == 0 {
+		t.Error("undo entry must carry a partial snapshot")
+	} else if len(top.partial[0].TimeEntries) != 1 {
+		t.Errorf("undo snapshot has %d entries, want 1 (pre-delete state)",
+			len(top.partial[0].TimeEntries))
+	}
+	// Cursor must clamp: with 0 entries left, timeEntryCursor must be 0.
+	if m.detail.timeEntryCursor != 0 {
+		t.Errorf("timeEntryCursor after delete = %d, want 0 (clamped)", m.detail.timeEntryCursor)
+	}
+
+	// Undo must restore the deleted entry.
+	m = sendKey(t, m, "u")
+	restored := m.get(task.ID)
+	if restored == nil || len(restored.TimeEntries) != 1 {
+		t.Fatalf("after undo: entry not restored (task = %+v)", restored)
+	}
+}
+
+func TestScriptDetailTimeEntryRunningEntryGuard(t *testing.T) {
+	// A running timer entry must be protected from edit/delete in the detail
+	// pane — the user must stop the timer first, just like the calendar.
+	task := todo.New("Running timer")
+	m := modelWithTasks(t, task)
+
+	// Start the timer via 't' in list pane.
+	m = sendKey(t, m, "t")
+	if !m.get(task.ID).IsTimerRunning() {
+		t.Fatal("timer not running after 't'")
+	}
+
+	m = navToTimeEntries(t, m)
+	if m.detail.field != fieldTimeEntries {
+		t.Fatalf("field = %v, want fieldTimeEntries", m.detail.field)
+	}
+
+	// 'r' on running entry must flash info, not open edit mode.
+	initialStack := len(m.undoStack)
+	m = sendKey(t, m, "r")
+	if m.mode != modeNormal {
+		t.Errorf("after 'r' on running entry: mode = %v, want modeNormal (guarded)", m.mode)
+	}
+	if len(m.undoStack) != initialStack {
+		t.Error("guard must not push undo")
+	}
+
+	// 'x' on running entry must flash info, not open confirm.
+	m = sendKey(t, m, "x")
+	if m.mode != modeNormal {
+		t.Errorf("after 'x' on running entry: mode = %v, want modeNormal (guarded)", m.mode)
+	}
+}

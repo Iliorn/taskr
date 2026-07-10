@@ -121,6 +121,26 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "a":
 		return m.detailAdd()
 
+	case "r":
+		// Edit the selected time entry from the detail pane — reuses the same
+		// startEditTimeEntry flow as the calendar timeline so parsing and undo
+		// are identical across both surfaces.
+		if m.detail.field == fieldTimeEntries {
+			if t := m.currentTodo(); t != nil {
+				idx := m.detail.timeEntryCursor
+				if idx < len(t.TimeEntries) {
+					e := &t.TimeEntries[idx]
+					if e.IsRunning() {
+						// Don't allow editing a still-running entry via the
+						// detail pane — use the calendar or stop the timer first.
+						m.flashInfo(tr("Stop the timer before editing a running entry"))
+						return m, clearErrAfter()
+					}
+					return m, m.startEditTimeEntry(t.ID, e.ID)
+				}
+			}
+		}
+
 	case "x", "delete":
 		return m.detailDelete()
 	}
@@ -130,7 +150,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 // detailSectionJump moves the detail cursor to the next/previous section
 // head — the pageless replacement for the old [1/3] page flip.
 func (m *model) detailSectionJump(dir int) {
-	sections := []detailField{fieldStartDate, fieldTags, fieldSubtasks, fieldDependencies, fieldLearnings, fieldComments}
+	sections := []detailField{fieldStartDate, fieldTags, fieldSubtasks, fieldDependencies, fieldLearnings, fieldTimeEntries, fieldComments}
 	cur := 0
 	for i, s := range sections {
 		if m.detail.field >= s {
@@ -150,6 +170,7 @@ func (m *model) detailSectionJump(dir int) {
 	m.detail.subtaskCursor = 0
 	m.detail.depCursor = 0
 	m.detail.learningCursor = 0
+	m.detail.timeEntryCursor = 0
 	m.detail.commentCursor = 0
 	m.invalidateDetailCache()
 }
@@ -216,14 +237,24 @@ func (m *model) detailCursorUp() {
 				}
 			}
 		}
-	case fieldComments:
-		if m.detail.commentCursor > 0 {
-			m.detail.commentCursor--
+	case fieldTimeEntries:
+		if m.detail.timeEntryCursor > 0 {
+			m.detail.timeEntryCursor--
 		} else {
 			m.detail.field = fieldLearnings
 			m.detail.learningCursor = 0
 			if t != nil && len(t.Learnings) > 0 {
 				m.detail.learningCursor = len(t.Learnings) - 1
+			}
+		}
+	case fieldComments:
+		if m.detail.commentCursor > 0 {
+			m.detail.commentCursor--
+		} else {
+			m.detail.field = fieldTimeEntries
+			m.detail.timeEntryCursor = 0
+			if t != nil && len(t.TimeEntries) > 0 {
+				m.detail.timeEntryCursor = len(t.TimeEntries) - 1
 			}
 		}
 	}
@@ -272,6 +303,13 @@ func (m *model) detailCursorDown() {
 	case fieldLearnings:
 		if t != nil && m.detail.learningCursor < len(t.Learnings)-1 {
 			m.detail.learningCursor++
+		} else {
+			m.detail.field = fieldTimeEntries
+			m.detail.timeEntryCursor = 0
+		}
+	case fieldTimeEntries:
+		if t != nil && m.detail.timeEntryCursor < len(t.TimeEntries)-1 {
+			m.detail.timeEntryCursor++
 		} else {
 			m.detail.field = fieldComments
 			m.detail.commentCursor = 0
@@ -392,6 +430,22 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 			m.confirmOnYes = (*model).confirmDeleteSubtask
 			m.pendingSubtask = m.detail.subtaskCursor
 			m.confirmMsg = fmt.Sprintf(tr("Delete subtask '%s'? (y/n)"), truncate(subTitle, 40))
+		}
+	case fieldTimeEntries:
+		idx := m.detail.timeEntryCursor
+		if idx < len(t.TimeEntries) {
+			e := &t.TimeEntries[idx]
+			if e.IsRunning() {
+				// Guard: deleting a running entry is the same footgun as on
+				// the calendar. Require the user to stop it first.
+				m.flashInfo(tr("Stop the timer before deleting a running entry"))
+				return m, clearErrAfter()
+			}
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteTimeEntryFromDetail
+			m.pendingEntryTaskID = t.ID
+			m.pendingEntryID = e.ID
+			m.confirmMsg = fmt.Sprintf(tr("Delete %s entry? (y/n)"), formatDuration(e.Duration()))
 		}
 	}
 	return m, nil

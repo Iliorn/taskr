@@ -90,6 +90,7 @@ const (
 	fieldDependencies
 	fieldLearnings
 	fieldSubtasks
+	fieldTimeEntries
 	fieldComments
 )
 
@@ -226,12 +227,13 @@ type searchState struct {
 }
 
 type detailState struct {
-	field          detailField
-	commentCursor  int
-	depCursor      int
-	tagCursor      int
-	learningCursor int
-	subtaskCursor  int
+	field            detailField
+	commentCursor    int
+	depCursor        int
+	tagCursor        int
+	learningCursor   int
+	subtaskCursor    int
+	timeEntryCursor  int
 }
 
 type calendarState struct {

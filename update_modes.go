@@ -831,6 +831,29 @@ func (m *model) confirmDeleteTimeEntry() tea.Cmd {
 	return nil
 }
 
+// confirmDeleteTimeEntryFromDetail is the detail-pane variant of
+// confirmDeleteTimeEntry. It deletes the entry and clamps detail.timeEntryCursor
+// instead of the calendar's entryCursor, so the two surfaces stay independent.
+func (m *model) confirmDeleteTimeEntryFromDetail() tea.Cmd {
+	if t := m.findTodoByID(m.pendingEntryTaskID); t != nil {
+		for i := range t.TimeEntries {
+			if t.TimeEntries[i].ID == m.pendingEntryID {
+				m.pushUndo("delete time entry", t.ID)
+				t.DeleteTimeEntry(i)
+				m.markModified(t.ID)
+				break
+			}
+		}
+		// Re-fetch after deletion to get the updated length.
+		if t2 := m.findTodoByID(m.pendingEntryTaskID); t2 != nil {
+			if m.detail.timeEntryCursor >= len(t2.TimeEntries) && m.detail.timeEntryCursor > 0 {
+				m.detail.timeEntryCursor--
+			}
+		}
+	}
+	return nil
+}
+
 func (m *model) confirmDeleteTag() tea.Cmd {
 	if t := m.currentTodo(); t != nil && m.pendingTag < len(t.Tags) {
 		m.pushUndo("remove tag", t.ID)

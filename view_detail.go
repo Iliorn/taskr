@@ -362,6 +362,59 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 		innerW = minInnerWidth
 	}
 	isDetailFocused := m.pane == paneDetail
+
+	// ── Time Entries ─────────────────────────────────────────────────────────
+	entryCur := "  "
+	if isDetailFocused && m.detail.field == fieldTimeEntries && len(t.TimeEntries) == 0 {
+		entryCur = "▶ "
+	}
+	b.WriteString(entryCur + detailLabelStyle.Render(tr("Time entries:")) + "\n")
+	if len(t.TimeEntries) == 0 {
+		b.WriteString("  " + detailValueStyle.Render(tr("No time entries. Press 'T' to add one.")) + "\n")
+	} else {
+		// Per-entry format: "HH:MM–HH:MM (duration)" mirroring the calendar
+		// timeline's range style so the two surfaces look consistent.
+		// A running entry (no StoppedAt) shows "HH:MM–now" and is not
+		// editable/deletable — guard in updateDetail handles that.
+		entryLineW := innerW - 4 // 2 cursor + 2 padding
+		if entryLineW < 10 {
+			entryLineW = 10
+		}
+		for i, e := range t.TimeEntries {
+			isSelected := isDetailFocused && m.detail.field == fieldTimeEntries && i == m.detail.timeEntryCursor
+			pfx := "  "
+			if isSelected {
+				pfx = "▶ "
+			}
+			endStr := e.StoppedAt.Format("15:04")
+			running := e.IsRunning()
+			if running {
+				endStr = tr("now")
+			}
+			rangeStr := e.StartedAt.Format("15:04") + "–" + endStr
+			durStr := formatDuration(e.Duration())
+			// Date prefix: show "DD-MM " only when the entry is not from today,
+			// so at-a-glance reading of today's entries stays terse.
+			datePrefix := ""
+			today := startOfDay(time.Now())
+			if startOfDay(e.StartedAt) != today {
+				datePrefix = e.StartedAt.Format("02-01 ")
+			}
+			line := pfx + datePrefix + rangeStr + "  " + durStr
+			if running {
+				line += tr(" ◉")
+			}
+			line = truncate(line, entryLineW)
+			if isSelected {
+				b.WriteString(detailSelectedStyle.Render(line) + "\n")
+			} else {
+				b.WriteString(detailValueStyle.Render(line) + "\n")
+			}
+		}
+	}
+	b.WriteString("\n")
+
+	// ── Comments ─────────────────────────────────────────────────────────────
 	commentCur := "  "
 	if isDetailFocused && m.detail.field == fieldComments && len(t.Comments) == 0 {
 		commentCur = "▶ "
