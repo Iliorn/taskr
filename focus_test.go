@@ -127,9 +127,13 @@ func TestDetailEscKeepsSearch(t *testing.T) {
 // Calendar timeline focus participates in the same stack.
 func TestCalendarTimelineEsc(t *testing.T) {
 	tracked := todo.New("tracked work")
+	// Anchor the entry to noon so it stays on today's calendar day no matter
+	// when the test runs — Now()-1h crosses midnight and lands on yesterday.
+	y, mo, d := time.Now().Date()
+	noon := time.Date(y, mo, d, 12, 0, 0, 0, time.Local)
 	tracked.TimeEntries = []todo.TimeEntry{{
-		StartedAt: time.Now().Add(-time.Hour),
-		StoppedAt: time.Now().Add(-30 * time.Minute),
+		StartedAt: noon,
+		StoppedAt: noon.Add(30 * time.Minute),
 	}}
 	m := modelWithTasks(t, tracked)
 
