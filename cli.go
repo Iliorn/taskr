@@ -441,6 +441,8 @@ func cliList(args []string) int {
 	tag := fs.String("tag", "", "only tasks carrying this tag (case-insensitive)")
 	project := fs.String("project", "", "only tasks in this project")
 	search := fs.String("search", "", "only tasks whose title contains this substring")
+	ready := fs.Bool("ready", false, "only actionable pending tasks (no unfinished dependencies)")
+	blocked := fs.Bool("blocked", false, "only tasks blocked by at least one unfinished dependency")
 	flagArgs, _ := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
@@ -456,6 +458,8 @@ func cliList(args []string) int {
 		tag:         *tag,
 		project:     *project,
 		search:      *search,
+		onlyReady:   *ready,
+		onlyBlocked: *blocked,
 	}
 	rows := filterTopLevel(todos, opts)
 	sortTodosByMode(rows, taskSortSequence)
@@ -476,7 +480,8 @@ func cliList(args []string) int {
 			return 0
 		}
 	}
-	printTaskTable(rows)
+	blockedSet := buildBlockedSet(todos)
+	printTaskTable(rows, blockedSet)
 	return 0
 }
 
@@ -514,7 +519,8 @@ func cliSearch(args []string) int {
 	if *asJSON {
 		return emitJSON(rows)
 	}
-	printTaskTable(rows)
+	blockedSet := buildBlockedSet(todos)
+	printTaskTable(rows, blockedSet)
 	return 0
 }
 
@@ -1989,7 +1995,7 @@ Tasks:
   taskr add "title" [flags]            add a new task (--like <ref> clones, --depends <ref>|^ blocks on, --start tracks)
   taskr add -                          batch add: one task per stdin line (flags apply to all; --chain links each
                                        line as depending on the previous — a plan typed in execution order)
-  taskr list [flags]                   list pending top-level tasks (filters below)
+  taskr list [flags]                   list pending top-level tasks (ST: [ ] ready, [~] blocked, [✓] done)
   taskr search "term" [flags]          title-substring search (includes done by default)
   taskr top [-n=N] [--json] [--wide]   show top-N by sequence score
   taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
@@ -2061,6 +2067,8 @@ Flags (list / search):
   --all           include completed tasks (list only; search includes by default)
   --pending       exclude completed (search only; inverts default)
   --focus         only today + overdue (list only)
+  --ready         only actionable tasks — ST [ ] (no unfinished dependencies; list only)
+  --blocked       only tasks waiting on an unfinished dependency — ST [~] (list only)
   --tag=NAME      only tasks carrying this tag
   --project=NAME  only tasks in this project
   --search=TERM   only tasks whose title contains TERM (list; redundant with 'search' verb)
@@ -2187,7 +2195,10 @@ func priorityLetter(p todo.Priority) string {
 	}
 }
 
-func printTaskTable(rows []todo.Todo) {
+// printTaskTable renders rows as a fixed-column table. blockedSet maps task IDs
+// to true when the task is waiting on at least one unfinished dependency; those
+// tasks receive the [~] glyph in the ST column instead of [ ].
+func printTaskTable(rows []todo.Todo, blockedSet map[string]bool) {
 	if len(rows) == 0 {
 		fmt.Println("(no tasks)")
 		return
@@ -2217,8 +2228,11 @@ func printTaskTable(rows []todo.Todo) {
 	}
 	for _, t := range rows {
 		st := "[ ]"
-		if t.Status == todo.Done {
+		switch {
+		case t.Status == todo.Done:
 			st = "[✓]"
+		case blockedSet[t.ID]:
+			st = "[~]" // blocked: waiting on an unfinished dependency
 		}
 		due := ""
 		if !t.DueDate.IsZero() {

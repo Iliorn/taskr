@@ -933,6 +933,8 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		checkbox = "[✓]"
 	} else if len(t.TimeEntries) > 0 {
 		checkbox = "[>]"
+	} else if m.cache.blockedSet[t.ID] {
+		checkbox = "[~]" // blocked: waiting on an unfinished dependency
 	}
 	foldIcon := " "
 	if m.subtaskCount(t.ID) > 0 {

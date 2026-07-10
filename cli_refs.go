@@ -159,12 +159,47 @@ type listFilterOpts struct {
 	tag         string // matched case-insensitively after NormalizeTag
 	project     string // matched case-insensitively for equality
 	search      string // case-insensitive substring of title
+	onlyReady   bool   // only actionable pending tasks (not blocked by an unfinished dependency)
+	onlyBlocked bool   // only tasks blocked by at least one unfinished dependency
+}
+
+// buildBlockedSet returns a set of task IDs that are "blocked": each task has
+// at least one dependency that is still pending (not done and not deleted).
+// Mirrors the same logic as model.rebuildDependencySets, but as a pure
+// function suitable for CLI use without a model/cache.
+func buildBlockedSet(todos []todo.Todo) map[string]bool {
+	pending := make(map[string]bool, len(todos))
+	for i := range todos {
+		if todos[i].Status != todo.Done && !todos[i].Deleted {
+			pending[todos[i].ID] = true
+		}
+	}
+	blocked := make(map[string]bool)
+	for i := range todos {
+		if todos[i].Status == todo.Done {
+			continue
+		}
+		for _, depID := range todos[i].Dependencies {
+			if pending[depID] {
+				blocked[todos[i].ID] = true
+				break
+			}
+		}
+	}
+	return blocked
 }
 
 func filterTopLevel(todos []todo.Todo, opts listFilterOpts) []todo.Todo {
 	tagQ := todo.NormalizeTag(opts.tag)
 	projQ := strings.ToLower(strings.TrimSpace(opts.project))
 	searchQ := strings.ToLower(strings.TrimSpace(opts.search))
+
+	// Build the blocked set only when one of the readiness filters is active —
+	// it requires scanning the full task list and is unnecessary otherwise.
+	var blockedSet map[string]bool
+	if opts.onlyReady || opts.onlyBlocked {
+		blockedSet = buildBlockedSet(todos)
+	}
 
 	rows := make([]todo.Todo, 0, len(todos))
 	for _, t := range todos {
@@ -193,6 +228,12 @@ func filterTopLevel(todos []todo.Todo, opts listFilterOpts) []todo.Todo {
 			continue
 		}
 		if searchQ != "" && !strings.Contains(strings.ToLower(t.Title), searchQ) {
+			continue
+		}
+		if opts.onlyReady && blockedSet[t.ID] {
+			continue
+		}
+		if opts.onlyBlocked && !blockedSet[t.ID] {
 			continue
 		}
 		rows = append(rows, t)

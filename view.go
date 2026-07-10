@@ -824,6 +824,7 @@ func (m model) helpBodyLines() []string {
 	sections = append(sections, helpSec{tr("Row symbols"), [][2]string{
 		{"⧗", tr("timer running")},
 		{"!", tr("high priority")},
+		{"[~]", tr("blocked — waiting on an unfinished dependency (ST column)")},
 		{"↥", tr("others depend on this — finishing it unblocks them")},
 		{"↧", tr("blocked — waiting on an unfinished dependency")},
 		{"↻", tr("recurring task")},

@@ -819,6 +819,105 @@ func TestFilterTopLevel(t *testing.T) {
 	})
 }
 
+// TestBuildBlockedSet verifies the pure blocked-set helper matches the same
+// semantics as model.rebuildDependencySets: a task is blocked iff at least one
+// of its dependencies is still pending; a dependency that is done does not block.
+func TestBuildBlockedSet(t *testing.T) {
+	blocker := todo.New("Prerequisite")
+	blocked := todo.New("Depends on prerequisite")
+	blocked.AddDependency(blocker.ID)
+	donePrereq := todo.New("Already done prereq")
+	donePrereq.Status = todo.Done
+	notBlocked := todo.New("Depends only on done task")
+	notBlocked.AddDependency(donePrereq.ID)
+	independent := todo.New("No dependencies")
+
+	todos := []todo.Todo{blocker, blocked, donePrereq, notBlocked, independent}
+	bs := buildBlockedSet(todos)
+
+	if !bs[blocked.ID] {
+		t.Errorf("task with pending dep should be blocked")
+	}
+	if bs[blocker.ID] {
+		t.Errorf("task with no deps should not be in blocked set")
+	}
+	if bs[notBlocked.ID] {
+		t.Errorf("task whose dep is done should not be blocked")
+	}
+	if bs[independent.ID] {
+		t.Errorf("independent task should not be blocked")
+	}
+}
+
+// TestFilterTopLevelReadyBlocked exercises the --ready and --blocked filters
+// added alongside the [~] glyph so a future refactor can't silently break them.
+func TestFilterTopLevelReadyBlocked(t *testing.T) {
+	prereq := todo.New("Prerequisite step")
+	dependent := todo.New("Depends on step")
+	dependent.AddDependency(prereq.ID)
+	free := todo.New("No dependencies")
+	todos := []todo.Todo{prereq, dependent, free}
+
+	titlesOf := func(rows []todo.Todo) []string {
+		out := make([]string, len(rows))
+		for i := range rows {
+			out[i] = rows[i].Title
+		}
+		return out
+	}
+
+	t.Run("--ready excludes blocked", func(t *testing.T) {
+		got := filterTopLevel(todos, listFilterOpts{onlyReady: true})
+		for _, r := range got {
+			if r.ID == dependent.ID {
+				t.Errorf("--ready should exclude blocked task, got %v", titlesOf(got))
+			}
+		}
+		if len(got) != 2 {
+			t.Errorf("want 2 ready tasks (prereq + free), got %d: %v", len(got), titlesOf(got))
+		}
+	})
+
+	t.Run("--blocked returns only blocked", func(t *testing.T) {
+		got := filterTopLevel(todos, listFilterOpts{onlyBlocked: true})
+		if len(got) != 1 || got[0].ID != dependent.ID {
+			t.Errorf("want only the blocked task, got %v", titlesOf(got))
+		}
+	})
+
+	t.Run("default includes all pending (blocked + unblocked)", func(t *testing.T) {
+		got := filterTopLevel(todos, listFilterOpts{})
+		if len(got) != 3 {
+			t.Errorf("want 3 rows (all pending), got %d: %v", len(got), titlesOf(got))
+		}
+	})
+}
+
+// TestPrintTaskTableBlockedGlyph confirms that printTaskTable renders [~] for
+// blocked tasks and [ ] for unblocked pending tasks, matching the ST column spec.
+func TestPrintTaskTableBlockedGlyph(t *testing.T) {
+	blocker := todo.New("Blocker task")
+	blocked := todo.New("Blocked task")
+	blocked.AddDependency(blocker.ID)
+
+	bs := buildBlockedSet([]todo.Todo{blocker, blocked})
+	out := captureStdout(t, func() {
+		printTaskTable([]todo.Todo{blocker, blocked}, bs)
+	})
+
+	if !strings.Contains(out, "[~]") {
+		t.Errorf("blocked task row should contain [~], got:\n%s", out)
+	}
+	// The blocker itself is pending but not blocked — it should show [ ].
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "Blocker task") {
+			if !strings.Contains(line, "[ ]") {
+				t.Errorf("unblocked pending task should show [ ], got: %s", line)
+			}
+		}
+	}
+}
+
 // TestResolveRefs covers the batch verb's ref-resolution contract: succeed on
 // all refs or fail before any mutation; collapse duplicates silently so
 // `done abc abc` is one done, not an error.
