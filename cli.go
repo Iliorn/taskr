@@ -126,7 +126,10 @@ func cliAdd(args []string) int {
 	due := fs.String("due", "", "due date (today|tomorrow|+3d|dd-mm-yy|...)")
 	// Defaults stay empty so --like can fill them; without --like, todo.New
 	// already sets Medium for both, so the user-visible behavior is unchanged.
-	priority := fs.String("p", "", "priority: h|m|l (default m, or copied from --like)")
+	// --priority is an alias for --p; both share the same destination.
+	var priorityVal string
+	fs.StringVar(&priorityVal, "p", "", "priority: h|m|l (default m, or copied from --like)")
+	fs.StringVar(&priorityVal, "priority", "", "priority: h|m|l (alias for --p)")
 	size := fs.String("size", "", "size: s|m|l (default m, or copied from --like)")
 	project := fs.String("project", "", "project name")
 	tags := fs.String("tag", "", "comma-separated tags")
@@ -134,7 +137,7 @@ func cliAdd(args []string) int {
 	depends := fs.String("depends", "", "make the new task depend on an existing task ref, or ^ for the last-added task")
 	chain := fs.Bool("chain", false, "batch add (-) only: each line depends on the previous line's task")
 	like := fs.String("like", "", "clone priority/size/project/tags from an existing task ref")
-	note := fs.String("note", "", "set the task's notes field (freeform body)")
+	note := fs.String("note", "", "set the task's notes field (freeform body; '-' reads from stdin)")
 	comment := fs.String("comment", "", "add an initial timestamped comment to the task")
 	startNow := fs.Bool("start", false, "start the time tracker on the new task (stops any other running timer first)")
 	asJSON := fs.Bool("json", false, "emit the created task as JSON (includes its id) instead of the human line")
@@ -144,6 +147,7 @@ func cliAdd(args []string) int {
 		fmt.Fprintln(os.Stderr, "  the title accepts the same quick-add tokens as the TUI: #tag @project due:friday p:high s:l r:weekly dep:^  (flags override tokens)")
 		fs.PrintDefaults()
 	}
+	priority := &priorityVal
 	flagArgs, titleParts := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
@@ -189,6 +193,12 @@ func cliAdd(args []string) int {
 		fmt.Fprintln(os.Stderr, "taskr add: --chain only applies to batch stdin add (-); for a single task use --depends ^")
 		return 2
 	}
+	// Detect the stdin conflict: `add -` (batch titles from stdin) + `--note -`
+	// (note body from stdin) can't both read the same stream.
+	if batch && *note == "-" {
+		fmt.Fprintln(os.Stderr, "taskr add: --note - and batch stdin add (-) both need stdin; use --note=TEXT or drop one")
+		return 2
+	}
 	if batch {
 		if *startNow {
 			fmt.Fprintln(os.Stderr, "taskr add: --start can't be combined with batch stdin add (-)")
@@ -204,6 +214,18 @@ func cliAdd(args []string) int {
 			return 2
 		}
 		titles = lines
+	}
+	// Resolve --note value once (before buildTask, so stdin is only consumed
+	// once even though buildTask is called in a loop). For '-', read from stdin
+	// — same helper as `edit --note -` / `edit --append-note -`.
+	var noteText string
+	if *note != "" {
+		text, terr := noteFlagText(*note, os.Stdin)
+		if terr != nil {
+			fmt.Fprintf(os.Stderr, "stdin: %v\n", terr)
+			return 1
+		}
+		noteText = text
 	}
 
 	// Parse quick-add tokens (#tag @project due: p: s: r: dep:) out of every
@@ -225,6 +247,7 @@ func cliAdd(args []string) int {
 		existing []todo.Todo
 		likeSrc  *todo.Todo
 		depID    string
+		depTask  *todo.Todo // kept for confirmation output after save
 	)
 	if *like != "" || *depends != "" || *startNow || anyTokenDeps {
 		loaded, err := repo.Load()
@@ -249,6 +272,7 @@ func cliAdd(args []string) int {
 			return 2
 		}
 		depID = dep.ID
+		depTask = dep
 	}
 	// Resolve any dep: token refs up front (mirroring --depends), so a bad ref
 	// fails cleanly before anything is written.
@@ -324,8 +348,8 @@ func cliAdd(args []string) int {
 		if depID != "" {
 			t.AddDependency(depID)
 		}
-		if *note != "" {
-			t.SetNotes(*note)
+		if noteText != "" {
+			t.SetNotes(noteText)
 		}
 		if *comment != "" {
 			t.AddComment(*comment)
@@ -372,7 +396,7 @@ func cliAdd(args []string) int {
 	if batch {
 		return emitAddResultsBatch(created, *asJSON, *quietID)
 	}
-	return emitAddResult(&created[0], started, *asJSON, *quietID)
+	return emitAddResult(&created[0], started, depTask, *asJSON, *quietID)
 }
 
 // readTitlesFromStdin returns one trimmed, non-empty title per line of r. Used
@@ -412,10 +436,11 @@ func emitAddResultsBatch(tasks []todo.Todo, asJSON, quietID bool) int {
 // emitAddResult renders the outcome of `taskr add`. --json emits the full
 // created task so a script can read .id (or any other field); --quiet-id prints
 // only the full UUID for shell capture (id=$(taskr add … --quiet-id)); otherwise
-// the usual human line. started selects the --start variant's message. Any
-// --start "stopped:" notices already went to stderr, so stdout stays clean for
-// the machine-readable modes.
-func emitAddResult(t *todo.Todo, started, asJSON, quietID bool) int {
+// the usual human line. started selects the --start variant's message. dep, when
+// non-nil, triggers a follow-up confirmation line so the user can see that the
+// dependency link took effect. Any --start "stopped:" notices already went to
+// stderr, so stdout stays clean for the machine-readable modes.
+func emitAddResult(t *todo.Todo, started bool, dep *todo.Todo, asJSON, quietID bool) int {
 	switch {
 	case asJSON:
 		return emitJSON(t)
@@ -425,6 +450,9 @@ func emitAddResult(t *todo.Todo, started, asJSON, quietID bool) int {
 		fmt.Printf("added + started: %s  %s\n", t.ID[:8], t.Title)
 	default:
 		fmt.Printf("added %s  %s\n", t.ID[:8], t.Title)
+	}
+	if dep != nil && !asJSON && !quietID {
+		fmt.Printf("blocked on %s  %s\n", dep.ID[:8], dep.Title)
 	}
 	return 0
 }
@@ -1039,7 +1067,11 @@ func cliEdit(args []string) int {
 	fs := flag.NewFlagSet("edit", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	title := fs.String("title", "", "new title")
-	priority := fs.String("p", "", "new priority: h|m|l")
+	// --priority is an alias for --p; both share the same destination.
+	var editPriorityVal string
+	fs.StringVar(&editPriorityVal, "p", "", "new priority: h|m|l")
+	fs.StringVar(&editPriorityVal, "priority", "", "new priority: h|m|l (alias for --p)")
+	priority := &editPriorityVal
 	size := fs.String("size", "", "new size: s|m|l")
 	due := fs.String("due", "", "set due date (today|tomorrow|+3d|dd-mm-yy|...)")
 	clearDue := fs.Bool("clear-due", false, "drop the due date")
@@ -2062,17 +2094,19 @@ so scripts stay deterministic. Ambiguous refs fail with exit code 2 and
 list each match with its short ID.
 
 Flags (add):
-  --due=DATE      today|tomorrow|+3d|dd-mm-yy|monday|...
-  --p=h|m|l       priority (default m, or copied from --like)
-  --size=s|m|l    task size (default m, or copied from --like)
-  --project=NAME  project
-  --tag=t1,t2     comma-separated tags
-  --like=REF      clone priority/size/project/tags from existing task (flags above override)
-  --note=TEXT     set the notes field (freeform body)
-  --comment=TEXT  add an initial timestamped comment
-  --start         start the time tracker on the new task (stops any other running timer first)
-  --json          emit the created task as JSON (includes its id)
-  --quiet-id      print only the new task's full id (for scripting)
+  --due=DATE           today|tomorrow|+3d|dd-mm-yy|monday|...
+  --p=h|m|l            priority (default m, or copied from --like)
+  --priority=h|m|l     priority (alias for --p)
+  --size=s|m|l         task size (default m, or copied from --like)
+  --project=NAME       project
+  --tag=t1,t2          comma-separated tags
+  --like=REF           clone priority/size/project/tags from existing task (flags above override)
+  --depends=REF        block the new task on an existing task (^ = last-added); echoed on success
+  --note=TEXT|-        set the notes field (freeform body; '-' reads from stdin)
+  --comment=TEXT       add an initial timestamped comment
+  --start              start the time tracker on the new task (stops any other running timer first)
+  --json               emit the created task as JSON (includes its id)
+  --quiet-id           print only the new task's full id (for scripting)
 
 Flags (list / search):
   --json          emit JSON
@@ -2092,9 +2126,10 @@ Flags (top):
   --wide          table with priority, due, tags columns
 
 Flags (edit):
-  --title=...     new title
-  --p=h|m|l       new priority
-  --size=s|m|l    new size
+  --title=...          new title
+  --p=h|m|l            new priority
+  --priority=h|m|l     new priority (alias for --p)
+  --size=s|m|l         new size
   --due=DATE      set due date         --clear-due       drop due date
   --start=DATE    set start date       --clear-start     drop start date
   --project=NAME  set project          --clear-project   drop project

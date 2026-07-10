@@ -1321,3 +1321,182 @@ func TestCliUndeleteRestoresSubtree(t *testing.T) {
 		t.Errorf("restored child ParentID = %q, want parent %q", c.ParentID, p.ID)
 	}
 }
+
+// ── Change 1: --depends confirmation + loud bad-ref failure ──────────────────
+
+// TestCliAddDependsConfirmationOutput verifies that a successful add with
+// --depends prints a "blocked on" line so the user can see the link took effect.
+func TestCliAddDependsConfirmationOutput(t *testing.T) {
+	if code := cliAdd([]string{"dep-confirm-prereq"}); code != 0 {
+		t.Fatalf("add prereq: exit %d", code)
+	}
+	out := captureStdout(t, func() {
+		if code := cliAdd([]string{"dep-confirm-task", "--depends", "dep-confirm-prereq"}); code != 0 {
+			t.Fatalf("add with --depends: exit %d", code)
+		}
+	})
+	if !strings.Contains(out, "added") {
+		t.Errorf("output should contain 'added'; got %q", out)
+	}
+	if !strings.Contains(out, "blocked on") {
+		t.Errorf("output should contain 'blocked on'; got %q", out)
+	}
+	if !strings.Contains(out, "Dep-confirm-prereq") {
+		t.Errorf("'blocked on' line should show dep title; got %q", out)
+	}
+}
+
+// TestCliAddDependsUnknownRefExitsNonZero verifies the command fails loudly
+// (non-zero exit, no task created) when --depends names a ref that doesn't exist.
+func TestCliAddDependsUnknownRefExitsNonZero(t *testing.T) {
+	countBefore := func() int {
+		_, todos, _ := loadForCLI()
+		return len(todos)
+	}
+	before := countBefore()
+	code := cliAdd([]string{"should-not-be-created", "--depends", "totally-bogus-ref-zzz99"})
+	if code == 0 {
+		t.Fatalf("want non-zero exit for unknown --depends ref, got 0")
+	}
+	after := countBefore()
+	if after != before {
+		t.Errorf("no task should be created when --depends ref is bad; had %d, now %d", before, after)
+	}
+}
+
+// TestCliAddDependsCaretConfirmationOutput checks that the ^ shorthand (depend
+// on the last-added task) also prints the "blocked on" confirmation line.
+func TestCliAddDependsCaretConfirmationOutput(t *testing.T) {
+	if code := cliAdd([]string{"caret-confirm-root"}); code != 0 {
+		t.Fatalf("add root: exit %d", code)
+	}
+	out := captureStdout(t, func() {
+		if code := cliAdd([]string{"caret-confirm-next", "--depends", "^"}); code != 0 {
+			t.Fatalf("add next --depends ^: exit %d", code)
+		}
+	})
+	if !strings.Contains(out, "blocked on") {
+		t.Errorf("^ path: output should contain 'blocked on'; got %q", out)
+	}
+	if !strings.Contains(out, "Caret-confirm-root") {
+		t.Errorf("^ path: 'blocked on' line should show dep title; got %q", out)
+	}
+}
+
+// ── Change 2: --note - reads stdin ───────────────────────────────────────────
+
+// TestCliAddNoteFromStdin verifies that --note=- reads the note body from stdin.
+func TestCliAddNoteFromStdin(t *testing.T) {
+	orig := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdin = r
+	go func() {
+		if _, err := io.WriteString(w, "line one\nline two\n"); err != nil {
+			t.Errorf("write stdin: %v", err)
+		}
+		w.Close()
+	}()
+	code := cliAdd([]string{"note-stdin-task", "--note", "-"})
+	os.Stdin = orig
+	if code != 0 {
+		t.Fatalf("add --note -: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, "note-stdin-task")
+	if err != nil {
+		t.Fatalf("find task: %v", err)
+	}
+	// noteFlagText trims trailing newlines (heredoc convention).
+	if got.Notes != "line one\nline two" {
+		t.Errorf("Notes = %q, want %q", got.Notes, "line one\nline two")
+	}
+}
+
+// TestCliAddNoteStdinConflictWithBatchErrors verifies that combining `add -`
+// (batch titles from stdin) and --note=- (note from stdin) is rejected clearly.
+func TestCliAddNoteStdinConflictWithBatchErrors(t *testing.T) {
+	orig := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdin = r
+	go func() {
+		if _, err := io.WriteString(w, "some title\n"); err != nil {
+			t.Errorf("write stdin: %v", err)
+		}
+		w.Close()
+	}()
+	code := cliAdd([]string{"-", "--note", "-"})
+	os.Stdin = orig
+	if code != 2 {
+		t.Errorf("add - --note -: want exit 2 (stdin conflict), got %d", code)
+	}
+}
+
+// ── Change 3: --priority alias ───────────────────────────────────────────────
+
+// TestCliAddPriorityAlias verifies --priority sets the same value as --p.
+func TestCliAddPriorityAlias(t *testing.T) {
+	if code := cliAdd([]string{"priority-alias-task", "--priority", "h"}); code != 0 {
+		t.Fatalf("add --priority h: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, "priority-alias-task")
+	if err != nil {
+		t.Fatalf("find task: %v", err)
+	}
+	if got.Priority != todo.PriorityHigh {
+		t.Errorf("Priority = %v, want High (--priority h)", got.Priority)
+	}
+}
+
+// TestCliAddPriorityShortFlagStillWorks verifies --p still works after the alias
+// is added (backward compat).
+func TestCliAddPriorityShortFlagStillWorks(t *testing.T) {
+	if code := cliAdd([]string{"priority-short-task", "--p", "l"}); code != 0 {
+		t.Fatalf("add --p l: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, "priority-short-task")
+	if err != nil {
+		t.Fatalf("find task: %v", err)
+	}
+	if got.Priority != todo.PriorityLow {
+		t.Errorf("Priority = %v, want Low (--p l)", got.Priority)
+	}
+}
+
+// TestCliEditPriorityAlias verifies that `edit --priority` is also aliased on
+// the edit verb (for parity with add).
+func TestCliEditPriorityAlias(t *testing.T) {
+	if code := cliAdd([]string{"edit-priority-alias-task"}); code != 0 {
+		t.Fatalf("add: exit %d", code)
+	}
+	if code := cliEdit([]string{"edit-priority-alias-task", "--priority", "h"}); code != 0 {
+		t.Fatalf("edit --priority h: exit %d", code)
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, "edit-priority-alias-task")
+	if err != nil {
+		t.Fatalf("find task: %v", err)
+	}
+	if got.Priority != todo.PriorityHigh {
+		t.Errorf("Priority = %v, want High (edit --priority h)", got.Priority)
+	}
+}
