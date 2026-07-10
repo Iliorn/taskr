@@ -597,9 +597,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "5":
 			m.switchTab(tabLearnings)
 		case "6":
-			m.tab = tabStats
-			m.pane = paneList
-			m.listOffset = 0
+			m.switchTab(tabStats)
 		case "7":
 			m.switchTab(tabSettings)
 
