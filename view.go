@@ -68,7 +68,11 @@ func (m model) View() string {
 	case tabTags:
 		showDetail = showDetail && !m.sideBySide()
 	case tabProjects:
-		showDetail = showDetail && m.pane == paneDetail
+		// When drilled into a project, the right column of buildProjectDrillContent
+		// handles both browsing (Gantt) and the open-task case (task detail), so no
+		// stacked panel is needed. Outside drill mode, a stacked panel is shown when
+		// the user has pressed Enter (pane == paneDetail).
+		showDetail = showDetail && m.pane == paneDetail && !m.projectTaskMode
 	}
 
 	if showDetail {
@@ -629,6 +633,17 @@ func (m model) buildProjectListContent(w, listH int) string {
 		return listPanelStyle.Width(w).Render(strings.Join(emptyLines, "\n"))
 	}
 
+	// ── Drilled-in view: task list (left) + right column (right) ────────────
+	// When the user has pressed Enter to drill into a project, render the
+	// same list+detail side-by-side contract as the Tasks/Learnings/Tags tabs:
+	// left column = task rows (same renderer as the Tasks tab), right column =
+	// Gantt chart when browsing (pane == paneList) or the task detail when the
+	// user has pressed Enter on a task (pane == paneDetail).
+	if m.projectTaskMode {
+		return m.buildProjectDrillContent(projects, w, listH)
+	}
+
+	// ── Project list + Gantt preview (stacked, original layout) ──────────────
 	projMaxH := listH / 3
 	if projMaxH < minListPanelLines {
 		projMaxH = minListPanelLines
@@ -684,6 +699,91 @@ func (m model) buildProjectListContent(w, listH int) string {
 	b.WriteString("\n")
 	b.WriteString(ganttRendered)
 	return b.String()
+}
+
+// buildProjectDrillContent renders the drilled-in project view as two columns:
+// the task list (left, using the same row renderer as the Tasks tab) and,
+// in the right column, either the Gantt chart (when browsing the list,
+// pane == paneList) or the task detail (when the user has pressed Enter on a
+// task, pane == paneDetail). Mirrors buildSideBySide's contract — each column
+// is rendered through a model copy whose termWidth is the column's share, and
+// the focused pane carries the accent border.
+func (m model) buildProjectDrillContent(projects []string, w, outerH int) string {
+	innerH := outerH - 2
+	if innerH < 1 {
+		innerH = 1
+	}
+
+	// Column widths: Gantt needs a reasonable minimum to be legible; the task
+	// list takes the remainder. Mirror the sideDetailCol constants but keep the
+	// Gantt wider since the bar chart needs more horizontal room than text detail.
+	ganttW := w * sideDetailColPct / 100
+	if ganttW < sideDetailColMin {
+		ganttW = sideDetailColMin
+	}
+	if ganttW > sideDetailColMax {
+		ganttW = sideDetailColMax
+	}
+	listW := w - ganttW - 4 // 4 = inter-panel gap absorbed by the border chars
+	if listW < minInnerWidth {
+		listW = minInnerWidth
+	}
+
+	// Task list — rendered through a model copy sized to the left column so
+	// taskListCols and renderTaskLineWithSet see the correct terminal width.
+	lm := m
+	lm.termWidth = listW + 6 // View hands buildListContent w = termWidth-6
+	var tasks []todo.Todo
+	if m.projectCursor < len(projects) {
+		tasks = m.getProjectTasks(projects[m.projectCursor])
+	}
+	listLines := lm.renderProjectDrillTaskList(tasks)
+
+	// Right column: task detail when the user has opened a task (pane ==
+	// paneDetail), Gantt chart otherwise (pane == paneList, always-on preview).
+	dm := m
+	dm.termWidth = ganttW + 6
+	var rightLines []string
+	if m.pane == paneDetail {
+		if m.currentTodo() != nil {
+			rightLines = strings.Split(dm.applyDetailScrollN(dm.buildDetailContent(), innerH), "\n")
+		} else {
+			rightLines = []string{"", dimStyle.Render(tr("  No task selected."))}
+		}
+	} else {
+		if len(tasks) > 0 {
+			ganttContent := dm.renderGantt(tasks)
+			rightLines = strings.Split(strings.TrimRight(ganttContent, "\n"), "\n")
+		} else {
+			rightLines = []string{dimStyle.Render(tr("  No tasks in this project."))}
+		}
+	}
+
+	fitLines := func(lines []string, h, contentW int) []string {
+		if len(lines) > h {
+			lines = lines[:h]
+		}
+		for len(lines) < h {
+			lines = append(lines, "")
+		}
+		truncateLines(lines, contentW)
+		return lines
+	}
+	listLines = fitLines(listLines, innerH, listW-2)
+	rightLines = fitLines(rightLines, innerH, ganttW-2)
+
+	// Focused-pane accent border: list gets the accent when browsing; the right
+	// column gets it when the user is viewing a task's detail.
+	listStyle := listPanelFocusedStyle
+	ganttStyle := detailPanelStyle
+	if m.pane == paneDetail {
+		listStyle = listPanelStyle
+		ganttStyle = detailPanelFocusedStyle
+	}
+
+	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
+	rightPanel := ganttStyle.Width(ganttW).Render(strings.Join(rightLines, "\n"))
+	return lipgloss.JoinHorizontal(lipgloss.Top, listPanel, rightPanel)
 }
 
 // ── Help ──────────────────────────────────────────────────────────────────────

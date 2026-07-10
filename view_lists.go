@@ -1146,6 +1146,55 @@ func (m model) renderProjectListContent(projects []string) string {
 	return b.String()
 }
 
+// renderProjectDrillTaskList renders the task-list panel shown in the left
+// column of the drilled-in Projects view. It reuses renderTaskLineWithSet so
+// rows look identical to the Tasks tab: same checkbox, priority glyphs, status
+// colours, and cursor marker. m.termWidth is already narrowed to the column's
+// share by the caller so taskListCols and no-wrap math apply per column.
+func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
+	if len(tasks) == 0 {
+		return []string{dimStyle.Render(tr("  No tasks in this project."))}
+	}
+
+	b := getBuilder()
+	defer putBuilder(b)
+
+	overdueSet := m.cache.overdueSet
+
+	// Compute column widths from this project's tasks, not the full active set.
+	contentMax, tagsMax := 0, 0
+	for i := range tasks {
+		if w := len([]rune(tasks[i].Title)); w > contentMax {
+			contentMax = w
+		}
+		if tw := tagsRenderWidth(tasks[i].Tags); tw > tagsMax {
+			tagsMax = tw
+		}
+	}
+	cols := taskListCols(m.termWidth, false, contentMax, tagsMax)
+	renderListHeader(b, m.termWidth, false, cols, listPosLabel(m.cursor, len(tasks)))
+
+	// Use projectDrillTaskVisibleRows (= listVisible()-1) to match the clamp
+	// window exactly. Both sides read the same helper so an off-by-one is
+	// impossible: the header row is already accounted for in the helper.
+	maxVisible := m.projectDrillTaskVisibleRows()
+	startIdx := m.listOffset
+	if startIdx > len(tasks) {
+		startIdx = 0
+	}
+	endIdx := startIdx + maxVisible
+	if endIdx > len(tasks) {
+		endIdx = len(tasks)
+	}
+
+	for i := startIdx; i < endIdx; i++ {
+		t := tasks[i]
+		b.WriteString(m.renderTaskLineWithSet(&t, i, m.cursor, true, overdueSet, cols))
+	}
+
+	return strings.Split(strings.TrimRight(b.String(), "\n"), "\n")
+}
+
 // ── Settings list ─────────────────────────────────────────────────────────────
 
 // Settings split into two visual columns. Right column clusters the

@@ -914,7 +914,13 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clampListOffset(m.visibleActiveLen())
 		}
 	case tabProjects:
-		m.clampListOffsetVisible(m.projectCursor, len(m.allProjectsForList()), m.projectListVisibleRows())
+		if m.projectTaskMode {
+			// Drilled in: clamp against projectDrillTaskVisibleRows so the window
+			// size matches the renderer (which subtracts 1 row for the header).
+			m.clampListOffsetVisible(m.cursor, m.currentProjectTaskLen(), m.projectDrillTaskVisibleRows())
+		} else {
+			m.clampListOffsetVisible(m.projectCursor, len(m.allProjectsForList()), m.projectListVisibleRows())
+		}
 	case tabTags:
 		m.clampListOffsetFor(m.tagTabCursor, len(m.getFilteredTagsForTab()))
 	case tabLearnings:

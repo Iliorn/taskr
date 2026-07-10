@@ -126,7 +126,10 @@ func (m model) detailVisible() bool {
 		// Always-on preview: stacked panel below the threshold, right column above.
 		return !m.sideBySide()
 	case tabProjects:
-		return m.pane == paneDetail
+		// When drilled in, buildProjectDrillContent's right column shows either the
+		// Gantt (paneList) or the task detail (paneDetail), so no stacked panel is
+		// needed. Outside drill mode, show the stacked panel when pane == paneDetail.
+		return m.pane == paneDetail && !m.projectTaskMode
 	case tabSettings:
 		return false
 	}
@@ -198,6 +201,21 @@ func (m model) projectListVisibleRows() int {
 	rows := m.estimateListHeight()/3 - 1
 	if rows < minListPanelLines-1 {
 		rows = minListPanelLines - 1
+	}
+	return rows
+}
+
+// projectDrillTaskVisibleRows is the number of task rows shown in the left
+// column of the drilled-in Projects view. The left panel inner height equals
+// estimateListHeight() (same formula as buildListContent's innerH = outerH-2),
+// and the renderer emits one header line above the task rows, so the task row
+// count is estimateListHeight()-1. Both renderProjectDrillTaskList and the
+// projectTaskMode offset clamp read this helper, so the two windows agree
+// exactly and no off-by-one is possible.
+func (m model) projectDrillTaskVisibleRows() int {
+	rows := m.estimateListHeight() - 1
+	if rows < 1 {
+		rows = 1
 	}
 	return rows
 }
