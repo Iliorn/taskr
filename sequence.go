@@ -408,6 +408,17 @@ func sequenceScore(t *todo.Todo) float64 {
 	return sequenceComponentsAt(time.Now(), t, activeBiases, activeHeat).Total
 }
 
+// rankTopBySequenceWith is the pure, testable form of rankTopBySequence: it
+// accepts explicit biases, a heat snapshot, and a clock so callers can compute
+// a preview ranking without touching the activeBiases / activeHeat globals.
+// The result is the same critical-path ordering (subtask + dependency rollups
+// applied) as the live path — only the scoring inputs differ.
+func rankTopBySequenceWith(todos []todo.Todo, b biases, heat activityHeat, now time.Time) []todo.Todo {
+	return rankTopBySequenceBy(todos, func(t *todo.Todo) float64 {
+		return sequenceComponentsAt(now, t, b, heat).Total
+	})
+}
+
 // ── Sequence hit rate ─────────────────────────────────────────────────────────
 
 const (

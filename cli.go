@@ -799,15 +799,24 @@ func cliDone(args []string) int {
 // -n limit. `taskr top`'s displayed SCORE stays each task's own score (matching
 // the TUI); only the ordering reflects the boost.
 func rankTopBySequence(todos []todo.Todo) []todo.Todo {
+	return rankTopBySequenceBy(todos, sequenceScore)
+}
+
+// rankTopBySequenceBy is the shared implementation behind rankTopBySequence and
+// rankTopBySequenceWith. It accepts an arbitrary score function so callers can
+// supply explicit biases/clock (the preview path) or the live globals (the CLI
+// and TUI paths). The rollup and sort logic — subtask inheritance, critical-path
+// dependency boost, fan-out bonus, cycle-safe DFS — is identical for both.
+func rankTopBySequenceBy(todos []todo.Todo, score func(*todo.Todo) float64) []todo.Todo {
 	rows := make([]todo.Todo, 0, len(todos))
 	for _, t := range todos {
 		if t.ParentID == "" && t.Status == todo.Pending {
 			rows = append(rows, t)
 		}
 	}
-	rollup := descendantScoreRollup(todos)
-	rollup = dependencyScoreRollup(todos, rollup)
-	sortTodosBySequenceWithRollup(rows, rollup)
+	rollup := descendantScoreRollupWith(todos, score)
+	rollup = dependencyScoreRollupWith(todos, rollup, score)
+	sortTodosBySequenceWithRollupBy(rows, rollup, score)
 	return rows
 }
 

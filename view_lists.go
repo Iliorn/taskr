@@ -1390,6 +1390,11 @@ func (m model) renderSettingsList() string {
 		for _, line := range wrapText(descr, rightW-4) {
 			right.WriteString("    " + helpStyle.Render(line) + "\n")
 		}
+		// Live preview: show the top-N tasks ranked with the current knob values
+		// so the user can see the effect without switching tabs.
+		if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, rightW); preview != "" {
+			right.WriteString(preview)
+		}
 		b.WriteString(joinColumns(left.String(), right.String(), leftW, gap))
 	} else {
 		// Narrow layout has no columns, so the summary stays a stacked footer.
@@ -1400,6 +1405,9 @@ func (m model) renderSettingsList() string {
 		}
 		b.WriteString("\n  " + activeCountStyle.Render(tr("Sequence: ")+name) +
 			"  " + helpStyle.Render(descr) + "\n")
+		if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, availW); preview != "" {
+			b.WriteString(preview)
+		}
 	}
 
 	if m.updateStatus != "" {
@@ -1409,6 +1417,47 @@ func (m model) renderSettingsList() string {
 		b.WriteString("\n  " + helpStyle.Render(m.syncStatus) + "\n")
 	}
 	return b.String()
+}
+
+// settingsPreviewN is the number of ranked rows shown in the bias-knob preview.
+const settingsPreviewN = 5
+
+// renderSettingsTopPreview returns a small block showing the top N pending
+// tasks ranked by the supplied biases/heat (pure — no global mutation). On
+// empty task sets it returns an empty string so the caller can skip it.
+// maxW is the column width available (content, no outer borders).
+func (m model) renderSettingsTopPreview(b biases, heat activityHeat, now time.Time, maxW int) string {
+	all := m.allTodos()
+	rows := rankTopBySequenceWith(all, b, heat, now)
+	if len(rows) == 0 {
+		return ""
+	}
+	if len(rows) > settingsPreviewN {
+		rows = rows[:settingsPreviewN]
+	}
+
+	var sb strings.Builder
+
+	hdr := tr("Top 5 with these weights:")
+	sb.WriteString("\n  " + dimStyle.Render(hdr) + "\n")
+
+	// Row format: "  NN  SS.S  <title>"
+	// "  " (2) + rank (2) + "  " (2) + score (4, e.g. "12.3") + "  " (2) = 12 chars before title.
+	const rowPrefixW = 12
+	titleMax := maxW - rowPrefixW
+	if titleMax < 8 {
+		titleMax = 8
+	}
+
+	for i, t := range rows {
+		score := sequenceComponentsAt(now, &t, b, heat).Total
+		rank := fmt.Sprintf("%2d", i+1)
+		scoreStr := fmt.Sprintf("%4.1f", score)
+		title := truncate(t.Title, titleMax)
+		line := fmt.Sprintf("  %s  %s  %s", rank, scoreStr, title)
+		sb.WriteString(dimStyle.Render(line) + "\n")
+	}
+	return sb.String()
 }
 
 // biasPickerValue formats a bias for the Settings picker the same way the

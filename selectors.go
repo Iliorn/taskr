@@ -223,6 +223,13 @@ func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode tas
 // instead of relying on the model's subtaskOf cache. Tasks without subtasks
 // don't appear in the map.
 func descendantScoreRollup(todos []todo.Todo) map[string]float64 {
+	return descendantScoreRollupWith(todos, sequenceScore)
+}
+
+// descendantScoreRollupWith is the parameterised form of descendantScoreRollup:
+// it accepts an arbitrary score function so callers can compute the rollup with
+// explicit biases/clock rather than the activeBiases / activeHeat globals.
+func descendantScoreRollupWith(todos []todo.Todo, score func(*todo.Todo) float64) map[string]float64 {
 	if len(todos) == 0 {
 		return nil
 	}
@@ -237,11 +244,11 @@ func descendantScoreRollup(todos []todo.Todo) map[string]float64 {
 		}
 		// Walk up to the top-level ancestor, lifting the boost at every
 		// level so a deeply-nested high-pri grandchild reaches the root.
-		score := sequenceScore(&todos[i])
+		s := score(&todos[i])
 		cur := todos[i].ParentID
 		for cur != "" {
-			if rollup[cur] < score {
-				rollup[cur] = score
+			if rollup[cur] < s {
+				rollup[cur] = s
 			}
 			pi, ok := idx[cur]
 			if !ok {
@@ -278,6 +285,13 @@ const (
 )
 
 func dependencyScoreRollup(todos []todo.Todo, base map[string]float64) map[string]float64 {
+	return dependencyScoreRollupWith(todos, base, sequenceScore)
+}
+
+// dependencyScoreRollupWith is the parameterised form of dependencyScoreRollup:
+// it accepts an arbitrary score function so callers can compute the rollup with
+// explicit biases/clock rather than the activeBiases / activeHeat globals.
+func dependencyScoreRollupWith(todos []todo.Todo, base map[string]float64, score func(*todo.Todo) float64) map[string]float64 {
 	if len(todos) == 0 {
 		return base
 	}
@@ -307,7 +321,7 @@ func dependencyScoreRollup(todos []todo.Todo, base map[string]float64) map[strin
 		idx[todos[i].ID] = i
 	}
 	effBase := func(id string) float64 {
-		s := sequenceScore(&todos[idx[id]])
+		s := score(&todos[idx[id]])
 		if b, ok := base[id]; ok && b > s {
 			s = b
 		}

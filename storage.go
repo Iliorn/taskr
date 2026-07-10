@@ -273,12 +273,20 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 // preserves the original behaviour (used by callers that don't have the
 // child set on hand, e.g. on-disk loads).
 func sortTodosBySequenceWithRollup(todos []todo.Todo, rollup map[string]float64) {
+	sortTodosBySequenceWithRollupBy(todos, rollup, sequenceScore)
+}
+
+// sortTodosBySequenceWithRollupBy is the parameterised form of
+// sortTodosBySequenceWithRollup: it accepts an arbitrary score function so
+// callers can sort with explicit biases/clock rather than the activeBiases /
+// activeHeat globals.
+func sortTodosBySequenceWithRollupBy(todos []todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) {
 	if len(todos) <= 1 {
 		return
 	}
 	scores := make(map[string]float64, len(todos))
 	for i := range todos {
-		s := sequenceScore(&todos[i])
+		s := score(&todos[i])
 		if rollup != nil {
 			if boost, ok := rollup[todos[i].ID]; ok && boost > s {
 				s = boost
