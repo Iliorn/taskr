@@ -118,7 +118,10 @@ taskr comment milk --edit=1 "still blocked, asked Sam"
 taskr comment milk --delete=2
 taskr stats                      # one-line summary
 taskr stats --format=waybar      # Waybar-shaped JSON for a status-bar widget
-taskr export > backup.json       # JSON snapshot of every live task
+taskr export > backup.json       # versioned JSON snapshot of every live task
+taskr export --include-done > full.json  # include completed tasks
+taskr import backup.json         # merge an export file into the local store
+taskr import - < backup.json     # same, reading from stdin
 taskr help
 ```
 
@@ -134,6 +137,43 @@ title "milk" matches 2 tasks:
 Flags can appear before or after the reference. `taskr top --json` and `taskr show --json` are the recommended hooks for scripts and other tools. The CLI reads the same `~/.taskr/settings.json` as the TUI, so ranking matches your current bias personality.
 
 The TUI and CLI share the SQLite store. Concurrent reads are safe; writes serialize via SQLite's busy-timeout. A running TUI watches `~/.taskr` and live-reloads when the CLI (or a sync from another device) mutates the database, so scripted changes show up without restarting — a reload is briefly deferred while you're mid-edit so it can't clobber in-flight input.
+
+## Export / import
+
+`taskr export` writes a versioned JSON envelope to stdout:
+
+```json
+{
+  "version": 1,
+  "exported_at": "2026-07-10T12:00:00Z",
+  "tasks": [ ... ]
+}
+```
+
+Each task in `tasks` is a `todo.Todo` object with these key fields:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | string (UUID) | stable identifier, used as the merge key |
+| `title` | string | |
+| `status` | int | 0 = pending, 1 = done |
+| `priority` | int | 0 = low, 1 = medium, 2 = high |
+| `size` | int | 0 = medium, 1 = small, 2 = large |
+| `created_at` / `modified_at` | RFC 3339 | LWW conflict resolution uses `modified_at` |
+| `due_date` | RFC 3339 (omitempty) | |
+| `project` | string (omitempty) | |
+| `tags` | string array (omitempty) | |
+| `dependencies` | string array (omitempty) | IDs of tasks this one is blocked by |
+| `comments` | array (omitempty) | each has `id`, `text`, `created_at` |
+| `learnings` | array (omitempty) | each has `id`, `text`, `created_at` |
+| `deleted` / `deleted_at` | bool / RFC 3339 | soft-delete tombstones for sync |
+| `parent_id` | string (omitempty) | set on subtasks |
+
+`taskr import <file>` (or `taskr import -` for stdin) merges the file's tasks into
+the local store using the same tombstone-aware, idempotent merge engine that powers
+device sync. Import **never replaces** the store — it folds the imported tasks in —
+so running `export | import` is always safe and importing the same file twice is a
+no-op. Both the versioned envelope and a legacy bare JSON array are accepted.
 
 ## Data
 

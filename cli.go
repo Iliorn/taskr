@@ -29,7 +29,7 @@ func isCLICommand(arg string) bool {
 	switch arg {
 	case "add", "list", "ls", "done", "top",
 		"show", "edit", "delete", "rm", "undelete", "comment",
-		"stats", "start", "stop", "log", "export", "subtask",
+		"stats", "start", "stop", "log", "export", "import", "subtask",
 		"search", "tags", "projects", "serve", "sync", "undo",
 		"doctor", "help", "-h", "--help", "--version":
 		return true
@@ -55,7 +55,7 @@ func runCLI(args []string) int {
 // trigger an auto-sync afterward).
 func cliMutates(cmd string) bool {
 	switch cmd {
-	case "add", "done", "edit", "delete", "rm", "undelete", "comment", "start", "stop", "log", "subtask", "undo", "doctor":
+	case "add", "done", "edit", "delete", "rm", "undelete", "comment", "start", "stop", "log", "subtask", "undo", "doctor", "import":
 		return true
 	}
 	return false
@@ -94,6 +94,8 @@ func dispatchCLI(args []string) int {
 		return cliUndo(rest)
 	case "export":
 		return cliExport(rest)
+	case "import":
+		return cliImport(rest)
 	case "subtask":
 		return cliSubtask(rest)
 	case "search":
@@ -1897,7 +1899,11 @@ func cliExport(args []string) int {
 		}
 		out = append(out, t)
 	}
-	return emitJSON(out)
+	return emitJSON(exportEnvelope{
+		Version:    1,
+		ExportedAt: time.Now().UTC(),
+		Tasks:      out,
+	})
 }
 
 // ── subtask ──────────────────────────────────────────────────────────────────
@@ -2007,7 +2013,8 @@ Comments:
 
 Reporting / backup:
   taskr stats [--format=text|json|waybar]   one-line health summary (default text)
-  taskr export [--include-done]             JSON snapshot of every live task to stdout
+  taskr export [--include-done]             JSON snapshot (versioned envelope) to stdout
+  taskr import <file>|-                     merge an export file into the local store (- = stdin)
 
 Sync (cross-device):
   taskr serve [--listen=ADDR] [--token=T]   run the sync server (self-hosted; binds 127.0.0.1:8765 by default)
