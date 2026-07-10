@@ -542,6 +542,12 @@ func loadTodosForSync(h querier) ([]todo.Todo, error) {
 // the restore must strictly beat in the sync merge, and the pre-delete
 // snapshot alone can't supply it.
 func tombstoneDeletedAt(h *sql.DB, id string) time.Time {
+	// No store open (tests over fakeRepo run undo without a DB): same outcome
+	// as a not-yet-flushed tombstone — zero time, caller falls back to the
+	// snapshot stamp.
+	if h == nil {
+		return time.Time{}
+	}
 	var s string
 	if err := h.QueryRow(`SELECT deleted_at FROM todos WHERE id = ?`, id).Scan(&s); err != nil {
 		return time.Time{}
