@@ -317,6 +317,73 @@ func TestSQLiteTombstoneRevive(t *testing.T) {
 	}
 }
 
+// TestSQLiteTombstoneClampsSlowClock: a task tombstone's deleted_at must be
+// clamped past the row's modified_at (StampModified), not stamped raw from the
+// wall clock. The sync merge resolves delete-vs-edit by comparing DeletedAt
+// against ModifiedAt, so a device whose clock runs behind the row's stamp (the
+// row last synced from a faster device) would otherwise write a deleted_at
+// that loses to the very version it deleted — and the task resurrects.
+// Simulated by saving a row whose ModifiedAt is in the future, then
+// tombstoning it with the real (thus "slow") clock.
+func TestSQLiteTombstoneClampsSlowClock(t *testing.T) {
+	h := openTestDB(t)
+
+	future := time.Now().Add(30 * time.Second)
+	a := todo.New("stamped by a fast device")
+	a.ModifiedAt = future
+	saveTodos(t, h, []todo.Todo{a})
+
+	saveTodos(t, h, nil, a.ID) // tombstone with the local ("slow") clock
+
+	got, err := loadTodosForSync(h)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 1 || !got[0].Deleted {
+		t.Fatalf("want one tombstone, got %+v", got)
+	}
+	if !got[0].DeletedAt.After(future) {
+		t.Errorf("deleted_at = %v, want after the row's modified_at %v — the deletion would lose the merge",
+			got[0].DeletedAt, future)
+	}
+}
+
+// TestSQLiteChildTombstoneClampsSlowClock is the child-record twin: a comment
+// that vanishes from a task gets a deleted_at tombstone, and that stamp must be
+// clamped past the child's own modified_at or a slow clock makes the child
+// tombstone lose to the live copy on another device (mergeChildren treats a
+// tombstone's DeletedAt as its event time).
+func TestSQLiteChildTombstoneClampsSlowClock(t *testing.T) {
+	h := openTestDB(t)
+
+	future := time.Now().Add(30 * time.Second)
+	a := todo.New("parent")
+	a.AddComment("stamped by a fast device")
+	a.Comments[0].ModifiedAt = future
+	saveTodos(t, h, []todo.Todo{a})
+
+	// Second save without the comment → vanished-child tombstone, stamped with
+	// the local ("slow") clock.
+	a.Comments = nil
+	saveTodos(t, h, []todo.Todo{a})
+
+	got, err := loadTodosForSync(h)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(got) != 1 || len(got[0].Comments) != 1 {
+		t.Fatalf("want the comment kept as a tombstone, got %+v", got)
+	}
+	c := got[0].Comments[0]
+	if c.DeletedAt.IsZero() {
+		t.Fatal("vanished comment not tombstoned")
+	}
+	if !c.DeletedAt.After(future) {
+		t.Errorf("child deleted_at = %v, want after its modified_at %v — the deletion would lose the merge",
+			c.DeletedAt, future)
+	}
+}
+
 // TestImportFromJSONSeedsFreshDB confirms the legacy-JSON import populates a
 // fresh database, then loads back through the SQLite path.
 func TestImportFromJSONSeedsFreshDB(t *testing.T) {

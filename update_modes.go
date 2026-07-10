@@ -201,7 +201,7 @@ func (m model) updateEditSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if sub := m.findTodoByID(ids[m.pendingSubtask]); sub != nil {
 							m.pushUndo("rename subtask", sub.ID)
 							sub.Title = todo.CapitalizeTitle(val)
-							sub.ModifiedAt = time.Now()
+							sub.ModifiedAt = todo.StampModified(sub.ModifiedAt)
 							m.markModified(sub.ID)
 						}
 					}
@@ -287,7 +287,7 @@ func (m model) updateEditTitle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if t := m.currentTodo(); t != nil {
 					m.pushUndo("rename task", t.ID)
 					t.Title = todo.CapitalizeTitle(newTitle)
-					t.ModifiedAt = time.Now()
+					t.ModifiedAt = todo.StampModified(t.ModifiedAt)
 					m.markModified(t.ID)
 				}
 			}
@@ -762,8 +762,8 @@ func (m model) updateEditTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.pushUndo("edit time entry", t.ID)
 					e.StartedAt = start
 					e.StoppedAt = stop
-					e.ModifiedAt = time.Now()
-					t.ModifiedAt = time.Now()
+					e.ModifiedAt = todo.StampModified(e.ModifiedAt)
+					t.ModifiedAt = todo.StampModified(t.ModifiedAt)
 					m.markModified(t.ID)
 					break
 				}

@@ -526,10 +526,22 @@ func (m *model) performUndo() tea.Cmd {
 // newer ModifiedAt) wins the merge and silently re-applies itself on the next
 // sync. Stamping now makes the undo the latest writer, so it propagates.
 func (m *model) touchRestored(ids []string) {
-	now := time.Now()
 	for _, id := range ids {
 		if t := m.get(id); t != nil {
-			t.ModifiedAt = now
+			// Clamp against the live tombstone's deleted_at, not just the
+			// restored snapshot's ModifiedAt: after a slow-clock delete both
+			// collapse to the same prev+1ms, and an exact event-time tie
+			// resolves by content hash (laterWins) — a coin flip the restore
+			// could lose on devices that already received the tombstone via
+			// the push sync. If the debounced save hasn't flushed the
+			// tombstone yet, tombstoneDeletedAt reads the still-live row
+			// (zero) and the clamp falls back to the snapshot stamp — fine,
+			// since a tombstone that never reached the DB never syncs out.
+			prev := t.ModifiedAt
+			if d := tombstoneDeletedAt(db, t.ID); d.After(prev) {
+				prev = d
+			}
+			t.ModifiedAt = todo.StampModified(prev)
 		}
 	}
 }

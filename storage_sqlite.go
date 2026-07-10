@@ -420,22 +420,21 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error
 			}
 			// Identified children: upsert the present set and tombstone any that
 			// vanished, so deletions become propagating tombstones.
-			now := fmtTime(time.Now())
-			if err := saveChildren(tx, t.ID, now, "task_comments", t.Comments,
+			if err := saveChildren(tx, t.ID, "task_comments", t.Comments,
 				func(c todo.Comment) string { return c.ID },
 				upComment, func(c todo.Comment) []any {
 					return []any{c.ID, t.ID, c.Text, fmtTime(c.CreatedAt), fmtTime(c.ModifiedAt), fmtTime(c.DeletedAt)}
 				}); err != nil {
 				return err
 			}
-			if err := saveChildren(tx, t.ID, now, "task_learnings", t.Learnings,
+			if err := saveChildren(tx, t.ID, "task_learnings", t.Learnings,
 				func(l todo.Learning) string { return l.ID },
 				upLearning, func(l todo.Learning) []any {
 					return []any{l.ID, t.ID, l.Text, fmtTime(l.CreatedAt), fmtTime(l.ModifiedAt), fmtTime(l.DeletedAt)}
 				}); err != nil {
 				return err
 			}
-			if err := saveChildren(tx, t.ID, now, "task_time_entries", t.TimeEntries,
+			if err := saveChildren(tx, t.ID, "task_time_entries", t.TimeEntries,
 				func(e todo.TimeEntry) string { return e.ID },
 				upEntry, func(e todo.TimeEntry) []any {
 					return []any{e.ID, t.ID, fmtTime(e.StartedAt), fmtTime(e.StoppedAt), fmtTime(e.LastSeen), fmtTime(e.ModifiedAt), fmtTime(e.DeletedAt)}
@@ -446,14 +445,24 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error
 	}
 
 	if len(tombstones) > 0 {
-		now := fmtTime(time.Now())
 		tomb, err := tx.Prepare(`UPDATE todos SET deleted=1, deleted_at=? WHERE id=?`)
 		if err != nil {
 			return err
 		}
 		defer tomb.Close()
+		// deleted_at is a merge-ordering stamp: delete-vs-edit resolves by
+		// comparing it against the live version's ModifiedAt, so it must be
+		// clamped against the row's own modified_at (StampModified) — a slow
+		// local clock would otherwise stamp a deleted_at older than the version
+		// it deleted, the deletion loses the merge, and the task resurrects on
+		// the next sync. Timestamps are TEXT with mixed second/nano precision,
+		// so the comparison happens in Go via parseTime, never in SQL.
 		for _, id := range tombstones {
-			if _, err := tomb.Exec(now, id); err != nil {
+			var modifiedAt string
+			if err := tx.QueryRow(`SELECT modified_at FROM todos WHERE id=?`, id).Scan(&modifiedAt); err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			if _, err := tomb.Exec(fmtTime(todo.StampModified(parseTime(modifiedAt))), id); err != nil {
 				return err
 			}
 		}
@@ -469,7 +478,12 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error
 // sync instead of being resurrected from another device's copy. A slice item
 // that is itself a tombstone (deleted_at set, e.g. a merged result) is upserted
 // with its tombstone intact; pre-existing tombstones in the DB are left alone.
-func saveChildren[T any](tx *sql.Tx, taskID, now, table string, items []T,
+//
+// Each tombstone's deleted_at is clamped against that child's own modified_at
+// (StampModified): the sync merge treats a child tombstone's DeletedAt as its
+// event time, so a slow local clock stamping a deleted_at older than the
+// version it deleted would lose the merge and the child would resurrect.
+func saveChildren[T any](tx *sql.Tx, taskID, table string, items []T,
 	id func(T) string, upsert *sql.Stmt, args func(T) []any,
 ) error {
 	present := make(map[string]bool, len(items))
@@ -479,27 +493,29 @@ func saveChildren[T any](tx *sql.Tx, taskID, now, table string, items []T,
 		}
 		present[id(it)] = true
 	}
-	rows, err := tx.Query(`SELECT id FROM `+table+` WHERE task_id = ? AND deleted_at = ''`, taskID)
+	rows, err := tx.Query(`SELECT id, modified_at FROM `+table+` WHERE task_id = ? AND deleted_at = ''`, taskID)
 	if err != nil {
 		return err
 	}
-	var vanished []string
+	type child struct{ id, modifiedAt string }
+	var vanished []child
 	for rows.Next() {
-		var cid string
-		if err := rows.Scan(&cid); err != nil {
+		var c child
+		if err := rows.Scan(&c.id, &c.modifiedAt); err != nil {
 			rows.Close()
 			return err
 		}
-		if !present[cid] {
-			vanished = append(vanished, cid)
+		if !present[c.id] {
+			vanished = append(vanished, c)
 		}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	for _, cid := range vanished {
-		if _, err := tx.Exec(`UPDATE `+table+` SET deleted_at = ? WHERE id = ?`, now, cid); err != nil {
+	for _, c := range vanished {
+		stamp := fmtTime(todo.StampModified(parseTime(c.modifiedAt)))
+		if _, err := tx.Exec(`UPDATE `+table+` SET deleted_at = ? WHERE id = ?`, stamp, c.id); err != nil {
 			return err
 		}
 	}
@@ -518,6 +534,19 @@ func loadTodosFromDB(h querier) ([]todo.Todo, error) {
 // resolve deletions. Order is unspecified; Merge sorts the result.
 func loadTodosForSync(h querier) ([]todo.Todo, error) {
 	return loadTodosCore(h, true)
+}
+
+// tombstoneDeletedAt returns the stored deleted_at for a task row, or the zero
+// time when the row is absent or live. A restore (cliUndo) clamps its
+// ModifiedAt stamp against this: the tombstone's DeletedAt is the event time
+// the restore must strictly beat in the sync merge, and the pre-delete
+// snapshot alone can't supply it.
+func tombstoneDeletedAt(h *sql.DB, id string) time.Time {
+	var s string
+	if err := h.QueryRow(`SELECT deleted_at FROM todos WHERE id = ?`, id).Scan(&s); err != nil {
+		return time.Time{}
+	}
+	return parseTime(s)
 }
 
 // loadTodosCore assembles tasks and their children. When includeDeleted is

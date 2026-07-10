@@ -13,6 +13,23 @@ import (
 	"github.com/google/uuid"
 )
 
+// StampModified returns the timestamp to use for a mutation's new ModifiedAt.
+// It returns max(time.Now(), prev+1ms), guaranteeing the stamp is strictly
+// later than the record version being replaced. This matters when the local
+// clock runs behind: without the clamp, an edit made on top of version X can
+// carry an older ModifiedAt than X itself, causing the sync merge (last
+// ModifiedAt wins) to silently discard the edit in favour of the stale sibling
+// from another device. Callers that are creating a brand-new record with no
+// previous version should pass the zero time; the max then collapses to
+// time.Now() since any real wall-clock value exceeds zero+1ms.
+func StampModified(prev time.Time) time.Time {
+	now := time.Now()
+	if floor := prev.Add(time.Millisecond); floor.After(now) {
+		return floor
+	}
+	return now
+}
+
 // CapitalizeTitle uppercases the first rune of s if it is a lowercase letter,
 // leaving the rest of s untouched. Empty strings and titles that start with a
 // non-letter (digit, emoji, punctuation) or are already uppercase are returned
@@ -249,12 +266,12 @@ func (t *Todo) Toggle() {
 		t.CompletedAt = time.Time{}
 		t.SeqRankAtDone = 0 // the rank is a completion-time reading; reopening voids it
 	}
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 func (t *Todo) SetDueDate(d time.Time) {
 	t.DueDate = d
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 // SetStartDate records when work on a task begins. StartDate holds a full
@@ -271,7 +288,7 @@ func (t *Todo) SetStartDate(d time.Time) {
 		d = time.Date(d.Year(), d.Month(), d.Day(), 9, 0, 0, 0, d.Location())
 	}
 	t.StartDate = d
-	t.ModifiedAt = now
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 // sameDay reports whether a and b fall on the same calendar day (each in its
@@ -284,17 +301,17 @@ func sameDay(a, b time.Time) bool {
 
 func (t *Todo) SetPriority(p Priority) {
 	t.Priority = p
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 func (t *Todo) SetSize(s Size) {
 	t.Size = s
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 func (t *Todo) SetProject(p string) {
 	t.Project = p
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 // NormalizeTag canonicalizes a tag so that "#Work", "work ", and "work" all
@@ -316,7 +333,7 @@ func (t *Todo) AddTag(tag string) {
 		}
 	}
 	t.Tags = append(t.Tags, tag)
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 func (t *Todo) RemoveTag(tag string) {
@@ -331,7 +348,7 @@ func (t *Todo) RemoveTag(tag string) {
 		return // tag wasn't present — don't bump ModifiedAt on a no-op
 	}
 	t.Tags = tags
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 func (t *Todo) AddDependency(id string) {
@@ -341,7 +358,7 @@ func (t *Todo) AddDependency(id string) {
 		}
 	}
 	t.Dependencies = append(t.Dependencies, id)
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 func (t *Todo) RemoveDependency(id string) {
@@ -355,59 +372,61 @@ func (t *Todo) RemoveDependency(id string) {
 		return // id wasn't a dependency — don't bump ModifiedAt on a no-op
 	}
 	t.Dependencies = deps
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 func (t *Todo) AddComment(text string) {
-	now := time.Now()
+	wall := time.Now()
+	stamp := StampModified(t.ModifiedAt)
 	t.Comments = append(t.Comments, Comment{
 		ID:         uuid.New().String(),
 		Text:       text,
-		CreatedAt:  now,
-		ModifiedAt: now,
+		CreatedAt:  wall, // domain timestamp: when the comment was written
+		ModifiedAt: stamp,
 	})
-	t.ModifiedAt = now
+	t.ModifiedAt = stamp
 }
 
 func (t *Todo) UpdateComment(index int, text string) {
 	if index >= 0 && index < len(t.Comments) {
 		t.Comments[index].Text = text
-		t.Comments[index].ModifiedAt = time.Now()
-		t.ModifiedAt = time.Now()
+		t.Comments[index].ModifiedAt = StampModified(t.Comments[index].ModifiedAt)
+		t.ModifiedAt = StampModified(t.ModifiedAt)
 	}
 }
 
 func (t *Todo) DeleteComment(index int) {
 	if index >= 0 && index < len(t.Comments) {
 		t.Comments = append(t.Comments[:index], t.Comments[index+1:]...)
-		t.ModifiedAt = time.Now()
+		t.ModifiedAt = StampModified(t.ModifiedAt)
 	}
 }
 
 func (t *Todo) AddLearning(text string) {
-	now := time.Now()
+	wall := time.Now()
+	stamp := StampModified(t.ModifiedAt)
 	l := Learning{
 		ID:         uuid.New().String(),
 		Text:       text,
-		CreatedAt:  now,
-		ModifiedAt: now,
+		CreatedAt:  wall, // domain timestamp: when the learning was recorded
+		ModifiedAt: stamp,
 	}
 	t.Learnings = append(t.Learnings, l)
-	t.ModifiedAt = now
+	t.ModifiedAt = stamp
 }
 
 func (t *Todo) UpdateLearning(index int, text string) {
 	if index >= 0 && index < len(t.Learnings) {
 		t.Learnings[index].Text = text
-		t.Learnings[index].ModifiedAt = time.Now()
-		t.ModifiedAt = time.Now()
+		t.Learnings[index].ModifiedAt = StampModified(t.Learnings[index].ModifiedAt)
+		t.ModifiedAt = StampModified(t.ModifiedAt)
 	}
 }
 
 func (t *Todo) DeleteLearning(index int) {
 	if index >= 0 && index < len(t.Learnings) {
 		t.Learnings = append(t.Learnings[:index], t.Learnings[index+1:]...)
-		t.ModifiedAt = time.Now()
+		t.ModifiedAt = StampModified(t.ModifiedAt)
 	}
 }
 
@@ -415,24 +434,27 @@ func (t *Todo) DeleteLearning(index int) {
 
 func (t *Todo) StartTimer() {
 	t.StopTimer()
-	now := time.Now()
+	wall := time.Now()
+	stamp := StampModified(t.ModifiedAt)
 	// The first timer start also marks when work began: if no start date was
 	// set manually, backfill it to this moment so start→done cycle-time stats
 	// capture the task, with the precise time of day (same rule as starting
-	// "today" via SetStartDate).
+	// "today" via SetStartDate). StartDate is a domain timestamp (wall-clock
+	// moment), not a merge-ordering stamp, so it uses the real now rather than
+	// the clamped value.
 	if t.StartDate.IsZero() {
-		t.StartDate = now
+		t.StartDate = wall
 	}
 	t.TimeEntries = append(t.TimeEntries, TimeEntry{
 		ID:         uuid.New().String(),
-		StartedAt:  now,
-		ModifiedAt: now,
+		StartedAt:  wall,
+		ModifiedAt: stamp,
 		// Born with a heartbeat: LastSeen starts defined so a save of this task
 		// never writes an empty last_seen over a fresher DB-side heartbeat
 		// before the first tick-driven stamp arrives.
-		LastSeen: now,
+		LastSeen: wall,
 	})
-	t.ModifiedAt = now
+	t.ModifiedAt = stamp
 }
 
 // AddTimeEntry appends a completed entry for [start, stop) and returns its
@@ -440,13 +462,14 @@ func (t *Todo) StartTimer() {
 // log work that wasn't captured by the live timer.
 func (t *Todo) AddTimeEntry(start, stop time.Time) string {
 	id := uuid.New().String()
+	now := StampModified(t.ModifiedAt)
 	t.TimeEntries = append(t.TimeEntries, TimeEntry{
 		ID:         id,
 		StartedAt:  start,
 		StoppedAt:  stop,
-		ModifiedAt: time.Now(),
+		ModifiedAt: now,
 	})
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = now
 	return id
 }
 
@@ -454,14 +477,15 @@ func (t *Todo) AddTimeEntry(start, stop time.Time) string {
 // matters for sync: another device still holds the *running* version of the
 // same entry, and the newer stop must win that merge or the timer resurrects.
 func (t *Todo) StopTimer() {
-	now := time.Now()
+	wall := time.Now()
+	stamp := StampModified(t.ModifiedAt)
 	for i := range t.TimeEntries {
 		if t.TimeEntries[i].IsRunning() {
-			t.TimeEntries[i].StoppedAt = now
-			t.TimeEntries[i].ModifiedAt = now
+			t.TimeEntries[i].StoppedAt = wall  // domain: when the clock stopped
+			t.TimeEntries[i].ModifiedAt = stamp // merge ordering: must beat running copy
 		}
 	}
-	t.ModifiedAt = now
+	t.ModifiedAt = stamp
 }
 
 func (t *Todo) IsTimerRunning() bool {
@@ -493,7 +517,7 @@ func (t *Todo) TotalTimeSpent() time.Duration {
 func (t *Todo) DeleteTimeEntry(index int) {
 	if index >= 0 && index < len(t.TimeEntries) {
 		t.TimeEntries = append(t.TimeEntries[:index], t.TimeEntries[index+1:]...)
-		t.ModifiedAt = time.Now()
+		t.ModifiedAt = StampModified(t.ModifiedAt)
 	}
 }
 
@@ -505,7 +529,7 @@ func (t *Todo) DeleteTimeEntry(index int) {
 
 func (t *Todo) SetNotes(notes string) {
 	t.Notes = notes
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 // ── Recurrence ────────────────────────────────────────────────────────────────
@@ -522,12 +546,12 @@ func (t *Todo) IsRecurring() bool { return t.Recurrence != "" }
 
 func (t *Todo) SetRecurrence(rule string) {
 	t.Recurrence = rule
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 func (t *Todo) ClearRecurrence() {
 	t.Recurrence = ""
-	t.ModifiedAt = time.Now()
+	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
 // ParseRecurrence canonicalizes a user-supplied recurrence string. Returns the

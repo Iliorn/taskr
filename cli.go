@@ -1064,7 +1064,7 @@ func cliEdit(args []string) int {
 	changed := false
 	if *title != "" {
 		t.Title = todo.CapitalizeTitle(*title)
-		t.ModifiedAt = time.Now()
+		t.ModifiedAt = todo.StampModified(t.ModifiedAt)
 		changed = true
 	}
 	if *priority != "" {
@@ -1077,7 +1077,7 @@ func cliEdit(args []string) int {
 	}
 	if *clearDue {
 		t.DueDate = time.Time{}
-		t.ModifiedAt = time.Now()
+		t.ModifiedAt = todo.StampModified(t.ModifiedAt)
 		changed = true
 	} else if *due != "" {
 		d, err := parseDueDate(*due)
@@ -1090,7 +1090,7 @@ func cliEdit(args []string) int {
 	}
 	if *clearStart {
 		t.StartDate = time.Time{}
-		t.ModifiedAt = time.Now()
+		t.ModifiedAt = todo.StampModified(t.ModifiedAt)
 		changed = true
 	} else if *start != "" {
 		d, err := parseDueDate(*start)
@@ -1340,9 +1340,10 @@ func cliUndelete(args []string) int {
 
 	// Restore the task and any of its deleted descendants — delete cascades, so a
 	// subtree went down together and comes back together. Bump ModifiedAt so the
-	// un-delete wins over the tombstone in a later sync merge.
+	// un-delete wins over the tombstone in a later sync merge. StampModified is
+	// clamped against the tombstone's DeletedAt so a slow local clock can't stamp
+	// an older ModifiedAt that loses to the deletion in the merge.
 	children, get := sliceTaskLookups(all)
-	now := time.Now()
 	restored := make([]todo.Todo, 0, 1)
 	for _, id := range descendantIDsFrom(children, t.ID) {
 		x := get(id)
@@ -1351,8 +1352,8 @@ func cliUndelete(args []string) int {
 		}
 		c := copyTodo(*x)
 		c.Deleted = false
+		c.ModifiedAt = todo.StampModified(x.DeletedAt)
 		c.DeletedAt = time.Time{}
-		c.ModifiedAt = now
 		restored = append(restored, c)
 	}
 	// If the restored root's parent is itself still deleted, detach it so it
@@ -1434,7 +1435,6 @@ func cliUndo(args []string) int {
 		live[todos[i].ID] = true
 	}
 	entry := entries[len(entries)-1]
-	now := time.Now()
 	var restore []*todo.Todo
 	for i := range entry.partial {
 		t := &entry.partial[i]
@@ -1447,8 +1447,17 @@ func cliUndo(args []string) int {
 		// Stamp the restore as the latest write. The tombstone in the store
 		// (and on other devices) carries a newer DeletedAt than the captured
 		// pre-delete state, so without the bump the deletion would win the
-		// next sync merge and quietly re-apply itself.
-		t.ModifiedAt = now
+		// next sync merge and quietly re-apply itself. Clamp against the live
+		// tombstone's deleted_at, not just the snapshot's ModifiedAt: after a
+		// slow-clock delete both the tombstone's stamp and
+		// StampModified(pre-delete ModifiedAt) land on the same prev+1ms, and
+		// an exact event-time tie resolves by content hash (laterWins) — a
+		// coin flip the restore could lose.
+		prev := t.ModifiedAt
+		if d := tombstoneDeletedAt(db, t.ID); d.After(prev) {
+			prev = d
+		}
+		t.ModifiedAt = todo.StampModified(prev)
 		restore = append(restore, t)
 	}
 	if len(restore) == 0 {

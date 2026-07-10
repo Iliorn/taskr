@@ -325,3 +325,92 @@ func TestMergeIdempotent(t *testing.T) {
 		t.Fatalf("merge not idempotent:\n once  = %+v\n twice = %+v", once, twice)
 	}
 }
+
+// ── Slow-clock regression ──────────────────────────────────────────────────────
+
+// TestSlowClockEditWinsMerge is a regression test for the slow-clock merge-loss
+// bug. Before the fix, a device with a clock behind the task's current
+// ModifiedAt would stamp its edit with an older timestamp, causing the merge to
+// treat the edit as a stale version and silently discard it.
+//
+// The fix — StampModified(prev) = max(now, prev+1ms) — ensures the stamp is
+// always strictly after the version being replaced, regardless of the local
+// clock's relation to the previous timestamp.
+//
+// We simulate the scenario directly on todo.Todo values (no storage or HTTP):
+//  1. A "fast device" edits the task, stamping a future ModifiedAt (ahead of now).
+//  2. A "slow device" then mutates the task using StampModified(fast.ModifiedAt),
+//     which should produce fast.ModifiedAt+1ms even though the wall clock is behind.
+//  3. Merge must pick the slow device's edit.
+func TestSlowClockEditWinsMerge(t *testing.T) {
+	// Step 1: fast device stamps a future ModifiedAt.
+	fastModified := time.Now().Add(30 * time.Second) // fast clock: 30s ahead
+	fastVersion := todo.Todo{
+		ID:         "task-1",
+		Title:      "original title",
+		CreatedAt:  mBase,
+		ModifiedAt: fastModified,
+	}
+
+	// Step 2: slow device's edit — simulate StampModified as the mutation path
+	// now uses it. The slow device's wall clock is behind fastModified, but
+	// StampModified clamps to fastModified+1ms.
+	slowEdited := fastVersion                                    // start from the same version
+	slowEdited.Title = "edited by slow device"                  // the edit
+	slowEdited.ModifiedAt = todo.StampModified(fastModified)    // clamp against prev
+	wantModified := fastModified.Add(time.Millisecond)
+	if !slowEdited.ModifiedAt.Equal(wantModified) {
+		t.Fatalf("StampModified did not clamp: got %v, want %v", slowEdited.ModifiedAt, wantModified)
+	}
+
+	// Step 3: merge — slow device's edit must win over fast device's version.
+	got := indexByID(Merge([]todo.Todo{fastVersion}, []todo.Todo{slowEdited}))
+	if got["task-1"].Title != "edited by slow device" {
+		t.Errorf("slow-clock edit lost to fast-device version: title = %q, want %q",
+			got["task-1"].Title, "edited by slow device")
+	}
+	if !got["task-1"].ModifiedAt.Equal(wantModified) {
+		t.Errorf("merged ModifiedAt = %v, want %v", got["task-1"].ModifiedAt, wantModified)
+	}
+}
+
+// TestSlowClockDeleteWinsMerge is the deletion twin of
+// TestSlowClockEditWinsMerge: the merge resolves delete-vs-edit by comparing
+// the tombstone's DeletedAt against the live version's ModifiedAt (eventTime),
+// so a slow-clock device stamping an unclamped wall-clock DeletedAt loses to
+// the very version it deleted and the task resurrects on the next sync. The
+// writer (saveNormalizedIn) now stamps deleted_at via StampModified of the
+// row's modified_at; this proves that stamp wins the merge in both argument
+// orders.
+func TestSlowClockDeleteWinsMerge(t *testing.T) {
+	// Fast device's edit: ModifiedAt ahead of the slow device's wall clock.
+	fastModified := time.Now().Add(30 * time.Second)
+	liveVersion := todo.Todo{
+		ID:         "task-1",
+		Title:      "deleted on the slow device",
+		CreatedAt:  mBase,
+		ModifiedAt: fastModified,
+	}
+
+	// Slow device deletes that version. Its wall clock is behind fastModified,
+	// but the tombstone writer clamps: DeletedAt = StampModified(fastModified).
+	tomb := liveVersion
+	tomb.Deleted = true
+	tomb.DeletedAt = todo.StampModified(fastModified)
+	if !tomb.DeletedAt.After(fastModified) {
+		t.Fatalf("StampModified did not clamp: DeletedAt = %v, not after %v", tomb.DeletedAt, fastModified)
+	}
+
+	for _, dir := range []struct {
+		name string
+		a, b []todo.Todo
+	}{
+		{"tombstone second", []todo.Todo{liveVersion}, []todo.Todo{tomb}},
+		{"tombstone first", []todo.Todo{tomb}, []todo.Todo{liveVersion}},
+	} {
+		got := indexByID(Merge(dir.a, dir.b))
+		if !got["task-1"].Deleted {
+			t.Errorf("%s: slow-clock deletion lost to the version it deleted — task resurrected", dir.name)
+		}
+	}
+}

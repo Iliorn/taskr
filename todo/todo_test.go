@@ -959,3 +959,43 @@ func TestRecurrenceMutators(t *testing.T) {
 			td.IsRecurring(), td.Recurrence)
 	}
 }
+
+// ── StampModified ─────────────────────────────────────────────────────────────
+
+// TestStampModifiedNormalClock checks that, with a normal wall clock (prev well
+// behind now), StampModified returns approximately now (not the zero-time floor).
+func TestStampModifiedNormalClock(t *testing.T) {
+	before := time.Now()
+	got := StampModified(time.Time{}) // zero prev → plain now
+	after := time.Now()
+	if got.Before(before) || got.After(after) {
+		t.Errorf("StampModified(zero) = %v, want a value between %v and %v", got, before, after)
+	}
+}
+
+// TestStampModifiedFuturePrev checks the slow-clock guard: when prev is in the
+// future (as if stamped by a faster device), the result is prev+1ms so the new
+// edit is strictly later than the version it replaces.
+func TestStampModifiedFuturePrev(t *testing.T) {
+	future := time.Now().Add(10 * time.Second)
+	got := StampModified(future)
+	want := future.Add(time.Millisecond)
+	if !got.Equal(want) {
+		t.Errorf("StampModified(future) = %v, want prev+1ms = %v", got, want)
+	}
+}
+
+// TestStampModifiedZeroPrev checks that a zero prev (brand-new record with no
+// history) returns a normal wall-clock value and not epoch+1ms.
+func TestStampModifiedZeroPrev(t *testing.T) {
+	before := time.Now()
+	got := StampModified(time.Time{})
+	after := time.Now()
+	epoch := time.Time{}.Add(time.Millisecond) // 0001-01-01 00:00:00.001 UTC
+	if got.Equal(epoch) {
+		t.Errorf("StampModified(zero) returned epoch+1ms; want a real now")
+	}
+	if got.Before(before) || got.After(after) {
+		t.Errorf("StampModified(zero) = %v, want a value between %v and %v", got, before, after)
+	}
+}

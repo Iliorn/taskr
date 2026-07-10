@@ -1106,6 +1106,55 @@ func TestCliUndeleteRestoresTask(t *testing.T) {
 	}
 }
 
+// A restore must be stamped strictly later than the tombstone it has to beat.
+// After a slow-clock delete the tombstone's deleted_at is clamped to the row's
+// modified_at+1ms (StampModified); if the restore only stamped
+// StampModified(pre-delete ModifiedAt) it would land on exactly that same
+// instant, and the merge breaks an event-time tie by content hash (laterWins)
+// — a coin flip the restore can lose, silently re-deleting the task on the
+// next sync. cliUndo therefore clamps against the live tombstone's deleted_at.
+// The slow clock is simulated by pushing the task's ModifiedAt into the future
+// before deleting, so the real clock is "behind" it for the whole test.
+func TestCliUndoRestoreBeatsSlowClockTombstone(t *testing.T) {
+	if code := cliAdd([]string{"Undo tie target"}); code != 0 {
+		t.Fatalf("add: exit %d", code)
+	}
+	repo, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	got, err := findTaskByRef(todos, "Undo tie target")
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	future := time.Now().Add(30 * time.Second)
+	got.ModifiedAt = future
+	if err := repo.Save([]*todo.Todo{got}, nil); err != nil {
+		t.Fatalf("save future stamp: %v", err)
+	}
+
+	if code := cliDelete([]string{got.ID[:8]}); code != 0 { // id ref → no confirm
+		t.Fatalf("delete: exit %d", code)
+	}
+	tombAt := tombstoneDeletedAt(db, got.ID)
+	if !tombAt.After(future) {
+		t.Fatalf("precondition: tombstone deleted_at = %v, want clamped past modified_at %v", tombAt, future)
+	}
+
+	if code := cliUndo(nil); code != 0 {
+		t.Fatalf("undo: exit %d", code)
+	}
+	_, back, _ := loadForCLI()
+	restored, err := findTaskByRef(back, "Undo tie target")
+	if err != nil {
+		t.Fatalf("task should be restored: %v", err)
+	}
+	if !restored.ModifiedAt.After(tombAt) {
+		t.Errorf("restore ModifiedAt = %v, want strictly after tombstone deleted_at %v — an exact tie is a hash coin flip in the merge",
+			restored.ModifiedAt, tombAt)
+	}
+}
+
 // `taskr undelete --list` browses the deleted tasks.
 func TestCliUndeleteListShowsDeleted(t *testing.T) {
 	if code := cliAdd([]string{"Undelete list target"}); code != 0 {
