@@ -2039,6 +2039,9 @@ Sync (cross-device):
   taskr sync --status                        print the last sync time/result (local only, no network)
   taskr sync --accept-stale                  rejoin after being offline past the deletion-memory window
                                             (~6 months; auto-sync pauses then so deleted tasks can't resurrect)
+  taskr sync --recover                       list dropped edits from ~/.taskr/sync.log (local only, no network)
+  taskr sync --recover=<ref>                 reapply one dropped edit by id-prefix or title substring;
+                                            stamps a fresh ModifiedAt so the fix propagates on the next sync
 
 Meta:
   taskr --version                      print build version

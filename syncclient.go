@@ -231,6 +231,11 @@ func printSyncStatus(cfg syncConfig) int {
 }
 
 func cliSync(args []string) int {
+	// --recover is an optional-value flag: bare `--recover` lists dropped edits,
+	// `--recover=<ref>` reapplies one. stdlib's flag package requires a value for
+	// string flags, so we normalise bare `--recover` to `--recover=` before
+	// parsing, then treat the empty-string case as "list mode".
+	args = normaliseBareRecover(args)
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 	url := fs.String("url", "", "sync server URL, e.g. http://100.x.y.z:8765 (or set TASKR_SYNC_URL)")
 	token := fs.String("token", "", "shared bearer token (or set TASKR_SYNC_TOKEN)")
@@ -238,6 +243,9 @@ func cliSync(args []string) int {
 	quiet := fs.Bool("quiet", false, "print nothing on success")
 	status := fs.Bool("status", false, "print the last sync time/result and exit (local only, no network)")
 	acceptStale := fs.Bool("accept-stale", false, "sync even though this device has been offline longer than the deletion-memory window (tasks deleted elsewhere may resurrect)")
+	// recover is a string: empty = list dropped edits; non-empty = reapply that ref.
+	// Both forms are pure local operations — no network contact.
+	recoverRef := fs.String("recover", recoverAbsent, "list dropped edits (no value) or reapply one: --recover=<ref>")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -247,6 +255,14 @@ func cliSync(args []string) int {
 	}
 	if *token != "" {
 		cfg.Token = *token
+	}
+	// --recover is a local operation: list or reapply dropped edits from
+	// ~/.taskr/sync.log. No network, no sync-server config required.
+	if *recoverRef != recoverAbsent {
+		if *recoverRef == "" {
+			return printDroppedEdits(syncLogPath())
+		}
+		return reapplyDroppedEdit(syncLogPath(), *recoverRef)
 	}
 	// --status is a local read: report and exit before any config-required or
 	// network path, so it works even when no server is configured yet.
