@@ -529,13 +529,13 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		case "":
 			t.SetRecurrence("daily")
 		case "daily":
+			t.SetRecurrence("weekdays")
+		case "weekdays":
 			t.SetRecurrence("weekly")
 		case "weekly":
 			t.SetRecurrence("monthly")
 		case "monthly":
 			t.SetRecurrence("yearly")
-		case "yearly":
-			t.SetRecurrence("weekdays")
 		default:
 			t.ClearRecurrence()
 		}
