@@ -1837,7 +1837,7 @@ func renderSeqAnalysisText(a seqAnalysis, b biases) string {
 	}
 	var sb strings.Builder
 	if a.Hits == 0 {
-		sb.WriteString(fmt.Sprintf("all %d rated completions closed outside the top-%d — no hits to compare against\n\n", a.Rated, a.TopN))
+		fmt.Fprintf(&sb, "all %d rated completions closed outside the top-%d — no hits to compare against\n\n", a.Rated, a.TopN)
 	}
 	largest, largestAbs := -1, 0.0
 	for d := range a.Gap {
@@ -1846,14 +1846,14 @@ func renderSeqAnalysisText(a seqAnalysis, b biases) string {
 		}
 	}
 	sb.WriteString("             avg contribution at completion\n")
-	sb.WriteString(fmt.Sprintf("%-10s  %6s  %6s  %6s\n", "dimension", "hits", "misses", "gap"))
+	fmt.Fprintf(&sb, "%-10s  %6s  %6s  %6s\n", "dimension", "hits", "misses", "gap")
 	for d := range seqDimNames {
 		marker := ""
 		if d == largest && largestAbs >= 0.05 {
 			marker = "  ◂ largest gap"
 		}
-		sb.WriteString(fmt.Sprintf("%-10s  %6.1f  %6.1f  %+6.1f%s\n",
-			seqDimNames[d], a.HitAvg[d], a.MissAvg[d], a.Gap[d], marker))
+		fmt.Fprintf(&sb, "%-10s  %6.1f  %6.1f  %+6.1f%s\n",
+			seqDimNames[d], a.HitAvg[d], a.MissAvg[d], a.Gap[d], marker)
 	}
 	if hint := seqSuggestion(a, b); hint != "" {
 		sb.WriteString("\n" + hint + "\n")
@@ -1861,7 +1861,7 @@ func renderSeqAnalysisText(a seqAnalysis, b biases) string {
 	sb.WriteString("\nrecent misses:\n")
 	for i, r := range a.Misses {
 		if i == seqMissDisplayCap {
-			sb.WriteString(fmt.Sprintf("  … %d more (use --format=json for all)\n", len(a.Misses)-i))
+			fmt.Fprintf(&sb, "  … %d more (use --format=json for all)\n", len(a.Misses)-i)
 			break
 		}
 		title := r.Title
