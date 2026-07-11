@@ -129,6 +129,7 @@ func TestSQLiteRoundTrip(t *testing.T) {
 	a.AddTag("work")
 	a.AddComment("first pass")
 	a.SetPriority(todo.PriorityHigh)
+	a.SetStage("Review")
 	b := todo.New("ship it")
 
 	saveTodos(t, h, []todo.Todo{a, b})
@@ -148,6 +149,9 @@ func TestSQLiteRoundTrip(t *testing.T) {
 	}
 	if ra.Title != "Write tests" || ra.Priority != todo.PriorityHigh {
 		t.Errorf("scalar fields lost: %+v", ra)
+	}
+	if ra.Stage != "Review" {
+		t.Errorf("stage lost: %q, want Review", ra.Stage)
 	}
 	if len(ra.Tags) != 1 || ra.Tags[0] != "work" {
 		t.Errorf("nested tags lost: %v", ra.Tags)

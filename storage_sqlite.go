@@ -282,8 +282,8 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error
 		// rollback is no longer a concern). Write an empty string; the column
 		// is no longer the source of truth.
 		upsertTask, err := tx.Prepare(`INSERT INTO todos
-			(id,title,status,priority,size,project,parent_id,created_at,modified_at,due_date,start_date,notes,completed_at,sequence,recurrence,seq_rank_done,data,deleted,deleted_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,?)
+			(id,title,status,priority,size,project,parent_id,created_at,modified_at,due_date,start_date,notes,completed_at,sequence,recurrence,seq_rank_done,stage,data,deleted,deleted_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,?)
 			ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, status=excluded.status, priority=excluded.priority,
 				size=excluded.size, project=excluded.project, parent_id=excluded.parent_id,
@@ -291,7 +291,7 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error
 				due_date=excluded.due_date, start_date=excluded.start_date,
 				notes=excluded.notes, completed_at=excluded.completed_at,
 				sequence=excluded.sequence, recurrence=excluded.recurrence,
-				seq_rank_done=excluded.seq_rank_done,
+				seq_rank_done=excluded.seq_rank_done, stage=excluded.stage,
 				deleted=excluded.deleted, deleted_at=excluded.deleted_at`)
 		if err != nil {
 			return err
@@ -392,7 +392,7 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error
 			if _, err := upsertTask.Exec(t.ID, t.Title, int(t.Status), int(t.Priority), int(t.Size),
 				t.Project, t.ParentID, fmtTime(t.CreatedAt), fmtTime(t.ModifiedAt),
 				fmtTime(t.DueDate), fmtTime(t.StartDate), t.Notes, fmtTime(t.CompletedAt),
-				sequenceScore(t), t.Recurrence, t.SeqRankAtDone, boolToInt(t.Deleted), fmtTime(t.DeletedAt)); err != nil {
+				sequenceScore(t), t.Recurrence, t.SeqRankAtDone, t.Stage, boolToInt(t.Deleted), fmtTime(t.DeletedAt)); err != nil {
 				return err
 			}
 			// Tags and dependencies are value-sets (no per-row identity), so
@@ -565,7 +565,7 @@ func loadTodosCore(h querier, includeDeleted bool) ([]todo.Todo, error) {
 	}
 	rows, err := h.Query(`SELECT id, title, status, priority, size, project, parent_id,
 		created_at, modified_at, due_date, start_date, completed_at, notes, recurrence,
-		seq_rank_done, deleted, deleted_at
+		seq_rank_done, stage, deleted, deleted_at
 		FROM todos ` + taskWhere)
 	if err != nil {
 		return nil, err
@@ -580,7 +580,7 @@ func loadTodosCore(h querier, includeDeleted bool) ([]todo.Todo, error) {
 		var createdAt, modifiedAt, dueDate, startDate, completedAt, deletedAt string
 		if err := rows.Scan(&t.ID, &t.Title, &status, &priority, &size, &t.Project,
 			&t.ParentID, &createdAt, &modifiedAt, &dueDate, &startDate,
-			&completedAt, &t.Notes, &t.Recurrence, &t.SeqRankAtDone, &deleted, &deletedAt); err != nil {
+			&completedAt, &t.Notes, &t.Recurrence, &t.SeqRankAtDone, &t.Stage, &deleted, &deletedAt); err != nil {
 			return nil, err
 		}
 		t.Status = safeStatus(status, t.ID)

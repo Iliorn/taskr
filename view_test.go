@@ -435,8 +435,8 @@ func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 		checkWrap bool // false for fixed-layout tabs that have their own min-width
 	}
 	cases := []tabCase{
-		{tabLearnings, true},  // "5 Learnings" — longest label, list-only tab
-		{tabSettings, true},   // "7 Settings"  — second selected-tab check
+		{tabLearnings, true}, // "5 Learnings" — longest label, list-only tab
+		{tabSettings, true},  // "7 Settings"  — second selected-tab check
 	}
 
 	for _, tc := range cases {
@@ -472,7 +472,7 @@ func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 				// separators all fit in avail.
 				// avail ≈ termWidth − titleW(5) − 2 − hintW(11) − 4 = termWidth − 22.
 				// Minimum unselected contribution: (numTabs−1) separators + (numTabs−1)×1.
-				approxMinWidth := len([]rune(fullLabel)) + (numTabs-1) + (numTabs-1)
+				approxMinWidth := len([]rune(fullLabel)) + (numTabs - 1) + (numTabs - 1)
 				if width-22 >= approxMinWidth {
 					header := lines[0]
 					if !strings.Contains(header, fullLabel) {

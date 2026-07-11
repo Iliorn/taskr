@@ -54,7 +54,7 @@ func TestPickerWindowStartCursorAlwaysVisible(t *testing.T) {
 func TestPickerWindowStartIndicatorsCorrect(t *testing.T) {
 	max := 5
 	cases := []struct {
-		total, cursor   int
+		total, cursor        int
 		wantAbove, wantBelow bool
 	}{
 		// Exactly fits: no indicators.

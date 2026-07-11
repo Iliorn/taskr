@@ -355,9 +355,9 @@ func TestSlowClockEditWinsMerge(t *testing.T) {
 	// Step 2: slow device's edit — simulate StampModified as the mutation path
 	// now uses it. The slow device's wall clock is behind fastModified, but
 	// StampModified clamps to fastModified+1ms.
-	slowEdited := fastVersion                                    // start from the same version
-	slowEdited.Title = "edited by slow device"                  // the edit
-	slowEdited.ModifiedAt = todo.StampModified(fastModified)    // clamp against prev
+	slowEdited := fastVersion                                // start from the same version
+	slowEdited.Title = "edited by slow device"               // the edit
+	slowEdited.ModifiedAt = todo.StampModified(fastModified) // clamp against prev
 	wantModified := fastModified.Add(time.Millisecond)
 	if !slowEdited.ModifiedAt.Equal(wantModified) {
 		t.Fatalf("StampModified did not clamp: got %v, want %v", slowEdited.ModifiedAt, wantModified)

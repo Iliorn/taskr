@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ func TestLoadSettingsMissingFileNoError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("missing file should not error, got: %v", err)
 	}
-	if s != (appSettings{}) {
+	if !reflect.DeepEqual(s, appSettings{}) {
 		t.Errorf("expected zero appSettings on missing file, got %+v", s)
 	}
 }

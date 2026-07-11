@@ -9,14 +9,15 @@ import (
 	"taskr/todo"
 )
 
-// loadForCLI opens the store with the user's persisted biases applied so any
-// score-based output ranks the same way the TUI would.
+// loadForCLI opens the store with the user's persisted biases and stage list
+// applied so any score-based or stage-aware output matches the TUI.
 func loadForCLI() (Repository, []todo.Todo, error) {
 	settings, sErr := loadSettings()
 	if sErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
 	applyBiases(biasesFromSettings(settings))
+	applyStages(stagesFromSettings(settings))
 	repo := newSQLiteRepo()
 	todos, err := repo.Load()
 	if err == nil {

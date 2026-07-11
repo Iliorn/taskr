@@ -69,6 +69,13 @@ type appSettings struct {
 	// default so closing a parent doesn't silently finish work you meant to
 	// keep open — the confirm/prompt path stays the default.
 	AutoCloseSubtasks bool `json:"auto_close_subtasks"`
+
+	// Stages is the ordered kanban column list for the Board tab (edited by
+	// hand — everyone has their own naming scheme). Empty means the defaults
+	// (Backlog / In progress / Review); persistSettings writes the active
+	// list out so the field is discoverable in settings.json. The board's
+	// final column is always Done and is not part of this list.
+	Stages []string `json:"stages,omitempty"`
 }
 
 // migrateSettings brings settings saved under an older schema version up to

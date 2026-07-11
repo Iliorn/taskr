@@ -135,6 +135,7 @@ func cliAdd(args []string) int {
 	project := fs.String("project", "", "project name")
 	tags := fs.String("tag", "", "comma-separated tags")
 	recur := fs.String("recur", "", "recurrence rule: daily|weekly|monthly|yearly|weekdays|Nd|Nw|Nm|Ny")
+	stage := fs.String("stage", "", "board stage (a name from settings.json \"stages\"; default = first stage)")
 	depends := fs.String("depends", "", "make the new task depend on an existing task ref, or ^ for the last-added task")
 	chain := fs.Bool("chain", false, "batch add (-) only: each line depends on the previous line's task")
 	like := fs.String("like", "", "clone priority/size/project/tags from an existing task ref")
@@ -162,6 +163,7 @@ func cliAdd(args []string) int {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
 	applyBiases(biasesFromSettings(settings))
+	applyStages(stagesFromSettings(settings))
 	repo := newSQLiteRepo()
 
 	// Resolve everything that's shared across all created tasks exactly once
@@ -216,6 +218,17 @@ func cliAdd(args []string) int {
 		}
 		titles = lines
 	}
+	// Resolve --stage once; an unknown name fails before anything is written.
+	var stageName string
+	if *stage != "" {
+		name, ok := canonicalStage(*stage)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "taskr add: unknown stage %q (configured: %s)\n", *stage, strings.Join(activeStages, ", "))
+			return 2
+		}
+		stageName = name
+	}
+
 	// Resolve --note value once (before buildTask, so stdin is only consumed
 	// once even though buildTask is called in a loop). For '-', read from stdin
 	// — same helper as `edit --note -` / `edit --append-note -`.
@@ -348,6 +361,9 @@ func cliAdd(args []string) int {
 		}
 		if depID != "" {
 			t.AddDependency(depID)
+		}
+		if stageName != "" {
+			t.Stage = stageName
 		}
 		if noteText != "" {
 			t.SetNotes(noteText)
@@ -974,6 +990,9 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo) {
 		status = "done"
 	}
 	fmt.Printf("Status:   %s\n", status)
+	if t.Status == todo.Pending && t.ParentID == "" {
+		fmt.Printf("Stage:    %s\n", activeStages[stageIndex(t.Stage)])
+	}
 	fmt.Printf("Priority: %s\n", t.Priority.String())
 	fmt.Printf("Size:     %s\n", t.Size.String())
 	if !t.StartDate.IsZero() {
@@ -1080,6 +1099,7 @@ func cliEdit(args []string) int {
 	clearStart := fs.Bool("clear-start", false, "drop the start date")
 	project := fs.String("project", "", "set project name")
 	clearProject := fs.Bool("clear-project", false, "drop the project")
+	stage := fs.String("stage", "", "move to a board stage (a name from settings.json \"stages\")")
 	addTag := fs.String("add-tag", "", "comma-separated tags to add")
 	removeTag := fs.String("remove-tag", "", "comma-separated tags to remove")
 	addDep := fs.String("add-dep", "", "add a dependency (ref to an existing task; refused if it would loop)")
@@ -1121,6 +1141,15 @@ func cliEdit(args []string) int {
 	}
 	if *size != "" {
 		t.SetSize(parseSizeFlag(*size))
+		changed = true
+	}
+	if *stage != "" {
+		name, ok := canonicalStage(*stage)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "taskr edit: unknown stage %q (configured: %s)\n", *stage, strings.Join(activeStages, ", "))
+			return 2
+		}
+		t.SetStage(name)
 		changed = true
 	}
 	if *clearDue {
@@ -2154,7 +2183,8 @@ Tasks:
   taskr search "term" [flags]          title-substring search (includes done by default)
   taskr top [-n=N] [--json] [--wide]   show top-N by sequence score
   taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
-  taskr edit <ref> [flags]             change fields on one task (incl. --note/--append-note/--clear-note)
+  taskr edit <ref> [flags]             change fields on one task (incl. --note/--append-note/--clear-note,
+                                       --stage to move it on the board — stage names live in settings.json)
   taskr done <ref>... [-m "why"]       mark one or more tasks done, stopping any running timer on them
                                        (--cascade also closes pending subtasks; without it a parent with
                                        open subtasks prompts on a TTY, else warns and leaves them open)

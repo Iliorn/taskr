@@ -1142,6 +1142,7 @@ func (m *model) persistSettings() {
 		SeqAgingDisabled:  !activeBiases.Aging,
 		AutoCloseParent:   m.autoCloseParent,
 		AutoCloseSubtasks: m.autoCloseSubtasks,
+		Stages:            activeStages,
 	}); err != nil {
 		m.flashError(fmt.Sprintf(tr("Error saving settings: %v"), err))
 	}

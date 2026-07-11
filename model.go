@@ -227,13 +227,13 @@ type searchState struct {
 }
 
 type detailState struct {
-	field            detailField
-	commentCursor    int
-	depCursor        int
-	tagCursor        int
-	learningCursor   int
-	subtaskCursor    int
-	timeEntryCursor  int
+	field           detailField
+	commentCursor   int
+	depCursor       int
+	tagCursor       int
+	learningCursor  int
+	subtaskCursor   int
+	timeEntryCursor int
 }
 
 type calendarState struct {
@@ -413,6 +413,7 @@ func initialModel(repo Repository) model {
 	applyTheme(th)
 	applyLang(settings.Language)
 	applyBiases(biasesFromSettings(settings))
+	applyStages(stagesFromSettings(settings))
 
 	store := Store{}
 	store.ensureTasks()

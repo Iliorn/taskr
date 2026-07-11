@@ -204,6 +204,16 @@ type Todo struct {
 	ParentID     string      `json:"parent_id,omitempty"`
 	Recurrence   string      `json:"recurrence,omitempty"`
 
+	// Stage is the kanban board column a pending top-level task sits in — one
+	// of the user-configured stage names (settings.json "stages"). Empty means
+	// the first configured stage, so existing tasks need no backfill and a
+	// renamed stage strands its tasks visibly in the first column rather than
+	// hiding them. Completion is NOT a stage: the board's final column is
+	// Status==Done itself, so "done" never has two sources of truth. The todo
+	// package stores the name verbatim; validation against the configured
+	// list is the caller's concern (this package stays configuration-free).
+	Stage string `json:"stage,omitempty"`
+
 	// SeqRankAtDone records the 1-based position this task held in the
 	// top-level sequence ranking at the moment a user completed it (0 = not
 	// recorded: legacy completions, subtasks, auto-closed parents). Feeds the
@@ -311,6 +321,14 @@ func (t *Todo) SetSize(s Size) {
 
 func (t *Todo) SetProject(p string) {
 	t.Project = p
+	t.ModifiedAt = StampModified(t.ModifiedAt)
+}
+
+// SetStage moves the task to a board stage. The empty string is valid — it
+// means "first configured stage" — so callers can reset a task without
+// knowing the configured names.
+func (t *Todo) SetStage(s string) {
+	t.Stage = s
 	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
@@ -481,7 +499,7 @@ func (t *Todo) StopTimer() {
 	stamp := StampModified(t.ModifiedAt)
 	for i := range t.TimeEntries {
 		if t.TimeEntries[i].IsRunning() {
-			t.TimeEntries[i].StoppedAt = wall  // domain: when the clock stopped
+			t.TimeEntries[i].StoppedAt = wall   // domain: when the clock stopped
 			t.TimeEntries[i].ModifiedAt = stamp // merge ordering: must beat running copy
 		}
 	}
