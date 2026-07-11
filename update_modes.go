@@ -53,6 +53,19 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.add(t)
 					m.markModified(t.ID)
 					saveLastAddedID(t.ID)
+					// Position the cursor on the newly added task and open its
+					// detail view so the user lands on it immediately. A live
+					// search/focus filter can hide the new task — then the
+					// cursor can't follow it, and opening the detail pane
+					// would show whatever task the cursor sits on, so only
+					// switch panes when the cursor actually reached it.
+					m.followTask(t.ID)
+					if cur := m.currentTodo(); cur != nil && cur.ID == t.ID {
+						m.pane = paneDetail
+						m.detail = detailState{field: fieldStartDate}
+						m.invalidateDetailCache()
+						m.pushFocus(stateDetailPane)
+					}
 					if depErr != nil {
 						m.flashError(fmt.Sprintf("%s: %v", tr("Dependency not linked"), depErr))
 						return m, clearErrAfter()

@@ -73,6 +73,87 @@ func TestScriptQuickAddCreatesTaskAndUndoRemoves(t *testing.T) {
 	}
 }
 
+// TestScriptQuickAddOpensDetailOnNewTask asserts that pressing Enter in the
+// add-task input opens the detail pane of the newly created task with the
+// cursor/selection positioned on that task. This is the "open detail after add"
+// flow from backlog item fa2261e1.
+func TestScriptQuickAddOpensDetailOnNewTask(t *testing.T) {
+	// Start with one existing task so we can verify the cursor moves to the
+	// newly added task rather than staying on whatever row it was on.
+	existing := todo.New("existing task")
+	m := modelWithTasks(t, existing)
+
+	// Cursor starts on the existing task.
+	if m.pane != paneList {
+		t.Fatalf("initial pane = %v, want paneList", m.pane)
+	}
+
+	m = script(t, m, "a", "brand new task", "enter")
+
+	// The app must switch to the detail pane.
+	if m.pane != paneDetail {
+		t.Errorf("after add: pane = %v, want paneDetail", m.pane)
+	}
+	// The detail must be reset to the first field.
+	if m.detail.field != fieldStartDate {
+		t.Errorf("after add: detail.field = %v, want fieldStartDate", m.detail.field)
+	}
+	// The cursor (and currentTodo) must point at the newly added task.
+	got := m.currentTodo()
+	if got == nil {
+		t.Fatal("currentTodo is nil after add — cursor not on any task")
+	}
+	if got.Title != "Brand new task" {
+		t.Errorf("currentTodo.Title = %q, want %q", got.Title, "Brand new task")
+	}
+}
+
+// TestScriptQuickAddOpensDetailOnFirstTask covers the edge case where the list
+// was empty before the add: the newly created task must still land in the
+// detail pane.
+func TestScriptQuickAddOpensDetailOnFirstTask(t *testing.T) {
+	m := modelWithTasks(t) // empty list
+
+	m = script(t, m, "a", "very first task", "enter")
+
+	if m.pane != paneDetail {
+		t.Errorf("after first add: pane = %v, want paneDetail", m.pane)
+	}
+	got := m.currentTodo()
+	if got == nil {
+		t.Fatal("currentTodo is nil after add into an empty list")
+	}
+	if got.Title != "Very first task" {
+		t.Errorf("currentTodo.Title = %q, want %q", got.Title, "Very first task")
+	}
+}
+
+// TestScriptQuickAddFilteredOutStaysInList covers adding a task while a search
+// filter hides it: the cursor can't follow the new task, so the app must stay
+// in the list pane instead of opening the detail of whatever task the cursor
+// was on.
+func TestScriptQuickAddFilteredOutStaysInList(t *testing.T) {
+	existing := todo.New("alpha task")
+	m := modelWithTasks(t, existing)
+
+	m = script(t, m, "/", "alpha", "enter")
+	if m.searchQuery != "alpha" {
+		t.Fatalf("searchQuery = %q, want alpha", m.searchQuery)
+	}
+
+	m = script(t, m, "a", "bravo task", "enter")
+
+	if m.len() != 2 {
+		t.Fatalf("store has %d tasks, want 2", m.len())
+	}
+	if m.pane != paneList {
+		t.Errorf("after filtered add: pane = %v, want paneList", m.pane)
+	}
+	if got := m.currentTodo(); got == nil || got.Title != "Alpha task" {
+		t.Errorf("currentTodo = %+v, want cursor to stay on the visible task", got)
+	}
+}
+
 func TestScriptQuickAddParsesInlineSyntax(t *testing.T) {
 	m := modelWithTasks(t)
 	m = script(t, m, "a", "ship release p:high due:tomorrow #work @taskr", "enter")
