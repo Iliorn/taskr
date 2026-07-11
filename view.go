@@ -235,8 +235,8 @@ func (m model) View() string {
 
 	if showDetail {
 		switch {
-		case m.tab == tabSettings:
-			detailContent = "" // settings tab has no detail pane
+		case m.tab == tabSettings, m.tab == tabBoard:
+			detailContent = "" // settings and board tabs have no detail pane
 		case m.tab == tabTags || m.tab == tabLearnings || m.tab == tabStats:
 			detailContent = m.buildDetailContent()
 		default:
@@ -1728,24 +1728,26 @@ func (m model) renderTabs(avail int) string {
 		tabCalendarActiveStyle,
 		tabProjectsActiveStyle,
 		tabTagsActiveStyle,
-		tabLearningsActiveStyle,
+		tabBoardActiveStyle,
 		tabStatsActiveStyle,
 		tabSettingsActiveStyle,
+		tabLearningsActiveStyle,
 	}
 	inactiveStyles := [numTabs]lipgloss.Style{
 		tabTasksInactiveStyle,
 		tabCalendarInactiveStyle,
 		tabProjectsInactiveStyle,
 		tabTagsInactiveStyle,
-		tabLearningsInactiveStyle,
+		tabBoardInactiveStyle,
 		tabStatsInactiveStyle,
 		tabSettingsInactiveStyle,
+		tabLearningsInactiveStyle,
 	}
 	// The selected tab renders as a solid colored pill. Unselected tabs use
 	// the per-tab color as the foreground so each tab keeps its identity
 	// without a background block.
-	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"), tr("4 Tags"), tr("5 Learnings"), tr("6 Stats"), tr("7 Settings")}
-	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7"}
+	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"), tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings"), tr("8 Learnings")}
+	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7", "8"}
 
 	// abbr keeps the "N " prefix and the first 3 letters of the name ("1 Tas").
 	var abbr [numTabs]string
@@ -1822,6 +1824,8 @@ func (m model) renderListContent() string {
 		return m.renderTagList()
 	case tabLearnings:
 		return m.renderLearningList()
+	case tabBoard:
+		return m.renderBoardList()
 	case tabStats:
 		return m.renderStatsList()
 	case tabSettings:

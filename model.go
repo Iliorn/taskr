@@ -24,12 +24,13 @@ const (
 	tabCalendar
 	tabProjects
 	tabTags
-	tabLearnings
+	tabBoard
 	tabStats
 	tabSettings
+	tabLearnings // demoted to the last slot when the Board took tab 5; kept while learnings live on
 )
 
-const numTabs = 7
+const numTabs = 8
 
 // Rows in the Settings tab. Bias rows come first because they're the
 // sequencing engine's only user-visible knob; cosmetic rows (theme, language)
@@ -242,6 +243,15 @@ type calendarState struct {
 	focusTimeline bool
 }
 
+// boardState is the Board tab's cursor: which column is focused and which
+// card within it. col indexes activeStages; col == len(activeStages) is the
+// Done column. Both are clamped at render/move time, so stale values after a
+// stage-list edit or task completion degrade to the nearest valid card.
+type boardState struct {
+	col    int
+	cursor int
+}
+
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 type model struct {
@@ -261,6 +271,9 @@ type model struct {
 	// Calendar tab state
 	calendar    calendarState
 	timerTickOn bool
+
+	// Board tab state
+	board boardState
 
 	// Search state per context
 	depSearch  searchState

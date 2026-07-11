@@ -197,9 +197,10 @@ var daTranslations = map[string]string{
 	"2 Calendar":  "2 Kalender",
 	"3 Projects":  "3 Projekter",
 	"4 Tags":      "4 Mærker",
-	"5 Learnings": "5 Læring",
+	"5 Board":     "5 Tavle",
 	"6 Stats":     "6 Statistik",
 	"7 Settings":  "7 Indstillinger",
+	"8 Learnings": "8 Læring",
 
 	// Key hints (footer)
 	"←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back":                                               "←/→ sider · enter rediger · a tilføj · d skift · x fjern · n noter · esc tilbage",

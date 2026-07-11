@@ -73,7 +73,7 @@ var keymap = []binding{
 	// enter has no global meaning — each context defines its own (open details,
 	// edit field, activate, cycle) — so it is registered per context, not here.
 	{ctxAll, "esc", "back", "go back", secNavigation, false, false},
-	{ctxAll, "tab / 1-7", "tabs", "switch tabs", secNavigation, false, false},
+	{ctxAll, "tab / 1-8", "tabs", "switch tabs", secNavigation, false, false},
 	{ctxAll, "?", "help", "toggle this help", secNavigation, false, false},
 
 	// ── Tasks list ───────────────────────────────────────────────────────

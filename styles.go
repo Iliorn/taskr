@@ -131,6 +131,7 @@ var (
 	tabTasksActiveStyle     lipgloss.Style
 	tabProjectsActiveStyle  lipgloss.Style
 	tabTagsActiveStyle      lipgloss.Style
+	tabBoardActiveStyle     lipgloss.Style
 	tabLearningsActiveStyle lipgloss.Style
 	tabStatsActiveStyle     lipgloss.Style
 	tabCalendarActiveStyle  lipgloss.Style
@@ -139,6 +140,7 @@ var (
 	tabTasksInactiveStyle     lipgloss.Style
 	tabProjectsInactiveStyle  lipgloss.Style
 	tabTagsInactiveStyle      lipgloss.Style
+	tabBoardInactiveStyle     lipgloss.Style
 	tabLearningsInactiveStyle lipgloss.Style
 	tabStatsInactiveStyle     lipgloss.Style
 	tabCalendarInactiveStyle  lipgloss.Style
@@ -232,6 +234,7 @@ func applyTheme(t theme) {
 	tabTasksActiveStyle = activeTab(t.green)
 	tabProjectsActiveStyle = activeTab(t.orange)
 	tabTagsActiveStyle = activeTab(t.purple)
+	tabBoardActiveStyle = activeTab(t.purpleLt)
 	tabLearningsActiveStyle = activeTab(t.yellow)
 	tabStatsActiveStyle = activeTab(t.blue)
 	tabCalendarActiveStyle = activeTab(t.teal)
@@ -240,6 +243,7 @@ func applyTheme(t theme) {
 	tabTasksInactiveStyle = inactiveTab(t.green)
 	tabProjectsInactiveStyle = inactiveTab(t.orange)
 	tabTagsInactiveStyle = inactiveTab(t.purple)
+	tabBoardInactiveStyle = inactiveTab(t.purpleLt)
 	tabLearningsInactiveStyle = inactiveTab(t.yellow)
 	tabStatsInactiveStyle = inactiveTab(t.blue)
 	tabCalendarInactiveStyle = inactiveTab(t.teal)

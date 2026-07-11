@@ -130,7 +130,7 @@ func (m model) detailVisible() bool {
 		// Gantt (paneList) or the task detail (paneDetail), so no stacked panel is
 		// needed. Outside drill mode, show the stacked panel when pane == paneDetail.
 		return m.pane == paneDetail && !m.projectTaskMode
-	case tabSettings:
+	case tabSettings, tabBoard:
 		return false
 	}
 	return true

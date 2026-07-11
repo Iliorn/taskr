@@ -372,7 +372,7 @@ func TestEnterOnInboundDependentJumps(t *testing.T) {
 // abbreviation. Under the new scheme the selected tab keeps its full label while
 // unselected tabs use the abbreviated form.
 //
-// Two different selected tabs are exercised: tabLearnings ("5 Learnings", the
+// Two different selected tabs are exercised: tabLearnings ("8 Learnings", the
 // longest label) and tabSettings ("7 Settings").
 func TestSelectedTabNeverTruncated(t *testing.T) {
 	applyLang(string(langEN))
@@ -382,7 +382,7 @@ func TestSelectedTabNeverTruncated(t *testing.T) {
 		fullLabel   string
 		abbrLabel   string
 	}{
-		{tabLearnings, "5 Learnings", "5 Lea"},
+		{tabLearnings, "8 Learnings", "8 Lea"},
 		{tabSettings, "7 Settings", "7 Set"},
 	}
 
@@ -406,7 +406,7 @@ func TestSelectedTabNeverTruncated(t *testing.T) {
 			// The abbreviated form of the selected tab must NOT appear — if it
 			// does, the label was truncated despite being selected.
 			// Guard: make sure abbrLabel is not a prefix of fullLabel so the
-			// check is meaningful (it isn't: "5 Lea" ≠ prefix of "5 Learnings"
+			// check is meaningful (it isn't: "8 Lea" ≠ prefix of "8 Learnings"
 			// but the latter contains it; only flag if it's the exact token not
 			// followed by more word characters, so we use HasPrefix test below).
 			if strings.Contains(header, tc.abbrLabel) && !strings.Contains(header, tc.fullLabel) {
@@ -435,7 +435,7 @@ func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 		checkWrap bool // false for fixed-layout tabs that have their own min-width
 	}
 	cases := []tabCase{
-		{tabLearnings, true}, // "5 Learnings" — longest label, list-only tab
+		{tabLearnings, true}, // "8 Learnings" — longest label, list-only tab
 		{tabSettings, true},  // "7 Settings"  — second selected-tab check
 	}
 
@@ -443,7 +443,8 @@ func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 		t.Run(fmt.Sprintf("tab%d", tc.tb), func(t *testing.T) {
 			fullLabel := [numTabs]string{
 				tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"),
-				tr("4 Tags"), tr("5 Learnings"), tr("6 Stats"), tr("7 Settings"),
+				tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings"),
+				tr("8 Learnings"),
 			}[tc.tb]
 
 			for _, width := range []int{40, 50, 60, 70, 80, 100, 120} {

@@ -98,9 +98,10 @@ func TestTabSwitchByNumberKey(t *testing.T) {
 		{"2", tabCalendar},
 		{"3", tabProjects},
 		{"4", tabTags},
-		{"5", tabLearnings},
+		{"5", tabBoard},
 		{"6", tabStats},
 		{"7", tabSettings},
+		{"8", tabLearnings},
 	}
 	for _, c := range cases {
 		m = sendKey(t, m, c.key)
