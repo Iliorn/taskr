@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -205,36 +207,74 @@ type activityHeat struct {
 // completions are the strongest signal) and marks the task, its project, and
 // its tags hot when any signal lands inside the window ending at `now`.
 func computeActivityHeat(now time.Time, todos []todo.Todo) activityHeat {
+	cutoff := now.Add(-momentumWindow)
+	recent := func(ts time.Time) bool { return !ts.IsZero() && ts.After(cutoff) }
+	return scanHeat(todos, func(t *todo.Todo) bool {
+		if recent(t.CompletedAt) {
+			return true
+		}
+		for _, c := range t.Comments {
+			if c.DeletedAt.IsZero() && (recent(c.CreatedAt) || recent(c.ModifiedAt)) {
+				return true
+			}
+		}
+		for _, e := range t.TimeEntries {
+			if e.IsRunning() || recent(e.StartedAt) || recent(e.StoppedAt) {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+// computeActivityHeatAt reconstructs the heat snapshot as it stood at a past
+// moment `at` — used by the stats --seq miss analysis to re-score a completion
+// with the momentum signal its rank stamp actually saw. Unlike the live
+// computeActivityHeat it bounds signals STRICTLY before `at`: the completion
+// being analyzed lands at exactly `at`, and captureSeqRankAtDone stamps the
+// rank before Toggle flips the status, so the task's own completion must not
+// count toward its own momentum. The live path keeps its open upper edge on
+// purpose — cross-device clock skew after a sync can put a legitimate hot
+// signal slightly in the future, and dropping it there would be wrong.
+func computeActivityHeatAt(at time.Time, todos []todo.Todo) activityHeat {
+	cutoff := at.Add(-momentumWindow)
+	inWindow := func(ts time.Time) bool {
+		return !ts.IsZero() && ts.After(cutoff) && ts.Before(at)
+	}
+	return scanHeat(todos, func(t *todo.Todo) bool {
+		if inWindow(t.CompletedAt) {
+			return true
+		}
+		for _, c := range t.Comments {
+			if c.DeletedAt.IsZero() && (inWindow(c.CreatedAt) || inWindow(c.ModifiedAt)) {
+				return true
+			}
+		}
+		for _, e := range t.TimeEntries {
+			// A time entry is a signal if it overlapped the window at all:
+			// started before `at` and not stopped before the window opened.
+			// (IsRunning is a *current* fact, meaningless for a past moment.)
+			if !e.StartedAt.IsZero() && e.StartedAt.Before(at) &&
+				(e.StoppedAt.IsZero() || e.StoppedAt.After(cutoff)) {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+// scanHeat builds an activityHeat by testing every live task against `hot`
+// and marking the task, its project, and its tags when it fires. The two
+// heat builders above share it; only their notion of "recent" differs.
+func scanHeat(todos []todo.Todo, hot func(*todo.Todo) bool) activityHeat {
 	h := activityHeat{
 		tasks:    make(map[string]bool),
 		projects: make(map[string]bool),
 		tags:     make(map[string]bool),
 	}
-	cutoff := now.Add(-momentumWindow)
-	recent := func(ts time.Time) bool { return !ts.IsZero() && ts.After(cutoff) }
 	for i := range todos {
 		t := &todos[i]
-		if t.Deleted {
-			continue
-		}
-		hot := recent(t.CompletedAt)
-		if !hot {
-			for _, c := range t.Comments {
-				if c.DeletedAt.IsZero() && (recent(c.CreatedAt) || recent(c.ModifiedAt)) {
-					hot = true
-					break
-				}
-			}
-		}
-		if !hot {
-			for _, e := range t.TimeEntries {
-				if e.IsRunning() || recent(e.StartedAt) || recent(e.StoppedAt) {
-					hot = true
-					break
-				}
-			}
-		}
-		if !hot {
+		if t.Deleted || !hot(t) {
 			continue
 		}
 		h.tasks[t.ID] = true
@@ -264,6 +304,14 @@ func dimensionsAt(now time.Time, t *todo.Todo, heat activityHeat) (u, i, m, size
 	if t == nil || t.Status == todo.Done {
 		return 0, 0, 0, 0, 0
 	}
+	return rawDimensionsAt(now, t, heat)
+}
+
+// rawDimensionsAt is dimensionsAt without the Done guard. The stats --seq
+// miss analysis re-scores *completed* tasks as of their completion moment,
+// where the live guard (Done scores 0) would erase exactly the data it needs.
+// Live scoring must keep going through dimensionsAt.
+func rawDimensionsAt(now time.Time, t *todo.Todo, heat activityHeat) (u, i, m, size, age float64) {
 	u = urgencyDim(now, t.DueDate)
 	i = importanceDim(t.Priority)
 	m = momentumDim(t, heat)
@@ -445,32 +493,199 @@ func captureSeqRankAtDone(todos []todo.Todo, t *todo.Todo) {
 	}
 }
 
-// sequenceHitStats reports, over the `window` most recent rank-stamped
-// completions, how many closed inside the top seqHitTopN. rated counts the
-// completions considered, so callers can render "39/50" and hide the stat
-// entirely while no history exists.
-func sequenceHitStats(todos []todo.Todo, window int) (hits, rated int) {
-	type reading struct {
-		at   time.Time
-		rank int
-	}
-	var recent []reading
+// ratedCompletions returns the rank-stamped completions the hit-rate metric
+// reads — done, top-level, stamped, timestamped — most recent first, truncated
+// to `window`. Shared by sequenceHitStats and analyzeSeqMisses so the two
+// always agree on which completions count.
+func ratedCompletions(todos []todo.Todo, window int) []*todo.Todo {
+	var recent []*todo.Todo
 	for i := range todos {
 		t := &todos[i]
 		if t.Status != todo.Done || t.ParentID != "" || t.SeqRankAtDone <= 0 || t.CompletedAt.IsZero() {
 			continue
 		}
-		recent = append(recent, reading{t.CompletedAt, t.SeqRankAtDone})
+		recent = append(recent, t)
 	}
-	sort.Slice(recent, func(i, j int) bool { return recent[i].at.After(recent[j].at) })
+	sort.Slice(recent, func(i, j int) bool { return recent[i].CompletedAt.After(recent[j].CompletedAt) })
 	if len(recent) > window {
 		recent = recent[:window]
 	}
-	for _, r := range recent {
+	return recent
+}
+
+// sequenceHitStats reports, over the `window` most recent rank-stamped
+// completions, how many closed inside the top seqHitTopN. rated counts the
+// completions considered, so callers can render "39/50" and hide the stat
+// entirely while no history exists.
+func sequenceHitStats(todos []todo.Todo, window int) (hits, rated int) {
+	for _, t := range ratedCompletions(todos, window) {
 		rated++
-		if r.rank <= seqHitTopN {
+		if t.SeqRankAtDone <= seqHitTopN {
 			hits++
 		}
 	}
 	return hits, rated
+}
+
+// ── Sequence miss analysis (stats --seq) ─────────────────────────────────────
+//
+// The hit rate says how often a finished task was a top-N pick; this section
+// says WHY the misses weren't. For every rated completion the five score
+// dimensions are recomputed as of its CompletedAt — activity heat rebuilt from
+// the historical record via computeActivityHeatAt — then averaged separately
+// for hits and misses. A dimension where misses lag hits is one the engine
+// values more than the user's actual picking behaviour does (they finished
+// those tasks anyway), so its bias knob is a Relaxed candidate; a dimension
+// where misses *beat* hits is followed more than the engine weights it —
+// an Intense candidate.
+//
+// Known approximation, deliberate: dimensions are recomputed from each task's
+// CURRENT fields (a due date or priority edited after completion skews that
+// reading) and weighted by the CURRENT biases. Exact readings would need the
+// components stamped at done-time — a schema migration not worth taking until
+// this reconstruction proves its keep.
+
+// seqDimCount / seqDimNames fix the dimension order used by every [seqDimCount]
+// array below: Deadline, Priority, Momentum, Size, Age. The first three are
+// the knobbed dimensions (they have a Settings bias); Size and Age are shown
+// in the table but never suggested on.
+const seqDimCount = 5
+
+var seqDimNames = [seqDimCount]string{"Deadline", "Priority", "Momentum", "Size", "Age"}
+
+type seqMissRow struct {
+	ID          string               `json:"id"`
+	Title       string               `json:"title"`
+	Rank        int                  `json:"rank"`
+	CompletedAt time.Time            `json:"completed_at"`
+	Dims        [seqDimCount]float64 `json:"dims"`
+	// Weakest is the dimension where this miss fell furthest below the hit
+	// average — the single best answer to "what buried it". Empty when there
+	// are no hits to compare against.
+	Weakest string `json:"weakest,omitempty"`
+}
+
+type seqAnalysis struct {
+	Hits       int                  `json:"hits"`
+	Rated      int                  `json:"rated"`
+	TopN       int                  `json:"top_n"`
+	Window     int                  `json:"window"`
+	Dimensions [seqDimCount]string  `json:"dimensions"` // names the array order for JSON consumers
+	HitAvg     [seqDimCount]float64 `json:"hit_avg"`
+	MissAvg    [seqDimCount]float64 `json:"miss_avg"`
+	Gap        [seqDimCount]float64 `json:"gap"` // MissAvg − HitAvg
+	Misses     []seqMissRow         `json:"misses"`
+}
+
+// analyzeSeqMisses is the pure fold behind stats --seq: re-score every rated
+// completion at its own CompletedAt, split hits from misses, and aggregate the
+// weighted per-dimension contributions. Misses come back most recent first
+// (ratedCompletions' order).
+func analyzeSeqMisses(todos []todo.Todo, window int, b biases) seqAnalysis {
+	a := seqAnalysis{TopN: seqHitTopN, Window: window, Dimensions: seqDimNames}
+	type scored struct {
+		t    *todo.Todo
+		dims [seqDimCount]float64
+	}
+	var missRows []scored
+	var hitSum, missSum [seqDimCount]float64
+	for _, t := range ratedCompletions(todos, window) {
+		heat := computeActivityHeatAt(t.CompletedAt, todos)
+		u, i, m, size, age := rawDimensionsAt(t.CompletedAt, t, heat)
+		if !b.Aging {
+			age = 0
+		}
+		dims := [seqDimCount]float64{
+			u * b.Deadline.weight(),
+			i * b.Priority.weight(),
+			m * b.Momentum.weight(),
+			size,
+			age,
+		}
+		a.Rated++
+		if t.SeqRankAtDone <= seqHitTopN {
+			a.Hits++
+			for d := range dims {
+				hitSum[d] += dims[d]
+			}
+			continue
+		}
+		missRows = append(missRows, scored{t, dims})
+		for d := range dims {
+			missSum[d] += dims[d]
+		}
+	}
+	misses := a.Rated - a.Hits
+	for d := 0; d < seqDimCount; d++ {
+		if a.Hits > 0 {
+			a.HitAvg[d] = hitSum[d] / float64(a.Hits)
+		}
+		if misses > 0 {
+			a.MissAvg[d] = missSum[d] / float64(misses)
+		}
+		a.Gap[d] = a.MissAvg[d] - a.HitAvg[d]
+	}
+	for _, r := range missRows {
+		row := seqMissRow{
+			ID:          r.t.ID,
+			Title:       r.t.Title,
+			Rank:        r.t.SeqRankAtDone,
+			CompletedAt: r.t.CompletedAt,
+			Dims:        r.dims,
+		}
+		if a.Hits > 0 {
+			worst, worstIdx := 0.0, -1
+			for d := range r.dims {
+				if deficit := a.HitAvg[d] - r.dims[d]; deficit > worst {
+					worst, worstIdx = deficit, d
+				}
+			}
+			if worstIdx >= 0 {
+				row.Weakest = seqDimNames[worstIdx]
+			}
+		}
+		a.Misses = append(a.Misses, row)
+	}
+	return a
+}
+
+// seqSuggestionMinMisses / seqSuggestionMinGap gate the bias hint: with fewer
+// misses than the floor any pattern is noise, and a gap under the floor (in
+// weighted score points) isn't worth moving a knob over.
+const (
+	seqSuggestionMinMisses = 3
+	seqSuggestionMinGap    = 1.0
+)
+
+// seqSuggestion turns the gap table into at most one actionable line: the
+// knobbed dimension (Deadline/Priority/Momentum) with the largest |gap|, and
+// which way to move its bias. Empty when there isn't enough signal to say
+// anything; an explicit "looks calibrated" when there is signal but no
+// dominant pattern.
+func seqSuggestion(a seqAnalysis, b biases) string {
+	misses := a.Rated - a.Hits
+	if a.Hits == 0 || misses < seqSuggestionMinMisses {
+		return ""
+	}
+	knobs := [3]biasLevel{b.Deadline, b.Priority, b.Momentum}
+	best, bestGap := -1, 0.0
+	for d := 0; d < len(knobs); d++ {
+		if g := a.Gap[d]; math.Abs(g) > math.Abs(bestGap) {
+			best, bestGap = d, g
+		}
+	}
+	if best < 0 || math.Abs(bestGap) < seqSuggestionMinGap {
+		return "No dominant pattern in the misses — the biases look calibrated."
+	}
+	name := seqDimNames[best]
+	if bestGap < 0 {
+		if knobs[best] == biasRelaxed {
+			return fmt.Sprintf("Misses were weakest on %s; your %s: relaxed setting already leans that way.", name, name)
+		}
+		return fmt.Sprintf("Misses were weakest on %s — you finish tasks the engine buried for scoring low there. Consider %s: relaxed (Settings).", name, name)
+	}
+	if knobs[best] == biasIntense {
+		return fmt.Sprintf("Misses scored higher on %s than hits; your %s: intense setting already leans that way.", name, name)
+	}
+	return fmt.Sprintf("Misses scored higher on %s than hits — you follow it more than the engine weights it. Consider %s: intense (Settings).", name, name)
 }

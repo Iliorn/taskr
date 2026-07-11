@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -412,5 +413,162 @@ func TestPersonalityNames(t *testing.T) {
 				t.Errorf("personality(%+v) = %q, want %q", c.b, got, c.want)
 			}
 		})
+	}
+}
+
+// ── stats --seq: historical heat + miss analysis ─────────────────────────────
+
+func TestComputeActivityHeatAtBounds(t *testing.T) {
+	at := fixedNow
+
+	self := todo.New("the completion being analyzed")
+	self.ID = "self"
+	self.Status = todo.Done
+	self.CompletedAt = at // lands exactly at `at` — its own completion must not count
+
+	prior := todo.New("finished an hour earlier")
+	prior.ID = "prior"
+	prior.Status = todo.Done
+	prior.CompletedAt = at.Add(-time.Hour)
+
+	future := todo.New("finished after the analyzed moment")
+	future.ID = "future"
+	future.Status = todo.Done
+	future.CompletedAt = at.Add(time.Hour)
+
+	spanning := todo.New("timer active across the analyzed moment")
+	spanning.ID = "spanning"
+	spanning.TimeEntries = []todo.TimeEntry{{
+		StartedAt: at.Add(-3 * 24 * time.Hour),
+		StoppedAt: at.Add(24 * time.Hour),
+	}}
+
+	stale := todo.New("timer stopped before the window opened")
+	stale.ID = "stale"
+	stale.TimeEntries = []todo.TimeEntry{{
+		StartedAt: at.Add(-4 * 24 * time.Hour),
+		StoppedAt: at.Add(-3 * 24 * time.Hour),
+	}}
+
+	h := computeActivityHeatAt(at, []todo.Todo{self, prior, future, spanning, stale})
+
+	for id, hot := range map[string]bool{
+		"self":     false,
+		"prior":    true,
+		"future":   false,
+		"spanning": true,
+		"stale":    false,
+	} {
+		if h.tasks[id] != hot {
+			t.Errorf("task %q hot = %v, want %v", id, h.tasks[id], hot)
+		}
+	}
+}
+
+// seqDone builds a rank-stamped completion for the miss-analysis tests:
+// CreatedAt pinned to CompletedAt so the Age dimension reads 0 and the
+// remaining dims are fully controlled by the caller.
+func seqDone(id string, rank int, completedAt time.Time) todo.Todo {
+	tt := todo.New(id)
+	tt.ID = id
+	tt.Status = todo.Done
+	tt.CompletedAt = completedAt
+	tt.CreatedAt = completedAt
+	tt.SeqRankAtDone = rank
+	return tt
+}
+
+func TestAnalyzeSeqMissesDeadlineGap(t *testing.T) {
+	base := fixedNow
+	// Two hits, both due on their completion day → Deadline 10 at completion.
+	hit1 := seqDone("hit1", 1, base.Add(-30*24*time.Hour))
+	hit1.DueDate = hit1.CompletedAt
+	hit2 := seqDone("hit2", 4, base.Add(-20*24*time.Hour))
+	hit2.DueDate = hit2.CompletedAt
+	// Three misses, no due date → Deadline 0. Distinct timestamps so the
+	// most-recent-first ordering is observable.
+	miss1 := seqDone("miss1", 9, base.Add(-3*24*time.Hour))
+	miss2 := seqDone("miss2", 12, base.Add(-2*24*time.Hour))
+	miss3 := seqDone("miss3", 8, base.Add(-1*24*time.Hour))
+
+	todos := []todo.Todo{hit1, miss1, hit2, miss2, miss3}
+	a := analyzeSeqMisses(todos, seqHitWindow, defaultBiases())
+
+	if a.Hits != 2 || a.Rated != 5 {
+		t.Fatalf("hits/rated = %d/%d, want 2/5", a.Hits, a.Rated)
+	}
+	if !approxEq(a.HitAvg[0], 10.0) || !approxEq(a.MissAvg[0], 0.0) || !approxEq(a.Gap[0], -10.0) {
+		t.Errorf("Deadline hit/miss/gap = %v/%v/%v, want 10/0/-10", a.HitAvg[0], a.MissAvg[0], a.Gap[0])
+	}
+	// Priority (medium=5) and Size (medium=1) identical on both sides.
+	if !approxEq(a.Gap[1], 0) || !approxEq(a.Gap[3], 0) {
+		t.Errorf("Priority/Size gaps = %v/%v, want 0/0", a.Gap[1], a.Gap[3])
+	}
+	if len(a.Misses) != 3 {
+		t.Fatalf("misses = %d, want 3", len(a.Misses))
+	}
+	if a.Misses[0].ID != "miss3" || a.Misses[2].ID != "miss1" {
+		t.Errorf("miss order = %s..%s, want miss3..miss1 (most recent first)", a.Misses[0].ID, a.Misses[2].ID)
+	}
+	for _, r := range a.Misses {
+		if r.Weakest != "Deadline" {
+			t.Errorf("miss %s weakest = %q, want Deadline", r.ID, r.Weakest)
+		}
+	}
+	if s := seqSuggestion(a, defaultBiases()); !strings.Contains(s, "Deadline: relaxed") {
+		t.Errorf("suggestion = %q, want a Deadline: relaxed hint", s)
+	}
+	already := defaultBiases()
+	already.Deadline = biasRelaxed
+	if s := seqSuggestion(a, already); !strings.Contains(s, "already leans") {
+		t.Errorf("suggestion with Deadline already relaxed = %q, want an 'already leans' note", s)
+	}
+}
+
+func TestAnalyzeSeqMissesMomentumIntenseHint(t *testing.T) {
+	base := fixedNow
+	// Hits: cold, no due dates.
+	hit1 := seqDone("hit1", 2, base.Add(-30*24*time.Hour))
+	// Misses: each commented on an hour before completion → task heat →
+	// Momentum 10 at their completion moments, while the hit stays cold.
+	mkMiss := func(id string, rank int, at time.Time) todo.Todo {
+		m := seqDone(id, rank, at)
+		m.Comments = []todo.Comment{{CreatedAt: at.Add(-time.Hour)}}
+		return m
+	}
+	miss1 := mkMiss("miss1", 7, base.Add(-3*24*time.Hour))
+	miss2 := mkMiss("miss2", 11, base.Add(-2*24*time.Hour))
+	miss3 := mkMiss("miss3", 9, base.Add(-1*24*time.Hour))
+
+	a := analyzeSeqMisses([]todo.Todo{hit1, miss1, miss2, miss3}, seqHitWindow, defaultBiases())
+
+	if !approxEq(a.Gap[2], 10.0) {
+		t.Fatalf("Momentum gap = %v, want +10", a.Gap[2])
+	}
+	if s := seqSuggestion(a, defaultBiases()); !strings.Contains(s, "Momentum: intense") {
+		t.Errorf("suggestion = %q, want a Momentum: intense hint", s)
+	}
+}
+
+func TestSeqSuggestionGates(t *testing.T) {
+	base := fixedNow
+	// Two misses only — below the floor, no matter how clear the pattern.
+	few := analyzeSeqMisses([]todo.Todo{
+		seqDone("h", 1, base.Add(-3*24*time.Hour)),
+		seqDone("m1", 9, base.Add(-2*24*time.Hour)),
+		seqDone("m2", 8, base.Add(-1*24*time.Hour)),
+	}, seqHitWindow, defaultBiases())
+	if s := seqSuggestion(few, defaultBiases()); s != "" {
+		t.Errorf("suggestion with 2 misses = %q, want empty", s)
+	}
+	// Three misses with dims identical to the hit → calibrated message.
+	flat := analyzeSeqMisses([]todo.Todo{
+		seqDone("h", 1, base.Add(-4*24*time.Hour)),
+		seqDone("m1", 9, base.Add(-3*24*time.Hour)),
+		seqDone("m2", 8, base.Add(-2*24*time.Hour)),
+		seqDone("m3", 7, base.Add(-1*24*time.Hour)),
+	}, seqHitWindow, defaultBiases())
+	if s := seqSuggestion(flat, defaultBiases()); !strings.Contains(s, "calibrated") {
+		t.Errorf("suggestion with flat gaps = %q, want the calibrated note", s)
 	}
 }
