@@ -1670,22 +1670,30 @@ func (m model) renderTabs(avail int) string {
 		abbr[i] = n[:space+1] + string(word)
 	}
 
-	// Degrade as the window narrows: full labels → 3-letter abbreviations →
-	// only the active tab keeps its abbreviation (rest collapse to bare
-	// numbers) → numbers only.
-	names := nums
-	switch {
-	case tabsWidth(full[:]) <= avail:
-		names = full
-	case tabsWidth(abbr[:]) <= avail:
-		names = abbr
-	default:
-		mixed := nums
-		mixed[m.tab] = abbr[m.tab]
-		if tabsWidth(mixed[:]) <= avail {
-			names = mixed
+	// The selected tab always shows its full label so it is never truncated
+	// away. Unselected tabs degrade uniformly (full → abbr → nums) to fit
+	// the remaining budget. tabsWidthMixed measures the mixed arrangement
+	// where the selected tab is fixed at selLabel and unselected tabs use
+	// the given candidates array.
+	selLabel := full[m.tab]
+	selRunes := []rune(selLabel)
+	if avail > 0 && len(selRunes) > avail {
+		// Degenerate: selected title alone exceeds avail — clip it rather than
+		// overflow; unselected tabs collapse to bare numbers.
+		selLabel = string(selRunes[:avail])
+	}
+
+	// Pick the most-verbose unselected level that fits.
+	unselNames := nums // fallback: bare numbers always fit (single rune each)
+	for _, candidates := range [][numTabs]string{full, abbr, nums} {
+		if tabsWidthMixed(candidates, m.tab, selLabel) <= avail {
+			unselNames = candidates
+			break
 		}
 	}
+
+	names := unselNames
+	names[m.tab] = selLabel
 
 	var parts [numTabs]string
 	for i := range names {
@@ -1703,6 +1711,21 @@ func tabsWidth(names []string) int {
 	w := len(names) - 1 // single-space separators
 	for _, n := range names {
 		w += len([]rune(n))
+	}
+	return w
+}
+
+// tabsWidthMixed measures the width of a mixed tab bar where tab sel uses
+// selLabel and all other tabs use the corresponding label from names.
+// Follows the same rune-length convention as tabsWidth (pre-style plain text).
+func tabsWidthMixed(names [numTabs]string, sel tab, selLabel string) int {
+	w := numTabs - 1 // single-space separators
+	for i, n := range names {
+		if tab(i) == sel {
+			w += len([]rune(selLabel))
+		} else {
+			w += len([]rune(n))
+		}
 	}
 	return w
 }

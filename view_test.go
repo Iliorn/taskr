@@ -362,6 +362,129 @@ func TestEnterOnInboundDependentJumps(t *testing.T) {
 	}
 }
 
+// TestSelectedTabNeverTruncated asserts that the selected tab's full title
+// always appears in the rendered header, even at widths where the old uniform
+// truncation scheme would have abbreviated it along with every other tab.
+//
+// Specifically, at termWidth=80 the available budget (≈58 rune-width units)
+// sits between tabsWidth(full)=67 (doesn't fit) and tabsWidth(abbr)=41 (fits).
+// Under the old scheme every tab — including the selected one — got its 3-letter
+// abbreviation. Under the new scheme the selected tab keeps its full label while
+// unselected tabs use the abbreviated form.
+//
+// Two different selected tabs are exercised: tabLearnings ("5 Learnings", the
+// longest label) and tabSettings ("7 Settings").
+func TestSelectedTabNeverTruncated(t *testing.T) {
+	applyLang(string(langEN))
+
+	cases := []struct {
+		selectedTab tab
+		fullLabel   string
+		abbrLabel   string
+	}{
+		{tabLearnings, "5 Learnings", "5 Lea"},
+		{tabSettings, "7 Settings", "7 Set"},
+	}
+
+	// termWidth=80 gives avail≈58: full labels (width 67) don't fit as a set,
+	// but the mixed arrangement (selected=full, others=abbr, width≈47) does.
+	for _, tc := range cases {
+		t.Run(tc.fullLabel, func(t *testing.T) {
+			m := newTestModel()
+			m.termWidth = 80
+			m.termHeight = 30
+			m.tab = tc.selectedTab
+			m.refreshCaches()
+
+			out := m.View()
+			header := strings.Split(out, "\n")[0]
+
+			if !strings.Contains(header, tc.fullLabel) {
+				t.Errorf("selected tab %q: full label %q missing from header: %q",
+					tc.fullLabel, tc.fullLabel, header)
+			}
+			// The abbreviated form of the selected tab must NOT appear — if it
+			// does, the label was truncated despite being selected.
+			// Guard: make sure abbrLabel is not a prefix of fullLabel so the
+			// check is meaningful (it isn't: "5 Lea" ≠ prefix of "5 Learnings"
+			// but the latter contains it; only flag if it's the exact token not
+			// followed by more word characters, so we use HasPrefix test below).
+			if strings.Contains(header, tc.abbrLabel) && !strings.Contains(header, tc.fullLabel) {
+				t.Errorf("selected tab %q: got abbreviated %q instead of full label",
+					tc.fullLabel, tc.abbrLabel)
+			}
+		})
+	}
+}
+
+// TestSelectedTabNeverTruncatedWidthSweep checks that across a range of narrow
+// terminal widths: (a) no rendered line exceeds termWidth (for list-only tabs
+// that respect the no-wrap contract at every width), and (b) the selected tab's
+// full title is present in the header whenever the title fits in avail on its
+// own (i.e. the terminal isn't so narrow that even the selected title alone
+// would overflow).
+//
+// The Calendar tab uses a fixed two-panel layout with its own minimum width
+// (same as TestNarrowNoWrapDanish) so it is excluded from the no-wrap sweep.
+// Two different selected tabs exercise different full-label lengths.
+func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
+	applyLang(string(langEN))
+
+	type tabCase struct {
+		tb        tab
+		checkWrap bool // false for fixed-layout tabs that have their own min-width
+	}
+	cases := []tabCase{
+		{tabLearnings, true},  // "5 Learnings" — longest label, list-only tab
+		{tabSettings, true},   // "7 Settings"  — second selected-tab check
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("tab%d", tc.tb), func(t *testing.T) {
+			fullLabel := [numTabs]string{
+				tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"),
+				tr("4 Tags"), tr("5 Learnings"), tr("6 Stats"), tr("7 Settings"),
+			}[tc.tb]
+
+			for _, width := range []int{40, 50, 60, 70, 80, 100, 120} {
+				m := newTestModel()
+				m.termWidth = width
+				m.termHeight = 30
+				m.tab = tc.tb
+				m.refreshCaches()
+
+				out := m.View()
+				lines := strings.Split(out, "\n")
+
+				// No-wrap contract: every line ≤ termWidth.
+				if tc.checkWrap {
+					for n, line := range lines {
+						if w := ansi.StringWidth(line); w > width {
+							t.Errorf("tab=%d width=%d: line %d is %d cells wide: %q",
+								tc.tb, width, n, w, line)
+						}
+					}
+				}
+
+				// Selected-tab guarantee: full label must appear in the header
+				// when there is room for it — i.e. the selected tab's full label
+				// plus the minimum-width unselected tabs (bare numbers) plus
+				// separators all fit in avail.
+				// avail ≈ termWidth − titleW(5) − 2 − hintW(11) − 4 = termWidth − 22.
+				// Minimum unselected contribution: (numTabs−1) separators + (numTabs−1)×1.
+				approxMinWidth := len([]rune(fullLabel)) + (numTabs-1) + (numTabs-1)
+				if width-22 >= approxMinWidth {
+					header := lines[0]
+					if !strings.Contains(header, fullLabel) {
+						t.Errorf("tab=%d width=%d: selected tab full label %q missing from header: %q",
+							tc.tb, width, fullLabel, header)
+					}
+				}
+			}
+		})
+	}
+}
+
 // When comments wrap to multiple lines in a narrow column, the detail scroll
 // must still bring the selected comment into view — counting one line per
 // comment used to undershoot and push the cursor row off the bottom edge.
