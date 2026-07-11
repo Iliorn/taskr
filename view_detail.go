@@ -72,8 +72,6 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		return cur + paddedLabel + v
 	}
 
-	b.WriteString(detailTitleStyle.Render(truncate(t.Title, availableW)) + "\n\n")
-
 	startVal := tr("not set")
 	if !t.StartDate.IsZero() {
 		startVal = formatStartDate(t.StartDate)

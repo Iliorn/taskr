@@ -88,6 +88,95 @@ func truncateLines(lines []string, maxW int) {
 	}
 }
 
+// withBorderTitle rewrites the top border line of a lipgloss-rendered
+// rounded-border box to embed the title text, producing the standard TUI look:
+//
+//	╭─ Title ──────────────────╮
+//	│ content …               │
+//	╰──────────────────────────╯
+//
+// boxW is the Width() argument that was passed to the panel's .Render call
+// (the content width, excluding borders and padding). focused controls which
+// border color is used (accent when true, dim when false). title is plain text;
+// it is ANSI-truncated with "…" so the box corners always survive.
+// If the box is too narrow to embed any title the function returns rendered
+// unchanged.
+func withBorderTitle(rendered, title string, boxW int, focused bool) string {
+	if rendered == "" {
+		return rendered
+	}
+
+	// style.Width(w) with RoundedBorder produces a top line:
+	//   ╭ + w dashes + ╮   (total box width w+2, excluding the 2-space margin)
+	//
+	// With an embedded title we replace the dash run:
+	//   ╭─ <title> <fill>╮
+	//   3(╭─ ) + T(title) + 1( ) + F(fill) + 1(╮) = T+F+5 = w+2
+	//   → F = w - T - 3
+	//
+	// Require at least 1 fill dash (F≥1) → max title = w - 4 where w = boxW.
+	maxTitle := boxW - 4
+	if maxTitle <= 0 {
+		return rendered // box too narrow for any title
+	}
+	title = ansi.Truncate(title, maxTitle, "…")
+	titleW := ansi.StringWidth(title)
+	fillW := boxW - titleW - 3
+	if fillW < 1 {
+		fillW = 1
+	}
+
+	borderFg := currentTheme.dim
+	if focused {
+		borderFg = currentTheme.accent
+	}
+	borderSty := lipgloss.NewStyle().Foreground(borderFg)
+	titleSty := lipgloss.NewStyle().Bold(true).Foreground(currentTheme.accent)
+
+	margin := "  " // MarginLeft(2) from detailPanelStyle / listPanelStyle
+	topLine := margin +
+		borderSty.Render("╭─ ") +
+		titleSty.Render(title) +
+		borderSty.Render(" "+strings.Repeat("─", fillW)+"╮")
+
+	// Replace only the first line of rendered (everything up to the first \n).
+	idx := strings.IndexByte(rendered, '\n')
+	if idx < 0 {
+		return rendered // no newline — shouldn't happen for a bordered box
+	}
+	return topLine + rendered[idx:]
+}
+
+// detailPanelTitle returns a short label for the detail panel's border title
+// given the current tab and selected item.
+func (m model) detailPanelTitle() string {
+	switch m.tab {
+	case tabTags:
+		tags := m.getFilteredTagsForTab()
+		if m.tagTabCursor < len(tags) {
+			tag := tags[m.tagTabCursor]
+			if tag == untaggedKey {
+				return tr("(untagged)")
+			}
+			return "#" + tag
+		}
+		return tr("Tag")
+	case tabLearnings:
+		learnings := m.allLearnings()
+		if m.learningCursor < len(learnings) {
+			return truncate(learnings[m.learningCursor].Text, 60)
+		}
+		return tr("Learning")
+	case tabStats:
+		return tr("Activity")
+	default:
+		if t := m.currentTodo(); t != nil {
+			return t.Title
+		}
+		return tr("Detail")
+	}
+}
+
 // ── Top-level View ────────────────────────────────────────────────────────────
 
 func (m model) View() string {
@@ -157,11 +246,13 @@ func (m model) View() string {
 		if detailContent != "" {
 			// The stacked detail only exists while it owns keystrokes on the
 			// enter-to-open tabs; the always-on previews (Tags/Stats) never do.
+			focused := m.pane == paneDetail
 			dst := detailPanelStyle
-			if m.pane == paneDetail {
+			if focused {
 				dst = detailPanelFocusedStyle
 			}
 			detailContent = dst.Width(w).Render(m.applyDetailScroll(detailContent))
+			detailContent = withBorderTitle(detailContent, m.detailPanelTitle(), w, focused)
 			detailSplit := strings.Split(detailContent, "\n")
 			for len(detailSplit) > 0 && strings.TrimSpace(detailSplit[len(detailSplit)-1]) == "" {
 				detailSplit = detailSplit[:len(detailSplit)-1]
@@ -710,11 +801,13 @@ func (m model) buildSideBySide(w, outerH int) string {
 	detailLines = fitLines(detailLines, innerH, detailW-2)
 
 	listStyle, detailStyle := listPanelFocusedStyle, detailPanelStyle
-	if m.pane == paneDetail {
+	detailFocused := m.pane == paneDetail
+	if detailFocused {
 		listStyle, detailStyle = listPanelStyle, detailPanelFocusedStyle
 	}
 	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
 	detailPanel := detailStyle.Width(detailW).Render(strings.Join(detailLines, "\n"))
+	detailPanel = withBorderTitle(detailPanel, m.detailPanelTitle(), detailW, detailFocused)
 	return lipgloss.JoinHorizontal(lipgloss.Top, listPanel, detailPanel)
 }
 
@@ -890,6 +983,12 @@ func (m model) buildProjectDrillContent(projects []string, w, outerH int) string
 
 	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
 	rightPanel := ganttStyle.Width(ganttW).Render(strings.Join(rightLines, "\n"))
+	// When showing the task detail in the right column, embed the title on the
+	// border. In browse mode (pane == paneList) the right column shows the Gantt
+	// chart, which has its own header row, so no border title is added there.
+	if m.pane == paneDetail {
+		rightPanel = withBorderTitle(rightPanel, m.detailPanelTitle(), ganttW, true)
+	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, listPanel, rightPanel)
 }
 
@@ -1385,8 +1484,6 @@ func (m model) buildLearningDetailLines() []string {
 	defer putBuilder(b)
 	availW := m.termWidth - 8
 
-	b.WriteString(learningSelectedStyle.Render("  "+truncate(l.Text, availW)) + "\n\n")
-
 	wrapped := wrapText(l.Text, availW-2)
 	if len(wrapped) > 1 {
 		for _, line := range wrapped {
@@ -1482,26 +1579,17 @@ func (m model) buildTagDetailLines() []string {
 	}
 
 	count := len(matches)
-	title := fmt.Sprintf("  #%s", tag)
-	if untagged {
-		title = tr("  (untagged)")
-	}
 	countWord := tr("%d task")
 	if count != 1 {
 		countWord = tr("%d tasks")
 	}
-	hint := "(" + fmt.Sprintf(countWord, count)
+	hint := "  (" + fmt.Sprintf(countWord, count)
 	if untagged {
 		hint += tr(" · enter: filter)")
 	} else {
 		hint += tr(" · enter: filter · r: rename)")
 	}
-	if len([]rune(title))+1+len([]rune(hint)) <= availW {
-		padW := availW - len([]rune(title)) - len([]rune(hint))
-		b.WriteString(tagSelectedStyle.Render(title) + strings.Repeat(" ", padW) + dimStyle.Render(hint) + "\n")
-	} else {
-		b.WriteString(tagSelectedStyle.Render(truncate(title, availW)) + "\n")
-	}
+	b.WriteString(dimStyle.Render(truncate(hint, availW)) + "\n")
 
 	summary := fmt.Sprintf(tr("  %d active · %d done · %d overdue"), active, done, overdue)
 	b.WriteString(normalStyle.Render(truncate(summary, availW)) + "\n")

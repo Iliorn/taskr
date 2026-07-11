@@ -118,6 +118,11 @@ func themeByName(name string) theme {
 	return themes[0]
 }
 
+// currentTheme holds the active palette so rendering helpers (e.g.
+// withBorderTitle) can read theme colors without receiving them as parameters.
+// Set by applyTheme on every theme switch.
+var currentTheme theme
+
 // ── Styles (assigned by applyTheme) ───────────────────────────────────────────
 
 var (
@@ -153,7 +158,6 @@ var (
 	selectedDepOverdueRowStyle lipgloss.Style
 	selectedTimerRowStyle      lipgloss.Style
 
-	detailTitleStyle    lipgloss.Style
 	detailLabelStyle    lipgloss.Style
 	detailValueStyle    lipgloss.Style
 	detailSelectedStyle lipgloss.Style
@@ -215,6 +219,7 @@ var (
 // applyTheme rebuilds every style from the given palette. Call at startup and
 // whenever the user switches theme.
 func applyTheme(t theme) {
+	currentTheme = t
 	activeTab := func(c lipgloss.Color) lipgloss.Style {
 		return lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(c).Padding(0, 1)
 	}
@@ -250,7 +255,6 @@ func applyTheme(t theme) {
 	selectedOverdueRowStyle = overdueStyle.Background(t.sel)
 	selectedDepOverdueRowStyle = depOverdueStyle.Background(t.sel)
 
-	detailTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent).Underline(true)
 	detailLabelStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent)
 	detailValueStyle = lipgloss.NewStyle().Foreground(t.fg)
 	detailSelectedStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)

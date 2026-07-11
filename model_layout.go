@@ -9,7 +9,7 @@ func (m model) estimateDetailCursorLine() int {
 	if t == nil {
 		return 0
 	}
-	line := 2 // title + blank
+	line := 0 // title moved to border; content starts at the first field
 	switch m.detail.field {
 	case fieldStartDate:
 		return line
@@ -238,9 +238,10 @@ func (m model) detailTagsRows(t *todo.Todo) int {
 }
 
 // detailMainHeight is the rendered height of the detail column's first
-// section: title, blank, the fields block, blank, tags label, tag rows.
+// section: the fields block, blank, tags label, tag rows. (The task title has
+// moved to the top border of the panel and is no longer counted here.)
 func (m model) detailMainHeight(t *todo.Todo) int {
-	h := 2  // title + blank
+	h := 0  // title is on the border now; content starts at the first field
 	h += 10 // start, due, recurrence, priority, size, project, notes, id, created, modified
 	if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
 		h++
