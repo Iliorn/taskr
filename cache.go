@@ -45,6 +45,7 @@ type cacheState struct {
 	// subtaskProgress/hasOverdueDescendant per task and dominated the render).
 	activeColContentMax int
 	activeColTagsMax    int
+	activeColHasDue     bool // true when at least one visible active task has a due date
 }
 
 // ── Cache management ──────────────────────────────────────────────────────────
@@ -168,6 +169,7 @@ func (m *model) refreshUsageRecency(all []todo.Todo) {
 // adds, or the longest row eats into the gap before the Score column.
 func (m *model) refreshTaskColMetrics() {
 	contentMax, tagsMax := 0, 0
+	hasDue := false
 	overdueSet := m.cache.overdueSet
 	active := m.cache.active
 	for i := range active {
@@ -199,9 +201,13 @@ func (m *model) refreshTaskColMetrics() {
 		if tw := tagsRenderWidth(active[i].Tags); tw > tagsMax {
 			tagsMax = tw
 		}
+		if !active[i].DueDate.IsZero() {
+			hasDue = true
+		}
 	}
 	m.cache.activeColContentMax = contentMax
 	m.cache.activeColTagsMax = tagsMax
+	m.cache.activeColHasDue = hasDue
 }
 
 // refreshFilteredCaches rebuilds only the views that depend on the search/focus

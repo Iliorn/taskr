@@ -153,10 +153,14 @@ func tagsRenderWidth(tags []string) int {
 	return w
 }
 
-func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int) listCols {
+// taskListCols decides which columns of the task/history list fit at the
+// current terminal width. hasDue must be true when at least one visible row
+// carries a non-zero due date; when it is false the Due column is omitted
+// entirely so space is not wasted on an always-empty column.
+func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool) listCols {
 	inner := termWidth - 8 // panel content width (margin + border + padding)
 	const fixed = 6        // cursor + checkbox + fold icon
-	c := listCols{showDue: true, showLast: true}
+	c := listCols{showDue: hasDue, showLast: true}
 	if !isHistory {
 		c.showSize = true
 		c.showProject = true
@@ -517,8 +521,10 @@ func formatStartDate(t time.Time) string {
 // formatDueShort renders a due date for the tasks-list column as its distance
 // in calendar days — "today", "3d", "-2d" (overdue) — because "how soon" is
 // the question the list answers. Beyond four weeks a day count reads worse
-// than a date, so it falls back to the absolute dd-mm-yy form. Detail views
-// keep the absolute form everywhere: it round-trips through the date editor.
+// than a date, so it falls back to the absolute form: dd-mm for dates in the
+// current year (saving space), or dd-mm-yy for dates in a different year.
+// Detail views keep the full absolute form everywhere: it round-trips through
+// the date editor.
 func formatDueShort(due, now time.Time) string {
 	// Round rather than truncate: local midnights straddling a DST switch are
 	// 23 or 25 hours apart and would otherwise land on the wrong day.
@@ -527,6 +533,9 @@ func formatDueShort(due, now time.Time) string {
 	case days == 0:
 		return tr("today")
 	case days < -28 || days > 28:
+		if due.Year() == now.Year() {
+			return due.Format("02-01")
+		}
 		return due.Format("02-01-06")
 	default:
 		return fmt.Sprintf("%dd", days)

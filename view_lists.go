@@ -791,7 +791,7 @@ func (m model) renderTaskList() string {
 	// Column widths (widest row content + widest tag cell) are derived from the
 	// active set and cached by refreshTaskColMetrics, so the frame doesn't
 	// rescan every task — see cache.go.
-	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax)
+	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax, m.cache.activeColHasDue)
 	total := m.visibleActiveLen()
 	renderListHeader(b, m.termWidth, false, cols, listPosLabel(m.cursor, total))
 
@@ -840,6 +840,7 @@ func (m model) renderHistoryList() string {
 
 	contentMax := 0
 	tagsMax := 0
+	hasDue := false
 	for i := range completed {
 		if w := len([]rune(completed[i].Title)); w > contentMax {
 			contentMax = w
@@ -847,8 +848,11 @@ func (m model) renderHistoryList() string {
 		if tw := tagsRenderWidth(completed[i].Tags); tw > tagsMax {
 			tagsMax = tw
 		}
+		if !completed[i].DueDate.IsZero() {
+			hasDue = true
+		}
 	}
-	cols := taskListCols(m.termWidth, true, contentMax, tagsMax)
+	cols := taskListCols(m.termWidth, true, contentMax, tagsMax, hasDue)
 	renderListHeader(b, m.termWidth, true, cols, listPosLabel(m.cursor, len(completed)))
 
 	maxVisible := m.estimateListHeight()
@@ -1199,6 +1203,7 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 
 	// Compute column widths from this project's tasks, not the full active set.
 	contentMax, tagsMax := 0, 0
+	hasDue := false
 	for i := range tasks {
 		if w := len([]rune(tasks[i].Title)); w > contentMax {
 			contentMax = w
@@ -1206,8 +1211,11 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 		if tw := tagsRenderWidth(tasks[i].Tags); tw > tagsMax {
 			tagsMax = tw
 		}
+		if !tasks[i].DueDate.IsZero() {
+			hasDue = true
+		}
 	}
-	cols := taskListCols(m.termWidth, false, contentMax, tagsMax)
+	cols := taskListCols(m.termWidth, false, contentMax, tagsMax, hasDue)
 	renderListHeader(b, m.termWidth, false, cols, listPosLabel(m.cursor, len(tasks)))
 
 	// Use projectDrillTaskVisibleRows (= listVisible()-1) to match the clamp

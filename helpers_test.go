@@ -1,9 +1,11 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"taskr/todo"
 )
 
@@ -196,9 +198,20 @@ func TestFormatDueShort(t *testing.T) {
 			t.Errorf("%+d days: got %q, want %q", c.days, got, c.want)
 		}
 	}
-	far := now.AddDate(0, 0, 40)
-	if got := formatDueShort(far, now); got != far.Format("02-01-06") {
-		t.Errorf("far date: got %q, want %q", got, far.Format("02-01-06"))
+	// Far dates in the same year show only dd-mm (no year) to save space.
+	farSameYear := now.AddDate(0, 0, 40) // still 2026
+	if got := formatDueShort(farSameYear, now); got != farSameYear.Format("02-01") {
+		t.Errorf("far date same year: got %q, want %q", got, farSameYear.Format("02-01"))
+	}
+	// Far dates in a different year include the 2-digit year.
+	farOtherYear := time.Date(2027, 3, 15, 0, 0, 0, 0, time.Local)
+	if got := formatDueShort(farOtherYear, now); got != farOtherYear.Format("02-01-06") {
+		t.Errorf("far date other year: got %q, want %q", got, farOtherYear.Format("02-01-06"))
+	}
+	// Same applies to far overdue dates in a past year.
+	pastOtherYear := time.Date(2025, 1, 10, 0, 0, 0, 0, time.Local)
+	if got := formatDueShort(pastOtherYear, now); got != pastOtherYear.Format("02-01-06") {
+		t.Errorf("far past date other year: got %q, want %q", got, pastOtherYear.Format("02-01-06"))
 	}
 }
 
@@ -483,7 +496,7 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := taskListCols(tt.termWidth, false, tt.contentMax, tt.tagsMax)
+			c := taskListCols(tt.termWidth, false, tt.contentMax, tt.tagsMax, true)
 
 			// Never wider than the longest title needs (+gap), but at least the
 			// header label — growth must not produce an empty padded column.
@@ -513,21 +526,86 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 
 	// On a wide terminal a long title must grow past the flat nameColMaxWidth
 	// cap, filling slack the old hard cap left empty.
-	if c := taskListCols(200, false, 120, 0); c.titleW <= nameColMaxWidth {
+	if c := taskListCols(200, false, 120, 0, true); c.titleW <= nameColMaxWidth {
 		t.Errorf("wide terminal titleW = %d, want > flat cap %d (should absorb slack)",
 			c.titleW, nameColMaxWidth)
 	}
 	// But a short title still hugs its content — no needless sprawl.
-	if c := taskListCols(200, false, 18, 0); c.titleW != 18+4 {
+	if c := taskListCols(200, false, 18, 0, true); c.titleW != 18+4 {
 		t.Errorf("short title titleW = %d, want %d (hug content)", c.titleW, 18+4)
 	}
 	// Reserving tag room must shrink the grown title vs. the no-tags case, so
 	// the tags column survives.
-	noTags := taskListCols(200, false, 120, 0)
-	withTags := taskListCols(200, false, 120, 40)
+	noTags := taskListCols(200, false, 120, 0, true)
+	withTags := taskListCols(200, false, 120, 40, true)
 	if !(withTags.titleW < noTags.titleW) {
 		t.Errorf("titleW with tags reserve = %d, want < no-reserve %d",
 			withTags.titleW, noTags.titleW)
+	}
+}
+
+// ── Due-column collapse ───────────────────────────────────────────────────────
+
+// TestDueColumnCollapseWhenNoDueDates verifies that when no visible task has a
+// due date the Due column is omitted entirely (showDue == false) and the header
+// carries no "Due" label either.
+func TestDueColumnCollapseWhenNoDueDates(t *testing.T) {
+	// hasDue=false: column must be absent regardless of terminal width.
+	c := taskListCols(120, false, 20, 0, false)
+	if c.showDue {
+		t.Error("showDue should be false when hasDue=false")
+	}
+
+	// hasDue=true: column must appear on a reasonably wide terminal.
+	c = taskListCols(120, false, 20, 0, true)
+	if !c.showDue {
+		t.Error("showDue should be true when hasDue=true and there is room")
+	}
+}
+
+// TestDueColumnAppearsWhenAtLeastOneDue verifies the end-to-end path: a list
+// with no due dates shows no "Due" column header; adding one due date causes
+// it to appear. Uses renderListHeader directly so we don't have to parse a
+// full View() that may include "Due date:" in the detail panel.
+func TestDueColumnAppearsWhenAtLeastOneDue(t *testing.T) {
+	var b strings.Builder
+
+	// No due dates: header must not contain the "Due" column label.
+	noDueCols := taskListCols(120, false, 20, 0, false)
+	b.Reset()
+	renderListHeader(&b, 120, false, noDueCols, "")
+	hdrNoDue := b.String()
+	// The header label is "Due" padded to dueColW; when absent it must not appear.
+	if strings.Contains(hdrNoDue, tr("Due")) {
+		t.Errorf("no due dates: list header should not show 'Due', got: %q", hdrNoDue)
+	}
+
+	// With a due date: header must now contain "Due".
+	withDueCols := taskListCols(120, false, 20, 0, true)
+	b.Reset()
+	renderListHeader(&b, 120, false, withDueCols, "")
+	hdrWithDue := b.String()
+	if !strings.Contains(hdrWithDue, tr("Due")) {
+		t.Errorf("with due dates: list header should show 'Due', got: %q", hdrWithDue)
+	}
+}
+
+// TestDueColumnNoWrapContractWithCollapse verifies the no-wrap contract holds
+// when the Due column is collapsed: every rendered line must fit within the
+// terminal width.
+func TestDueColumnNoWrapContractWithCollapse(t *testing.T) {
+	for _, width := range []int{40, 60, 80, 120} {
+		m := modelWithTasks(t, todo.New("alpha"), todo.New("beta"), todo.New("gamma"))
+		m.termWidth = width
+		m.termHeight = 30
+		m.refreshCaches()
+		out := m.View()
+		for n, line := range strings.Split(out, "\n") {
+			if w := ansi.StringWidth(line); w > width {
+				t.Errorf("width=%d: line %d is %d cells wide (Due collapsed): %q",
+					width, n, w, line)
+			}
+		}
 	}
 }
 
