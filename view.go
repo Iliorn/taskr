@@ -1794,18 +1794,9 @@ func (m model) renderTabs(avail int) string {
 	return strings.Join(parts[:], " ")
 }
 
-// tabsWidth is the visible width of the tab labels joined with single spaces.
-func tabsWidth(names []string) int {
-	w := len(names) - 1 // single-space separators
-	for _, n := range names {
-		w += len([]rune(n))
-	}
-	return w
-}
-
 // tabsWidthMixed measures the width of a mixed tab bar where tab sel uses
-// selLabel and all other tabs use the corresponding label from names.
-// Follows the same rune-length convention as tabsWidth (pre-style plain text).
+// selLabel and all other tabs use the corresponding label from names
+// (rune length of the pre-style plain text, single-space separators).
 func tabsWidthMixed(names [numTabs]string, sel tab, selLabel string) int {
 	w := numTabs - 1 // single-space separators
 	for i, n := range names {
