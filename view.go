@@ -11,6 +11,75 @@ import (
 	"taskr/todo"
 )
 
+// pickerWindowStart computes the scroll offset for the detail-pane search
+// pickers (dep / tag / project). The pickers render a fixed `max`-row viewport
+// and keep no persistent offset state; the window is derived purely from the
+// cursor each frame so no offset field is needed.
+//
+// When there are results below the visible window the caller must reserve the
+// last slot for a "… N more below" indicator, which means the cursor must sit
+// at most at slot max−2 (not max−1). This function handles that by pulling
+// start forward when needed so the cursor never lands on the indicator slot.
+// Similarly, when start > 0 the first slot becomes a "… N more above"
+// indicator, so the cursor must sit at slot ≥ 1; start is adjusted backward
+// when needed.
+//
+// The caller renders exactly max lines and the cursor is always on a result
+// row, never on an indicator row.
+func pickerWindowStart(cursor, total, max int) (start int, hasAbove, hasBelow bool) {
+	if max < 1 {
+		max = 1
+	}
+	if total <= 0 {
+		return 0, false, false
+	}
+	// First pass: anchor cursor at the bottom of the window.
+	start = cursor - (max - 1)
+	if start < 0 {
+		start = 0
+	}
+	maxStart := total - max
+	if maxStart < 0 {
+		maxStart = 0
+	}
+	if start > maxStart {
+		start = maxStart
+	}
+
+	hasAbove = start > 0
+	hasBelow = start+max < total
+
+	// Second pass: if the cursor would land on an indicator slot, shift start.
+	//
+	// hasBelow reserves the last slot (index max−1) for the below-indicator.
+	// If cursor == start+max−1 (last slot), pull start forward by 1 so the
+	// cursor moves to slot max−2, and recompute.
+	if hasBelow && cursor == start+max-1 {
+		start++
+		if start > maxStart {
+			start = maxStart
+		}
+		hasAbove = start > 0
+		hasBelow = start+max < total
+	}
+
+	// hasAbove reserves the first slot (index 0) for the above-indicator.
+	// If cursor == start (first slot), pull start backward by 1 so the cursor
+	// moves to slot 1, and recompute.
+	if hasAbove && cursor == start {
+		start--
+		if start < 0 {
+			start = 0
+		}
+		hasAbove = start > 0
+		hasBelow = start+max < total
+		// A backward shift may again cause cursor == start+max−1 (hasBelow
+		// conflict) only if max==1, which is prevented by the guard above.
+	}
+
+	return start, hasAbove, hasBelow
+}
+
 // truncateLines ANSI-aware-truncates every line to maxW display cells so
 // over-long lines can never wrap inside a bordered panel.
 func truncateLines(lines []string, maxW int) {
@@ -396,21 +465,31 @@ func (m model) buildFooterContent(w int) string {
 		b := getBuilder()
 		defer putBuilder(b)
 		b.WriteString(searchStyle.Width(w).Render(m.depSearchInput.View()))
+		results := m.depSearchResults()
 		shown := 0
-		for i, r := range m.depSearchResults() {
-			if i >= maxDepSearchResults {
-				break
+		start, hasAbove, hasBelow := pickerWindowStart(m.depSearch.cursor, len(results), maxDepSearchResults)
+		for slot := 0; slot < maxDepSearchResults; slot++ {
+			idx := start + slot
+			switch {
+			case hasAbove && slot == 0:
+				b.WriteString("\n" + dimStyle.Render(fmt.Sprintf("  … %d more above", start+1)))
+				shown++
+			case hasBelow && slot == maxDepSearchResults-1:
+				below := len(results) - (start + slot)
+				b.WriteString("\n" + dimStyle.Render(fmt.Sprintf("  … %d more below", below)))
+				shown++
+			case idx < len(results):
+				r := results[idx]
+				if idx == m.depSearch.cursor {
+					b.WriteString("\n" + selectedStyle.Render("  → "+r.Title))
+				} else {
+					b.WriteString("\n" + normalStyle.Render("    "+r.Title))
+				}
+				shown++
+			default:
+				b.WriteString("\n")
+				shown++
 			}
-			if i == m.depSearch.cursor {
-				b.WriteString("\n" + selectedStyle.Render("  → "+r.Title))
-			} else {
-				b.WriteString("\n" + normalStyle.Render("    "+r.Title))
-			}
-			shown++
-		}
-		for shown < maxDepSearchResults {
-			b.WriteString("\n")
-			shown++
 		}
 		return b.String()
 	case modeSearchTag:
@@ -419,20 +498,34 @@ func (m model) buildFooterContent(w int) string {
 		b.WriteString(searchStyle.Width(w).Render(m.tagSearchInput.View()))
 		results := m.tagSearchResults()
 		shown := 0
-		for i, r := range results {
-			if i >= maxTagSearchResults {
-				break
-			}
-			if i == m.tagSearch.cursor {
-				b.WriteString("\n" + selectedStyle.Render("  → #"+r))
-			} else {
-				b.WriteString("\n" + normalStyle.Render("    #"+r))
-			}
-			shown++
-		}
 		if len(results) == 0 && m.tagSearch.query != "" {
 			b.WriteString("\n" + dimStyle.Render("  → "+tr("create new tag: ")) + tagStyle.Render(m.tagSearch.query))
 			shown++
+		} else {
+			start, hasAbove, hasBelow := pickerWindowStart(m.tagSearch.cursor, len(results), maxTagSearchResults)
+			for slot := 0; slot < maxTagSearchResults; slot++ {
+				idx := start + slot
+				switch {
+				case hasAbove && slot == 0:
+					b.WriteString("\n" + dimStyle.Render(fmt.Sprintf("  … %d more above", start+1)))
+					shown++
+				case hasBelow && slot == maxTagSearchResults-1:
+					below := len(results) - (start + slot)
+					b.WriteString("\n" + dimStyle.Render(fmt.Sprintf("  … %d more below", below)))
+					shown++
+				case idx < len(results):
+					r := results[idx]
+					if idx == m.tagSearch.cursor {
+						b.WriteString("\n" + selectedStyle.Render("  → #"+r))
+					} else {
+						b.WriteString("\n" + normalStyle.Render("    #"+r))
+					}
+					shown++
+				default:
+					b.WriteString("\n")
+					shown++
+				}
+			}
 		}
 		for shown < maxTagSearchResults {
 			b.WriteString("\n")
@@ -445,20 +538,34 @@ func (m model) buildFooterContent(w int) string {
 		b.WriteString(searchStyle.Width(w).Render(m.projSearchInput.View()))
 		results := m.projSearchResults()
 		shown := 0
-		for i, r := range results {
-			if i >= maxProjSearchResults {
-				break
-			}
-			if i == m.projSearch.cursor {
-				b.WriteString("\n" + selectedStyle.Render("  → "+r))
-			} else {
-				b.WriteString("\n" + normalStyle.Render("    "+r))
-			}
-			shown++
-		}
 		if len(results) == 0 && m.projSearch.query != "" {
 			b.WriteString("\n" + dimStyle.Render("  → "+tr("create new project: ")) + selectedStyle.Render(m.projSearch.query))
 			shown++
+		} else {
+			start, hasAbove, hasBelow := pickerWindowStart(m.projSearch.cursor, len(results), maxProjSearchResults)
+			for slot := 0; slot < maxProjSearchResults; slot++ {
+				idx := start + slot
+				switch {
+				case hasAbove && slot == 0:
+					b.WriteString("\n" + dimStyle.Render(fmt.Sprintf("  … %d more above", start+1)))
+					shown++
+				case hasBelow && slot == maxProjSearchResults-1:
+					below := len(results) - (start + slot)
+					b.WriteString("\n" + dimStyle.Render(fmt.Sprintf("  … %d more below", below)))
+					shown++
+				case idx < len(results):
+					r := results[idx]
+					if idx == m.projSearch.cursor {
+						b.WriteString("\n" + selectedStyle.Render("  → "+r))
+					} else {
+						b.WriteString("\n" + normalStyle.Render("    "+r))
+					}
+					shown++
+				default:
+					b.WriteString("\n")
+					shown++
+				}
+			}
 		}
 		for shown < maxProjSearchResults {
 			b.WriteString("\n")
