@@ -387,3 +387,44 @@ func TestStatsNarrowNoWrap(t *testing.T) {
 		}
 	}
 }
+
+// TestStatsRespectsSearchFilter pins the Stats-tab scoping contract: an active
+// search query (set via / on the Tasks, Projects, or Stats tab) narrows every
+// stat block to the matching top-level tasks.
+func TestStatsRespectsSearchFilter(t *testing.T) {
+	now := time.Now()
+	mk := func(title string, tags ...string) todo.Todo {
+		td := todo.New(title)
+		td.CreatedAt = now.AddDate(0, 0, -1)
+		td.Tags = tags
+		return td
+	}
+	tagged1 := mk("tagged one", "work")
+	tagged2 := mk("tagged two", "work")
+	plain1 := mk("plain one")
+	plain2 := mk("plain two")
+	doneTagged := mk("tagged done", "work")
+	doneTagged.Status = todo.Done
+	doneTagged.CompletedAt = now
+
+	m := newTagModel(tagged1, tagged2, plain1, plain2, doneTagged)
+	m.termWidth = 120
+	m.tab = tabStats
+	m.frameTime = now
+
+	activeTotal := regexp.MustCompile(`Active total\s+(\d+)`)
+
+	plainOut := ansi.Strip(m.renderStatsList())
+	if got := activeTotal.FindStringSubmatch(plainOut); got == nil || got[1] != "4" {
+		t.Fatalf("unfiltered Active total = %v, want 4\n%s", got, plainOut)
+	}
+
+	m.searchQuery = "#work"
+	filteredOut := ansi.Strip(m.renderStatsList())
+	if got := activeTotal.FindStringSubmatch(filteredOut); got == nil || got[1] != "2" {
+		t.Fatalf("filtered Active total = %v, want 2\n%s", got, filteredOut)
+	}
+	if !regexp.MustCompile(`Today\s+1`).MatchString(filteredOut) {
+		t.Errorf("filtered velocity should still count the tagged completion:\n%s", filteredOut)
+	}
+}

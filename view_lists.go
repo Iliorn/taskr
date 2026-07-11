@@ -338,6 +338,27 @@ func (m model) renderLearningList() string {
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
+// statsScopedTodos returns the task set the Stats tab aggregates: everything
+// when no search is active, otherwise the top-level tasks matching the query
+// (same compileSearch grammar as the Tasks list — #tag, @project, free text).
+// Subtasks are dropped from the filtered form; every stats bucket reads
+// top-level rows anyway, and the active `/query` chip already tells the user
+// the page is scoped.
+func (m model) statsScopedTodos() []todo.Todo {
+	all := m.allTodos()
+	if m.searchQuery == "" {
+		return all
+	}
+	match := compileSearch(m.searchQuery)
+	scoped := make([]todo.Todo, 0, len(all))
+	for _, t := range all {
+		if t.ParentID == "" && match(t) {
+			scoped = append(scoped, t)
+		}
+	}
+	return scoped
+}
+
 func (m model) renderStatsList() string {
 	b := getBuilder()
 	defer putBuilder(b)
@@ -368,7 +389,9 @@ func (m model) renderStatsList() string {
 	var cycleBySize [3][]time.Duration
 	var pendingBySize [3]int
 
-	for _, t := range m.tasks {
+	scope := m.statsScopedTodos()
+	for i := range scope {
+		t := &scope[i]
 		if t.ParentID != "" {
 			continue
 		}
@@ -525,7 +548,7 @@ func (m model) renderStatsList() string {
 		// How often a completed task sat in the engine's top-5 at close —
 		// the feedback loop for tuning the sequence biases. Hidden until
 		// rank-stamped completions exist.
-		if hits, rated := sequenceHitStats(m.allTodos(), seqHitWindow); rated > 0 {
+		if hits, rated := sequenceHitStats(scope, seqHitWindow); rated > 0 {
 			stat(sb, tr("Seq hit (top-5)"), hits, rated, true)
 		}
 	})

@@ -21,7 +21,7 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 - **Stats** — productivity overview with an activity heatmap
 - **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
 - **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`), plus a live score breakdown so you can see why a task ranks where it does
-- **Search** — live filter across tasks, projects, tags and learnings; fuzzy title matching plus field filters (`#tag @project p:high due:<fri overdue`)
+- **Search** — live filter across tasks, projects, tags and learnings; fuzzy title matching plus field filters (`#tag @project p:high due:<fri overdue`); the Stats tab follows the active filter, so `#tag` scopes every stat to that tag
 - **Undo** — multi-level undo for all mutations
 - **Settings** — three sequencing-bias knobs, theme, language, version, in-app self-update (tab 7)
 

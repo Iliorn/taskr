@@ -1007,7 +1007,10 @@ func (m model) startSearch() (tea.Model, tea.Cmd) {
 		m.learningCursor = 0
 		m.learningSearchInput.Focus()
 		return m, textinput.Blink
-	case tabTasks, tabProjects:
+	case tabTasks, tabProjects, tabStats:
+		// Stats shares the Tasks-list query: renderStatsList aggregates only
+		// the matching top-level tasks, so a #tag or @project search scopes
+		// every stat block on the page.
 		m.mode = modeSearch
 		m.searchInput.SetValue("")
 		m.searchInput.Focus()
