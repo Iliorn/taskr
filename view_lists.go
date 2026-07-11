@@ -791,7 +791,7 @@ func (m model) renderTaskList() string {
 	// Column widths (widest row content + widest tag cell) are derived from the
 	// active set and cached by refreshTaskColMetrics, so the frame doesn't
 	// rescan every task — see cache.go.
-	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax, m.cache.activeColHasDue)
+	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax, m.cache.activeColHasDue, m.cache.activeColProjectMax)
 	total := m.visibleActiveLen()
 	renderListHeader(b, m.termWidth, false, cols, listPosLabel(m.cursor, total))
 
@@ -852,7 +852,7 @@ func (m model) renderHistoryList() string {
 			hasDue = true
 		}
 	}
-	cols := taskListCols(m.termWidth, true, contentMax, tagsMax, hasDue)
+	cols := taskListCols(m.termWidth, true, contentMax, tagsMax, hasDue, 0)
 	renderListHeader(b, m.termWidth, true, cols, listPosLabel(m.cursor, len(completed)))
 
 	maxVisible := m.estimateListHeight()
@@ -1034,10 +1034,10 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		line += "  " + padRight(strings.ToLower(t.Size.Letter()), sizeColW-2)
 	}
 	if cols.showProject {
-		// Truncate at projectColW-4 so the column always leaves ≥4 trailing
+		// Truncate at projectW-4 so the column always leaves ≥4 trailing
 		// spaces; combined with the 1-space prefix on tags below that's a 5-char
 		// minimum gap between project text and the first tag.
-		line += padRight(truncate(t.Project, projectColW-4), projectColW)
+		line += padRight(truncate(t.Project, cols.projectW-4), cols.projectW)
 	}
 
 	// Only append tags if they fit within the inner panel content width.
@@ -1202,7 +1202,7 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 	overdueSet := m.cache.overdueSet
 
 	// Compute column widths from this project's tasks, not the full active set.
-	contentMax, tagsMax := 0, 0
+	contentMax, tagsMax, projectMax := 0, 0, 0
 	hasDue := false
 	for i := range tasks {
 		if w := len([]rune(tasks[i].Title)); w > contentMax {
@@ -1214,8 +1214,11 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 		if !tasks[i].DueDate.IsZero() {
 			hasDue = true
 		}
+		if pw := len([]rune(tasks[i].Project)); pw > projectMax {
+			projectMax = pw
+		}
 	}
-	cols := taskListCols(m.termWidth, false, contentMax, tagsMax, hasDue)
+	cols := taskListCols(m.termWidth, false, contentMax, tagsMax, hasDue, projectMax)
 	renderListHeader(b, m.termWidth, false, cols, listPosLabel(m.cursor, len(tasks)))
 
 	// Use projectDrillTaskVisibleRows (= listVisible()-1) to match the clamp

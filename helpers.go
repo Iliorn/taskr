@@ -136,6 +136,7 @@ func renderTagsPart(tags []string) string {
 // Score for active rows and the Completed date for history rows.
 type listCols struct {
 	titleW      int
+	projectW    int // actual width of the Project column (0 when showProject=false)
 	showSize    bool
 	showDue     bool
 	showLast    bool // Score (active) or Completed (history)
@@ -156,14 +157,30 @@ func tagsRenderWidth(tags []string) int {
 // taskListCols decides which columns of the task/history list fit at the
 // current terminal width. hasDue must be true when at least one visible row
 // carries a non-zero due date; when it is false the Due column is omitted
-// entirely so space is not wasted on an always-empty column.
-func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool) listCols {
+// entirely so space is not wasted on an always-empty column. widestProject is
+// the rune-count of the longest visible project name; when it is 0 the Project
+// column collapses entirely (no header label, no reserved space).
+func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool, widestProject int) listCols {
 	inner := termWidth - 8 // panel content width (margin + border + padding)
 	const fixed = 6        // cursor + checkbox + fold icon
 	c := listCols{showDue: hasDue, showLast: true}
 	if !isHistory {
 		c.showSize = true
-		c.showProject = true
+		if widestProject > 0 {
+			c.showProject = true
+			// Hug the widest project name + a 4-char gap, floored to the header
+			// label width (same rule as the title column), capped at the old
+			// fixed projectColW so the column never grows past what it used to
+			// reserve.
+			projHdrW := len([]rune(tr("Project")))
+			c.projectW = widestProject + 4
+			if c.projectW < projHdrW {
+				c.projectW = projHdrW
+			}
+			if c.projectW > projectColW {
+				c.projectW = projectColW
+			}
+		}
 	}
 
 	// Title column fits its longest entry (+gap), floored to the header label so
@@ -192,7 +209,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 			w += lastW
 		}
 		if c.showProject {
-			w += projectColW
+			w += c.projectW
 		}
 		return w
 	}
@@ -287,7 +304,7 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 		headerLeft += lastLabel
 	}
 	if c.showProject {
-		headerLeft += padRight(tr("Project"), projectColW)
+		headerLeft += padRight(tr("Project"), c.projectW)
 	}
 	// Row tags are rendered with a leading space (see renderTaskLineWithSet), so
 	// the header label needs the same lead-in to line up with the tag content.

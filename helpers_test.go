@@ -476,7 +476,7 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 			w += scoreColW
 		}
 		if c.showProject {
-			w += projectColW
+			w += c.projectW
 		}
 		return w
 	}
@@ -496,7 +496,7 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := taskListCols(tt.termWidth, false, tt.contentMax, tt.tagsMax, true)
+			c := taskListCols(tt.termWidth, false, tt.contentMax, tt.tagsMax, true, 8)
 
 			// Never wider than the longest title needs (+gap), but at least the
 			// header label — growth must not produce an empty padded column.
@@ -526,18 +526,18 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 
 	// On a wide terminal a long title must grow past the flat nameColMaxWidth
 	// cap, filling slack the old hard cap left empty.
-	if c := taskListCols(200, false, 120, 0, true); c.titleW <= nameColMaxWidth {
+	if c := taskListCols(200, false, 120, 0, true, 0); c.titleW <= nameColMaxWidth {
 		t.Errorf("wide terminal titleW = %d, want > flat cap %d (should absorb slack)",
 			c.titleW, nameColMaxWidth)
 	}
 	// But a short title still hugs its content — no needless sprawl.
-	if c := taskListCols(200, false, 18, 0, true); c.titleW != 18+4 {
+	if c := taskListCols(200, false, 18, 0, true, 0); c.titleW != 18+4 {
 		t.Errorf("short title titleW = %d, want %d (hug content)", c.titleW, 18+4)
 	}
 	// Reserving tag room must shrink the grown title vs. the no-tags case, so
 	// the tags column survives.
-	noTags := taskListCols(200, false, 120, 0, true)
-	withTags := taskListCols(200, false, 120, 40, true)
+	noTags := taskListCols(200, false, 120, 0, true, 0)
+	withTags := taskListCols(200, false, 120, 40, true, 0)
 	if !(withTags.titleW < noTags.titleW) {
 		t.Errorf("titleW with tags reserve = %d, want < no-reserve %d",
 			withTags.titleW, noTags.titleW)
@@ -551,13 +551,13 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 // carries no "Due" label either.
 func TestDueColumnCollapseWhenNoDueDates(t *testing.T) {
 	// hasDue=false: column must be absent regardless of terminal width.
-	c := taskListCols(120, false, 20, 0, false)
+	c := taskListCols(120, false, 20, 0, false, 0)
 	if c.showDue {
 		t.Error("showDue should be false when hasDue=false")
 	}
 
 	// hasDue=true: column must appear on a reasonably wide terminal.
-	c = taskListCols(120, false, 20, 0, true)
+	c = taskListCols(120, false, 20, 0, true, 0)
 	if !c.showDue {
 		t.Error("showDue should be true when hasDue=true and there is room")
 	}
@@ -571,7 +571,7 @@ func TestDueColumnAppearsWhenAtLeastOneDue(t *testing.T) {
 	var b strings.Builder
 
 	// No due dates: header must not contain the "Due" column label.
-	noDueCols := taskListCols(120, false, 20, 0, false)
+	noDueCols := taskListCols(120, false, 20, 0, false, 0)
 	b.Reset()
 	renderListHeader(&b, 120, false, noDueCols, "")
 	hdrNoDue := b.String()
@@ -581,7 +581,7 @@ func TestDueColumnAppearsWhenAtLeastOneDue(t *testing.T) {
 	}
 
 	// With a due date: header must now contain "Due".
-	withDueCols := taskListCols(120, false, 20, 0, true)
+	withDueCols := taskListCols(120, false, 20, 0, true, 0)
 	b.Reset()
 	renderListHeader(&b, 120, false, withDueCols, "")
 	hdrWithDue := b.String()
@@ -603,6 +603,137 @@ func TestDueColumnNoWrapContractWithCollapse(t *testing.T) {
 		for n, line := range strings.Split(out, "\n") {
 			if w := ansi.StringWidth(line); w > width {
 				t.Errorf("width=%d: line %d is %d cells wide (Due collapsed): %q",
+					width, n, w, line)
+			}
+		}
+	}
+}
+
+// ── Project-column sizing ─────────────────────────────────────────────────────
+
+// TestProjectColumnCollapseWhenNoProjects verifies that when no visible task
+// has a project the Project column is omitted entirely (showProject == false,
+// projectW == 0) and the header carries no "Project" label.
+func TestProjectColumnCollapseWhenNoProjects(t *testing.T) {
+	// widestProject=0: column must be absent regardless of terminal width.
+	c := taskListCols(120, false, 20, 0, false, 0)
+	if c.showProject {
+		t.Error("showProject should be false when widestProject=0")
+	}
+	if c.projectW != 0 {
+		t.Errorf("projectW should be 0 when no projects, got %d", c.projectW)
+	}
+
+	// widestProject>0: column must appear on a reasonably wide terminal.
+	c = taskListCols(120, false, 20, 0, false, 5)
+	if !c.showProject {
+		t.Error("showProject should be true when widestProject>0 and there is room")
+	}
+	if c.projectW == 0 {
+		t.Error("projectW should be non-zero when widestProject>0")
+	}
+}
+
+// TestProjectColumnAppearsWhenAtLeastOneProject verifies the header shows the
+// "Project" label when at least one visible task has a project set, and that
+// no "Project" label appears in the header when all tasks lack a project.
+func TestProjectColumnAppearsWhenAtLeastOneProject(t *testing.T) {
+	var b strings.Builder
+
+	// No projects: header must not contain the "Project" column label.
+	noProjCols := taskListCols(120, false, 20, 0, false, 0)
+	b.Reset()
+	renderListHeader(&b, 120, false, noProjCols, "")
+	hdrNoProj := b.String()
+	if strings.Contains(hdrNoProj, tr("Project")) {
+		t.Errorf("no projects: list header should not show 'Project', got: %q", hdrNoProj)
+	}
+
+	// With a project: header must now contain "Project".
+	withProjCols := taskListCols(120, false, 20, 0, false, 7)
+	b.Reset()
+	renderListHeader(&b, 120, false, withProjCols, "")
+	hdrWithProj := b.String()
+	if !strings.Contains(hdrWithProj, tr("Project")) {
+		t.Errorf("with projects: list header should show 'Project', got: %q", hdrWithProj)
+	}
+}
+
+// TestProjectColumnHugsWidestEntry verifies the column width hugs the widest
+// project name plus the gap, floors at the header label, and caps at projectColW.
+func TestProjectColumnHugsWidestEntry(t *testing.T) {
+	projHdrW := len([]rune(tr("Project")))
+
+	cases := []struct {
+		widest  int
+		wantMin int
+		wantMax int
+		desc    string
+	}{
+		{3, projHdrW, projectColW, "short name floors at header"},
+		{projHdrW - 2, projHdrW, projectColW, "name shorter than header floors at header"},
+		{projHdrW + 2, projHdrW + 2 + 4, projectColW, "name wider than header: hug + gap"},
+		{projectColW - 4, projectColW, projectColW, "name at cap boundary"},
+		{projectColW + 5, projectColW, projectColW, "very long name caps at projectColW"},
+	}
+
+	for _, tc := range cases {
+		c := taskListCols(200, false, 20, 0, false, tc.widest)
+		if !c.showProject {
+			t.Errorf("%s: showProject should be true", tc.desc)
+			continue
+		}
+		if c.projectW < tc.wantMin {
+			t.Errorf("%s: projectW=%d < wantMin=%d", tc.desc, c.projectW, tc.wantMin)
+		}
+		if c.projectW > tc.wantMax {
+			t.Errorf("%s: projectW=%d > wantMax=%d", tc.desc, c.projectW, tc.wantMax)
+		}
+	}
+}
+
+// TestProjectColumnNoWrapContractWithCollapse verifies the no-wrap contract
+// holds when the Project column is collapsed: every rendered line must fit
+// within the terminal width.
+func TestProjectColumnNoWrapContractWithCollapse(t *testing.T) {
+	for _, width := range []int{40, 60, 80, 120} {
+		t1 := todo.New("alpha")
+		t2 := todo.New("beta")
+		t3 := todo.New("gamma")
+		// no projects set — column should collapse
+		m := modelWithTasks(t, t1, t2, t3)
+		m.termWidth = width
+		m.termHeight = 30
+		m.refreshCaches()
+		out := m.View()
+		for n, line := range strings.Split(out, "\n") {
+			if w := ansi.StringWidth(line); w > width {
+				t.Errorf("width=%d: line %d is %d cells wide (Project collapsed): %q",
+					width, n, w, line)
+			}
+		}
+	}
+}
+
+// TestProjectColumnNoWrapContractWithProject verifies the no-wrap contract
+// holds when tasks have a project assigned: every rendered line must fit
+// within the terminal width.
+func TestProjectColumnNoWrapContractWithProject(t *testing.T) {
+	for _, width := range []int{40, 60, 80, 120} {
+		t1 := todo.New("alpha")
+		t1.Project = "myproject"
+		t2 := todo.New("beta")
+		t2.Project = "myproject"
+		t3 := todo.New("gamma")
+		t3.Project = "longerproject"
+		m := modelWithTasks(t, t1, t2, t3)
+		m.termWidth = width
+		m.termHeight = 30
+		m.refreshCaches()
+		out := m.View()
+		for n, line := range strings.Split(out, "\n") {
+			if w := ansi.StringWidth(line); w > width {
+				t.Errorf("width=%d: line %d is %d cells wide (Project shown): %q",
 					width, n, w, line)
 			}
 		}

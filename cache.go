@@ -46,6 +46,7 @@ type cacheState struct {
 	activeColContentMax int
 	activeColTagsMax    int
 	activeColHasDue     bool // true when at least one visible active task has a due date
+	activeColProjectMax int  // widest project name rune count in the active list (0 = none)
 }
 
 // ── Cache management ──────────────────────────────────────────────────────────
@@ -168,7 +169,7 @@ func (m *model) refreshUsageRecency(all []todo.Todo) {
 // It must mirror exactly the width every suffix/prefix renderTaskLineWithSet
 // adds, or the longest row eats into the gap before the Score column.
 func (m *model) refreshTaskColMetrics() {
-	contentMax, tagsMax := 0, 0
+	contentMax, tagsMax, projectMax := 0, 0, 0
 	hasDue := false
 	overdueSet := m.cache.overdueSet
 	active := m.cache.active
@@ -204,10 +205,14 @@ func (m *model) refreshTaskColMetrics() {
 		if !active[i].DueDate.IsZero() {
 			hasDue = true
 		}
+		if pw := len([]rune(active[i].Project)); pw > projectMax {
+			projectMax = pw
+		}
 	}
 	m.cache.activeColContentMax = contentMax
 	m.cache.activeColTagsMax = tagsMax
 	m.cache.activeColHasDue = hasDue
+	m.cache.activeColProjectMax = projectMax
 }
 
 // refreshFilteredCaches rebuilds only the views that depend on the search/focus
