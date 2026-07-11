@@ -740,6 +740,92 @@ func TestProjectColumnNoWrapContractWithProject(t *testing.T) {
 	}
 }
 
+// ── Tags-column collapse ──────────────────────────────────────────────────────
+
+// TestTagsColumnCollapseWhenNoTags verifies that when no visible task has any
+// tags, showTags is false and the "Tags" header label is not emitted.
+func TestTagsColumnCollapseWhenNoTags(t *testing.T) {
+	// tagsMax=0: showTags must be false regardless of terminal width.
+	c := taskListCols(120, false, 20, 0, false, 0)
+	if c.showTags {
+		t.Error("showTags should be false when tagsMax=0")
+	}
+
+	// tagsMax>0: showTags must be true on a reasonably wide terminal.
+	c = taskListCols(120, false, 20, 30, false, 0)
+	if !c.showTags {
+		t.Error("showTags should be true when tagsMax>0")
+	}
+}
+
+// TestTagsColumnAppearsWhenAtLeastOneTag verifies the header shows the "Tags"
+// label when at least one visible task has tags, and that no "Tags" label
+// appears in the header when all tasks lack tags.
+func TestTagsColumnAppearsWhenAtLeastOneTag(t *testing.T) {
+	var b strings.Builder
+
+	// No tags: header must not contain the "Tags" column label.
+	noTagsCols := taskListCols(120, false, 20, 0, false, 0)
+	b.Reset()
+	renderListHeader(&b, 120, false, noTagsCols, "")
+	hdrNoTags := b.String()
+	if strings.Contains(hdrNoTags, tr("Tags")) {
+		t.Errorf("no tags: list header should not show 'Tags', got: %q", hdrNoTags)
+	}
+
+	// With tags: header must now contain "Tags".
+	withTagsCols := taskListCols(120, false, 20, 30, false, 0)
+	b.Reset()
+	renderListHeader(&b, 120, false, withTagsCols, "")
+	hdrWithTags := b.String()
+	if !strings.Contains(hdrWithTags, tr("Tags")) {
+		t.Errorf("with tags: list header should show 'Tags', got: %q", hdrWithTags)
+	}
+}
+
+// TestTagsColumnNoWrapContractWithCollapse verifies the no-wrap contract holds
+// when the Tags column is collapsed: every rendered line must fit within the
+// terminal width.
+func TestTagsColumnNoWrapContractWithCollapse(t *testing.T) {
+	for _, width := range []int{40, 60, 80, 120} {
+		// no tags set — Tags header label should collapse
+		m := modelWithTasks(t, todo.New("alpha"), todo.New("beta"), todo.New("gamma"))
+		m.termWidth = width
+		m.termHeight = 30
+		m.refreshCaches()
+		out := m.View()
+		for n, line := range strings.Split(out, "\n") {
+			if w := ansi.StringWidth(line); w > width {
+				t.Errorf("width=%d: line %d is %d cells wide (Tags collapsed): %q",
+					width, n, w, line)
+			}
+		}
+	}
+}
+
+// TestTagsColumnNoWrapContractWithTags verifies the no-wrap contract holds
+// when tasks have tags: every rendered line must fit within the terminal width.
+func TestTagsColumnNoWrapContractWithTags(t *testing.T) {
+	for _, width := range []int{40, 60, 80, 120} {
+		t1 := todo.New("alpha")
+		t1.Tags = []string{"work", "urgent"}
+		t2 := todo.New("beta")
+		t2.Tags = []string{"personal"}
+		t3 := todo.New("gamma")
+		m := modelWithTasks(t, t1, t2, t3)
+		m.termWidth = width
+		m.termHeight = 30
+		m.refreshCaches()
+		out := m.View()
+		for n, line := range strings.Split(out, "\n") {
+			if w := ansi.StringWidth(line); w > width {
+				t.Errorf("width=%d: line %d is %d cells wide (Tags shown): %q",
+					width, n, w, line)
+			}
+		}
+	}
+}
+
 // ── computeTagStats ───────────────────────────────────────────────────────────
 
 func TestComputeTagStats(t *testing.T) {

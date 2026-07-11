@@ -134,6 +134,9 @@ func renderTagsPart(tags []string) string {
 //
 // showSize is active-only (history doesn't expose size); showLast carries the
 // Score for active rows and the Completed date for history rows.
+// showTags is true when at least one visible row has tags (tagsMax > 0); when
+// false the "Tags" header label is suppressed so it never appears on a list
+// where every row would show a blank tags cell.
 type listCols struct {
 	titleW      int
 	projectW    int // actual width of the Project column (0 when showProject=false)
@@ -141,6 +144,7 @@ type listCols struct {
 	showDue     bool
 	showLast    bool // Score (active) or Completed (history)
 	showProject bool
+	showTags    bool // true when at least one visible row has tags
 }
 
 // tagsRenderWidth is the on-screen width of a task's trailing tag list as the
@@ -163,7 +167,7 @@ func tagsRenderWidth(tags []string) int {
 func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool, widestProject int) listCols {
 	inner := termWidth - 8 // panel content width (margin + border + padding)
 	const fixed = 6        // cursor + checkbox + fold icon
-	c := listCols{showDue: hasDue, showLast: true}
+	c := listCols{showDue: hasDue, showLast: true, showTags: tagsMax > 0}
 	if !isHistory {
 		c.showSize = true
 		if widestProject > 0 {
@@ -308,6 +312,8 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 	}
 	// Row tags are rendered with a leading space (see renderTaskLineWithSet), so
 	// the header label needs the same lead-in to line up with the tag content.
+	// Only show the "Tags" label when at least one visible row actually has tags
+	// (c.showTags), so the header never reserves space for an always-blank column.
 	tagsLabel := " " + tr("Tags")
 	// Reserve the right end for the position indicator (a leading space + the
 	// label) before the tags label claims the slack, so a full list can't push
@@ -320,7 +326,7 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 		posW = 1 + len([]rune(posLabel))
 	}
 	padW := termWidth - 8 - len([]rune(headerLeft)) - posW
-	if padW >= len([]rune(tagsLabel)) {
+	if c.showTags && padW >= len([]rune(tagsLabel)) {
 		headerLeft += tagsLabel
 		padW -= len([]rune(tagsLabel))
 	}
