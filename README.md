@@ -117,6 +117,9 @@ taskr comment milk "blocked on review"
 taskr comment milk --edit=1 "still blocked, asked Sam"
 taskr comment milk --delete=2
 taskr stats                      # one-line summary
+taskr stats --tag=work           # same, scoped to tasks carrying a tag (also --project / --search)
+taskr stats --seq                # sequence miss analysis: which score dimension buried the
+                                 # tasks you finished anyway, plus a bias-tuning hint
 taskr stats --format=waybar      # Waybar-shaped JSON for a status-bar widget
 taskr export > backup.json       # versioned JSON snapshot of every live task
 taskr export --include-done > full.json  # include completed tasks

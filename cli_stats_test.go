@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -66,5 +67,72 @@ func TestComputeStatsIgnoresEdgeCases(t *testing.T) {
 	got := computeStats(todos, now)
 	if got.Active != 0 || got.DoneToday != 0 || got.DoneThisWeek != 0 {
 		t.Errorf("expected all zero, got %+v", got)
+	}
+}
+
+func TestScopeForStats(t *testing.T) {
+	parent := todo.New("tagged parent")
+	parent.ID = "parent"
+	parent.Tags = []string{"work"}
+	sub := todo.New("subtask, no tag of its own")
+	sub.ID = "sub"
+	sub.ParentID = "parent"
+	other := todo.New("unrelated")
+	other.ID = "other"
+	doneTagged := todo.New("tagged and finished")
+	doneTagged.ID = "done"
+	doneTagged.Tags = []string{"work"}
+	doneTagged.Status = todo.Done
+	doneTagged.CompletedAt = time.Now()
+
+	scoped := scopeForStats([]todo.Todo{parent, sub, other, doneTagged}, listFilterOpts{includeDone: true, tag: "work"})
+
+	got := map[string]bool{}
+	for _, x := range scoped {
+		got[x.ID] = true
+	}
+	for id, want := range map[string]bool{"parent": true, "sub": true, "done": true, "other": false} {
+		if got[id] != want {
+			t.Errorf("scoped[%s] = %v, want %v", id, got[id], want)
+		}
+	}
+}
+
+func TestRenderSeqAnalysisTextEdges(t *testing.T) {
+	if s := renderSeqAnalysisText(seqAnalysis{}, defaultBiases()); !strings.Contains(s, "no rank-stamped completions") {
+		t.Errorf("empty analysis = %q, want the no-history message", s)
+	}
+	allHits := seqAnalysis{Hits: 4, Rated: 4, TopN: seqHitTopN}
+	if s := renderSeqAnalysisText(allHits, defaultBiases()); !strings.Contains(s, "no misses") {
+		t.Errorf("all-hits analysis = %q, want the no-misses message", s)
+	}
+}
+
+func TestRenderSeqAnalysisTextTable(t *testing.T) {
+	base := time.Date(2026, 6, 17, 14, 0, 0, 0, time.UTC)
+	mk := func(id string, rank int, at time.Time, due bool) todo.Todo {
+		x := todo.New(id)
+		x.ID = id
+		x.Status = todo.Done
+		x.CompletedAt = at
+		x.CreatedAt = at
+		x.SeqRankAtDone = rank
+		if due {
+			x.DueDate = at
+		}
+		return x
+	}
+	todos := []todo.Todo{
+		mk("h1", 1, base.Add(-40*24*time.Hour), true),
+		mk("m1", 9, base.Add(-3*24*time.Hour), false),
+		mk("m2", 12, base.Add(-2*24*time.Hour), false),
+		mk("m3", 8, base.Add(-1*24*time.Hour), false),
+	}
+	a := analyzeSeqMisses(todos, todos, seqHitWindow, defaultBiases())
+	out := renderSeqAnalysisText(a, defaultBiases())
+	for _, want := range []string{"largest gap", "Deadline: relaxed", "recent misses:", "rank   9"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("rendered analysis missing %q:\n%s", want, out)
+		}
 	}
 }

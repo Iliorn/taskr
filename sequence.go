@@ -580,8 +580,11 @@ type seqAnalysis struct {
 // analyzeSeqMisses is the pure fold behind stats --seq: re-score every rated
 // completion at its own CompletedAt, split hits from misses, and aggregate the
 // weighted per-dimension contributions. Misses come back most recent first
-// (ratedCompletions' order).
-func analyzeSeqMisses(todos []todo.Todo, window int, b biases) seqAnalysis {
+// (ratedCompletions' order). heatSource is the task set momentum is
+// reconstructed from — pass the FULL set even when `todos` is a filtered
+// stats scope, or completions outside the filter stop warming their
+// project/tags and the momentum readings go colder than the rank stamp saw.
+func analyzeSeqMisses(todos, heatSource []todo.Todo, window int, b biases) seqAnalysis {
 	a := seqAnalysis{TopN: seqHitTopN, Window: window, Dimensions: seqDimNames}
 	type scored struct {
 		t    *todo.Todo
@@ -590,7 +593,7 @@ func analyzeSeqMisses(todos []todo.Todo, window int, b biases) seqAnalysis {
 	var missRows []scored
 	var hitSum, missSum [seqDimCount]float64
 	for _, t := range ratedCompletions(todos, window) {
-		heat := computeActivityHeatAt(t.CompletedAt, todos)
+		heat := computeActivityHeatAt(t.CompletedAt, heatSource)
 		u, i, m, size, age := rawDimensionsAt(t.CompletedAt, t, heat)
 		if !b.Aging {
 			age = 0

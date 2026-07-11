@@ -492,7 +492,7 @@ func TestAnalyzeSeqMissesDeadlineGap(t *testing.T) {
 	miss3 := seqDone("miss3", 8, base.Add(-1*24*time.Hour))
 
 	todos := []todo.Todo{hit1, miss1, hit2, miss2, miss3}
-	a := analyzeSeqMisses(todos, seqHitWindow, defaultBiases())
+	a := analyzeSeqMisses(todos, todos, seqHitWindow, defaultBiases())
 
 	if a.Hits != 2 || a.Rated != 5 {
 		t.Fatalf("hits/rated = %d/%d, want 2/5", a.Hits, a.Rated)
@@ -540,7 +540,7 @@ func TestAnalyzeSeqMissesMomentumIntenseHint(t *testing.T) {
 	miss2 := mkMiss("miss2", 11, base.Add(-2*24*time.Hour))
 	miss3 := mkMiss("miss3", 9, base.Add(-1*24*time.Hour))
 
-	a := analyzeSeqMisses([]todo.Todo{hit1, miss1, miss2, miss3}, seqHitWindow, defaultBiases())
+	a := analyzeSeqMisses([]todo.Todo{hit1, miss1, miss2, miss3}, []todo.Todo{hit1, miss1, miss2, miss3}, seqHitWindow, defaultBiases())
 
 	if !approxEq(a.Gap[2], 10.0) {
 		t.Fatalf("Momentum gap = %v, want +10", a.Gap[2])
@@ -553,21 +553,23 @@ func TestAnalyzeSeqMissesMomentumIntenseHint(t *testing.T) {
 func TestSeqSuggestionGates(t *testing.T) {
 	base := fixedNow
 	// Two misses only — below the floor, no matter how clear the pattern.
-	few := analyzeSeqMisses([]todo.Todo{
+	fewSet := []todo.Todo{
 		seqDone("h", 1, base.Add(-3*24*time.Hour)),
 		seqDone("m1", 9, base.Add(-2*24*time.Hour)),
 		seqDone("m2", 8, base.Add(-1*24*time.Hour)),
-	}, seqHitWindow, defaultBiases())
+	}
+	few := analyzeSeqMisses(fewSet, fewSet, seqHitWindow, defaultBiases())
 	if s := seqSuggestion(few, defaultBiases()); s != "" {
 		t.Errorf("suggestion with 2 misses = %q, want empty", s)
 	}
 	// Three misses with dims identical to the hit → calibrated message.
-	flat := analyzeSeqMisses([]todo.Todo{
+	flatSet := []todo.Todo{
 		seqDone("h", 1, base.Add(-4*24*time.Hour)),
 		seqDone("m1", 9, base.Add(-3*24*time.Hour)),
 		seqDone("m2", 8, base.Add(-2*24*time.Hour)),
 		seqDone("m3", 7, base.Add(-1*24*time.Hour)),
-	}, seqHitWindow, defaultBiases())
+	}
+	flat := analyzeSeqMisses(flatSet, flatSet, seqHitWindow, defaultBiases())
 	if s := seqSuggestion(flat, defaultBiases()); !strings.Contains(s, "calibrated") {
 		t.Errorf("suggestion with flat gaps = %q, want the calibrated note", s)
 	}

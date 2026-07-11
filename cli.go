@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -1671,6 +1672,9 @@ type statsSummary struct {
 	// completions, how many closed while in the engine's top seqHitTopN.
 	SeqHitsRecent  int `json:"seq_hits_recent"`
 	SeqRatedRecent int `json:"seq_rated_recent"`
+	// Seq carries the --seq miss analysis in JSON output; nil (and omitted)
+	// unless the flag was passed.
+	Seq *seqAnalysis `json:"seq,omitempty"`
 }
 
 func computeStats(todos []todo.Todo, now time.Time) statsSummary {
@@ -1711,10 +1715,44 @@ func computeStats(todos []todo.Todo, now time.Time) statsSummary {
 	return s
 }
 
+// scopeForStats narrows the full task set to the top-level tasks matching the
+// filters plus every descendant of a match — descendants carry the time
+// entries the tracked-today scan reads, and computeStats skips them for the
+// top-level counts anyway.
+func scopeForStats(todos []todo.Todo, opts listFilterOpts) []todo.Todo {
+	matched := make(map[string]bool)
+	for _, t := range filterTopLevel(todos, opts) {
+		matched[t.ID] = true
+	}
+	parentOf := make(map[string]string, len(todos))
+	for i := range todos {
+		parentOf[todos[i].ID] = todos[i].ParentID
+	}
+	inScope := func(id string) bool {
+		for cur := id; cur != ""; cur = parentOf[cur] {
+			if matched[cur] {
+				return true
+			}
+		}
+		return false
+	}
+	out := make([]todo.Todo, 0, len(todos))
+	for i := range todos {
+		if inScope(todos[i].ID) {
+			out = append(out, todos[i])
+		}
+	}
+	return out
+}
+
 func cliStats(args []string) int {
 	fs := flag.NewFlagSet("stats", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	format := fs.String("format", "text", "output format: text | json | waybar")
+	seq := fs.Bool("seq", false, "append the sequence miss analysis (why completions closed outside the top-5)")
+	tag := fs.String("tag", "", "restrict stats to tasks carrying this tag (case-insensitive)")
+	project := fs.String("project", "", "restrict stats to tasks in this project")
+	search := fs.String("search", "", "restrict stats to tasks whose title contains this substring")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -1723,8 +1761,23 @@ func cliStats(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	s := computeStats(todos, time.Now())
-	s.SeqHitsRecent, s.SeqRatedRecent = sequenceHitStats(todos, seqHitWindow)
+	scoped := todos
+	if *tag != "" || *project != "" || *search != "" {
+		scoped = scopeForStats(todos, listFilterOpts{
+			includeDone: true, // the done/tracked buckets need completed rows
+			tag:         *tag,
+			project:     *project,
+			search:      *search,
+		})
+	}
+	s := computeStats(scoped, time.Now())
+	s.SeqHitsRecent, s.SeqRatedRecent = sequenceHitStats(scoped, seqHitWindow)
+	if *seq {
+		// Heat always reconstructs from the full set: completions outside the
+		// filter still warmed their projects/tags at the time.
+		a := analyzeSeqMisses(scoped, todos, seqHitWindow, activeBiases)
+		s.Seq = &a
+	}
 	switch strings.ToLower(*format) {
 	case "json":
 		return emitJSON(s)
@@ -1760,8 +1813,69 @@ func cliStats(args []string) int {
 				100*s.SeqHitsRecent/s.SeqRatedRecent, s.SeqHitsRecent, s.SeqRatedRecent, seqHitTopN)
 		}
 		fmt.Println(line)
+		if s.Seq != nil {
+			fmt.Print("\n" + renderSeqAnalysisText(*s.Seq, activeBiases))
+		}
 		return 0
 	}
+}
+
+// seqMissDisplayCap bounds the per-miss listing in the --seq text output; the
+// full set is always in the JSON form.
+const seqMissDisplayCap = 5
+
+// renderSeqAnalysisText renders the stats --seq block: the hit/miss dimension
+// table, the bias suggestion, and the most recent misses. The hit rate itself
+// is already on the stats summary line above it, so it isn't repeated here.
+func renderSeqAnalysisText(a seqAnalysis, b biases) string {
+	if a.Rated == 0 {
+		return "no rank-stamped completions yet — the analysis needs a few finished tasks\n"
+	}
+	misses := a.Rated - a.Hits
+	if misses == 0 {
+		return fmt.Sprintf("no misses in the last %d rated completions — every one closed as a top-%d pick\n", a.Rated, a.TopN)
+	}
+	var sb strings.Builder
+	if a.Hits == 0 {
+		sb.WriteString(fmt.Sprintf("all %d rated completions closed outside the top-%d — no hits to compare against\n\n", a.Rated, a.TopN))
+	}
+	largest, largestAbs := -1, 0.0
+	for d := range a.Gap {
+		if abs := math.Abs(a.Gap[d]); abs > largestAbs {
+			largest, largestAbs = d, abs
+		}
+	}
+	sb.WriteString("             avg contribution at completion\n")
+	sb.WriteString(fmt.Sprintf("%-10s  %6s  %6s  %6s\n", "dimension", "hits", "misses", "gap"))
+	for d := range seqDimNames {
+		marker := ""
+		if d == largest && largestAbs >= 0.05 {
+			marker = "  ◂ largest gap"
+		}
+		sb.WriteString(fmt.Sprintf("%-10s  %6.1f  %6.1f  %+6.1f%s\n",
+			seqDimNames[d], a.HitAvg[d], a.MissAvg[d], a.Gap[d], marker))
+	}
+	if hint := seqSuggestion(a, b); hint != "" {
+		sb.WriteString("\n" + hint + "\n")
+	}
+	sb.WriteString("\nrecent misses:\n")
+	for i, r := range a.Misses {
+		if i == seqMissDisplayCap {
+			sb.WriteString(fmt.Sprintf("  … %d more (use --format=json for all)\n", len(a.Misses)-i))
+			break
+		}
+		title := r.Title
+		if len([]rune(title)) > 44 {
+			title = string([]rune(title)[:43]) + "…"
+		}
+		line := fmt.Sprintf("  rank %3d  %-44s", r.Rank, title)
+		if r.Weakest != "" {
+			line += "  weakest: " + r.Weakest
+		}
+		sb.WriteString(strings.TrimRight(line, " ") + "\n")
+	}
+	sb.WriteString("\n(dimensions recomputed at each completion's timestamp from current task fields and biases)\n")
+	return sb.String()
 }
 
 // ── start / stop ─────────────────────────────────────────────────────────────
@@ -2069,6 +2183,9 @@ Comments:
 
 Reporting / backup:
   taskr stats [--format=text|json|waybar]   one-line health summary (default text)
+                                            (--tag/--project/--search scope the stats to matching tasks;
+                                             --seq appends the sequence miss analysis: which score dimension
+                                             buried the tasks you finished anyway, and a bias hint)
   taskr export [--include-done]             JSON snapshot (versioned envelope) to stdout
   taskr import <file>|-                     merge an export file into the local store (- = stdin)
 
