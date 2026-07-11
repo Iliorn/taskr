@@ -3,7 +3,6 @@ package main
 // ── Layout & rendering constants ──────────────────────────────────────────────
 
 const (
-	ganttBarWidthDivisor   = 3
 	ganttLabelWidthDivisor = 5
 	detailMaxHeightPct     = 55
 	overlayWidthPct        = 60
@@ -23,7 +22,6 @@ const (
 	minOverlayWidth    = 50
 	minTitleColWidth   = 20
 	minTagBarWidth     = 10
-	maxTagBarWidth     = 60
 	minInnerWidth      = 20
 
 	// List-tab side-by-side layout (Tasks/Learnings/Tags): at or above

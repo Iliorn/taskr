@@ -13,6 +13,11 @@ import (
 
 // ── Tags list ─────────────────────────────────────────────────────────────────
 
+// tagBarEighths maps a sub-cell fill index (0–7) to the corresponding Unicode
+// block element. Index 0 = empty (not used at the fill boundary), 1 = ▏ (1/8),
+// …, 7 = ▉ (7/8). A full cell (index 8) uses █ in the main fill loop.
+var tagBarEighths = [8]string{"", "▏", "▎", "▍", "▌", "▋", "▊", "▉"}
+
 func (m model) renderTagList() string {
 	tags := m.getFilteredTagsForTab()
 
@@ -28,14 +33,6 @@ func (m model) renderTagList() string {
 
 	b := getBuilder()
 	defer putBuilder(b)
-
-	barW := m.termWidth / ganttBarWidthDivisor
-	if barW < minTagBarWidth {
-		barW = minTagBarWidth
-	}
-	if barW > maxTagBarWidth {
-		barW = maxTagBarWidth
-	}
 
 	gradLen := len(tagProgressGradient)
 	stats := m.cache.tags
@@ -99,16 +96,28 @@ func (m model) renderTagList() string {
 	const pctW = 5 // " 100%"
 	const colGap = 2
 	avail := m.termWidth - 8
-	used := nameW + barW + pctW
-	showDone := used+colGap+doneW <= avail
+
+	// Determine which optional data columns fit using the minimum bar width,
+	// then expand the bar to claim whatever space is left over so the bar
+	// fills the full available pane width instead of leaving dead space.
+	usedMin := nameW + minTagBarWidth + pctW
+	showDone := usedMin+colGap+doneW <= avail
 	if showDone {
-		used += colGap + doneW
+		usedMin += colGap + doneW
 	}
-	showAge := showDone && used+colGap+ageW <= avail
+	showAge := showDone && usedMin+colGap+ageW <= avail
 	if showAge {
-		used += colGap + ageW
+		usedMin += colGap + ageW
 	}
-	showTime := showAge && used+colGap+timeW <= avail
+	showTime := showAge && usedMin+colGap+timeW <= avail
+	if showTime {
+		usedMin += colGap + timeW
+	}
+	// barW = all remaining space after fixed and shown columns; floor at minimum.
+	barW := avail - (usedMin - minTagBarWidth)
+	if barW < minTagBarWidth {
+		barW = minTagBarWidth
+	}
 
 	headerLeft := padRight(tagHdr, nameW) + padRight(tr("Progress"), barW+pctW)
 	if showDone {
@@ -137,7 +146,7 @@ func (m model) renderTagList() string {
 	}
 
 	var barStr strings.Builder
-	barStr.Grow(barW * 4)
+	barStr.Grow(barW * 6) // extra headroom for partial-block glyph (3 bytes)
 
 	for i := startIdx; i < endIdx; i++ {
 		tag := tags[i]
@@ -148,7 +157,15 @@ func (m model) renderTagList() string {
 		if total > 0 {
 			pct = float64(done) / float64(total)
 		}
-		filled := int(math.Round(pct * float64(barW)))
+		// Compute fill at 1/8-cell resolution: filledEighths counts total
+		// eighth-block steps, so filled full cells = filledEighths/8 and the
+		// partial-boundary cell uses tagBarEighths[filledEighths%8].
+		filledEighths := int(math.Round(pct * float64(barW) * 8))
+		if filledEighths > barW*8 {
+			filledEighths = barW * 8
+		}
+		filled := filledEighths / 8
+		partialEighths := filledEighths % 8
 		cur := "  "
 		if i == m.tagTabCursor {
 			cur = "▶ "
@@ -156,7 +173,7 @@ func (m model) renderTagList() string {
 		tagLabel := padRight(truncate(r.label, nameW-4), nameW-2)
 
 		barStr.Reset()
-		// Group consecutive cells that share a gradient color into a single
+		// Group consecutive full cells that share a gradient color into a single
 		// styled Render call (≤gradLen calls instead of one per column).
 		prevIdx := -1
 		runLen := 0
@@ -181,7 +198,24 @@ func (m model) renderTagList() string {
 		if runLen > 0 {
 			barStr.WriteString(tagProgressGradient[prevIdx].Render(strings.Repeat("█", runLen)))
 		}
-		if filled < barW {
+		// Partial-fill boundary cell: use the gradient color at the filled
+		// position so the sub-cell glyph blends with the full cells beside it.
+		if partialEighths > 0 && filled < barW {
+			pos := 0.0
+			if filled > 0 {
+				pos = float64(filled) / float64(barW)
+			}
+			gradIdx := int(pos * float64(gradLen-1))
+			if gradIdx >= gradLen {
+				gradIdx = gradLen - 1
+			}
+			barStr.WriteString(tagProgressGradient[gradIdx].Render(tagBarEighths[partialEighths]))
+			// Remaining empty cells: one fewer because the partial cell occupies a slot.
+			empty := barW - filled - 1
+			if empty > 0 {
+				barStr.WriteString(dimStyle.Render(strings.Repeat("░", empty)))
+			}
+		} else if filled < barW {
 			barStr.WriteString(dimStyle.Render(strings.Repeat("░", barW-filled)))
 		}
 

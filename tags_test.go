@@ -229,7 +229,7 @@ func TestTagListDropsColumnsWhenNarrow(t *testing.T) {
 // TestTagsTabNarrowNoWrap renders the Tags tab (list + detail) across widths and
 // for both a real tag and the untagged row, asserting nothing wraps.
 func TestTagsTabNarrowNoWrap(t *testing.T) {
-	for _, width := range []int{40, 50, 60, 80} {
+	for _, width := range []int{40, 50, 60, 80, 120, 200} {
 		tagged := todo.New("A long task title that would overflow a slim detail pane easily")
 		tagged.Tags = []string{"alpha"}
 		tagged.Project = "someproject"
@@ -249,5 +249,91 @@ func TestTagsTabNarrowNoWrap(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestTagBarExpandsWithWidth verifies that the progress bar grows as the
+// terminal widens and never overflows the available content area.
+func TestTagBarExpandsWithWidth(t *testing.T) {
+	task := todo.New("some task")
+	task.Tags = []string{"work"}
+
+	widths := []int{80, 120, 200}
+	prevBarW := 0
+	for _, width := range widths {
+		m := newTagModel(task)
+		m.termWidth = width
+		m.tab = tabTags
+		m.refreshCaches()
+
+		out := m.renderTagList()
+		// Measure bar width by counting █ and ░ on the data row (the header
+		// row won't have them). A partial-block glyph (▏▎▍▌▋▊▉) occupies one
+		// cell and one Unicode code-point; ansi.StringWidth counts it correctly.
+		barW := 0
+		for _, line := range strings.Split(out, "\n") {
+			plain := ansi.Strip(line)
+			cellW := 0
+			for _, ch := range plain {
+				switch ch {
+				case '█', '░':
+					cellW++
+				case '▏', '▎', '▍', '▌', '▋', '▊', '▉':
+					cellW++
+				}
+			}
+			if cellW > barW {
+				barW = cellW
+			}
+		}
+
+		avail := width - 8
+		if barW > avail {
+			t.Errorf("width=%d: bar width %d exceeds avail %d", width, barW, avail)
+		}
+		if barW < minTagBarWidth {
+			t.Errorf("width=%d: bar width %d below minimum %d", width, barW, minTagBarWidth)
+		}
+		if barW <= prevBarW && prevBarW > 0 {
+			t.Errorf("width=%d: bar width %d did not grow from previous %d", width, barW, prevBarW)
+		}
+		prevBarW = barW
+	}
+}
+
+// TestTagBarPartialFillGlyphs verifies that a partially-complete tag shows a
+// sub-cell eighth-block glyph when the progress is not on a full-cell boundary.
+func TestTagBarPartialFillGlyphs(t *testing.T) {
+	// 2 done out of 5 total = 2/5 = 0.4. At the computed barW for termWidth=120
+	// (barW=84) this gives filledEighths = round(0.4*84*8) = round(268.8) = 269,
+	// which has partial = 269 % 8 = 5, so a ▋ should appear.
+	var todos []todo.Todo
+	for i := 0; i < 5; i++ {
+		td := todo.New(fmt.Sprintf("task-%d", i))
+		td.Tags = []string{"x"}
+		if i < 2 {
+			td.Status = todo.Done
+		}
+		todos = append(todos, td)
+	}
+
+	m := newTagModel(todos...)
+	m.termWidth = 120
+	m.tab = tabTags
+	m.refreshCaches()
+
+	out := m.renderTagList()
+	plain := ansi.Strip(out)
+
+	partialChars := "▏▎▍▌▋▊▉"
+	found := false
+	for _, ch := range plain {
+		if strings.ContainsRune(partialChars, ch) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected a partial-block glyph (▏▎▍▌▋▊▉) in the tag bar output, got:\n%s", plain)
 	}
 }
