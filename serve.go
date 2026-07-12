@@ -9,8 +9,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"taskr/tasksync"
@@ -102,11 +104,21 @@ func cliServe(args []string) int {
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	// Graceful stop: SIGINT/SIGTERM (^C, systemctl stop) closes the listener
+	// so ListenAndServe returns cleanly and the WAL gets checkpointed on the
+	// way out instead of surviving as a multi-megabyte sidecar.
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigc
+		_ = httpServer.Close()
+	}()
 	fmt.Fprintf(os.Stderr, "taskr serve: listening on %s (POST /v1/sync)\n", *listen)
-	if err := httpServer.ListenAndServe(); err != nil {
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "taskr serve: %v\n", err)
 		return 1
 	}
+	checkpointStore()
 	return 0
 }
 

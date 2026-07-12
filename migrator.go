@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -90,7 +91,29 @@ func snapshotDBBeforeMigrations(db *sql.DB, fromVersion int) (string, error) {
 	if _, err := db.Exec(`VACUUM INTO ?`, backupPath); err != nil {
 		return "", fmt.Errorf("vacuum into %s: %w", backupPath, err)
 	}
+	prunePreMigrationBackups(path, preMigrationBackupsKept)
 	return backupPath, nil
+}
+
+// preMigrationBackupsKept bounds how many pre-migration snapshots accumulate
+// next to the database. Three covers "the migration two releases ago was the
+// one that ate my data" while stopping the pile from growing forever.
+const preMigrationBackupsKept = 3
+
+// prunePreMigrationBackups keeps the newest `keep` pre-migration snapshots
+// for the database at dbPath and removes the rest. The zero-padded version +
+// UTC timestamp in the name make lexical order chronological, so no stat
+// calls are needed. Best-effort: a failed remove leaves a stale backup, it
+// never blocks a migration.
+func prunePreMigrationBackups(dbPath string, keep int) {
+	matches, err := filepath.Glob(dbPath + "-pre-migration-*.bak")
+	if err != nil || len(matches) <= keep {
+		return
+	}
+	sort.Strings(matches)
+	for _, old := range matches[:len(matches)-keep] {
+		_ = os.Remove(old)
+	}
 }
 
 type migration struct {

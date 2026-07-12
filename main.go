@@ -22,7 +22,9 @@ func main() {
 	// dispatcher and exit. Bare `taskr` (no args, or only flags meant for the
 	// TUI) still launches the Bubble Tea program below.
 	if len(os.Args) > 1 && isCLICommand(os.Args[1]) {
-		os.Exit(runCLI(os.Args[1:]))
+		code := runCLI(os.Args[1:])
+		checkpointStore()
+		os.Exit(code)
 	}
 
 	p := tea.NewProgram(initialModel(newSQLiteRepo()), tea.WithAltScreen())
@@ -33,4 +35,5 @@ func main() {
 	// Final best-effort sync on exit so the session's last edits propagate
 	// immediately (no-op unless sync is configured).
 	maybeAutoSyncCLI()
+	checkpointStore()
 }

@@ -575,3 +575,34 @@ func TestPruneOldTombstones(t *testing.T) {
 		}
 	}
 }
+
+// TestCheckpointTruncatesWAL pins the exit-path housekeeping: after a
+// checkpoint the WAL sidecar is empty instead of carrying megabytes of
+// un-folded frames between runs. Nil handle must be a no-op.
+func TestCheckpointTruncatesWAL(t *testing.T) {
+	checkpointDB(nil) // must not panic
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tasks.db")
+	h, err := openStoreAt(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer h.Close()
+
+	x := todo.New("wal filler")
+	saveTodos(t, h, []todo.Todo{x})
+
+	walPath := path + "-wal"
+	before, err := os.Stat(walPath)
+	if err != nil || before.Size() == 0 {
+		t.Fatalf("expected a non-empty WAL after a write, got %v", err)
+	}
+
+	checkpointDB(h)
+
+	after, err := os.Stat(walPath)
+	if err == nil && after.Size() != 0 {
+		t.Errorf("WAL still %d bytes after checkpoint, want 0 (or removed)", after.Size())
+	}
+}

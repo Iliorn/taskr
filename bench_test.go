@@ -92,3 +92,20 @@ func BenchmarkRefreshCaches(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkBoardView measures a full Board-tab frame with warm caches. It
+// guards the boardColumns cache: the column split copies task values, so
+// doing it per frame would reintroduce exactly the per-frame O(active) scans
+// cacheState exists to prevent.
+func BenchmarkBoardView(b *testing.B) {
+	for _, n := range []int{100, 500, 2000} {
+		m := benchModel(n)
+		m.tab = tabBoard
+		b.Run(fmt.Sprintf("n=%d", n), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = m.View()
+			}
+		})
+	}
+}

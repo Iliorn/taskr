@@ -33,6 +33,7 @@ type cacheState struct {
 	projLastUsed  map[string]time.Time // project → latest ModifiedAt of a task in it
 	tagRender     map[string]string
 	taskTagRender map[string]string
+	boardCols     [][]todo.Todo // Board-tab columns derived from active/done; see buildBoardColumns
 
 	projectSearch string
 
@@ -96,6 +97,7 @@ func (m *model) refreshCaches() {
 
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
+	m.cache.boardCols = buildBoardColumns(m.cache.active, m.cache.done)
 
 	m.cache.dirty = false
 	m.cache.filterDirty = false
@@ -221,6 +223,7 @@ func (m *model) refreshFilteredCaches() {
 	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
+	m.cache.boardCols = buildBoardColumns(m.cache.active, m.cache.done)
 	m.cache.filterDirty = false
 }
 

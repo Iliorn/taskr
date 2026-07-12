@@ -48,6 +48,21 @@ func openStore() error {
 	return dbErr
 }
 
+// checkpointStore folds the WAL back into tasks.db and truncates it, so the
+// sidecar doesn't sit at megabytes against a hundreds-of-KB database between
+// runs (checkpoints otherwise only happen at SQLite's 1000-page threshold,
+// which this database rarely reaches). Best-effort by design: with another
+// process holding the store (the sync server, a concurrent TUI) SQLite
+// reports busy and the WAL simply persists — the next clean exit gets it.
+func checkpointStore() { checkpointDB(db) }
+
+func checkpointDB(h *sql.DB) {
+	if h == nil {
+		return
+	}
+	_, _ = h.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+}
+
 // openStoreAt opens the database at path, applies the schema, and imports the
 // legacy JSON only when the todos table did not already exist. Split out from
 // openStore (which owns the package-level singleton) so tests can drive it

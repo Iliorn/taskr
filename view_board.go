@@ -21,20 +21,32 @@ const (
 	boardDoneCards = 50
 )
 
-// boardColumns splits the visible task set into per-column card lists:
-// index i < len(activeStages) is stage i, the last index is Done.
-func (m model) boardColumns() [][]todo.Todo {
+// buildBoardColumns splits the filtered active/done lists into per-column
+// card lists: index i < len(activeStages) is stage i, the last index is Done
+// (capped at boardDoneCards). Pure so refreshCaches can derive it and tests
+// can drive it directly.
+func buildBoardColumns(active, done []todo.Todo) [][]todo.Todo {
 	cols := make([][]todo.Todo, len(activeStages)+1)
-	for _, t := range m.activeTodos() {
-		i := stageIndex(t.Stage)
-		cols[i] = append(cols[i], t)
+	for i := range active {
+		cols[stageIndex(active[i].Stage)] = append(cols[stageIndex(active[i].Stage)], active[i])
 	}
-	done := m.completedTodos()
 	if len(done) > boardDoneCards {
 		done = done[:boardDoneCards]
 	}
 	cols[len(activeStages)] = append([]todo.Todo(nil), done...)
 	return cols
+}
+
+// boardColumns returns the cached per-column card lists (rebuilt by
+// refreshCaches/refreshFilteredCaches alongside the active/done split — the
+// column split copies task values, and doing that per frame is exactly the
+// per-frame O(active) work cacheState exists to prevent). The nil-cache
+// fallback builds directly so a bare model (tests) stays correct.
+func (m model) boardColumns() [][]todo.Todo {
+	if m.cache.boardCols != nil {
+		return m.cache.boardCols
+	}
+	return buildBoardColumns(m.cache.active, m.cache.done)
 }
 
 // boardColTitles returns the column headers: the stage names plus Done.

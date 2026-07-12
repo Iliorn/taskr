@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -74,5 +75,43 @@ func TestSnapshotFileBackedProducesOpenableCopy(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("backup has %d rows, want 1", count)
+	}
+}
+
+// TestPrunePreMigrationBackups pins the retention rule: newest `keep` stay,
+// older go, unrelated files are untouched.
+func TestPrunePreMigrationBackups(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "tasks.db")
+	names := []string{
+		"tasks.db-pre-migration-005-20260624-162950.bak",
+		"tasks.db-pre-migration-006-20260625-065315.bak",
+		"tasks.db-pre-migration-007-20260702-085628.bak",
+		"tasks.db-pre-migration-008-20260703-191525.bak",
+		"tasks.db-pre-migration-009-20260712-110537.bak",
+	}
+	for _, n := range names {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	unrelated := filepath.Join(dir, "tasks.db-wal")
+	if err := os.WriteFile(unrelated, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	prunePreMigrationBackups(dbPath, 3)
+
+	for i, n := range names {
+		_, err := os.Stat(filepath.Join(dir, n))
+		if i < 2 && !os.IsNotExist(err) {
+			t.Errorf("%s should have been pruned", n)
+		}
+		if i >= 2 && err != nil {
+			t.Errorf("%s should survive: %v", n, err)
+		}
+	}
+	if _, err := os.Stat(unrelated); err != nil {
+		t.Errorf("unrelated sidecar removed: %v", err)
 	}
 }
