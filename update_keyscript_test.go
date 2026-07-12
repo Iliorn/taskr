@@ -603,3 +603,83 @@ func TestScriptDetailTimeEntryRunningEntryGuard(t *testing.T) {
 		t.Errorf("after 'x' on running entry: mode = %v, want modeNormal (guarded)", m.mode)
 	}
 }
+
+// TestScriptBoardMoveCardAcrossStages drives the Board tab through the real
+// Update path: L advances the selected card a stage at a time, into Done as a
+// full close (rank stamp included); H out of Done stages the reopen confirm,
+// and y lands the card back in its stored stage.
+func TestScriptBoardMoveCardAcrossStages(t *testing.T) {
+	seed := todo.New("board rider")
+	m := modelWithTasks(t, seed)
+	m = script(t, m, "5")
+	if m.tab != tabBoard {
+		t.Fatalf("after '5': tab = %v, want tabBoard", m.tab)
+	}
+
+	m = script(t, m, "L")
+	got := m.get(seed.ID)
+	if got.Stage != "In progress" {
+		t.Fatalf("after first L: stage = %q, want In progress", got.Stage)
+	}
+	if len(m.undoStack) != 1 {
+		t.Fatalf("stage move pushed %d undo entries, want 1", len(m.undoStack))
+	}
+	if !m.savePending && !m.saveScheduled {
+		t.Error("stage move did not schedule a save")
+	}
+	if m.board.col != 1 {
+		t.Errorf("board focus did not follow the card: col = %d, want 1", m.board.col)
+	}
+
+	m = script(t, m, "L") // → Review
+	if got = m.get(seed.ID); got.Stage != "Review" {
+		t.Fatalf("after second L: stage = %q, want Review", got.Stage)
+	}
+
+	m = script(t, m, "L") // Review → Done: the shared close path
+	got = m.get(seed.ID)
+	if got.Status != todo.Done {
+		t.Fatalf("after third L: status = %v, want Done", got.Status)
+	}
+	if got.SeqRankAtDone == 0 {
+		t.Error("board close did not capture the sequence rank")
+	}
+	if m.board.col != len(activeStages) {
+		t.Errorf("focus should follow into the Done column, col = %d", m.board.col)
+	}
+
+	m = script(t, m, "H")
+	if m.mode != modeConfirm {
+		t.Fatalf("H on a Done card should stage the reopen confirm, mode = %v", m.mode)
+	}
+	m = script(t, m, "y")
+	got = m.get(seed.ID)
+	if got.Status != todo.Pending {
+		t.Fatalf("after confirm: status = %v, want Pending", got.Status)
+	}
+	if got.Stage != "Review" {
+		t.Errorf("reopened card should keep its stored stage, got %q", got.Stage)
+	}
+	if m.board.col != stageIndex("Review") {
+		t.Errorf("board cursor should follow the reopened card, col = %d", m.board.col)
+	}
+}
+
+// TestScriptBoardDoneKeySharesCloseSemantics pins 'd' on the board to the
+// Tasks-tab close path: a pending parent with open subtasks stages the
+// confirm instead of silently closing.
+func TestScriptBoardDoneKeySharesCloseSemantics(t *testing.T) {
+	parent := todo.New("parent with open work")
+	sub := todo.New("open subtask")
+	sub.ParentID = parent.ID
+	m := modelWithTasks(t, parent, sub)
+
+	m = script(t, m, "5", "d")
+	if m.mode != modeConfirm {
+		t.Fatalf("d on a parent with open subtasks: mode = %v, want modeConfirm", m.mode)
+	}
+	m = script(t, m, "n")
+	if got := m.get(parent.ID); got.Status != todo.Pending {
+		t.Errorf("declined close still toggled the parent: %v", got.Status)
+	}
+}

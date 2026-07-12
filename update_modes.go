@@ -688,9 +688,14 @@ func (m *model) confirmReopen() tea.Cmd {
 			m.markModified(t.ID)
 			// The row leaves the done/history list, so the cursor would land on
 			// the next row — decrement so it lands on the previous one instead.
-			// Subtasks stay visible.
-			if t.ParentID == "" && m.cursor > 0 {
+			// Subtasks stay visible. Only the Tasks tab owns m.cursor; a reopen
+			// confirmed from the Board must not nudge it.
+			if m.tab == tabTasks && t.ParentID == "" && m.cursor > 0 {
 				m.cursor--
+			}
+			// A board-staged reopen follows the card back to its stage column.
+			if m.tab == tabBoard {
+				m.boardFollow(stageIndex(t.Stage), t.ID)
 			}
 		}
 	}

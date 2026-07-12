@@ -27,11 +27,13 @@ const (
 	ctxCalendar
 	ctxCalendarTimeline
 	ctxSettings
+	ctxBoard
 
 	// ctxAll marks the global bindings (navigation, help, undo, quit) that are
 	// live in every context.
 	ctxAll = ctxTasksList | ctxTasksDetail | ctxProjects | ctxTags |
-		ctxLearnings | ctxStats | ctxCalendar | ctxCalendarTimeline | ctxSettings
+		ctxLearnings | ctxStats | ctxCalendar | ctxCalendarTimeline | ctxSettings |
+		ctxBoard
 )
 
 // binding is one row of the registry.
@@ -49,7 +51,7 @@ type binding struct {
 // these. Navigation and App collect the global bindings.
 var helpSectionOrder = []string{
 	secNavigation, secTasks, secDetail, secTagsProjects,
-	secLearnings, secCalendar, secStats, secSettings, secApp,
+	secBoard, secLearnings, secCalendar, secStats, secSettings, secApp,
 }
 
 const (
@@ -57,6 +59,7 @@ const (
 	secTasks        = "Tasks"
 	secDetail       = "Detail view"
 	secTagsProjects = "Tags & Projects"
+	secBoard        = "Board"
 	secLearnings    = "Learnings"
 	secCalendar     = "Calendar"
 	secStats        = "Stats"
@@ -127,6 +130,11 @@ var keymap = []binding{
 	{ctxCalendarTimeline, "esc", "back", "back", secCalendar, true, false},
 
 	// ── Stats ────────────────────────────────────────────────────────────
+	// ── Board ────────────────────────────────────────────────────────────
+	{ctxBoard, "←/→", "boardcolumn", "focus previous/next column", secBoard, true, true},
+	{ctxBoard, "H/L", "boardmove", "move card between stages (into Done completes it)", secBoard, true, true},
+	{ctxBoard, "d", "done", "toggle done", secBoard, true, false},
+
 	{ctxStats, "enter", "statscycle", "cycle activity range", secStats, true, false},
 
 	// ── Settings ─────────────────────────────────────────────────────────
@@ -164,6 +172,8 @@ func (m model) currentKeyCtx() keyCtx {
 		return ctxCalendar
 	case tabSettings:
 		return ctxSettings
+	case tabBoard:
+		return ctxBoard
 	}
 	return ctxTasksList
 }

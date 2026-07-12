@@ -632,7 +632,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "right":
-			if m.tab == tabCalendar {
+			if m.tab == tabBoard {
+				m.boardMoveColumn(1)
+			} else if m.tab == tabCalendar {
 				m.moveCalendarDay(1)
 			} else if m.tab == tabSettings && m.isBiasSettingRow(m.settingsCursor) {
 				m.cycleBias(m.settingsCursor, +1)
@@ -656,7 +658,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "left":
-			if m.tab == tabCalendar {
+			if m.tab == tabBoard {
+				m.boardMoveColumn(-1)
+			} else if m.tab == tabCalendar {
 				m.moveCalendarDay(-1)
 			} else if m.tab == tabSettings && m.isBiasSettingRow(m.settingsCursor) {
 				m.cycleBias(m.settingsCursor, -1)
@@ -686,6 +690,15 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 					delete(m.expandedTasks, parentID)
 					m.followTask(parentID)
 				}
+			}
+
+		case "H", "<", "shift+left":
+			if m.tab == tabBoard {
+				m.boardMoveCard(-1)
+			}
+		case "L", ">", "shift+right":
+			if m.tab == tabBoard {
+				m.boardMoveCard(1)
 			}
 
 		case "[", "]":
@@ -817,75 +830,34 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "d":
 			if m.tab == tabTasks {
 				if t := m.currentTodo(); t != nil {
-					// Closing a task while its timer is running would
-					// leave a dangling open entry — and the runningTimers
-					// index would go stale. Stop first, then toggle.
-					// Mirrors the CLI done path.
-					if t.Status == todo.Pending && t.IsTimerRunning() {
-						m.stopTimer(t.ID)
-					}
-					isSub := t.ParentID != ""
-					wasPending := t.Status == todo.Pending
 					// Un-marking a done task is a state change the user
 					// rarely means (usually a stray 'd' on a completed row)
 					// and it voids the completion rank — so confirm it.
 					// Marking done stays immediate.
-					if !wasPending {
-						m.pendingReopenID = t.ID
-						m.mode = modeConfirm
-						m.confirmOnYes = (*model).confirmReopen
-						m.confirmMsg = fmt.Sprintf(tr("Move '%s' to active? (y/n)"), truncate(t.Title, 40))
+					if t.Status != todo.Pending {
+						m.stageReopenConfirm(t)
 						return m, nil
 					}
-					// Pending parent with open subtasks: with auto-close-subtasks
-					// on, cascade them closed; otherwise stage a confirm rather
-					// than silently close (and hide) the open work.
-					cascadeSubs := false
-					if wasPending && !isSub {
-						if done, total := m.subtaskProgress(t.ID); total > 0 && done < total {
-							if m.autoCloseSubtasks {
-								cascadeSubs = true
-							} else {
-								m.pendingCloseParentID = t.ID
-								m.mode = modeConfirm
-								m.confirmOnYes = (*model).confirmCloseParent
-								m.confirmMsg = fmt.Sprintf(tr("Close '%s' with %d open subtask(s)? (y/n)"), truncate(t.Title, 40), total-done)
-								return m, nil
-							}
-						}
+					if !m.closePendingTask(t) {
+						return m, nil // confirm staged (open subtasks)
 					}
-					// Full snapshot: ancestor cascade + recurrence spawn can
-					// touch arbitrary IDs not knowable until mid-mutation, so
-					// capture all state for a clean undo.
-					if wasPending && (isSub || cascadeSubs || t.IsRecurring()) {
-						m.pushUndo("close task")
-					} else {
-						m.pushUndo("toggle done", t.ID)
-					}
-					if wasPending {
-						captureSeqRankAtDone(m.allTodos(), t)
-					}
-					t.Toggle()
-					ids := []string{t.ID}
-					if wasPending && t.IsRecurring() {
-						if newID := m.spawnNextRecurrence(t); newID != "" {
-							ids = append(ids, newID)
-						}
-					}
-					if wasPending && isSub {
-						ids = append(ids, m.autoCloseAncestorsIfAllDone(t.ID)...)
-					}
-					if cascadeSubs {
-						ids = append(ids, m.closePendingSubtree(t.ID)...)
-					}
-					m.markModified(ids...)
 					// Subtasks stay visible after toggling (dimmed with a
 					// check), so the cursor stays on the same row. Parents
 					// disappear from active and the cursor would land on
 					// the next row — decrement so it lands on the previous
 					// one instead.
-					if !isSub && m.cursor > 0 {
+					if t.ParentID == "" && m.cursor > 0 {
 						m.cursor--
+					}
+				}
+			} else if m.tab == tabBoard {
+				if t := m.boardSelectedTask(); t != nil {
+					if t.Status != todo.Pending {
+						m.stageReopenConfirm(t)
+						return m, nil
+					}
+					if m.closePendingTask(t) {
+						m.boardFollow(len(activeStages), t.ID)
 					}
 				}
 			}
@@ -1152,6 +1124,8 @@ func (m *model) persistSettings() {
 
 func (m *model) moveCursorUp() {
 	switch m.tab {
+	case tabBoard:
+		m.boardMoveCursor(-1)
 	case tabCalendar:
 		if m.calendar.focusTimeline {
 			if m.calendar.entryCursor > 0 {
@@ -1189,6 +1163,8 @@ func (m *model) moveCursorUp() {
 
 func (m *model) moveCursorDown() {
 	switch m.tab {
+	case tabBoard:
+		m.boardMoveCursor(1)
 	case tabCalendar:
 		if m.calendar.focusTimeline {
 			if acts := m.activitiesForDay(m.calendar.selected); m.calendar.entryCursor < len(acts)-1 {
