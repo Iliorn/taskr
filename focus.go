@@ -19,7 +19,6 @@ const (
 	stateFocusFilter
 	stateSearch
 	stateTagSearch
-	stateLearningSearch
 )
 
 type focusEntry struct {
@@ -78,8 +77,6 @@ func (m *model) focusActive(e focusEntry) bool {
 		return m.searchQuery != ""
 	case stateTagSearch:
 		return m.tagTabSearchQuery != ""
-	case stateLearningSearch:
-		return m.learningSearchQuery != ""
 	}
 	return false
 }
@@ -133,8 +130,5 @@ func (m *model) exitFocus(s uiState) {
 	case stateTagSearch:
 		m.tagTabSearchQuery = ""
 		m.tagTabCursor = 0
-	case stateLearningSearch:
-		m.learningSearchQuery = ""
-		m.learningCursor = 0
 	}
 }

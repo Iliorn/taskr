@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`taskr` is a keyboard-driven terminal task manager built with Go and Bubble Tea (Charm). It is a standalone app with its own SQLite storage (legacy JSON is imported on first run) — **not** a Taskwarrior frontend. Beyond tasks it provides a calendar/time-tracking view, projects (Gantt), tags, per-task "learnings", a stats dashboard, and in-app self-update.
+`taskr` is a keyboard-driven terminal task manager built with Go and Bubble Tea (Charm). It is a standalone app with its own SQLite storage (legacy JSON is imported on first run) — **not** a Taskwarrior frontend. Beyond tasks it provides a calendar/time-tracking view, projects (Gantt), tags, a kanban board, per-task "learnings" (managed in the task detail; recalled via `taskr learnings`), a stats dashboard, and in-app self-update.
 
 ## Commands
 
@@ -59,11 +59,11 @@ Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file co
 - **`model.go`** — the `model` struct (large, flat), all the enums (`tab`, `appMode`, `pane`, sort modes), message types, `initialModel`, undo stack, and most pure model-mutation/lookup helpers.
 - **`model_layout.go`** — `model`-method geometry helpers split out of `model.go`: detail-scroll cursor estimation (`estimateDetailCursorLine`), list-offset clamping, and the detail/list height math (`detailVisible`, `listVisible`, `maxDetailHeight`, the per-page `detailPageNContentHeight`). Pairs with the pure width/height math in `layout.go`.
 - **`update.go`** — top-level `Update`, the normal-mode list key handling, tab switching, editor launching, self-update plumbing.
-- **`update_detail.go`** — `Update` handlers for the detail pane (`updateDetail`, detail cursor moves, `detailAdd`/`detailDelete`, `updateLearningsDetail`, `startEditing`); the input-side mirror of `view_detail.go`.
+- **`update_detail.go`** — `Update` handlers for the detail pane (`updateDetail`, detail cursor moves, `detailAdd`/`detailDelete`, `startEditing`); the input-side mirror of `view_detail.go`.
 - **`update_modes.go`** — `Update` handlers for the text-entry / search modes (`updateInput`, `updateSearch`, `updateEditTitle`, etc.). When adding a modal interaction, the handler usually lives here.
-- **`view.go`** — top-level `View` + the Tasks tab and shared rendering helpers; dispatches to `view_lists.go` (projects/tags/learnings/stats), `view_calendar.go`, `view_detail.go`.
+- **`view.go`** — top-level `View` + the Tasks tab and shared rendering helpers; dispatches to `view_lists.go` (projects/tags/stats), `view_calendar.go`, `view_detail.go`.
 - **`cache.go`** — `cacheState` (see below).
-- **`board.go` / `view_board.go` / `update_board.go`** — the kanban Board tab (tab 5): stage config (`activeStages`, an applyTheme-style global fed by settings.json `"stages"`; the Done column is `Status==Done` itself, never a stage), column rendering as a projection of the same filtered/cached lists the Tasks tab shows, and the interactions. `closePendingTask` (update_board.go) is the one pending→done path — the Tasks-tab `d`, the board `d`, and a card moved into Done all go through it; keep it that way or the timer/subtask/rank/recurrence semantics fork.
+- **`board.go` / `view_board.go` / `update_board.go`** — the kanban Board tab (tab 5; there is no Learnings tab — learnings live in the task detail and the `taskr learnings` CLI): stage config (`activeStages`, an applyTheme-style global fed by settings.json `"stages"`; the Done column is `Status==Done` itself, never a stage), column rendering as a projection of the same filtered/cached lists the Tasks tab shows, and the interactions. `closePendingTask` (update_board.go) is the one pending→done path — the Tasks-tab `d`, the board `d`, and a card moved into Done all go through it; keep it that way or the timer/subtask/rank/recurrence semantics fork.
 - **`storage_sqlite.go`** — the live SQLite backend: schema, `openStore`/`openStoreAt`, `loadTodos`, `prepareSave`, row encode/decode, and the first-run JSON import. Schema is **fully normalized** since migration 002: every `todo.Todo` field maps to a real column (child records live in `task_tags`/`task_comments`/`task_learnings`/`task_time_entries`/`task_dependencies`); the legacy `data` JSON blob column still exists but is written as `''` and never read. **Adding a field to `todo.Todo` therefore requires a migration** (new `migrations/NNN_*.sql`) plus wiring it into the `prepareSave` upsert and the `loadTodosCore` scan — a field with only a struct tag silently drops on the first save/load round-trip. Deletes are **soft (tombstones)** — `prepareSave` upserts the current set and marks any vanished row `deleted=1` — so a deletion syncs instead of the row reappearing. A single connection (`SetMaxOpenConns(1)`) serializes the one writer.
 - **`storage.go`** — settings load/save, the legacy JSON envelope (`taskFile`/`migrate`/`decodeTaskFile`), `loadTodosJSON` (now only the import source + corruption fallback), and task sorting.
 - **`helpers.go`** — parsing (quick-add syntax, dates, time-entry edits), formatting, column layout, editor resolution, self-update file ops.
@@ -73,7 +73,7 @@ Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file co
 
 ### Two patterns that matter most
 
-**1. The derived-view cache (`cacheState`).** `m.todos` is the single source of truth; everything the UI shows (active vs. done lists, sorted tags + counts, projects, learnings, a `todoIndex` ID→slice-index map, overdue set, subtask index) is *derived* and cached on the model. After **any** mutation to `m.todos`, call the right invalidator or the UI goes stale:
+**1. The derived-view cache (`cacheState`).** `m.todos` is the single source of truth; everything the UI shows (active vs. done lists, sorted tags + counts, projects, a `todoIndex` ID→slice-index map, overdue set, subtask index) is *derived* and cached on the model. After **any** mutation to `m.todos`, call the right invalidator or the UI goes stale:
 
 - `m.markModified()` — mutate + push undo + mark dirty + refresh (the usual path).
 - `m.markModifiedNoUndo()` — same without an undo snapshot.
@@ -89,13 +89,13 @@ Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file co
 
 - **Persistence is debounced** — mutations set `dirty`/`savePending` and a `saveTickMsg` (300ms) flushes via `prepareSave`. `prepareSave` encodes the snapshot synchronously (so the async write can't race a later mutation) and returns a `tea.Cmd` that commits to SQLite; don't write the store synchronously from `Update`.
 - **Modes drive input.** `m.mode` (an `appMode`) decides which `update*`/`render*` path runs. Adding a feature with text entry or a confirm prompt means: add an `appMode` const, a handler (usually `update_modes.go`), and a render branch.
-- **Subtasks, dependencies, learnings** are all stored inside `m.todos` (subtasks are full `Todo`s with a `ParentID`, linked by `SubtaskIDs`), so global operations loop the whole slice — see `renameTagGlobally`, `deleteLearningByID`.
+- **Subtasks, dependencies, learnings** are all stored inside `m.todos` (subtasks are full `Todo`s with a `ParentID`, linked by `SubtaskIDs`), so global operations loop the whole slice — see `renameTagGlobally`, `selectLearnings`.
 - Data lives at `~/.taskr/tasks.db` (SQLite; WAL, so `-wal`/`-shm` sidecars), settings at `~/.taskr/settings.json`. The legacy `~/.taskr/tasks.json` (+ `.bak`) is read only to seed a fresh database, then left in place. Built binaries and `*.bak` are gitignored. **Tests must not touch real `~/.taskr`** — `TestMain` (`main_test.go`) redirects `$HOME` to a temp dir for the whole test binary, because several tests build a `model` (→ `initialModel` → `loadTodos`) which opens the store.
 
 ### Rendering conventions
 
 - **ANSI-aware width math.** Once a string has been through a lipgloss `.Render`, `len([]rune(s))` over-counts by the escape sequences and silently breaks alignment/centering. Use `ansi.StringWidth` to measure and `ansi.Truncate` to clip **styled** strings; `len([]rune(...))` is only correct for plain text. Width tests assert no line exceeds the pane's inner width (`termWidth-8`) — that's the no-wrap contract.
-- **Shared list-column rule.** The leading "name" column on the Tasks / Projects / Tags / Learnings tabs is sized by `contentFitWidth` (hug the widest entry + gap, floored to the header label, capped by the responsive `nameColWidth`) in `layout.go`. Reuse it for any new list tab instead of inventing per-tab width constants, so all tabs reflow identically on resize.
+- **Shared list-column rule.** The leading "name" column on the Tasks / Projects / Tags list tabs is sized by `contentFitWidth` (hug the widest entry + gap, floored to the header label, capped by the responsive `nameColWidth`) in `layout.go`. Reuse it for any new list tab instead of inventing per-tab width constants, so all tabs reflow identically on resize.
 - **Group same-style runs.** When emitting a row of per-cell-styled glyphs (tag progress bars, the stats histogram via `statsCell`/`renderCellRow`), coalesce consecutive cells that share a style into one `.Render` call — far fewer escape sequences and it keeps `ansi.StringWidth` honest.
 
 ## House rules (from global CLAUDE.md)

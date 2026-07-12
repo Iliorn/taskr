@@ -161,12 +161,6 @@ func (m model) detailPanelTitle() string {
 			return "#" + tag
 		}
 		return tr("Tag")
-	case tabLearnings:
-		learnings := m.allLearnings()
-		if m.learningCursor < len(learnings) {
-			return truncate(learnings[m.learningCursor].Text, 60)
-		}
-		return tr("Learning")
 	case tabStats:
 		return tr("Activity")
 	default:
@@ -221,7 +215,7 @@ func (m model) View() string {
 	// mode the Tasks detail renders inside buildListContent's right column
 	// instead of as a stacked panel.
 	switch m.tab {
-	case tabTasks, tabLearnings:
+	case tabTasks:
 		showDetail = showDetail && m.pane == paneDetail && !m.sideBySide()
 	case tabTags:
 		showDetail = showDetail && !m.sideBySide()
@@ -237,7 +231,7 @@ func (m model) View() string {
 		switch {
 		case m.tab == tabSettings, m.tab == tabBoard:
 			detailContent = "" // settings and board tabs have no detail pane
-		case m.tab == tabTags || m.tab == tabLearnings || m.tab == tabStats:
+		case m.tab == tabTags || m.tab == tabStats:
 			detailContent = m.buildDetailContent()
 		default:
 			detailContent = m.getCachedDetailContent()
@@ -355,9 +349,6 @@ func (m model) renderStatusLine() string {
 	}
 	if m.tab == tabTags && m.tagTabSearchQuery != "" {
 		chips = append(chips, searchChipStyle.Render("/"+m.tagTabSearchQuery))
-	}
-	if m.tab == tabLearnings && m.learningSearchQuery != "" {
-		chips = append(chips, searchChipStyle.Render("/"+m.learningSearchQuery))
 	}
 	left := strings.Join(chips, " ")
 
@@ -537,9 +528,6 @@ func (m model) buildFooterContent(w int) string {
 	case modeIdlePrompt, modeConfirmUpdate:
 		return calTodayStyle.Render(m.confirmMsg)
 	case modeSearch:
-		if m.tab == tabLearnings {
-			return searchStyle.Width(w).Render(m.learningSearchInput.View())
-		}
 		field := searchStyle.Width(w).Render(m.searchInput.View())
 		// The token grammar (compileSearch) only drives the Tasks list; on the
 		// other tabs the query is a plain name substring, so a chip preview
@@ -696,12 +684,6 @@ func (m model) buildDetailContent() string {
 	switch {
 	case m.tab == tabTags:
 		lines := m.buildTagDetailLines()
-		if len(lines) == 0 {
-			return ""
-		}
-		return strings.Join(lines, "\n")
-	case m.tab == tabLearnings:
-		lines := m.buildLearningDetailLines()
 		if len(lines) == 0 {
 			return ""
 		}
@@ -1473,50 +1455,6 @@ func (m model) buildListLines() []string {
 	return strings.Split(m.renderListContent(), "\n")
 }
 
-func (m model) buildLearningDetailLines() []string {
-	learnings := m.allLearnings()
-	if len(learnings) == 0 || m.learningCursor >= len(learnings) {
-		return strings.Split(dimStyle.Render(tr("  No learning selected.")), "\n")
-	}
-
-	l := learnings[m.learningCursor]
-	b := getBuilder()
-	defer putBuilder(b)
-	availW := m.termWidth - 8
-
-	wrapped := wrapText(l.Text, availW-2)
-	if len(wrapped) > 1 {
-		for _, line := range wrapped {
-			b.WriteString(normalStyle.Render("  "+line) + "\n")
-		}
-		b.WriteString("\n")
-	}
-
-	sourceLabel := "  " + detailLabelStyle.Render(tr("Source task:  "))
-	source := m.findLearningSource(l.ID)
-	if source != nil {
-		status := ""
-		if source.Status == todo.Done {
-			status = "  " + checkDoneStyle.Render(tr("[done]"))
-		}
-		b.WriteString(sourceLabel + normalStyle.Render(source.Title) + status + "\n")
-	} else {
-		b.WriteString(sourceLabel + dimStyle.Render(tr("[task removed]")) + "\n")
-	}
-
-	b.WriteString("  " + detailLabelStyle.Render(tr("Date:         ")) +
-		normalStyle.Render(l.CreatedAt.Format("02-01-06 15:04")) + "\n")
-
-	b.WriteString("  " + detailLabelStyle.Render(tr("Tags:         ")))
-	if len(l.Tags) == 0 {
-		b.WriteString(dimStyle.Render(tr("none")) + "\n")
-	} else {
-		b.WriteString(m.getRenderedTags(l.Tags) + "\n")
-	}
-
-	return strings.Split(b.String(), "\n")
-}
-
 func (m model) buildTagDetailLines() []string {
 	tags := m.getFilteredTagsForTab()
 	if len(tags) == 0 || m.tagTabCursor >= len(tags) {
@@ -1731,7 +1669,6 @@ func (m model) renderTabs(avail int) string {
 		tabBoardActiveStyle,
 		tabStatsActiveStyle,
 		tabSettingsActiveStyle,
-		tabLearningsActiveStyle,
 	}
 	inactiveStyles := [numTabs]lipgloss.Style{
 		tabTasksInactiveStyle,
@@ -1741,13 +1678,12 @@ func (m model) renderTabs(avail int) string {
 		tabBoardInactiveStyle,
 		tabStatsInactiveStyle,
 		tabSettingsInactiveStyle,
-		tabLearningsInactiveStyle,
 	}
 	// The selected tab renders as a solid colored pill. Unselected tabs use
 	// the per-tab color as the foreground so each tab keeps its identity
 	// without a background block.
-	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"), tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings"), tr("8 Learnings")}
-	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7", "8"}
+	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"), tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings")}
+	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7"}
 
 	// abbr keeps the "N " prefix and the first 3 letters of the name ("1 Tas").
 	var abbr [numTabs]string
@@ -1822,8 +1758,6 @@ func (m model) renderListContent() string {
 		return m.renderProjectListContent(m.allProjectsForList())
 	case tabTags:
 		return m.renderTagList()
-	case tabLearnings:
-		return m.renderLearningList()
 	case tabBoard:
 		return m.renderBoardList()
 	case tabStats:

@@ -600,8 +600,6 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.switchTab(tabStats)
 		case "7":
 			m.switchTab(tabSettings)
-		case "8":
-			m.switchTab(tabLearnings)
 
 		case "tab":
 			m.switchTab((m.tab + 1) % numTabs)
@@ -897,8 +895,6 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tabTags:
 		m.clampListOffsetFor(m.tagTabCursor, len(m.getFilteredTagsForTab()))
-	case tabLearnings:
-		m.clampListOffsetFor(m.learningCursor, len(m.allLearnings()))
 	}
 	return m, nil
 }
@@ -974,13 +970,6 @@ func (m model) startSearch() (tea.Model, tea.Cmd) {
 		m.tagTabCursor = 0
 		m.tagTabSearchInput.Focus()
 		return m, textinput.Blink
-	case tabLearnings:
-		m.mode = modeSearch
-		m.learningSearchInput.SetValue("")
-		m.learningSearchQuery = ""
-		m.learningCursor = 0
-		m.learningSearchInput.Focus()
-		return m, textinput.Blink
 	case tabTasks, tabProjects, tabStats:
 		// Stats shares the Tasks-list query: renderStatsList aggregates only
 		// the matching top-level tasks, so a #tag or @project search scopes
@@ -1031,13 +1020,6 @@ func (m *model) cycleSortMode() {
 		m.cursor = 0
 		m.listOffset = 0
 		m.markCacheDirty()
-	case tabLearnings:
-		if m.learningSort == learningSortDate {
-			m.learningSort = learningSortAlpha
-		} else {
-			m.learningSort = learningSortDate
-		}
-		m.learningCursor = 0
 	}
 	m.persistSettings()
 }
@@ -1107,7 +1089,6 @@ func (m *model) persistSettings() {
 		TaskSort:          m.taskSort,
 		HistorySort:       m.historySort,
 		TagSort:           m.tagSort,
-		LearningSort:      m.learningSort,
 		Theme:             m.themeName,
 		Language:          string(activeLang),
 		SeqBiasDeadline:   activeBiases.Deadline,
@@ -1137,10 +1118,6 @@ func (m *model) moveCursorUp() {
 	case tabTags:
 		if n := len(m.getFilteredTagsForTab()); n > 0 {
 			m.tagTabCursor = (m.tagTabCursor - 1 + n) % n
-		}
-	case tabLearnings:
-		if n := len(m.allLearnings()); n > 0 {
-			m.learningCursor = (m.learningCursor - 1 + n) % n
 		}
 	case tabSettings:
 		m.settingsCursor = settingsCursorStep(m.settingsCursor, -1)
@@ -1177,10 +1154,6 @@ func (m *model) moveCursorDown() {
 		if n := len(m.getFilteredTagsForTab()); n > 0 {
 			m.tagTabCursor = (m.tagTabCursor + 1) % n
 		}
-	case tabLearnings:
-		if n := len(m.allLearnings()); n > 0 {
-			m.learningCursor = (m.learningCursor + 1) % n
-		}
 	case tabSettings:
 		m.settingsCursor = settingsCursorStep(m.settingsCursor, +1)
 	case tabProjects:
@@ -1210,8 +1183,6 @@ func (m *model) listNavTarget() (*int, int) {
 		return &m.cursor, m.currentTaskListLen()
 	case tabTags:
 		return &m.tagTabCursor, len(m.getFilteredTagsForTab())
-	case tabLearnings:
-		return &m.learningCursor, len(m.allLearnings())
 	case tabProjects:
 		if m.projectTaskMode {
 			return &m.cursor, m.currentProjectTaskLen()
@@ -1291,11 +1262,6 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 			m.calendar.focusTimeline = true
 			m.calendar.entryCursor = 0
 			m.pushFocus(stateCalTimeline)
-		}
-	case tabLearnings:
-		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-			m.pane = paneDetail
-			m.pushFocus(stateDetailPane)
 		}
 	case tabProjects:
 		if !m.projectTaskMode {
@@ -1473,7 +1439,6 @@ func (m *model) applyLangPlaceholders() {
 	m.tagSearchInput.Placeholder = tr("Search or create tag...")
 	m.projSearchInput.Placeholder = tr("Search or create project...")
 	m.tagTabSearchInput.Placeholder = tr("Filter tags...")
-	m.learningSearchInput.Placeholder = tr("Search learnings... (use # to filter by tag)")
 }
 
 func (m model) handleListRename() (tea.Model, tea.Cmd) {
@@ -1515,15 +1480,6 @@ func (m model) handleListRename() (tea.Model, tea.Cmd) {
 				return m, textinput.Blink
 			}
 		}
-	case tabLearnings:
-		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-			m.pendingLearning = m.learningCursor
-			m.mode = modeEditLearning
-			m.textInput.SetValue(learnings[m.learningCursor].Text)
-			m.textInput.Placeholder = tr("Edit learning...")
-			m.textInput.Focus()
-			return m, textinput.Blink
-		}
 	}
 	return m, nil
 }
@@ -1559,13 +1515,6 @@ func (m model) handleListDelete() (tea.Model, tea.Cmd) {
 			} else {
 				m.confirmMsg = fmt.Sprintf(tr("Delete '%s'? (y/n)"), t.Title)
 			}
-		}
-	case tabLearnings:
-		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-			m.mode = modeConfirm
-			m.confirmOnYes = (*model).confirmDeleteLearning
-			m.pendingLearning = m.learningCursor
-			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(learnings[m.learningCursor].Text, 40))
 		}
 	}
 	return m, nil

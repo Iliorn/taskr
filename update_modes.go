@@ -263,16 +263,7 @@ func (m model) updateEditLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "enter":
 			if newText := strings.TrimSpace(m.textInput.Value()); newText != "" {
-				if m.tab == tabLearnings {
-					if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-						// updateLearningByID walks every task and returns the
-						// parent ID — we don't know which task to snapshot
-						// ahead of time, so capture full state.
-						m.pushUndo("edit learning")
-						parentID := m.updateLearningByID(learnings[m.learningCursor].ID, newText)
-						m.markModified(parentID)
-					}
-				} else if t := m.currentTodo(); t != nil && m.detail.learningCursor < len(t.Learnings) {
+				if t := m.currentTodo(); t != nil && m.detail.learningCursor < len(t.Learnings) {
 					m.pushUndo("edit learning", t.ID)
 					t.UpdateLearning(m.detail.learningCursor, newText)
 					m.markModified(t.ID)
@@ -396,66 +387,41 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "enter":
 			m.mode = modeNormal
-			if m.tab == tabLearnings {
-				m.learningSearchQuery = m.learningSearchInput.Value()
-				m.learningCursor = 0
-				if m.learningSearchQuery != "" {
-					m.pushFocus(stateLearningSearch)
-				} else {
-					m.dropFocus(stateLearningSearch)
-				}
+			m.searchQuery = m.searchInput.Value()
+			if m.searchQuery != "" {
+				m.pushFocus(stateSearch)
 			} else {
-				m.searchQuery = m.searchInput.Value()
-				if m.searchQuery != "" {
-					m.pushFocus(stateSearch)
-				} else {
-					m.dropFocus(stateSearch)
-				}
-				m.cursor = 0
-				m.projectCursor = 0
-				m.listOffset = 0
-				m.markFilterDirty()
+				m.dropFocus(stateSearch)
 			}
-			return m, nil
-		case "esc":
-			// Cancel: discard the query and restore the unfiltered list.
-			m.mode = modeNormal
-			if m.tab == tabLearnings {
-				m.learningSearchInput.SetValue("")
-				m.learningSearchQuery = ""
-				m.learningCursor = 0
-			} else {
-				m.searchInput.SetValue("")
-				m.searchQuery = ""
-				m.cursor = 0
-				m.projectCursor = 0
-				m.listOffset = 0
-				m.markFilterDirty()
-			}
-			return m, nil
-		}
-	}
-	if m.tab == tabLearnings {
-		m.learningSearchInput, cmd = m.learningSearchInput.Update(msg)
-		newQuery := m.learningSearchInput.Value()
-		if newQuery != m.learningSearchQuery {
-			m.learningSearchQuery = newQuery
-			m.learningCursor = 0
-		}
-	} else {
-		m.searchInput, cmd = m.searchInput.Update(msg)
-		newQuery := m.searchInput.Value()
-		if newQuery != m.searchQuery {
-			// Only invalidate caches and reset cursor when the query
-			// actually changed. Otherwise cursor-blink ticks would
-			// rebuild caches on every frame, reshuffling tied done
-			// tasks (see sortTodosBySequenceWithRollup tiebreakers).
-			m.searchQuery = newQuery
 			m.cursor = 0
 			m.projectCursor = 0
 			m.listOffset = 0
 			m.markFilterDirty()
+			return m, nil
+		case "esc":
+			// Cancel: discard the query and restore the unfiltered list.
+			m.mode = modeNormal
+			m.searchInput.SetValue("")
+			m.searchQuery = ""
+			m.cursor = 0
+			m.projectCursor = 0
+			m.listOffset = 0
+			m.markFilterDirty()
+			return m, nil
 		}
+	}
+	m.searchInput, cmd = m.searchInput.Update(msg)
+	newQuery := m.searchInput.Value()
+	if newQuery != m.searchQuery {
+		// Only invalidate caches and reset cursor when the query
+		// actually changed. Otherwise cursor-blink ticks would
+		// rebuild caches on every frame, reshuffling tied done
+		// tasks (see sortTodosBySequenceWithRollup tiebreakers).
+		m.searchQuery = newQuery
+		m.cursor = 0
+		m.projectCursor = 0
+		m.listOffset = 0
+		m.markFilterDirty()
 	}
 	return m, cmd
 }
@@ -906,18 +872,7 @@ func (m *model) confirmDeleteProject() tea.Cmd {
 }
 
 func (m *model) confirmDeleteLearning() tea.Cmd {
-	if m.tab == tabLearnings {
-		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-			// We don't know the parent ID until deleteLearningByID returns it,
-			// so capture the snapshot afterwards via the no-args fallback.
-			m.pushUndo("delete learning")
-			parentID := m.deleteLearningByID(learnings[m.learningCursor].ID)
-			m.markModified(parentID)
-			if remaining := m.allLearnings(); m.learningCursor >= len(remaining) && m.learningCursor > 0 {
-				m.learningCursor--
-			}
-		}
-	} else if t := m.currentTodo(); t != nil && m.detail.learningCursor < len(t.Learnings) {
+	if t := m.currentTodo(); t != nil && m.detail.learningCursor < len(t.Learnings) {
 		m.pushUndo("delete learning", t.ID)
 		t.DeleteLearning(m.detail.learningCursor)
 		if m.detail.learningCursor >= len(t.Learnings) && m.detail.learningCursor > 0 {

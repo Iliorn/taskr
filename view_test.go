@@ -70,7 +70,7 @@ func TestNarrowNoWrapDanish(t *testing.T) {
 	// Reflowing single-list tabs are checked across every width. The calendar and
 	// projects tabs use fixed two-panel layouts with their own minimum widths (and
 	// pre-existing narrow-width handling), so they're only swept where they fit.
-	listTabs := []tab{tabTasks, tabTags, tabLearnings, tabStats, tabSettings}
+	listTabs := []tab{tabTasks, tabTags, tabBoard, tabStats, tabSettings}
 	panelTabs := []tab{tabCalendar, tabProjects}
 
 	// initialModel applies the stored language, so set lang *after* building it.
@@ -172,31 +172,6 @@ func TestSideBySideDetailPreview(t *testing.T) {
 	m2 := script(t, m, "enter")
 	if !strings.Contains(m2.View(), tr("Priority")) {
 		t.Error("stacked fallback: Enter should open the detail pane")
-	}
-}
-
-// The Learnings tab shares the Tasks tab's side-by-side contract: at wide
-// widths the cursor learning's detail previews in the right column without
-// Enter, and narrow terminals fall back to the stacked enter-to-open layout.
-func TestLearningsSideBySide(t *testing.T) {
-	task := todo.New("ship the release")
-	task.AddLearning("tag the release before pushing")
-	m := modelWithTasks(t, task)
-	m.tab = tabLearnings
-	m.termHeight = 40
-
-	m.termWidth = sideBySideMinWidth + 10
-	if !strings.Contains(m.View(), tr("Source task:  ")) {
-		t.Error("side-by-side: learning detail should render without Enter")
-	}
-
-	m.termWidth = sideBySideMinWidth - 10
-	if strings.Contains(m.View(), tr("Source task:  ")) {
-		t.Error("stacked fallback: learning detail should stay hidden until Enter")
-	}
-	m2 := script(t, m, "enter")
-	if !strings.Contains(m2.View(), tr("Source task:  ")) {
-		t.Error("stacked fallback: Enter should open the learning detail pane")
 	}
 }
 
@@ -372,7 +347,7 @@ func TestEnterOnInboundDependentJumps(t *testing.T) {
 // abbreviation. Under the new scheme the selected tab keeps its full label while
 // unselected tabs use the abbreviated form.
 //
-// Two different selected tabs are exercised: tabLearnings ("8 Learnings", the
+// Two different selected tabs are exercised: tabCalendar ("2 Calendar", the
 // longest label) and tabSettings ("7 Settings").
 func TestSelectedTabNeverTruncated(t *testing.T) {
 	applyLang(string(langEN))
@@ -382,7 +357,7 @@ func TestSelectedTabNeverTruncated(t *testing.T) {
 		fullLabel   string
 		abbrLabel   string
 	}{
-		{tabLearnings, "8 Learnings", "8 Lea"},
+		{tabCalendar, "2 Calendar", "2 Cal"},
 		{tabSettings, "7 Settings", "7 Set"},
 	}
 
@@ -435,8 +410,8 @@ func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 		checkWrap bool // false for fixed-layout tabs that have their own min-width
 	}
 	cases := []tabCase{
-		{tabLearnings, true}, // "8 Learnings" — longest label, list-only tab
-		{tabSettings, true},  // "7 Settings"  — second selected-tab check
+		{tabBoard, true},    // "5 Board" — list-style tab under the no-wrap contract
+		{tabSettings, true}, // "7 Settings" — second selected-tab check
 	}
 
 	for _, tc := range cases {
@@ -444,7 +419,6 @@ func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 			fullLabel := [numTabs]string{
 				tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"),
 				tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings"),
-				tr("8 Learnings"),
 			}[tc.tb]
 
 			for _, width := range []int{40, 50, 60, 70, 80, 100, 120} {

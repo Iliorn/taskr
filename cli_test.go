@@ -1500,3 +1500,80 @@ func TestCliEditPriorityAlias(t *testing.T) {
 		t.Errorf("Priority = %v, want High (edit --priority h)", got.Priority)
 	}
 }
+
+// TestCliLearnings covers the cross-task recall command that replaced the
+// Learnings tab: listing with source attribution, text and #tag filtering,
+// and the JSON shape.
+func TestCliLearnings(t *testing.T) {
+	captureStdout(t, func() {
+		if code := cliAdd([]string{"learned from this", "--tag", "golang", "--quiet-id"}); code != 0 {
+			t.Fatalf("add: exit %d", code)
+		}
+	})
+	repo, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	var src *todo.Todo
+	for i := range todos {
+		if todos[i].Title == "Learned from this" {
+			src = &todos[i]
+		}
+	}
+	if src == nil {
+		t.Fatal("seed task not found")
+	}
+	src.AddLearning("always flush the pipeline")
+	if err := repo.Save([]*todo.Todo{src}, nil); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		if code := cliLearnings(nil); code != 0 {
+			t.Fatalf("learnings: exit %d", code)
+		}
+	})
+	if !strings.Contains(out, "always flush the pipeline") || !strings.Contains(out, "Learned from this") {
+		t.Errorf("listing missing text or source:\n%s", out)
+	}
+
+	out = captureStdout(t, func() {
+		if code := cliLearnings([]string{"#golang"}); code != 0 {
+			t.Fatalf("learnings #tag: exit %d", code)
+		}
+	})
+	if !strings.Contains(out, "always flush the pipeline") {
+		t.Errorf("#tag filter should match via the source task's tags:\n%s", out)
+	}
+
+	out = captureStdout(t, func() {
+		if code := cliLearnings([]string{"no-such-text"}); code != 0 {
+			t.Fatalf("learnings miss: exit %d", code)
+		}
+	})
+	if !strings.Contains(out, "no learnings match") {
+		t.Errorf("miss should say so:\n%s", out)
+	}
+
+	out = captureStdout(t, func() {
+		if code := cliLearnings([]string{"--json"}); code != 0 {
+			t.Fatalf("learnings --json: exit %d", code)
+		}
+	})
+	var rows []map[string]any
+	if err := json.Unmarshal([]byte(out), &rows); err != nil {
+		t.Fatalf("json: %v\n%s", err, out)
+	}
+	found := false
+	for _, r := range rows {
+		if r["text"] == "always flush the pipeline" {
+			found = true
+			if r["source_task_title"] != "Learned from this" {
+				t.Errorf("json source_task_title = %v", r["source_task_title"])
+			}
+		}
+	}
+	if !found {
+		t.Error("json output missing the learning")
+	}
+}

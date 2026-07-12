@@ -106,7 +106,7 @@ func (m *model) clampListOffsetVisible(cursor, listLen, visible int) {
 // below the width threshold each falls back to its stacked layout
 // (enter-to-open for Tasks/Learnings, always-on below the list for Tags).
 func (m model) sideBySide() bool {
-	return (m.tab == tabTasks || m.tab == tabLearnings || m.tab == tabTags) &&
+	return (m.tab == tabTasks || m.tab == tabTags) &&
 		m.termWidth >= sideBySideMinWidth
 }
 
@@ -120,7 +120,7 @@ func (m model) detailVisible() bool {
 		return false
 	}
 	switch m.tab {
-	case tabTasks, tabLearnings:
+	case tabTasks:
 		return m.pane == paneDetail && !m.sideBySide()
 	case tabTags:
 		// Always-on preview: stacked panel below the threshold, right column above.

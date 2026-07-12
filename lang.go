@@ -193,14 +193,13 @@ var daTranslations = map[string]string{
 	"(untagged)": "(uden mærke)",
 
 	// Tab labels (number prefix kept; only the word is translated)
-	"1 Tasks":     "1 Opgaver",
-	"2 Calendar":  "2 Kalender",
-	"3 Projects":  "3 Projekter",
-	"4 Tags":      "4 Mærker",
-	"5 Board":     "5 Tavle",
-	"6 Stats":     "6 Statistik",
-	"7 Settings":  "7 Indstillinger",
-	"8 Learnings": "8 Læring",
+	"1 Tasks":    "1 Opgaver",
+	"2 Calendar": "2 Kalender",
+	"3 Projects": "3 Projekter",
+	"4 Tags":     "4 Mærker",
+	"5 Board":    "5 Tavle",
+	"6 Stats":    "6 Statistik",
+	"7 Settings": "7 Indstillinger",
 
 	// Key hints (footer)
 	"←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back":                                               "←/→ sider · enter rediger · a tilføj · d skift · x fjern · n noter · esc tilbage",

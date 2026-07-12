@@ -32,7 +32,7 @@ func TestKeymapActionsAreConsistent(t *testing.T) {
 // user would experience), which is what forced h off the vim-left slot.
 func TestKeymapNoIntraContextCollision(t *testing.T) {
 	ctxs := []keyCtx{
-		ctxTasksList, ctxTasksDetail, ctxProjects, ctxTags, ctxLearnings,
+		ctxTasksList, ctxTasksDetail, ctxProjects, ctxTags, ctxBoard,
 		ctxStats, ctxCalendar, ctxCalendarTimeline, ctxSettings,
 	}
 	for _, ctx := range ctxs {
@@ -75,7 +75,7 @@ func TestKeymapCoversPreviouslyMissingKeys(t *testing.T) {
 func TestKeymapGeneratesHintsAndHelp(t *testing.T) {
 	ctxs := map[string]keyCtx{
 		"tasks": ctxTasksList, "detail": ctxTasksDetail, "projects": ctxProjects,
-		"tags": ctxTags, "learnings": ctxLearnings, "calendar": ctxCalendar,
+		"tags": ctxTags, "board": ctxBoard, "calendar": ctxCalendar,
 		"calendarTimeline": ctxCalendarTimeline, "settings": ctxSettings,
 	}
 	for name, ctx := range ctxs {

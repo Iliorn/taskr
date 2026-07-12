@@ -27,7 +27,6 @@ type cacheState struct {
 	tagsSortMode  tagSortMode
 	untaggedTotal int
 	untaggedDone  int
-	learnings     []learningView
 	projects      []string
 	projectTasks  map[string][]todo.Todo
 	tagLastUsed   map[string]time.Time // tag → latest ModifiedAt of a task using it
@@ -35,9 +34,7 @@ type cacheState struct {
 	tagRender     map[string]string
 	taskTagRender map[string]string
 
-	learningSearch string
-	learningSort   learningSortMode
-	projectSearch  string
+	projectSearch string
 
 	// Tasks-tab column-sizing metrics for the active list: the widest rendered
 	// row content and the widest tag cell. Derived from the active set + overdue
@@ -96,8 +93,6 @@ func (m *model) refreshCaches() {
 
 	m.cache.projects = nil
 	m.cache.projectSearch = "\x00"
-
-	m.cache.learningSearch = "\x00"
 
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
@@ -308,16 +303,6 @@ func (m *model) refreshTagRenderCache() {
 	}
 }
 
-func (m *model) refreshLearnings() {
-	if m.cache.learningSearch == m.learningSearchQuery &&
-		m.cache.learningSort == m.learningSort {
-		return
-	}
-	m.cache.learnings = selectLearnings(m.allTodos(), m.learningSearchQuery, m.learningSort)
-	m.cache.learningSearch = m.learningSearchQuery
-	m.cache.learningSort = m.learningSort
-}
-
 func (m *model) refreshProjects() {
 	if m.cache.projectSearch == m.searchQuery {
 		return
@@ -343,11 +328,6 @@ func (m model) activeTodos() []todo.Todo {
 
 func (m model) completedTodos() []todo.Todo {
 	return m.cache.done
-}
-
-func (m *model) allLearnings() []learningView {
-	m.refreshLearnings()
-	return m.cache.learnings
 }
 
 func (m *model) allProjectsForList() []string {

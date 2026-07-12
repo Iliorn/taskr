@@ -128,23 +128,21 @@ var currentTheme theme
 var (
 	titleStyle lipgloss.Style
 
-	tabTasksActiveStyle     lipgloss.Style
-	tabProjectsActiveStyle  lipgloss.Style
-	tabTagsActiveStyle      lipgloss.Style
-	tabBoardActiveStyle     lipgloss.Style
-	tabLearningsActiveStyle lipgloss.Style
-	tabStatsActiveStyle     lipgloss.Style
-	tabCalendarActiveStyle  lipgloss.Style
-	tabSettingsActiveStyle  lipgloss.Style
+	tabTasksActiveStyle    lipgloss.Style
+	tabProjectsActiveStyle lipgloss.Style
+	tabTagsActiveStyle     lipgloss.Style
+	tabBoardActiveStyle    lipgloss.Style
+	tabStatsActiveStyle    lipgloss.Style
+	tabCalendarActiveStyle lipgloss.Style
+	tabSettingsActiveStyle lipgloss.Style
 
-	tabTasksInactiveStyle     lipgloss.Style
-	tabProjectsInactiveStyle  lipgloss.Style
-	tabTagsInactiveStyle      lipgloss.Style
-	tabBoardInactiveStyle     lipgloss.Style
-	tabLearningsInactiveStyle lipgloss.Style
-	tabStatsInactiveStyle     lipgloss.Style
-	tabCalendarInactiveStyle  lipgloss.Style
-	tabSettingsInactiveStyle  lipgloss.Style
+	tabTasksInactiveStyle    lipgloss.Style
+	tabProjectsInactiveStyle lipgloss.Style
+	tabTagsInactiveStyle     lipgloss.Style
+	tabBoardInactiveStyle    lipgloss.Style
+	tabStatsInactiveStyle    lipgloss.Style
+	tabCalendarInactiveStyle lipgloss.Style
+	tabSettingsInactiveStyle lipgloss.Style
 
 	selectedStyle   lipgloss.Style
 	normalStyle     lipgloss.Style
@@ -235,7 +233,6 @@ func applyTheme(t theme) {
 	tabProjectsActiveStyle = activeTab(t.orange)
 	tabTagsActiveStyle = activeTab(t.purple)
 	tabBoardActiveStyle = activeTab(t.purpleLt)
-	tabLearningsActiveStyle = activeTab(t.yellow)
 	tabStatsActiveStyle = activeTab(t.blue)
 	tabCalendarActiveStyle = activeTab(t.teal)
 	tabSettingsActiveStyle = activeTab(t.accent)
@@ -244,7 +241,6 @@ func applyTheme(t theme) {
 	tabProjectsInactiveStyle = inactiveTab(t.orange)
 	tabTagsInactiveStyle = inactiveTab(t.purple)
 	tabBoardInactiveStyle = inactiveTab(t.purpleLt)
-	tabLearningsInactiveStyle = inactiveTab(t.yellow)
 	tabStatsInactiveStyle = inactiveTab(t.blue)
 	tabCalendarInactiveStyle = inactiveTab(t.teal)
 	tabSettingsInactiveStyle = inactiveTab(t.accent)

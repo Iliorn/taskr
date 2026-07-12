@@ -12,10 +12,6 @@ import (
 // ── Detail pane ───────────────────────────────────────────────────────────────
 
 func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if m.tab == tabLearnings {
-		return m.updateLearningsDetail(msg)
-	}
-
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return m, nil
@@ -449,39 +445,6 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 			m.pendingEntryTaskID = t.ID
 			m.pendingEntryID = e.ID
 			m.confirmMsg = fmt.Sprintf(tr("Delete %s entry? (y/n)"), formatDuration(e.Duration()))
-		}
-	}
-	return m, nil
-}
-
-func (m model) updateLearningsDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
-	key, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
-	}
-	switch key.String() {
-	case "?":
-		m.mode = modeHelp
-	case "u":
-		return m, m.performUndo()
-	case "esc":
-		m.popFocus()
-	case "tab":
-		m.switchTab((m.tab + 1) % numTabs)
-	case "x", "delete":
-		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-			m.mode = modeConfirm
-			m.confirmOnYes = (*model).confirmDeleteLearning
-			m.pendingLearning = m.learningCursor
-			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(learnings[m.learningCursor].Text, 40))
-		}
-	case "r":
-		if learnings := m.allLearnings(); m.learningCursor < len(learnings) {
-			m.mode = modeEditLearning
-			m.textInput.SetValue(learnings[m.learningCursor].Text)
-			m.textInput.Placeholder = tr("Edit learning...")
-			m.textInput.Focus()
-			return m, textinput.Blink
 		}
 	}
 	return m, nil

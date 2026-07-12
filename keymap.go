@@ -22,7 +22,6 @@ const (
 	ctxTasksDetail
 	ctxProjects
 	ctxTags
-	ctxLearnings
 	ctxStats
 	ctxCalendar
 	ctxCalendarTimeline
@@ -32,7 +31,7 @@ const (
 	// ctxAll marks the global bindings (navigation, help, undo, quit) that are
 	// live in every context.
 	ctxAll = ctxTasksList | ctxTasksDetail | ctxProjects | ctxTags |
-		ctxLearnings | ctxStats | ctxCalendar | ctxCalendarTimeline | ctxSettings |
+		ctxStats | ctxCalendar | ctxCalendarTimeline | ctxSettings |
 		ctxBoard
 )
 
@@ -51,7 +50,7 @@ type binding struct {
 // these. Navigation and App collect the global bindings.
 var helpSectionOrder = []string{
 	secNavigation, secTasks, secDetail, secTagsProjects,
-	secBoard, secLearnings, secCalendar, secStats, secSettings, secApp,
+	secBoard, secCalendar, secStats, secSettings, secApp,
 }
 
 const (
@@ -60,7 +59,6 @@ const (
 	secDetail       = "Detail view"
 	secTagsProjects = "Tags & Projects"
 	secBoard        = "Board"
-	secLearnings    = "Learnings"
 	secCalendar     = "Calendar"
 	secStats        = "Stats"
 	secSettings     = "Settings"
@@ -114,10 +112,6 @@ var keymap = []binding{
 	{ctxProjects | ctxTags, "/", "search", "filter", secTagsProjects, true, true},
 
 	// ── Learnings ────────────────────────────────────────────────────────
-	{ctxLearnings, "r", "edit", "edit learning", secLearnings, true, false},
-	{ctxLearnings, "x", "delete", "delete learning", secLearnings, true, false},
-	{ctxLearnings, "s", "sort", "sort date/alpha", secLearnings, true, false},
-	{ctxLearnings, "/", "search", "search", secLearnings, true, true},
 
 	// ── Calendar ─────────────────────────────────────────────────────────
 	{ctxCalendar, "←/→ ↑/↓", "calnav", "move by day / week", secCalendar, true, false},
@@ -161,8 +155,6 @@ func (m model) currentKeyCtx() keyCtx {
 		return ctxProjects
 	case tabTags:
 		return ctxTags
-	case tabLearnings:
-		return ctxLearnings
 	case tabStats:
 		return ctxStats
 	case tabCalendar:

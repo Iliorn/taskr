@@ -27,10 +27,9 @@ const (
 	tabBoard
 	tabStats
 	tabSettings
-	tabLearnings // demoted to the last slot when the Board took tab 5; kept while learnings live on
 )
 
-const numTabs = 8
+const numTabs = 7
 
 // Rows in the Settings tab. Bias rows come first because they're the
 // sequencing engine's only user-visible knob; cosmetic rows (theme, language)
@@ -281,13 +280,12 @@ type model struct {
 	projSearch searchState
 
 	// Inputs
-	textInput           textinput.Model
-	searchInput         textinput.Model
-	depSearchInput      textinput.Model
-	tagSearchInput      textinput.Model
-	projSearchInput     textinput.Model
-	tagTabSearchInput   textinput.Model
-	learningSearchInput textinput.Model
+	textInput         textinput.Model
+	searchInput       textinput.Model
+	depSearchInput    textinput.Model
+	tagSearchInput    textinput.Model
+	projSearchInput   textinput.Model
+	tagTabSearchInput textinput.Model
 
 	// UI state
 	confirmMsg string
@@ -310,11 +308,9 @@ type model struct {
 	errKind              toastKind // styles the toast: error (default) / success / info
 	projectCursor        int
 	tagTabCursor         int
-	learningCursor       int
 	settingsCursor       int
 	searchQuery          string
 	tagTabSearchQuery    string
-	learningSearchQuery  string
 	listOffset           int
 	helpScroll           int
 	tabViews             [numTabs]tabView
@@ -328,7 +324,6 @@ type model struct {
 	tagSort              tagSortMode
 	taskSort             taskSortMode
 	historySort          historySortMode
-	learningSort         learningSortMode
 	statsRange           statsRangeMode
 	themeName            string
 	updateStatus         string
@@ -403,9 +398,6 @@ func initialModel(repo Repository) model {
 	tagTabSearch := textinput.New()
 	tagTabSearch.CharLimit = 50
 
-	learningSearch := textinput.New()
-	learningSearch.CharLimit = 100
-
 	todos, err := repo.Load()
 	errMsg := ""
 	if err != nil {
@@ -444,33 +436,31 @@ func initialModel(repo Repository) model {
 		store.undoStack = append(store.undoStack, persisted...)
 	}
 	m := model{
-		Store:               store,
-		repo:                repo,
-		textInput:           ti,
-		searchInput:         si,
-		depSearchInput:      di,
-		tagSearchInput:      tagi,
-		projSearchInput:     proji,
-		tagTabSearchInput:   tagTabSearch,
-		learningSearchInput: learningSearch,
-		mode:                modeNormal,
-		pane:                paneList,
-		tab:                 tabTasks,
-		termWidth:           80,
-		termHeight:          24,
-		err:                 errMsg,
-		tagSort:             settings.TagSort,
-		taskSort:            settings.TaskSort,
-		historySort:         settings.HistorySort,
-		learningSort:        settings.LearningSort,
-		autoCloseParent:     settings.AutoCloseParent,
-		autoCloseSubtasks:   settings.AutoCloseSubtasks,
-		themeName:           th.name,
-		expandedTasks:       make(map[string]bool),
-		editorCmd:           resolveEditorCmd(),
-		frameTime:           time.Now(),
-		ganttBarBuf:         make([]rune, 256),
-		ganttColorBuf:       make([]int, 256),
+		Store:             store,
+		repo:              repo,
+		textInput:         ti,
+		searchInput:       si,
+		depSearchInput:    di,
+		tagSearchInput:    tagi,
+		projSearchInput:   proji,
+		tagTabSearchInput: tagTabSearch,
+		mode:              modeNormal,
+		pane:              paneList,
+		tab:               tabTasks,
+		termWidth:         80,
+		termHeight:        24,
+		err:               errMsg,
+		tagSort:           settings.TagSort,
+		taskSort:          settings.TaskSort,
+		historySort:       settings.HistorySort,
+		autoCloseParent:   settings.AutoCloseParent,
+		autoCloseSubtasks: settings.AutoCloseSubtasks,
+		themeName:         th.name,
+		expandedTasks:     make(map[string]bool),
+		editorCmd:         resolveEditorCmd(),
+		frameTime:         time.Now(),
+		ganttBarBuf:       make([]rune, 256),
+		ganttColorBuf:     make([]int, 256),
 		cache: &cacheState{
 			dirty:         true,
 			overdueSet:    make(map[string]bool),
@@ -903,44 +893,6 @@ func (m model) currentTodo() *todo.Todo {
 }
 
 // ── Learnings helpers ─────────────────────────────────────────────────────────
-
-func (m model) findLearningSource(learningID string) *todo.Todo {
-	for _, t := range m.tasks {
-		for _, l := range t.Learnings {
-			if l.ID == learningID {
-				return t
-			}
-		}
-	}
-	return nil
-}
-
-// deleteLearningByID removes the named learning from its parent task and
-// returns the parent's ID (or "" if not found) so callers can mark it dirty.
-func (m *model) deleteLearningByID(learningID string) string {
-	for _, t := range m.tasks {
-		for j, l := range t.Learnings {
-			if l.ID == learningID {
-				t.DeleteLearning(j)
-				return t.ID
-			}
-		}
-	}
-	return ""
-}
-
-// updateLearningByID rewrites a learning's text and returns its parent's ID.
-func (m *model) updateLearningByID(learningID, newText string) string {
-	for _, t := range m.tasks {
-		for j, l := range t.Learnings {
-			if l.ID == learningID {
-				t.UpdateLearning(j, newText)
-				return t.ID
-			}
-		}
-	}
-	return ""
-}
 
 // ── Subtask helpers ───────────────────────────────────────────────────────────
 

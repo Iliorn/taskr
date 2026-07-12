@@ -35,12 +35,11 @@ type appSettings struct {
 	// the current version.
 	Version int `json:"version"`
 
-	TaskSort     taskSortMode     `json:"task_sort"`
-	HistorySort  historySortMode  `json:"history_sort"`
-	TagSort      tagSortMode      `json:"tag_sort"`
-	LearningSort learningSortMode `json:"learning_sort"`
-	Theme        string           `json:"theme"`
-	Language     string           `json:"language"`
+	TaskSort    taskSortMode    `json:"task_sort"`
+	HistorySort historySortMode `json:"history_sort"`
+	TagSort     tagSortMode     `json:"tag_sort"`
+	Theme       string          `json:"theme"`
+	Language    string          `json:"language"`
 
 	// Sequencing biases: ints 0/1/2 mapping to biasBalanced/Relaxed/Intense.
 	// Stored as ints (not enum names) to match the existing convention used by
