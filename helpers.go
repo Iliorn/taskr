@@ -218,14 +218,15 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	c.titleW = contentFitWidth(termWidth, contentMax, 4, floor)
 
 	lastW := scoreColW
-	// The active list shows short relative due values ("2d", "today"), so size
-	// the Due column to its widest entry plus the 3-space trailing gap (which,
-	// with the Size column's 2-space left pad, forms the same 5-char rhythm as
-	// the other columns) — floored to the header label and capped at dueColW,
-	// the full-date worst case. History always shows absolute dates, so it keeps
-	// the fixed 12-wide column that also matches its Completed column.
-	dueW := dueMax + 3
-	if hdr := len([]rune(tr("Due"))) + 3; dueW < hdr {
+	// The active list shows short relative due values ("2d", "today"), so hug the
+	// Due column to its widest entry plus a single trailing space; the Size
+	// column's own 2-space left pad supplies the rest of the inter-column gap, so
+	// a 2-char "3d" no longer strands a wide empty column. Floored to the header
+	// label ("Due") so it never clips, capped at dueColW, the full-date worst
+	// case. History always shows absolute dates, so it keeps the fixed 12-wide
+	// column that also matches its Completed column.
+	dueW := dueMax + 1
+	if hdr := len([]rune(tr("Due"))); dueW < hdr {
 		dueW = hdr
 	}
 	if dueW > dueColW {
