@@ -470,7 +470,7 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 			w += sizeColW
 		}
 		if c.showDue {
-			w += dueColW
+			w += c.dueW
 		}
 		if c.showLast {
 			w += scoreColW
@@ -496,7 +496,7 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := taskListCols(tt.termWidth, false, tt.contentMax, tt.tagsMax, true, 8)
+			c := taskListCols(tt.termWidth, false, tt.contentMax, tt.tagsMax, true, 8, 8)
 
 			// Never wider than the longest title needs (+gap), but at least the
 			// header label — growth must not produce an empty padded column.
@@ -526,18 +526,18 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 
 	// On a wide terminal a long title must grow past the flat nameColMaxWidth
 	// cap, filling slack the old hard cap left empty.
-	if c := taskListCols(200, false, 120, 0, true, 0); c.titleW <= nameColMaxWidth {
+	if c := taskListCols(200, false, 120, 0, true, 8, 0); c.titleW <= nameColMaxWidth {
 		t.Errorf("wide terminal titleW = %d, want > flat cap %d (should absorb slack)",
 			c.titleW, nameColMaxWidth)
 	}
 	// But a short title still hugs its content — no needless sprawl.
-	if c := taskListCols(200, false, 18, 0, true, 0); c.titleW != 18+4 {
+	if c := taskListCols(200, false, 18, 0, true, 8, 0); c.titleW != 18+4 {
 		t.Errorf("short title titleW = %d, want %d (hug content)", c.titleW, 18+4)
 	}
 	// Reserving tag room must shrink the grown title vs. the no-tags case, so
 	// the tags column survives.
-	noTags := taskListCols(200, false, 120, 0, true, 0)
-	withTags := taskListCols(200, false, 120, 40, true, 0)
+	noTags := taskListCols(200, false, 120, 0, true, 8, 0)
+	withTags := taskListCols(200, false, 120, 40, true, 8, 0)
 	if !(withTags.titleW < noTags.titleW) {
 		t.Errorf("titleW with tags reserve = %d, want < no-reserve %d",
 			withTags.titleW, noTags.titleW)
@@ -551,13 +551,13 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 // carries no "Due" label either.
 func TestDueColumnCollapseWhenNoDueDates(t *testing.T) {
 	// hasDue=false: column must be absent regardless of terminal width.
-	c := taskListCols(120, false, 20, 0, false, 0)
+	c := taskListCols(120, false, 20, 0, false, 0, 0)
 	if c.showDue {
 		t.Error("showDue should be false when hasDue=false")
 	}
 
 	// hasDue=true: column must appear on a reasonably wide terminal.
-	c = taskListCols(120, false, 20, 0, true, 0)
+	c = taskListCols(120, false, 20, 0, true, 2, 0)
 	if !c.showDue {
 		t.Error("showDue should be true when hasDue=true and there is room")
 	}
@@ -571,7 +571,7 @@ func TestDueColumnAppearsWhenAtLeastOneDue(t *testing.T) {
 	var b strings.Builder
 
 	// No due dates: header must not contain the "Due" column label.
-	noDueCols := taskListCols(120, false, 20, 0, false, 0)
+	noDueCols := taskListCols(120, false, 20, 0, false, 0, 0)
 	b.Reset()
 	renderListHeader(&b, 120, false, noDueCols, "")
 	hdrNoDue := b.String()
@@ -581,7 +581,7 @@ func TestDueColumnAppearsWhenAtLeastOneDue(t *testing.T) {
 	}
 
 	// With a due date: header must now contain "Due".
-	withDueCols := taskListCols(120, false, 20, 0, true, 0)
+	withDueCols := taskListCols(120, false, 20, 0, true, 2, 0)
 	b.Reset()
 	renderListHeader(&b, 120, false, withDueCols, "")
 	hdrWithDue := b.String()
@@ -616,7 +616,7 @@ func TestDueColumnNoWrapContractWithCollapse(t *testing.T) {
 // projectW == 0) and the header carries no "Project" label.
 func TestProjectColumnCollapseWhenNoProjects(t *testing.T) {
 	// widestProject=0: column must be absent regardless of terminal width.
-	c := taskListCols(120, false, 20, 0, false, 0)
+	c := taskListCols(120, false, 20, 0, false, 0, 0)
 	if c.showProject {
 		t.Error("showProject should be false when widestProject=0")
 	}
@@ -625,7 +625,7 @@ func TestProjectColumnCollapseWhenNoProjects(t *testing.T) {
 	}
 
 	// widestProject>0: column must appear on a reasonably wide terminal.
-	c = taskListCols(120, false, 20, 0, false, 5)
+	c = taskListCols(120, false, 20, 0, false, 0, 5)
 	if !c.showProject {
 		t.Error("showProject should be true when widestProject>0 and there is room")
 	}
@@ -641,7 +641,7 @@ func TestProjectColumnAppearsWhenAtLeastOneProject(t *testing.T) {
 	var b strings.Builder
 
 	// No projects: header must not contain the "Project" column label.
-	noProjCols := taskListCols(120, false, 20, 0, false, 0)
+	noProjCols := taskListCols(120, false, 20, 0, false, 0, 0)
 	b.Reset()
 	renderListHeader(&b, 120, false, noProjCols, "")
 	hdrNoProj := b.String()
@@ -650,7 +650,7 @@ func TestProjectColumnAppearsWhenAtLeastOneProject(t *testing.T) {
 	}
 
 	// With a project: header must now contain "Project".
-	withProjCols := taskListCols(120, false, 20, 0, false, 7)
+	withProjCols := taskListCols(120, false, 20, 0, false, 0, 7)
 	b.Reset()
 	renderListHeader(&b, 120, false, withProjCols, "")
 	hdrWithProj := b.String()
@@ -678,7 +678,7 @@ func TestProjectColumnHugsWidestEntry(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		c := taskListCols(200, false, 20, 0, false, tc.widest)
+		c := taskListCols(200, false, 20, 0, false, 0, tc.widest)
 		if !c.showProject {
 			t.Errorf("%s: showProject should be true", tc.desc)
 			continue
@@ -746,13 +746,13 @@ func TestProjectColumnNoWrapContractWithProject(t *testing.T) {
 // tags, showTags is false and the "Tags" header label is not emitted.
 func TestTagsColumnCollapseWhenNoTags(t *testing.T) {
 	// tagsMax=0: showTags must be false regardless of terminal width.
-	c := taskListCols(120, false, 20, 0, false, 0)
+	c := taskListCols(120, false, 20, 0, false, 0, 0)
 	if c.showTags {
 		t.Error("showTags should be false when tagsMax=0")
 	}
 
 	// tagsMax>0: showTags must be true on a reasonably wide terminal.
-	c = taskListCols(120, false, 20, 30, false, 0)
+	c = taskListCols(120, false, 20, 30, false, 0, 0)
 	if !c.showTags {
 		t.Error("showTags should be true when tagsMax>0")
 	}
@@ -765,7 +765,7 @@ func TestTagsColumnAppearsWhenAtLeastOneTag(t *testing.T) {
 	var b strings.Builder
 
 	// No tags: header must not contain the "Tags" column label.
-	noTagsCols := taskListCols(120, false, 20, 0, false, 0)
+	noTagsCols := taskListCols(120, false, 20, 0, false, 0, 0)
 	b.Reset()
 	renderListHeader(&b, 120, false, noTagsCols, "")
 	hdrNoTags := b.String()
@@ -774,7 +774,7 @@ func TestTagsColumnAppearsWhenAtLeastOneTag(t *testing.T) {
 	}
 
 	// With tags: header must now contain "Tags".
-	withTagsCols := taskListCols(120, false, 20, 30, false, 0)
+	withTagsCols := taskListCols(120, false, 20, 30, false, 0, 0)
 	b.Reset()
 	renderListHeader(&b, 120, false, withTagsCols, "")
 	hdrWithTags := b.String()

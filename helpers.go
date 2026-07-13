@@ -140,11 +140,31 @@ func renderTagsPart(tags []string) string {
 type listCols struct {
 	titleW      int
 	projectW    int // actual width of the Project column (0 when showProject=false)
+	dueW        int // width of the Due column (sized to content on the active list)
 	showSize    bool
 	showDue     bool
 	showLast    bool // Score (active) or Completed (history)
 	showProject bool
 	showTags    bool // true when at least one visible row has tags
+}
+
+// dueColMax returns the widest rendered due value (formatDueShort) across the
+// given top-level tasks, used to size the active list's Due column to exactly
+// its content. Computed per frame rather than cached because the rendered width
+// depends on the current time — a task crossing a day boundary ("1d"→"today")
+// or the 28-day cutoff ("28d"→"15-06-26") changes its width — so the column
+// must track the exact strings the rows draw this frame and never clip them.
+func dueColMax(tasks []todo.Todo, now time.Time) int {
+	max := 0
+	for i := range tasks {
+		if tasks[i].DueDate.IsZero() {
+			continue
+		}
+		if w := len([]rune(formatDueShort(tasks[i].DueDate, now))); w > max {
+			max = w
+		}
+	}
+	return max
 }
 
 // tagsRenderWidth is the on-screen width of a task's trailing tag list as the
@@ -161,10 +181,12 @@ func tagsRenderWidth(tags []string) int {
 // taskListCols decides which columns of the task/history list fit at the
 // current terminal width. hasDue must be true when at least one visible row
 // carries a non-zero due date; when it is false the Due column is omitted
-// entirely so space is not wasted on an always-empty column. widestProject is
-// the rune-count of the longest visible project name; when it is 0 the Project
-// column collapses entirely (no header label, no reserved space).
-func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool, widestProject int) listCols {
+// entirely so space is not wasted on an always-empty column. dueMax is the
+// rune-count of the widest rendered due value, used to size the Due column to
+// its content (see dueColMax). widestProject is the rune-count of the longest
+// visible project name; when it is 0 the Project column collapses entirely (no
+// header label, no reserved space).
+func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool, dueMax, widestProject int) listCols {
 	inner := termWidth - 8 // panel content width (margin + border + padding)
 	const fixed = 6        // cursor + checkbox + fold icon
 	c := listCols{showDue: hasDue, showLast: true, showTags: tagsMax > 0}
@@ -196,11 +218,24 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	c.titleW = contentFitWidth(termWidth, contentMax, 4, floor)
 
 	lastW := scoreColW
-	dueW := dueColW
+	// The active list shows short relative due values ("2d", "today"), so size
+	// the Due column to its widest entry plus the 3-space trailing gap (which,
+	// with the Size column's 2-space left pad, forms the same 5-char rhythm as
+	// the other columns) — floored to the header label and capped at dueColW,
+	// the full-date worst case. History always shows absolute dates, so it keeps
+	// the fixed 12-wide column that also matches its Completed column.
+	dueW := dueMax + 3
+	if hdr := len([]rune(tr("Due"))) + 3; dueW < hdr {
+		dueW = hdr
+	}
+	if dueW > dueColW {
+		dueW = dueColW
+	}
 	if isHistory {
 		lastW = 12
 		dueW = 12
 	}
+	c.dueW = dueW
 	colsW := func() int {
 		w := 0
 		if c.showSize {
@@ -275,10 +310,7 @@ func listPosLabel(cursor, total int) string {
 // posLabel, when non-empty (e.g. "3/47"), is drawn right-aligned on the header
 // as a scroll-position indicator; pass "" to omit it.
 func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listCols, posLabel string) {
-	dueW := dueColW
-	if isHistory {
-		dueW = 12
-	}
+	dueW := c.dueW
 	sizeLabel := padCenter(tr("Size"), sizeColW)
 	dueLabel := padRight(tr("Due"), dueW)
 	lastLabel := padRight(tr("Score"), scoreColW)

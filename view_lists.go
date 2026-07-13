@@ -731,7 +731,7 @@ func (m model) renderTaskList() string {
 	// Column widths (widest row content + widest tag cell) are derived from the
 	// active set and cached by refreshTaskColMetrics, so the frame doesn't
 	// rescan every task — see cache.go.
-	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax, m.cache.activeColHasDue, m.cache.activeColProjectMax)
+	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax, m.cache.activeColHasDue, dueColMax(m.cache.active, m.frameTime), m.cache.activeColProjectMax)
 	total := m.visibleActiveLen()
 	renderListHeader(b, m.termWidth, false, cols, listPosLabel(m.cursor, total))
 
@@ -792,7 +792,8 @@ func (m model) renderHistoryList() string {
 			hasDue = true
 		}
 	}
-	cols := taskListCols(m.termWidth, true, contentMax, tagsMax, hasDue, 0)
+	// dueMax (0) is ignored for history — it forces its fixed 12-wide date column.
+	cols := taskListCols(m.termWidth, true, contentMax, tagsMax, hasDue, 0, 0)
 	renderListHeader(b, m.termWidth, true, cols, listPosLabel(m.cursor, len(completed)))
 
 	maxVisible := m.estimateListHeight()
@@ -828,7 +829,7 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	titleCol := padRight(truncate(t.Title, titleW-1), titleW)
 	dateCols := ""
 	if cols.showDue {
-		dateCols += padRight(dueVal, 12)
+		dateCols += padRight(dueVal, cols.dueW)
 	}
 	if cols.showLast {
 		dateCols += padRight(completedVal, 12)
@@ -965,7 +966,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		line += padRight(fmt.Sprintf("%.1f", sequenceScore(t)), scoreColW)
 	}
 	if cols.showDue {
-		line += padRight(dueVal, dueColW)
+		line += padRight(dueVal, cols.dueW)
 	}
 	if cols.showSize {
 		// Asymmetric pad (2 left + letter + 5 right) so the gap from Due to the
@@ -1158,7 +1159,7 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 			projectMax = pw
 		}
 	}
-	cols := taskListCols(m.termWidth, false, contentMax, tagsMax, hasDue, projectMax)
+	cols := taskListCols(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax)
 	renderListHeader(b, m.termWidth, false, cols, listPosLabel(m.cursor, len(tasks)))
 
 	// Use projectDrillTaskVisibleRows (= listVisible()-1) to match the clamp

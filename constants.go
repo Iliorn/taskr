@@ -68,11 +68,12 @@ const (
 	// width since its "Completed" header is longer.
 	scoreColW = 8
 
-	// dueColW is the Due column on the active Tasks list. Sized so that the
-	// 3-trailing-space gap after "DD-MM-YY", plus the 2-space left pad of the
-	// centered Size column, equals the 5-space gap a typical "X.X" score leaves
-	// before Due. History keeps the wider 12-col width to match its Completed
-	// column.
+	// dueColW is the maximum width of the Due column on the active Tasks list;
+	// taskListCols sizes the column to its actual content and caps it here. The
+	// cap is the full-date worst case: "DD-MM-YY" (8) plus the 3-trailing-space
+	// gap which, with the 2-space left pad of the centered Size column, equals
+	// the 5-space gap a typical "X.X" score leaves before Due. History keeps a
+	// fixed 12-col width to match its Completed column.
 	dueColW = 11
 
 	footerHeight      = 1
