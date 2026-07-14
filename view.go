@@ -758,6 +758,12 @@ func (m model) buildSideBySide(w, outerH int) string {
 
 	lm := m
 	lm.termWidth = listW + 6 // View hands buildListContent w = termWidth-6
+	// The narrowed copy is only for responsive column sizing. If the detail
+	// column owns focus, leaving paneDetail set makes the list-height helpers
+	// interpret this now-narrow model as the stacked layout and reserve rows
+	// for a second detail panel below the list. The real detail is already in
+	// the right column, so size the list copy as the list pane.
+	lm.pane = paneList
 	listLines := lm.buildListLines()
 
 	dm := m

@@ -139,9 +139,15 @@ func TestListHeightFillsWhenDetailHidden(t *testing.T) {
 	// be pane-independent.
 	m.termWidth = sideBySideMinWidth
 	m.pane = paneDetail
+	sbsEstimateWith := m.estimateListHeight()
 	sbsWith := m.listVisible()
 	m.pane = paneList
+	sbsEstimateWithout := m.estimateListHeight()
 	sbsWithout := m.listVisible()
+	if sbsEstimateWith != sbsEstimateWithout {
+		t.Errorf("side-by-side: estimated list height should be pane-independent: focused=%d unfocused=%d",
+			sbsEstimateWith, sbsEstimateWithout)
+	}
 	if sbsWith != sbsWithout {
 		t.Errorf("side-by-side: list height should be pane-independent: focused=%d unfocused=%d",
 			sbsWith, sbsWithout)

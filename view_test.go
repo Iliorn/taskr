@@ -175,6 +175,30 @@ func TestSideBySideDetailPreview(t *testing.T) {
 	}
 }
 
+// Focusing the right-hand detail must not reduce the number of rows rendered
+// in the left-hand list. buildSideBySide narrows a model copy so list columns
+// reflow; that narrowed width must not make the height calculation mistake the
+// copy for a stacked layout and reserve space for a nonexistent bottom panel.
+func TestSideBySideDetailFocusKeepsFullListHeight(t *testing.T) {
+	tasks := make([]todo.Todo, 40)
+	for i := range tasks {
+		tasks[i] = todo.New(fmt.Sprintf("task-row-%02d", i))
+	}
+	m := modelWithTasks(t, tasks...)
+	m.termWidth = sideBySideMinWidth + 10
+	m.termHeight = 30
+
+	m.pane = paneList
+	listFocusedRows := strings.Count(m.View(), "task-row-")
+	m.pane = paneDetail
+	detailFocusedRows := strings.Count(m.View(), "task-row-")
+
+	if detailFocusedRows != listFocusedRows {
+		t.Errorf("side-by-side detail focus changed rendered task rows: list focus=%d detail focus=%d",
+			listFocusedRows, detailFocusedRows)
+	}
+}
+
 // The Tags tab's detail is always-on either way; side-by-side only moves it
 // from the stacked panel below the list into the right column at wide widths.
 // detailVisible gates the stacked panel, so it must flip with the threshold
