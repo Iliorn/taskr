@@ -242,6 +242,13 @@ func TestParseQuickAdd(t *testing.T) {
 			wantPrio:  todo.PriorityMedium,
 		},
 		{
+			name:      "tag token is canonicalized",
+			input:     "Plan work #Deep-Work",
+			wantTitle: "Plan work",
+			wantTags:  []string{"deep-work"},
+			wantPrio:  todo.PriorityMedium,
+		},
+		{
 			name:      "priority high",
 			input:     "Deploy release p:high",
 			wantTitle: "Deploy release",

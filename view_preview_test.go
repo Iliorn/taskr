@@ -17,6 +17,17 @@ func TestQuickAddPreviewParsedFields(t *testing.T) {
 	}
 }
 
+func TestQuickAddPreviewUsesCanonicalTagSlug(t *testing.T) {
+	applyLang(string(langEN))
+	got := ansi.Strip(renderQuickAddPreview("Plan work #Deep-Work", 120))
+	if !strings.Contains(got, "#deep-work") {
+		t.Errorf("preview should show the canonical stored tag; got %q", got)
+	}
+	if strings.Contains(got, "#Deep-Work") {
+		t.Errorf("preview should not show a spelling AddTag will later change; got %q", got)
+	}
+}
+
 // A mistyped token must not become a chip — it stays inside the title quotes,
 // which is exactly the typo-catching signal the preview exists for.
 func TestQuickAddPreviewKeepsBadTokensInTitle(t *testing.T) {

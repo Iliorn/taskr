@@ -552,7 +552,7 @@ func parseQuickAdd(input string) parsedTask {
 		lower := strings.ToLower(word)
 		switch {
 		case strings.HasPrefix(word, "#"):
-			if tag := strings.TrimPrefix(word, "#"); tag != "" {
+			if tag := todo.NormalizeTag(word); tag != "" {
 				result.tags = append(result.tags, tag)
 			}
 		case strings.HasPrefix(lower, "due:"):

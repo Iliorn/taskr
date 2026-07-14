@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
+	"time"
 
 	"taskr/todo"
 
@@ -113,5 +115,43 @@ func TestPrunePreMigrationBackups(t *testing.T) {
 	}
 	if _, err := os.Stat(unrelated); err != nil {
 		t.Errorf("unrelated sidecar removed: %v", err)
+	}
+}
+
+func TestNormalizeStoredTagsMigration(t *testing.T) {
+	h := openTestDB(t)
+	task := todo.New("legacy spaced tags")
+	task.ModifiedAt = time.Now().Add(-time.Hour)
+	before := task.ModifiedAt
+	// Bypass AddTag to model rows written by an older taskr version.
+	task.Tags = []string{"Deep Work", "deep-work", "Personal   Admin"}
+	saveTodos(t, h, []todo.Todo{task})
+
+	tx, err := h.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := normalizeStoredTags(tx); err != nil {
+		tx.Rollback()
+		t.Fatalf("normalizeStoredTags: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	got, err := loadTodosFromDB(h)
+	if err != nil {
+		t.Fatalf("load normalized tags: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("loaded %d tasks, want 1", len(got))
+	}
+	sort.Strings(got[0].Tags)
+	want := []string{"deep-work", "personal-admin"}
+	if len(got[0].Tags) != len(want) || got[0].Tags[0] != want[0] || got[0].Tags[1] != want[1] {
+		t.Errorf("normalized tags = %v, want %v", got[0].Tags, want)
+	}
+	if !got[0].ModifiedAt.After(before) {
+		t.Errorf("migration ModifiedAt = %v, want after %v so sync propagates it", got[0].ModifiedAt, before)
 	}
 }

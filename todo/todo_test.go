@@ -131,33 +131,55 @@ func TestAddTagNormalizes(t *testing.T) {
 		t.Errorf("tag = %q, want %q", task.Tags[0], "work")
 	}
 
+	// Internal whitespace becomes a hyphen, and the slug spelling deduplicates
+	// against the spaced spelling.
+	task.AddTag("Deep   Work")
+	task.AddTag("deep-work")
+	if len(task.Tags) != 2 || task.Tags[1] != "deep-work" {
+		t.Errorf("spaced tag normalization = %v, want [work deep-work]", task.Tags)
+	}
+
 	// Empty / punctuation-only input is rejected.
 	task.AddTag("   ")
 	task.AddTag("#")
-	if len(task.Tags) != 1 {
+	if len(task.Tags) != 2 {
 		t.Errorf("empty tags should be ignored, got %v", task.Tags)
 	}
 
 	// RemoveTag normalizes its argument too.
 	task.RemoveTag("#WORK ")
-	if len(task.Tags) != 0 {
-		t.Errorf("expected tag removed, got %v", task.Tags)
+	if len(task.Tags) != 1 || task.Tags[0] != "deep-work" {
+		t.Errorf("expected work tag removed, got %v", task.Tags)
 	}
 }
 
 func TestNormalizeTag(t *testing.T) {
 	cases := map[string]string{
-		"#Work":  "work",
-		" work ": "work",
-		"WORK":   "work",
-		"#":      "",
-		"   ":    "",
-		"a-b":    "a-b",
+		"#Work":          "work",
+		" work ":         "work",
+		"WORK":           "work",
+		"Deep Work":      "deep-work",
+		"  Deep   Work ": "deep-work",
+		"Deep\tWork":     "deep-work",
+		"#":              "",
+		"   ":            "",
+		"a-b":            "a-b",
 	}
 	for in, want := range cases {
 		if got := NormalizeTag(in); got != want {
 			t.Errorf("NormalizeTag(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestAddTagRepairsLegacySpacedAlias(t *testing.T) {
+	task := New("Legacy aliases")
+	task.Tags = []string{"Deep Work", "deep-work", "other"}
+
+	task.AddTag("DEEP   WORK")
+
+	if len(task.Tags) != 2 || task.Tags[0] != "deep-work" || task.Tags[1] != "other" {
+		t.Errorf("tags = %v, want deduplicated [deep-work other]", task.Tags)
 	}
 }
 

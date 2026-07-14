@@ -332,12 +332,15 @@ func (t *Todo) SetStage(s string) {
 	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
-// NormalizeTag canonicalizes a tag so that "#Work", "work ", and "work" all
-// collapse to a single tag. Returns "" for input that isn't a usable tag.
+// NormalizeTag canonicalizes a tag so that "#Deep Work", "deep-work ", and
+// "DEEP   WORK" all collapse to the whitespace-free slug "deep-work". Tags
+// are used as whitespace-delimited #tokens in quick-add/search syntax, so
+// allowing spaces in storage would make the displayed token ambiguous.
+// Returns "" for input that isn't a usable tag.
 func NormalizeTag(tag string) string {
 	tag = strings.TrimSpace(tag)
 	tag = strings.TrimPrefix(tag, "#")
-	return strings.ToLower(strings.TrimSpace(tag))
+	return strings.ToLower(strings.Join(strings.Fields(tag), "-"))
 }
 
 func (t *Todo) AddTag(tag string) {
@@ -345,12 +348,30 @@ func (t *Todo) AddTag(tag string) {
 	if tag == "" {
 		return
 	}
+	found := false
+	changed := false
+	tags := t.Tags[:0]
 	for _, existing := range t.Tags {
-		if existing == tag {
-			return
+		if NormalizeTag(existing) == tag {
+			if found {
+				changed = true // collapse a legacy alias duplicate
+				continue
+			}
+			found = true
+			tags = append(tags, tag)
+			changed = changed || existing != tag
+			continue
 		}
+		tags = append(tags, existing)
 	}
-	t.Tags = append(t.Tags, tag)
+	if found {
+		t.Tags = tags
+		if changed {
+			t.ModifiedAt = StampModified(t.ModifiedAt)
+		}
+		return
+	}
+	t.Tags = append(tags, tag)
 	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
@@ -358,7 +379,7 @@ func (t *Todo) RemoveTag(tag string) {
 	tag = NormalizeTag(tag)
 	tags := t.Tags[:0]
 	for _, existing := range t.Tags {
-		if existing != tag {
+		if NormalizeTag(existing) != tag {
 			tags = append(tags, existing)
 		}
 	}

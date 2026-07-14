@@ -77,7 +77,7 @@ taskr
 Buy groceries #shopping due:friday p:high size:s @personal
 ```
 
-Supports `#tag`, `due:date`, `p:high/medium/low`, `size:s/m/l`, `@project` inline when adding a task.
+Supports `#tag`, `due:date`, `p:high/medium/low`, `size:s/m/l`, `@project` inline when adding a task. Tags are lowercase slugs; whitespace entered in the tag editor is normalized to `-` (for example, `Deep Work` becomes `#deep-work`).
 
 ### Search syntax
 
