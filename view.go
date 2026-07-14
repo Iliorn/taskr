@@ -178,9 +178,9 @@ func (m model) listPanelTitle() string {
 	switch m.tab {
 	case tabTasks:
 		if m.showHistory {
-			return tr("Completed tasks")
+			return tr("History")
 		}
-		return tr("Active tasks")
+		return tr("Overview")
 	case tabTags:
 		return tr("Tag progress")
 	case tabBoard:
@@ -197,14 +197,14 @@ func projectTimelineTitle(project string) string {
 	if project == "" {
 		return tr("Timeline")
 	}
-	return tr("Timeline") + " · @" + project
+	return tr("Timeline") + " · " + project
 }
 
 func projectTasksTitle(project string) string {
 	if project == "" {
-		return tr("Tasks")
+		return tr("Overview")
 	}
-	return tr("Tasks") + " · @" + project
+	return tr("Overview") + " · @" + project
 }
 
 // ── Top-level View ────────────────────────────────────────────────────────────
@@ -857,7 +857,7 @@ func (m model) buildProjectListContent(w, listH int) string {
 			emptyLines = emptyLines[:innerH]
 		}
 		panel := listPanelStyle.Width(w).Render(strings.Join(emptyLines, "\n"))
-		return withBorderTitle(panel, tr("Project overview"), w, false)
+		return withBorderTitle(panel, tr("Overview"), w, false)
 	}
 
 	// ── Drilled-in view: task list (left) + right column (right) ────────────
@@ -889,7 +889,7 @@ func (m model) buildProjectListContent(w, listH int) string {
 	}
 	truncateLines(projLines, w-2)
 	projRendered := listPanelStyle.Width(w).Render(strings.Join(projLines, "\n"))
-	projRendered = withBorderTitle(projRendered, tr("Project overview"), w, false)
+	projRendered = withBorderTitle(projRendered, tr("Overview"), w, false)
 
 	projRenderedLines := strings.Split(projRendered, "\n")
 	ganttOuterH := listH - len(projRenderedLines)

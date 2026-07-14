@@ -193,9 +193,9 @@ func TestPersistentPanelsUseContextualBorderTitles(t *testing.T) {
 
 	task := todo.New("Panel title task")
 	tasks := modelWithTasks(t, task)
-	assertTitle("tasks", plainView(tasks), "Active tasks")
+	assertTitle("tasks", plainView(tasks), "Overview")
 	tasks.showHistory = true
-	assertTitle("task history", plainView(tasks), "Completed tasks")
+	assertTitle("task history", plainView(tasks), "History")
 
 	tagged := todo.New("Tagged task")
 	tagged.Tags = []string{"home"}
@@ -208,11 +208,11 @@ func TestPersistentPanelsUseContextualBorderTitles(t *testing.T) {
 	projectTask.Project = "alpha"
 	projects := modelWithTasks(t, projectTask)
 	projects.tab = tabProjects
-	assertTitle("projects", plainView(projects), "Project overview")
-	assertTitle("project timeline", plainView(projects), "Timeline · @alpha")
+	assertTitle("projects", plainView(projects), "Overview")
+	assertTitle("project timeline", plainView(projects), "Timeline · alpha")
 	projects.projectTaskMode = true
-	assertTitle("project drill tasks", plainView(projects), "Tasks · @alpha")
-	assertTitle("project drill timeline", plainView(projects), "Timeline · @alpha")
+	assertTitle("project drill tasks", plainView(projects), "Overview · @alpha")
+	assertTitle("project drill timeline", plainView(projects), "Timeline · alpha")
 
 	calendar := modelWithTasks(t)
 	calendar.tab = tabCalendar
