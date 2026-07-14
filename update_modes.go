@@ -94,13 +94,18 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					case fieldDueDate:
 						if val == "" {
-							m.pushUndo("clear due date", t.ID)
-							t.DueDate = time.Time{}
+							// A parent deadline applies to its whole subtree, so capture
+							// every affected task for undo before clearing descendants too.
+							if m.subtaskCount(t.ID) > 0 {
+								m.pushUndo("clear due date")
+							} else {
+								m.pushUndo("clear due date", t.ID)
+							}
+							t.SetDueDate(time.Time{})
 						} else if d, err := parseDueDate(val); err == nil {
-							// Subtask: extendParentDueIfNeeded may bump
-							// ancestors, so capture full state instead of just
-							// t.ID — partial would miss the ancestor pre-state.
-							if t.ParentID != "" {
+							// A subtask may extend ancestors and a parent updates all
+							// descendants, so capture the full tree when either applies.
+							if t.ParentID != "" || m.subtaskCount(t.ID) > 0 {
 								m.pushUndo("set due date")
 							} else {
 								m.pushUndo("set due date", t.ID)
@@ -112,8 +117,11 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 					ids := []string{t.ID}
-					if m.detail.field == fieldDueDate && t.ParentID != "" {
-						ids = append(ids, m.extendParentDueIfNeeded(t.ID)...)
+					if m.detail.field == fieldDueDate {
+						ids = append(ids, m.propagateDueToSubtasks(t.ID)...)
+						if t.ParentID != "" {
+							ids = append(ids, m.extendParentDueIfNeeded(t.ID)...)
+						}
 					}
 					m.markModified(ids...)
 				}

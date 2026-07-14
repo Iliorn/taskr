@@ -1260,20 +1260,34 @@ func cliEdit(args []string) int {
 		return 0
 	}
 	saveSet := []*todo.Todo{t}
-	// If a subtask's due moved later, walk up and extend every ancestor
-	// whose due falls short of the child's — mirrors the TUI flow.
-	if *due != "" && t.ParentID != "" {
-		_, get := sliceTaskLookups(todos)
-		saveSet = append(saveSet, extendAncestorsDue(get, t)...)
+	var propagated, bumped []*todo.Todo
+	if *clearDue || *due != "" {
+		children, get := sliceTaskLookups(todos)
+		// A parent deadline applies to the full subtree, including clearing it.
+		propagated = propagateDescendantsDue(children, get, t)
+		saveSet = append(saveSet, propagated...)
+		// If a subtask's due moved later, also extend every ancestor whose due
+		// falls short of the child — mirrors the TUI flow.
+		if *due != "" && t.ParentID != "" {
+			bumped = extendAncestorsDue(get, t)
+			saveSet = append(saveSet, bumped...)
+		}
 	}
 	if err := repo.Save(saveSet, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
 		return 1
 	}
 	fmt.Printf("edited  %s  %s\n", t.ID[:8], t.Title)
-	// Ancestor due-date bumps are side-effects of the edit, not its result —
-	// stderr, so `edit --json`-style scripting on stdout stays clean.
-	for _, a := range saveSet[1:] {
+	// Propagation and ancestor bumps are side-effects of the edit, not its
+	// result — stderr keeps scripting on stdout clean.
+	for _, child := range propagated {
+		if child.DueDate.IsZero() {
+			fmt.Fprintf(os.Stderr, "cleared  %s  %s  due\n", child.ID[:8], child.Title)
+		} else {
+			fmt.Fprintf(os.Stderr, "updated  %s  %s  due → %s\n", child.ID[:8], child.Title, child.DueDate.Format("02-01-06"))
+		}
+	}
+	for _, a := range bumped {
 		fmt.Fprintf(os.Stderr, "bumped  %s  %s  due → %s\n", a.ID[:8], a.Title, a.DueDate.Format("02-01-06"))
 	}
 	return 0

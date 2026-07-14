@@ -1190,6 +1190,17 @@ func (m *model) extendParentDueIfNeeded(subID string) []string {
 	return ids
 }
 
+// propagateDueToSubtasks copies parentID's due date (including a cleared zero
+// date) to every descendant and returns the changed IDs for dirty tracking.
+func (m *model) propagateDueToSubtasks(parentID string) []string {
+	changed := propagateDescendantsDue(m.subtaskIDs, m.get, m.get(parentID))
+	ids := make([]string, len(changed))
+	for i, child := range changed {
+		ids[i] = child.ID
+	}
+	return ids
+}
+
 // toggleSubtask flips a child task's status and returns every ID the caller
 // should mark dirty: the toggled subtask, plus the freshly-spawned next
 // instance when the subtask was a recurring task closed by this call, plus

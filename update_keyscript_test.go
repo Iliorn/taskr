@@ -180,6 +180,40 @@ func TestScriptQuickAddParsesInlineSyntax(t *testing.T) {
 	}
 }
 
+func TestDetailDueDatePropagatesToSubtasksAndUndoRestores(t *testing.T) {
+	oldDue := startOfDay(time.Now()).AddDate(0, 0, 3)
+	parent := todo.New("Parent deadline")
+	parent.DueDate = oldDue
+	child := todo.NewSubtask("Child deadline", parent.ID)
+	child.DueDate = oldDue
+	grandchild := todo.NewSubtask("Grandchild deadline", child.ID)
+	grandchild.DueDate = oldDue
+	m := modelWithTasks(t, parent, child, grandchild)
+
+	m.pane = paneDetail
+	m.detail.field = fieldDueDate
+	m.mode = modeInput
+	m.textInput.SetValue("+10d")
+	m = sendKey(t, m, "enter")
+
+	want := startOfDay(time.Now()).AddDate(0, 0, 10)
+	for _, id := range []string{parent.ID, child.ID, grandchild.ID} {
+		if got := m.get(id).DueDate; !got.Equal(want) {
+			t.Errorf("%s due = %v, want propagated %v", id, got, want)
+		}
+		if _, dirty := m.dirtyIDs[id]; !dirty {
+			t.Errorf("%s not marked dirty after due propagation", id)
+		}
+	}
+
+	m.performUndo()
+	for _, id := range []string{parent.ID, child.ID, grandchild.ID} {
+		if got := m.get(id).DueDate; !got.Equal(oldDue) {
+			t.Errorf("undo: %s due = %v, want original %v", id, got, oldDue)
+		}
+	}
+}
+
 func TestScriptDeleteCascadesAndUndoRestoresSubtree(t *testing.T) {
 	parent := todo.New("Parent job")
 	sub := todo.NewSubtask("Child step", parent.ID)

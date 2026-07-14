@@ -107,6 +107,26 @@ func extendAncestorsDue(get func(string) *todo.Todo, child *todo.Todo) []*todo.T
 	return bumped
 }
 
+// propagateDescendantsDue copies parent's DueDate to every live descendant,
+// including a zero date when the parent deadline is cleared. Mutates through
+// get and reports only descendants whose date actually changed so callers can
+// mark/save the exact affected set.
+func propagateDescendantsDue(children func(string) []string, get func(string) *todo.Todo, parent *todo.Todo) []*todo.Todo {
+	if parent == nil {
+		return nil
+	}
+	var changed []*todo.Todo
+	for _, id := range descendantIDsFrom(children, parent.ID)[1:] {
+		child := get(id)
+		if child == nil || child.Deleted || child.DueDate.Equal(parent.DueDate) {
+			continue
+		}
+		child.SetDueDate(parent.DueDate)
+		changed = append(changed, child)
+	}
+	return changed
+}
+
 // stopOtherRunningTimers stops every running timer except exceptID, returning
 // the touched tasks for the save set. This is the single-running-timer
 // invariant the TUI's toggleTimer enforces, shared by the CLI paths

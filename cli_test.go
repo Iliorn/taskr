@@ -1128,6 +1128,58 @@ func TestCliAddParsesQuickAddTokens(t *testing.T) {
 	}
 }
 
+func TestCliEditParentDuePropagatesAndClearsSubtree(t *testing.T) {
+	if code := cliAdd([]string{"CLI due propagation parent"}); code != 0 {
+		t.Fatalf("add parent: exit %d", code)
+	}
+	_, tasks, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load parent: %v", err)
+	}
+	parent, err := findTaskByRef(tasks, "CLI due propagation parent")
+	if err != nil {
+		t.Fatalf("find parent: %v", err)
+	}
+	if code := cliSubtask([]string{parent.ID[:8], "CLI due propagation child"}); code != 0 {
+		t.Fatalf("add child: exit %d", code)
+	}
+	_, tasks, _ = loadForCLI()
+	child, err := findTaskByRef(tasks, "CLI due propagation child")
+	if err != nil {
+		t.Fatalf("find child: %v", err)
+	}
+	if code := cliSubtask([]string{child.ID[:8], "CLI due propagation grandchild"}); code != 0 {
+		t.Fatalf("add grandchild: exit %d", code)
+	}
+
+	if code := cliEdit([]string{parent.ID[:8], "--due", "+10d"}); code != 0 {
+		t.Fatalf("edit parent due: exit %d", code)
+	}
+	_, tasks, _ = loadForCLI()
+	parent, _ = findTaskByRef(tasks, "CLI due propagation parent")
+	child, _ = findTaskByRef(tasks, "CLI due propagation child")
+	grandchild, _ := findTaskByRef(tasks, "CLI due propagation grandchild")
+	for _, task := range []*todo.Todo{child, grandchild} {
+		if !task.DueDate.Equal(parent.DueDate) {
+			t.Errorf("%s due = %v, want parent due %v", task.Title, task.DueDate, parent.DueDate)
+		}
+	}
+
+	if code := cliEdit([]string{parent.ID[:8], "--clear-due"}); code != 0 {
+		t.Fatalf("clear parent due: exit %d", code)
+	}
+	_, tasks, _ = loadForCLI()
+	for _, title := range []string{"CLI due propagation parent", "CLI due propagation child", "CLI due propagation grandchild"} {
+		task, findErr := findTaskByRef(tasks, title)
+		if findErr != nil {
+			t.Fatalf("find %q after clear: %v", title, findErr)
+		}
+		if !task.DueDate.IsZero() {
+			t.Errorf("%s due = %v after parent clear, want zero", task.Title, task.DueDate)
+		}
+	}
+}
+
 // An explicit flag overrides the matching token in the title.
 func TestCliAddFlagOverridesToken(t *testing.T) {
 	if code := cliAdd([]string{"Flag wins p:low", "-p", "high"}); code != 0 {

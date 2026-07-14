@@ -91,6 +91,54 @@ func TestExtendParentDueDoesNotShrink(t *testing.T) {
 	}
 }
 
+// ── Parent due-date propagation ──────────────────────────────────────────────
+
+func TestPropagateParentDueToAllDescendants(t *testing.T) {
+	now := time.Now()
+	parent := makeSub("p", "parent", "", 0)
+	parent.DueDate = now.AddDate(0, 0, 14)
+	child := makeSub("c", "child", "p", time.Second)
+	child.DueDate = now.AddDate(0, 0, 3)
+	grandchild := makeSub("g", "grandchild", "c", 2*time.Second)
+	sibling := makeSub("s", "sibling", "p", 3*time.Second)
+	sibling.DueDate = parent.DueDate // already correct; should not be reported
+	unrelated := makeSub("u", "unrelated", "", 4*time.Second)
+	unrelated.DueDate = now.AddDate(0, 0, 30)
+
+	m := modelWithTasks(t, parent, child, grandchild, sibling, unrelated)
+	changed := m.propagateDueToSubtasks("p")
+	if got, want := changed, []string{"c", "g"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("changed = %v, want %v", got, want)
+	}
+	for _, id := range []string{"c", "g", "s"} {
+		if got := m.get(id).DueDate; !got.Equal(parent.DueDate) {
+			t.Errorf("%s due = %v, want parent due %v", id, got, parent.DueDate)
+		}
+	}
+	if got := m.get("u").DueDate; !got.Equal(unrelated.DueDate) {
+		t.Errorf("unrelated due changed to %v, want %v", got, unrelated.DueDate)
+	}
+}
+
+func TestClearingParentDueClearsDescendants(t *testing.T) {
+	due := time.Now().AddDate(0, 0, 7)
+	parent := makeSub("p", "parent", "", 0)
+	child := makeSub("c", "child", "p", time.Second)
+	grandchild := makeSub("g", "grandchild", "c", 2*time.Second)
+	parent.DueDate, child.DueDate, grandchild.DueDate = due, due, due
+
+	m := modelWithTasks(t, parent, child, grandchild)
+	m.get("p").SetDueDate(time.Time{})
+	changed := m.propagateDueToSubtasks("p")
+	if len(changed) != 2 {
+		t.Fatalf("changed = %v, want both descendants", changed)
+	}
+	if !m.get("c").DueDate.IsZero() || !m.get("g").DueDate.IsZero() {
+		t.Errorf("clearing parent should clear descendants: child=%v grandchild=%v",
+			m.get("c").DueDate, m.get("g").DueDate)
+	}
+}
+
 // ── Auto-close parent ───────────────────────────────────────────────────────
 
 func TestAutoCloseOffDoesNothing(t *testing.T) {
