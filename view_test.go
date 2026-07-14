@@ -201,7 +201,7 @@ func TestPersistentPanelsUseContextualBorderTitles(t *testing.T) {
 	tagged.Tags = []string{"home"}
 	tags := modelWithTasks(t, tagged)
 	tags.tab = tabTags
-	assertTitle("tags", plainView(tags), "Tag progress")
+	assertTitle("tags", plainView(tags), "Overview")
 	assertTitle("tag detail", plainView(tags), "#home")
 
 	projectTask := todo.New("Project task")

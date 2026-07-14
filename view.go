@@ -182,7 +182,7 @@ func (m model) listPanelTitle() string {
 		}
 		return tr("Overview")
 	case tabTags:
-		return tr("Tag progress")
+		return tr("Overview")
 	case tabBoard:
 		return tr("Workflow")
 	case tabStats:
