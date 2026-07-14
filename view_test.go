@@ -350,6 +350,40 @@ func TestTaskTagOverflowShowsTruncationMarker(t *testing.T) {
 	}
 }
 
+func TestWideSideBySideProjectColumnUsesSpareWidth(t *testing.T) {
+	const project = "customer-success-platform-redesign"
+	task := todo.New("Prepare launch brief")
+	task.Project = project
+	m := modelWithTasks(t, task)
+	m.termWidth = 200
+	m.termHeight = 30
+	m.refreshCaches()
+
+	var listRow string
+	for _, line := range strings.Split(m.View(), "\n") {
+		plain := ansi.Strip(line)
+		if strings.Contains(plain, "[ ]") && strings.Contains(plain, task.Title) {
+			// In side-by-side mode the detail panel continues on the same terminal
+			// row. Keep only the left panel up to its closing border.
+			titleAt := strings.Index(plain, task.Title)
+			if borderAt := strings.Index(plain[titleAt:], "│"); borderAt >= 0 {
+				plain = plain[:titleAt+borderAt]
+			}
+			listRow = plain
+			break
+		}
+	}
+	if listRow == "" {
+		t.Fatal("task list row should render")
+	}
+	if !strings.Contains(listRow, project) {
+		t.Errorf("wide list should show the full project name instead of truncating it: %q", listRow)
+	}
+	if strings.Contains(listRow, "(…)") {
+		t.Errorf("wide list used a truncation marker despite available space: %q", listRow)
+	}
+}
+
 // An overdue dependency conveys itself through the row color, not a glyph — a
 // normal-priority task whose dependency is overdue carries no "!".
 func TestOverdueDependencyAddsNoGlyph(t *testing.T) {

@@ -58,9 +58,10 @@ const (
 	// width so "Size" / ">Size<" stay centered.
 	sizeColW = 8
 
-	// projectColW is the Project column on the Tasks list. Holds a short
-	// project name; longer ones truncate.
-	projectColW = 14
+	// projectColCompactW is the Project column's compact baseline on the Tasks
+	// list. At wider widths the column can grow past this to reveal the full
+	// project name; narrow layouts retain the familiar compact footprint.
+	projectColCompactW = 14
 
 	// scoreColW is the Score column on the active Tasks list. Wide enough for
 	// the ">Score<" sort indicator (7 runes) plus a one-char buffer so it never

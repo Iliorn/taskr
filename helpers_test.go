@@ -659,22 +659,21 @@ func TestProjectColumnAppearsWhenAtLeastOneProject(t *testing.T) {
 	}
 }
 
-// TestProjectColumnHugsWidestEntry verifies the column width hugs the widest
-// project name plus the gap, floors at the header label, and caps at projectColW.
+// TestProjectColumnHugsWidestEntry verifies that a wide layout lets the column
+// hug the widest project name plus its gap instead of retaining the compact cap.
 func TestProjectColumnHugsWidestEntry(t *testing.T) {
 	projHdrW := len([]rune(tr("Project")))
 
 	cases := []struct {
-		widest  int
-		wantMin int
-		wantMax int
-		desc    string
+		widest int
+		want   int
+		desc   string
 	}{
-		{3, projHdrW, projectColW, "short name floors at header"},
-		{projHdrW - 2, projHdrW, projectColW, "name shorter than header floors at header"},
-		{projHdrW + 2, projHdrW + 2 + 4, projectColW, "name wider than header: hug + gap"},
-		{projectColW - 4, projectColW, projectColW, "name at cap boundary"},
-		{projectColW + 5, projectColW, projectColW, "very long name caps at projectColW"},
+		{3, projHdrW, "short name floors at header"},
+		{projHdrW - 2, projHdrW + 2, "name shorter than header still includes its gap"},
+		{projHdrW + 2, projHdrW + 2 + 4, "name wider than header: hug + gap"},
+		{projectColCompactW - 4, projectColCompactW, "name at compact boundary"},
+		{projectColCompactW + 15, projectColCompactW + 15 + 4, "long name expands past compact width"},
 	}
 
 	for _, tc := range cases {
@@ -683,11 +682,8 @@ func TestProjectColumnHugsWidestEntry(t *testing.T) {
 			t.Errorf("%s: showProject should be true", tc.desc)
 			continue
 		}
-		if c.projectW < tc.wantMin {
-			t.Errorf("%s: projectW=%d < wantMin=%d", tc.desc, c.projectW, tc.wantMin)
-		}
-		if c.projectW > tc.wantMax {
-			t.Errorf("%s: projectW=%d > wantMax=%d", tc.desc, c.projectW, tc.wantMax)
+		if c.projectW != tc.want {
+			t.Errorf("%s: projectW=%d, want %d", tc.desc, c.projectW, tc.want)
 		}
 	}
 }

@@ -226,21 +226,22 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	inner := termWidth - 8 // panel content width (margin + border + padding)
 	const fixed = 6        // cursor + checkbox + fold icon
 	c := listCols{showDue: hasDue, showLast: true, showTags: tagsMax > 0}
+	projectWant := 0
 	if !isHistory {
 		c.showSize = true
 		if widestProject > 0 {
 			c.showProject = true
-			// Hug the widest project name + a 4-char gap, floored to the header
-			// label width (same rule as the title column), capped at the old
-			// fixed projectColW so the column never grows past what it used to
-			// reserve.
+			// Start at the compact baseline for ordinary layouts. After the fixed
+			// columns and title have claimed what they need, genuine spare width is
+			// offered back to Project below so wide terminals reveal longer names.
 			projHdrW := len([]rune(tr("Project")))
-			c.projectW = widestProject + 4
-			if c.projectW < projHdrW {
-				c.projectW = projHdrW
+			projectWant = widestProject + 4
+			if projectWant < projHdrW {
+				projectWant = projHdrW
 			}
-			if c.projectW > projectColW {
-				c.projectW = projectColW
+			c.projectW = projectWant
+			if c.projectW > projectColCompactW {
+				c.projectW = projectColCompactW
 			}
 		}
 	}
@@ -305,6 +306,9 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 		}
 		*d = false
 	}
+	if !c.showProject {
+		c.projectW = 0
+	}
 
 	// The flat name-column cap (nameColWidth) keeps the title sane on the other
 	// list tabs, but on a wide terminal it can clip a long title while empty
@@ -323,6 +327,21 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 				grow = spare
 			}
 			c.titleW += grow
+		}
+	}
+
+	// Once task titles and tag chips have enough room, let a visible Project
+	// column consume the remaining slack up to its actual content need. This is
+	// deliberately after title growth: it removes otherwise-empty space without
+	// making task titles truncate sooner merely to widen a secondary column.
+	if c.showProject && c.projectW < projectWant {
+		spare := inner - fixed - c.titleW - colsW() - tagsReserve
+		if spare > 0 {
+			grow := projectWant - c.projectW
+			if grow > spare {
+				grow = spare
+			}
+			c.projectW += grow
 		}
 	}
 
