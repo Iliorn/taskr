@@ -1023,7 +1023,6 @@ func (m model) helpBodyLines() []string {
 		{"↧", tr("blocked — waiting on an unfinished dependency")},
 		{"↻", tr("recurring task")},
 		{"(2/5)", tr("subtasks done / total")},
-		{"‼", tr("a subtask is overdue")},
 	}})
 
 	// Reference section: date-input grammar. Not key bindings, so it lives

@@ -61,6 +61,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// switch panes when the cursor actually reached it.
 					m.followTask(t.ID)
 					if cur := m.currentTodo(); cur != nil && cur.ID == t.ID {
+						m.detailTaskID = t.ID
 						m.pane = paneDetail
 						m.detail = detailState{field: fieldStartDate}
 						m.invalidateDetailCache()

@@ -269,6 +269,49 @@ func TestSelectedOverdueRowKeepsSelectionBackground(t *testing.T) {
 	}
 }
 
+func TestOverdueSubtaskIsRedInDetailWithoutParentMarker(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	applyTheme(themes[0])
+	defer func() {
+		lipgloss.SetColorProfile(before)
+		applyTheme(themes[0])
+	}()
+
+	parent := todo.New("Parent task")
+	child := todo.NewSubtask("Late child", parent.ID)
+	child.DueDate = time.Now().Add(-24 * time.Hour)
+	m := modelWithTasks(t, parent, child)
+	m.pane = paneDetail
+	m.detailTaskID = parent.ID
+	m.detail = detailState{field: fieldSubtasks, subtaskCursor: 0}
+
+	detail := m.renderDetailPage2(m.currentTodo())
+	var childLine string
+	for _, line := range strings.Split(detail, "\n") {
+		if strings.Contains(line, child.Title) {
+			childLine = line
+			break
+		}
+	}
+	if childLine == "" {
+		t.Fatal("overdue child should render in parent details")
+	}
+	if want := newFastStyle(overdueStyle).prefix; !strings.Contains(childLine, want) {
+		t.Errorf("overdue child should use overdue red (%q): %q", want, childLine)
+	}
+
+	m.pane = paneList
+	m.detailTaskID = ""
+	list := ansi.Strip(m.View())
+	if strings.Contains(list, "‼") {
+		t.Errorf("parent list row should not carry an overdue-descendant marker:\n%s", list)
+	}
+	if !strings.Contains(list, "(0/1)") {
+		t.Errorf("parent should retain its subtask progress badge:\n%s", list)
+	}
+}
+
 func TestSelectedTaskRowHighlightIncludesTags(t *testing.T) {
 	before := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)

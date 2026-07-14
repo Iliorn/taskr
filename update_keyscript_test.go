@@ -324,6 +324,60 @@ func TestScriptAddSubtaskFromDetail(t *testing.T) {
 	}
 }
 
+func TestEnterOpensSelectedSubtaskDetail(t *testing.T) {
+	parent := todo.New("Parent task")
+	child := todo.NewSubtask("Child task", parent.ID)
+	grandchild := todo.NewSubtask("Grandchild task", child.ID)
+	m := modelWithTasks(t, parent, child, grandchild)
+	m.pane = paneDetail
+	m.detailTaskID = parent.ID
+	m.detail = detailState{field: fieldSubtasks, subtaskCursor: 0}
+	m.pushFocus(stateDetailPane)
+
+	m = script(t, m, "enter")
+	if cur := m.currentTodo(); cur == nil || cur.ID != child.ID {
+		t.Fatalf("Enter should open child details, current task = %+v", cur)
+	}
+	if m.mode != modeNormal || m.detail.field != fieldStartDate {
+		t.Fatalf("mode=%v field=%v, want normal detail at start date", m.mode, m.detail.field)
+	}
+
+	// The explicit detail target also allows traversal below the one-level
+	// Tasks-list expansion.
+	m.detail = detailState{field: fieldSubtasks, subtaskCursor: 0}
+	m = script(t, m, "enter")
+	if cur := m.currentTodo(); cur == nil || cur.ID != grandchild.ID {
+		t.Fatalf("Enter should open nested child details, current task = %+v", cur)
+	}
+
+	m = script(t, m, "esc")
+	if m.pane != paneList || m.detailTaskID != "" {
+		t.Fatalf("Esc should return to list and clear detail target: pane=%v target=%q", m.pane, m.detailTaskID)
+	}
+	if cur := m.currentTodo(); cur == nil || cur.ID != parent.ID {
+		t.Fatalf("list cursor should remain on parent after closing nested details, got %+v", cur)
+	}
+}
+
+func TestRRenamesSelectedSubtask(t *testing.T) {
+	parent := todo.New("Parent task")
+	child := todo.NewSubtask("Old child title", parent.ID)
+	m := modelWithTasks(t, parent, child)
+	m.pane = paneDetail
+	m.detailTaskID = parent.ID
+	m.detail = detailState{field: fieldSubtasks, subtaskCursor: 0}
+
+	m = script(t, m, "r")
+	if m.mode != modeEditSubtask || m.textInput.Value() != child.Title {
+		t.Fatalf("r should start subtask rename: mode=%v value=%q", m.mode, m.textInput.Value())
+	}
+	m.textInput.SetValue("Renamed child")
+	m = script(t, m, "enter")
+	if got := m.get(child.ID).Title; got != "Renamed child" {
+		t.Errorf("renamed subtask title = %q, want %q", got, "Renamed child")
+	}
+}
+
 func TestScriptManualTimeEntryEndsNow(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Tracked work"))
 	target := m.currentTodo()

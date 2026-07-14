@@ -37,26 +37,6 @@ func TestSubtaskProgressCountsDirectChildren(t *testing.T) {
 	}
 }
 
-func TestHasOverdueDescendantRecurses(t *testing.T) {
-	parent := makeSub("p", "parent", "", 0)
-	mid := makeSub("m", "mid", "p", time.Second)
-	leaf := makeSub("l", "leaf", "m", 2*time.Second)
-	leaf.DueDate = time.Now().Add(-48 * time.Hour) // overdue
-
-	m := modelWithTasks(t, parent, mid, leaf)
-	overdue := map[string]bool{"l": true}
-	if !m.hasOverdueDescendant("p", overdue) {
-		t.Error("parent should report overdue grandchild")
-	}
-	if m.hasOverdueDescendant("m", overdue) == false {
-		t.Error("mid should also report overdue child")
-	}
-	// A leaf has no descendants — should be false even though it's overdue.
-	if m.hasOverdueDescendant("l", overdue) {
-		t.Error("leaf has no descendants, should return false")
-	}
-}
-
 // ── Parent due-date extension ────────────────────────────────────────────────
 
 func TestExtendParentDueBumpsAncestorsOnlyForward(t *testing.T) {

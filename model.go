@@ -63,17 +63,19 @@ const (
 )
 
 // tabView is the slice of UI state that several tabs share the same fields for
-// (the cursor, scroll offset, open pane, and task/project search query).
+// (the cursor, scroll offset, open pane and its task, and task/project search
+// query).
 // switchTab snapshots it on the way out of a tab and restores it on the way
 // back, so glancing at another tab doesn't wipe your position or filter. Tab-
 // private state (projectCursor, tagTabCursor, showHistory, projectTaskMode, the
 // per-tab search queries, …) lives in its own fields and simply persists —
 // switchTab no longer zeroes it.
 type tabView struct {
-	cursor     int
-	listOffset int
-	pane       pane
-	search     string
+	cursor       int
+	listOffset   int
+	pane         pane
+	search       string
+	detailTaskID string
 }
 
 type detailField int
@@ -319,6 +321,7 @@ type model struct {
 	focusFilter          bool
 	focusStack           []focusEntry
 	expandedTasks        map[string]bool
+	detailTaskID         string
 	editingTagName       string
 	editingProjectName   string
 	tagSort              tagSortMode
@@ -869,6 +872,13 @@ func (m model) findTodoByID(id string) *todo.Todo {
 // task list the user is viewing (active / done / project-tasks), or nil if the
 // cursor is past the end of that list.
 func (m model) currentTodo() *todo.Todo {
+	// A detail pane opened from another task's subtask list is not tied to a
+	// visible list row (nested subtasks may not have one). Keep its target
+	// explicitly while the pane is open, falling back to the list cursor for
+	// tests and older entry paths that do not set one.
+	if m.pane == paneDetail && m.detailTaskID != "" {
+		return m.get(m.detailTaskID)
+	}
 	switch m.tab {
 	case tabTasks:
 		if m.showHistory {
@@ -1072,21 +1082,6 @@ func (m *model) subtaskProgress(parentID string) (done, total int) {
 		}
 	}
 	return done, total
-}
-
-// hasOverdueDescendant returns true if any task in parentID's subtree (any
-// depth) is currently overdue. Recursive so a deeply-nested overdue child
-// still surfaces on the root row.
-func (m *model) hasOverdueDescendant(parentID string, overdueSet map[string]bool) bool {
-	for _, id := range m.subtaskIDs(parentID) {
-		if overdueSet[id] {
-			return true
-		}
-		if m.hasOverdueDescendant(id, overdueSet) {
-			return true
-		}
-	}
-	return false
 }
 
 // descendantTimeSpent sums TotalTimeSpent across parentID's full subtree (not

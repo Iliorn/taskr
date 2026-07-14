@@ -43,7 +43,7 @@ func TestFastStyleMatchesLipgloss(t *testing.T) {
 		"",
 		"a",
 		"  [ ] Buy milk          12.3",
-		"▶ [✓] nested task ↻ ¶ (2/5)‼",
+		"▶ [✓] nested task ↻ ¶ (2/5)",
 		"⏱ running timer",
 		strings.Repeat("x", 200),
 		"münchen café — 日本語タスク",

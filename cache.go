@@ -40,7 +40,7 @@ type cacheState struct {
 	// Tasks-tab column-sizing metrics for the active list: the widest rendered
 	// row content and the widest tag cell. Derived from the active set + overdue
 	// set, so cached here rather than rescanned every frame (the scan called
-	// subtaskProgress/hasOverdueDescendant per task and dominated the render).
+	// subtaskProgress per task and dominated the render).
 	activeColContentMax int
 	activeColTagsMax    int
 	activeColHasDue     bool // true when at least one visible active task has a due date
@@ -160,15 +160,14 @@ func (m *model) refreshUsageRecency(all []todo.Todo) {
 // refreshTaskColMetrics recomputes the Tasks-tab column-sizing metrics for the
 // active list: the widest rendered row content (title plus every indicator the
 // row appends) and the widest tag cell. These depend only on the active set and
-// the overdue set, so they're computed once per cache refresh instead of being
+// the task tree, so they're computed once per cache refresh instead of being
 // rescanned on every frame — the per-frame scan was O(active) and dominated the
-// render because it called subtaskProgress/hasOverdueDescendant for every task.
+// render because it called subtaskProgress for every task.
 // It must mirror exactly the width every suffix/prefix renderTaskLineWithSet
 // adds, or the longest row eats into the gap before the Score column.
 func (m *model) refreshTaskColMetrics() {
 	contentMax, tagsMax, projectMax := 0, 0, 0
 	hasDue := false
-	overdueSet := m.cache.overdueSet
 	active := m.cache.active
 	for i := range active {
 		w := len([]rune(active[i].Title))
@@ -186,9 +185,6 @@ func (m *model) refreshTaskColMetrics() {
 		}
 		if subDone, subTotal := m.subtaskProgress(active[i].ID); subTotal > 0 {
 			w += len([]rune(fmt.Sprintf(" (%d/%d)", subDone, subTotal)))
-			if m.hasOverdueDescendant(active[i].ID, overdueSet) {
-				w++ // "‼"
-			}
 		}
 		if active[i].IsTimerRunning() {
 			w += 2 // "⧗ " prefix

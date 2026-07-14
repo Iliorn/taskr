@@ -60,6 +60,9 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailCursorDown()
 
 	case "enter":
+		if m.detail.field == fieldSubtasks {
+			return m.openSelectedSubtaskDetail()
+		}
 		return m.startEditing()
 
 	case "d":
@@ -121,6 +124,9 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.detailAdd()
 
 	case "r":
+		if m.detail.field == fieldSubtasks {
+			return m.startRenamingSelectedSubtask()
+		}
 		// Edit the selected time entry from the detail pane — reuses the same
 		// startEditTimeEntry flow as the calendar timeline so parsing and undo
 		// are identical across both surfaces.
@@ -563,6 +569,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 					// before m.tab changes so it's removed from the right tab.
 					m.dropFocus(stateDetailPane)
 					m.pane = paneList
+					m.detailTaskID = ""
 					m.cursor = i
 					m.tab = tabTasks
 					m.invalidateDetailCache()
@@ -590,22 +597,52 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		}
 	case fieldSubtasks:
-		// Enter on a subtask edits the title (matches comments + learnings).
-		// 'd' still toggles done/pending.
-		if m.subtaskCount(t.ID) > 0 && m.detail.subtaskCursor < m.subtaskCount(t.ID) {
-			ids := m.subtaskIDs(t.ID)
-			sub := m.findTodoByID(ids[m.detail.subtaskCursor])
-			if sub == nil {
-				return m, nil
-			}
-			m.mode = modeEditSubtask
-			m.pendingSubtask = m.detail.subtaskCursor
-			m.textInput.SetValue(sub.Title)
-			m.textInput.Placeholder = tr("Edit subtask title...")
-			m.textInput.Focus()
-			return m, textinput.Blink
-		}
+		// Enter is handled by updateDetail so it can open the selected
+		// subtask's full detail pane. Renaming is deliberately bound to 'r'.
 	}
+	return m, textinput.Blink
+}
+
+// openSelectedSubtaskDetail changes the detail pane's explicit target rather
+// than moving the list cursor. This also works for deeply nested subtasks,
+// which do not necessarily have their own visible Tasks-list row.
+func (m model) openSelectedSubtaskDetail() (tea.Model, tea.Cmd) {
+	parent := m.currentTodo()
+	if parent == nil {
+		return m, nil
+	}
+	ids := m.subtaskIDs(parent.ID)
+	if m.detail.subtaskCursor >= len(ids) {
+		return m, nil
+	}
+	sub := m.findTodoByID(ids[m.detail.subtaskCursor])
+	if sub == nil {
+		return m, nil
+	}
+	m.detailTaskID = sub.ID
+	m.detail = detailState{field: fieldStartDate}
+	m.invalidateDetailCache()
+	return m, nil
+}
+
+func (m model) startRenamingSelectedSubtask() (tea.Model, tea.Cmd) {
+	parent := m.currentTodo()
+	if parent == nil {
+		return m, nil
+	}
+	ids := m.subtaskIDs(parent.ID)
+	if m.detail.subtaskCursor >= len(ids) {
+		return m, nil
+	}
+	sub := m.findTodoByID(ids[m.detail.subtaskCursor])
+	if sub == nil {
+		return m, nil
+	}
+	m.mode = modeEditSubtask
+	m.pendingSubtask = m.detail.subtaskCursor
+	m.textInput.SetValue(sub.Title)
+	m.textInput.Placeholder = tr("Edit subtask title...")
+	m.textInput.Focus()
 	return m, textinput.Blink
 }
 

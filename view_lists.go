@@ -945,14 +945,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		title += " ↻"
 	}
 	if subDone, subTotal := m.subtaskProgress(t.ID); subTotal > 0 {
-		// Trailing ‼ marks "something in the subtree is overdue" — distinct
-		// from the leading dep-overdue ! so the user can tell which side is
-		// on fire.
-		badge := fmt.Sprintf(" (%d/%d)", subDone, subTotal)
-		if m.hasOverdueDescendant(t.ID, overdueSet) {
-			badge += "‼"
-		}
-		title += badge
+		title += fmt.Sprintf(" (%d/%d)", subDone, subTotal)
 	}
 	if t.IsTimerRunning() {
 		title = "⧗ " + title

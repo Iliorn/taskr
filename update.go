@@ -911,10 +911,11 @@ func (m *model) switchTab(t tab) {
 	// (projectCursor, tagTabCursor, showHistory, the calendar day, …) lives in
 	// its own fields and persists on its own — no longer zeroed here.
 	m.tabViews[m.tab] = tabView{
-		cursor:     m.cursor,
-		listOffset: m.listOffset,
-		pane:       m.pane,
-		search:     m.searchQuery,
+		cursor:       m.cursor,
+		listOffset:   m.listOffset,
+		pane:         m.pane,
+		search:       m.searchQuery,
+		detailTaskID: m.detailTaskID,
 	}
 	m.tab = t
 	v := m.tabViews[t]
@@ -922,6 +923,7 @@ func (m *model) switchTab(t tab) {
 	m.listOffset = v.listOffset
 	m.pane = v.pane
 	m.searchQuery = v.search
+	m.detailTaskID = v.detailTaskID
 
 	m.invalidateDetailCache()
 	m.markFilterDirty()
@@ -1270,14 +1272,16 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 				m.cursor = 0
 				m.pushFocus(stateProjectDrill)
 			}
-		} else if m.currentTodo() != nil {
+		} else if t := m.currentTodo(); t != nil {
+			m.detailTaskID = t.ID
 			m.pane = paneDetail
 			m.detail = detailState{field: fieldStartDate}
 			m.invalidateDetailCache()
 			m.pushFocus(stateDetailPane)
 		}
 	case tabTasks:
-		if m.currentTodo() != nil {
+		if t := m.currentTodo(); t != nil {
+			m.detailTaskID = t.ID
 			m.pane = paneDetail
 			m.detail = detailState{field: fieldStartDate}
 			m.invalidateDetailCache()

@@ -249,9 +249,12 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 				}
 			} else {
 				line := fmt.Sprintf("%s[ ] %s", pfx, title)
-				if isSubSelected {
+				switch {
+				case sub.IsOverdue():
+					subB.WriteString(overdueStyle.Render(line) + "\n")
+				case isSubSelected:
 					subB.WriteString(detailSelectedStyle.Render(line) + "\n")
-				} else {
+				default:
 					subB.WriteString(detailValueStyle.Render(line) + "\n")
 				}
 			}

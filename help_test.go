@@ -73,7 +73,7 @@ func TestHelpOverlayListsRowSymbols(t *testing.T) {
 	if !strings.Contains(body, "Row symbols") {
 		t.Fatal("help body should contain a 'Row symbols' section")
 	}
-	for _, want := range []string{"⧗", "↥", "↧", "↻", "‼", "recurring task", "timer running"} {
+	for _, want := range []string{"⧗", "↥", "↧", "↻", "recurring task", "timer running"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Row symbols section missing %q", want)
 		}
