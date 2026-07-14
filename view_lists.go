@@ -1349,8 +1349,6 @@ func (m model) renderSettingsList() string {
 		return cursor + labelStyle.Render(padRight(labels[id], labelW)) + helpStyle.Render(values[id])
 	}
 
-	b.WriteString(headerStyle.Render(tr("Settings")) + "\n\n")
-
 	// Personality summary: what the current bias mix "feels like", so tweaking a
 	// single bias gives immediate feedback that the sequence has shifted. It
 	// belongs next to the biases that produce it (the right column).

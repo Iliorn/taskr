@@ -513,7 +513,9 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 		innerSpaces = 1
 	}
 	timelineHeader := leftDate + strings.Repeat(" ", innerSpaces) + rightDate
-	headerLabel := padRight(tr("  Timeline"), labelW)
+	// The Timeline label now lives on the panel border; keep this first row as
+	// the chart's date-axis header rather than repeating the box title.
+	headerLabel := strings.Repeat(" ", labelW)
 	b.WriteString(headerStyle.Render(headerLabel+timelineHeader) + "\n")
 
 	todayLabel := tr("today:") + today.Format("02-01")

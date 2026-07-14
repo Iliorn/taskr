@@ -171,6 +171,42 @@ func (m model) detailPanelTitle() string {
 	}
 }
 
+// listPanelTitle names the primary content box without merely repeating the
+// selected tab. Context-sensitive variants make the border explain what is in
+// the pane (active work versus history, for example).
+func (m model) listPanelTitle() string {
+	switch m.tab {
+	case tabTasks:
+		if m.showHistory {
+			return tr("Completed tasks")
+		}
+		return tr("Active tasks")
+	case tabTags:
+		return tr("Tag progress")
+	case tabBoard:
+		return tr("Workflow")
+	case tabStats:
+		return tr("Summary")
+	case tabSettings:
+		return tr("Preferences")
+	}
+	return tr("Overview")
+}
+
+func projectTimelineTitle(project string) string {
+	if project == "" {
+		return tr("Timeline")
+	}
+	return tr("Timeline") + " · @" + project
+}
+
+func projectTasksTitle(project string) string {
+	if project == "" {
+		return tr("Tasks")
+	}
+	return tr("Tasks") + " · @" + project
+}
+
 // ── Top-level View ────────────────────────────────────────────────────────────
 
 func (m model) View() string {
@@ -728,7 +764,8 @@ func (m model) buildListContent(w, outerH int) string {
 		rawList = rawList[:innerH]
 	}
 	truncateLines(rawList, w-2)
-	return listPanelStyle.Width(w).Render(strings.Join(rawList, "\n"))
+	panel := listPanelStyle.Width(w).Render(strings.Join(rawList, "\n"))
+	return withBorderTitle(panel, m.listPanelTitle(), w, false)
 }
 
 // buildSideBySide renders the side-by-side list tabs (Tasks/Learnings/Tags) as
@@ -795,6 +832,7 @@ func (m model) buildSideBySide(w, outerH int) string {
 	}
 	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
 	detailPanel := detailStyle.Width(detailW).Render(strings.Join(detailLines, "\n"))
+	listPanel = withBorderTitle(listPanel, m.listPanelTitle(), listW, !detailFocused)
 	detailPanel = withBorderTitle(detailPanel, m.detailPanelTitle(), detailW, detailFocused)
 	return lipgloss.JoinHorizontal(lipgloss.Top, listPanel, detailPanel)
 }
@@ -818,7 +856,8 @@ func (m model) buildProjectListContent(w, listH int) string {
 		if len(emptyLines) > innerH {
 			emptyLines = emptyLines[:innerH]
 		}
-		return listPanelStyle.Width(w).Render(strings.Join(emptyLines, "\n"))
+		panel := listPanelStyle.Width(w).Render(strings.Join(emptyLines, "\n"))
+		return withBorderTitle(panel, tr("Project overview"), w, false)
 	}
 
 	// ── Drilled-in view: task list (left) + right column (right) ────────────
@@ -850,6 +889,7 @@ func (m model) buildProjectListContent(w, listH int) string {
 	}
 	truncateLines(projLines, w-2)
 	projRendered := listPanelStyle.Width(w).Render(strings.Join(projLines, "\n"))
+	projRendered = withBorderTitle(projRendered, tr("Project overview"), w, false)
 
 	projRenderedLines := strings.Split(projRendered, "\n")
 	ganttOuterH := listH - len(projRenderedLines)
@@ -880,6 +920,11 @@ func (m model) buildProjectListContent(w, listH int) string {
 	}
 	truncateLines(ganttLines, w-2)
 	ganttRendered := listPanelStyle.Width(w).Render(strings.Join(ganttLines, "\n"))
+	project := ""
+	if m.projectCursor < len(projects) {
+		project = projects[m.projectCursor]
+	}
+	ganttRendered = withBorderTitle(ganttRendered, projectTimelineTitle(project), w, false)
 
 	b := getBuilder()
 	defer putBuilder(b)
@@ -971,11 +1016,17 @@ func (m model) buildProjectDrillContent(projects []string, w, outerH int) string
 
 	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
 	rightPanel := ganttStyle.Width(ganttW).Render(strings.Join(rightLines, "\n"))
-	// When showing the task detail in the right column, embed the title on the
-	// border. In browse mode (pane == paneList) the right column shows the Gantt
-	// chart, which has its own header row, so no border title is added there.
+	project := ""
+	if m.projectCursor < len(projects) {
+		project = projects[m.projectCursor]
+	}
+	listPanel = withBorderTitle(listPanel, projectTasksTitle(project), listW, m.pane == paneList)
+	// The right border names either the opened task or the selected project's
+	// timeline, matching the contextual title on the left task pane.
 	if m.pane == paneDetail {
 		rightPanel = withBorderTitle(rightPanel, m.detailPanelTitle(), ganttW, true)
+	} else {
+		rightPanel = withBorderTitle(rightPanel, projectTimelineTitle(project), ganttW, false)
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, listPanel, rightPanel)
 }

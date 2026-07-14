@@ -209,6 +209,8 @@ func (m model) buildCalendarContent(w, outerH int) string {
 	}
 	calPanel := calStyle.Width(calPanelWidth).Render(strings.Join(calLines, "\n"))
 	tlPanel := tlStyle.Width(tlW).Render(strings.Join(tlLines, "\n"))
+	tlPanel = withBorderTitle(tlPanel, localizedDayDateAbbrev(m.calendar.selected), tlW, m.calendar.focusTimeline)
+	calPanel = withBorderTitle(calPanel, localizedMonthYear(m.calendar.selected), calPanelWidth, !m.calendar.focusTimeline)
 	return lipgloss.JoinHorizontal(lipgloss.Top, tlPanel, calPanel)
 }
 
@@ -233,12 +235,6 @@ func (m model) renderMonthCalendarLines() []string {
 	innerW := calPanelWidth - 2
 
 	var lines []string
-	title := localizedMonthYear(sel)
-	pad := (innerW - len([]rune(title))) / 2
-	if pad < 0 {
-		pad = 0
-	}
-	lines = append(lines, strings.Repeat(" ", pad)+calHeaderStyle.Render(title))
 	lines = append(lines, dimStyle.Render(localizedWeekdayHeader()))
 
 	// Monday-first offset of the 1st, matching the stats heatmap convention.
@@ -352,17 +348,15 @@ func (m model) renderTimelineLines(innerW, innerH int) []string {
 		total += a.duration()
 	}
 
-	headerText := localizedDayDateAbbrev(m.calendar.selected)
-	header := calHeaderStyle.Render(headerText)
 	suffix := fmt.Sprintf(tr("%d entries · %s"), len(acts), formatDuration(total))
 	if len(acts) == 1 {
 		suffix = tr("1 entry · ") + formatDuration(total)
 	}
-	pad := innerW - len([]rune(headerText)) - len([]rune(suffix))
+	pad := innerW - len([]rune(suffix))
 	if pad < 1 {
 		pad = 1
 	}
-	lines := []string{header + strings.Repeat(" ", pad) + dimStyle.Render(suffix), ""}
+	lines := []string{strings.Repeat(" ", pad) + dimStyle.Render(suffix), ""}
 
 	if len(acts) == 0 {
 		lines = append(lines, dimStyle.Render(tr("  No activity on this day.")))

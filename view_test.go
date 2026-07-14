@@ -175,6 +175,71 @@ func TestSideBySideDetailPreview(t *testing.T) {
 	}
 }
 
+func TestPersistentPanelsUseContextualBorderTitles(t *testing.T) {
+	applyLang(string(langEN))
+	t.Cleanup(func() { applyLang(string(langEN)) })
+
+	plainView := func(m model) string {
+		m.termWidth = 120 // stacked layouts make every panel title easy to assert
+		m.termHeight = 40
+		return ansi.Strip(m.View())
+	}
+	assertTitle := func(label, view, title string) {
+		t.Helper()
+		if !strings.Contains(view, "╭─ "+title+" ") {
+			t.Errorf("%s missing border title %q:\n%s", label, title, view)
+		}
+	}
+
+	task := todo.New("Panel title task")
+	tasks := modelWithTasks(t, task)
+	assertTitle("tasks", plainView(tasks), "Active tasks")
+	tasks.showHistory = true
+	assertTitle("task history", plainView(tasks), "Completed tasks")
+
+	tagged := todo.New("Tagged task")
+	tagged.Tags = []string{"home"}
+	tags := modelWithTasks(t, tagged)
+	tags.tab = tabTags
+	assertTitle("tags", plainView(tags), "Tag progress")
+	assertTitle("tag detail", plainView(tags), "#home")
+
+	projectTask := todo.New("Project task")
+	projectTask.Project = "alpha"
+	projects := modelWithTasks(t, projectTask)
+	projects.tab = tabProjects
+	assertTitle("projects", plainView(projects), "Project overview")
+	assertTitle("project timeline", plainView(projects), "Timeline · @alpha")
+	projects.projectTaskMode = true
+	assertTitle("project drill tasks", plainView(projects), "Tasks · @alpha")
+	assertTitle("project drill timeline", plainView(projects), "Timeline · @alpha")
+
+	calendar := modelWithTasks(t)
+	calendar.tab = tabCalendar
+	calendar.calendar.selected = time.Date(2026, time.July, 14, 0, 0, 0, 0, time.Local)
+	calendarView := plainView(calendar)
+	assertTitle("calendar day", calendarView, localizedDayDateAbbrev(calendar.calendar.selected))
+	assertTitle("calendar month", calendarView, localizedMonthYear(calendar.calendar.selected))
+
+	for _, tc := range []struct {
+		label string
+		tab   tab
+		title string
+	}{
+		{"board", tabBoard, "Workflow"},
+		{"stats", tabStats, "Summary"},
+		{"settings", tabSettings, "Preferences"},
+	} {
+		m := modelWithTasks(t, task)
+		m.tab = tc.tab
+		view := plainView(m)
+		assertTitle(tc.label, view, tc.title)
+		if tc.tab == tabStats {
+			assertTitle("stats activity", view, "Activity")
+		}
+	}
+}
+
 // Focusing the right-hand detail must not reduce the number of rows rendered
 // in the left-hand list. buildSideBySide narrows a model copy so list columns
 // reflow; that narrowed width must not make the height calculation mistake the
