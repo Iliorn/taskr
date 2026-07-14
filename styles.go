@@ -210,7 +210,6 @@ var (
 	statsAxisStyle   lipgloss.Style // brighter than dim — used for weekday/week labels under bars
 	timerStyle       lipgloss.Style
 
-	calHeaderStyle      lipgloss.Style
 	calSelectedDayStyle lipgloss.Style
 	calTodayStyle       lipgloss.Style
 
@@ -305,7 +304,6 @@ func applyTheme(t theme) {
 	timerStyle = lipgloss.NewStyle().Foreground(t.teal).Bold(true)
 	selectedTimerRowStyle = timerStyle.Background(t.sel)
 
-	calHeaderStyle = lipgloss.NewStyle().Foreground(t.teal).Bold(true)
 	calSelectedDayStyle = lipgloss.NewStyle().Foreground(t.bg).Background(t.teal).Bold(true)
 	calTodayStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
 
