@@ -193,8 +193,9 @@ var (
 	checkDoneStyle  lipgloss.Style
 	headerStyle     lipgloss.Style
 
-	tagStyle         lipgloss.Style
-	tagSelectedStyle lipgloss.Style
+	tagStyle                lipgloss.Style
+	tagSelectedStyle        lipgloss.Style
+	taskTagSelectedRowStyle lipgloss.Style
 
 	overdueCountStyle lipgloss.Style
 	activeCountStyle  lipgloss.Style
@@ -285,6 +286,7 @@ func applyTheme(t theme) {
 
 	tagStyle = lipgloss.NewStyle().Foreground(t.purple).Bold(true)
 	tagSelectedStyle = lipgloss.NewStyle().Foreground(t.purpleLt).Bold(true)
+	taskTagSelectedRowStyle = tagStyle.Background(t.sel)
 
 	overdueCountStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
 	activeCountStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)

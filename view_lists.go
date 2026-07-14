@@ -815,7 +815,8 @@ func (m model) renderHistoryList() string {
 func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, cols listCols) string {
 	titleW := cols.titleW
 	cursorStr := "  "
-	if index == cursor && active {
+	selected := index == cursor && active
+	if selected {
 		cursorStr = "▶ "
 	}
 	dueVal := ""
@@ -840,17 +841,21 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	if tagsPart != "" {
 		tagsW := tagsRenderWidth(t.Tags)
 		if mainW+1+tagsW <= m.termWidth-8 {
-			tagsStr = " " + tagsPart
+			if selected {
+				tagsStr = renderSelectedTaskTagsPart(t.Tags)
+			} else {
+				tagsStr = " " + tagsPart
+			}
 		} else {
 			// Trim last 3 chars of titleCol to make room for (…).
 			r := []rune(titleCol)
 			if len(r) > 3 {
-				titleCol = string(r[:len(r)-3]) + dimStyle.Render("(…)")
+				titleCol = string(r[:len(r)-3]) + "(…)"
 			}
 		}
 	}
 
-	if index == cursor && active {
+	if selected {
 		return fastSelectedRow.render(cursorStr+"[") +
 			fastCheckDone.render("✓") +
 			fastSelectedRow.render("] "+titleCol+dateCols) +
@@ -904,7 +909,8 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
 	titleW := cols.titleW
 	cursorStr := "  "
-	if index == cursor && active {
+	selected := index == cursor && active
+	if selected {
 		cursorStr = "▶ "
 	}
 	checkbox := "[ ]"
@@ -986,12 +992,18 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	if tagsPart != "" {
 		tagsW := tagsRenderWidth(t.Tags)
 		if len([]rune(line))+1+tagsW <= m.termWidth-8 {
-			tagsStr = " " + tagsPart
+			if selected {
+				tagsStr = renderSelectedTaskTagsPart(t.Tags)
+			} else {
+				tagsStr = " " + tagsPart
+			}
 		} else {
-			// Overwrite the last 3 chars of the line with (…) so it always fits.
+			// Overwrite the last 3 chars with the same plain (…) marker used by
+			// truncated title/project values. The row style is applied below, so
+			// selection and status colours remain continuous through the marker.
 			runes := []rune(line)
 			if len(runes) > 3 {
-				line = string(runes[:len(runes)-3]) + dimStyle.Render("(…)")
+				line = string(runes[:len(runes)-3]) + "(…)"
 			}
 		}
 	}
@@ -999,7 +1011,6 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	// Status colour owns the foreground; selection owns the background — so a
 	// selected overdue/timer row shows both instead of the status masking the
 	// cursor.
-	selected := index == cursor && active
 	var st fastStyle
 	switch {
 	case t.IsTimerRunning() && selected:

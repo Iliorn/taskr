@@ -128,6 +128,22 @@ func renderTagsPart(tags []string) string {
 	return sb.String()
 }
 
+// renderSelectedTaskTagsPart keeps the tag foreground while extending the
+// selected-row background through the leading gap, every tag chip, and the
+// spaces between them.
+func renderSelectedTaskTagsPart(tags []string) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.Grow(len(tags) * 12)
+	sb.WriteByte(' ')
+	for _, tag := range tags {
+		sb.WriteString("⟨#" + tag + "⟩ ")
+	}
+	return taskTagSelectedRowStyle.Render(sb.String())
+}
+
 // listCols decides which columns of the task/history list fit at the current
 // terminal width. Columns are dropped least-important-first as the window
 // narrows so list lines never wrap inside the panel.

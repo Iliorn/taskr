@@ -269,6 +269,65 @@ func TestSelectedOverdueRowKeepsSelectionBackground(t *testing.T) {
 	}
 }
 
+func TestSelectedTaskRowHighlightIncludesTags(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	applyTheme(themes[0])
+	defer func() {
+		lipgloss.SetColorProfile(before)
+		applyTheme(themes[0])
+	}()
+
+	task := todo.New("Tagged task")
+	task.Tags = []string{"urgent", "home"}
+	m := modelWithTasks(t, task)
+	m.termWidth = 100 // stacked width leaves ample room for both tag chips
+
+	var row string
+	for _, line := range strings.Split(m.View(), "\n") {
+		if strings.Contains(line, "Tagged task") {
+			row = line
+			break
+		}
+	}
+	if row == "" {
+		t.Fatal("tagged task row should render")
+	}
+	tagPos := strings.Index(row, "⟨#urgent⟩")
+	if tagPos < 0 {
+		t.Fatalf("selected row should render its tags: %q", row)
+	}
+	wantPrefix := newFastStyle(taskTagSelectedRowStyle).prefix
+	if !strings.Contains(row[:tagPos], wantPrefix) {
+		t.Errorf("selected-row background should continue into tags (%q): %q", wantPrefix, row)
+	}
+}
+
+func TestTaskTagOverflowShowsTruncationMarker(t *testing.T) {
+	task := todo.New("Short title")
+	task.Tags = []string{"a-tag-name-far-too-long-for-the-task-list-column"}
+	m := modelWithTasks(t, task)
+	m.termWidth = 60
+
+	var row string
+	for _, line := range strings.Split(m.View(), "\n") {
+		plain := ansi.Strip(line)
+		if strings.Contains(plain, "Short title") {
+			row = plain
+			break
+		}
+	}
+	if row == "" {
+		t.Fatal("task row should render")
+	}
+	if !strings.Contains(row, "(…)") {
+		t.Errorf("hidden tags should leave a truncation marker: %q", row)
+	}
+	if strings.Contains(row, "a-tag-name-far-too-long") {
+		t.Errorf("overflowing tag should not leak past the marker: %q", row)
+	}
+}
+
 // An overdue dependency conveys itself through the row color, not a glyph — a
 // normal-priority task whose dependency is overdue carries no "!".
 func TestOverdueDependencyAddsNoGlyph(t *testing.T) {
