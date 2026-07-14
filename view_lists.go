@@ -835,8 +835,9 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	if cols.showLast {
 		dateCols += padRight(completedVal, 12)
 	}
+	rowTail := titleCol + dateCols
 	tagsPart := m.getRenderedTagsForTask(&t)
-	mainW := len([]rune(cursorStr)) + 4 + len([]rune(titleCol)) + len([]rune(dateCols))
+	mainW := len([]rune(cursorStr)) + 4 + len([]rune(rowTail))
 	tagsStr := ""
 	if tagsPart != "" {
 		tagsW := tagsRenderWidth(t.Tags)
@@ -847,23 +848,22 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 				tagsStr = " " + tagsPart
 			}
 		} else {
-			// Trim last 3 chars of titleCol to make room for (…).
-			r := []rune(titleCol)
-			if len(r) > 3 {
-				titleCol = string(r[:len(r)-3]) + "(…)"
-			}
+			// Render the omission marker as the Tags-column value, in tag colour.
+			// The fixed cursor+checkbox prefix occupies six cells and is rendered
+			// separately below so the done checkmark can keep its own colour.
+			rowTail, tagsStr = renderTaskTagOverflow(rowTail, m.termWidth-8-6, selected)
 		}
 	}
 
 	if selected {
 		return fastSelectedRow.render(cursorStr+"[") +
 			fastCheckDone.render("✓") +
-			fastSelectedRow.render("] "+titleCol+dateCols) +
+			fastSelectedRow.render("] "+rowTail) +
 			tagsStr + "\n"
 	}
 	return fastNormal.render(cursorStr+"[") +
 		fastCheckDone.render("✓") +
-		fastNormal.render("] "+titleCol+dateCols) +
+		fastNormal.render("] "+rowTail) +
 		tagsStr + "\n"
 }
 
@@ -998,13 +998,9 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 				tagsStr = " " + tagsPart
 			}
 		} else {
-			// Overwrite the last 3 chars with the same plain (…) marker used by
-			// truncated title/project values. The row style is applied below, so
-			// selection and status colours remain continuous through the marker.
-			runes := []rune(line)
-			if len(runes) > 3 {
-				line = string(runes[:len(runes)-3]) + "(…)"
-			}
+			// The omission marker is a Tags-column value, not part of whichever
+			// preceding column happened to be last, so it keeps the tag colour.
+			line, tagsStr = renderTaskTagOverflow(line, m.termWidth-8, selected)
 		}
 	}
 

@@ -304,15 +304,31 @@ func TestSelectedTaskRowHighlightIncludesTags(t *testing.T) {
 }
 
 func TestTaskTagOverflowShowsTruncationMarker(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	applyTheme(themes[0])
+	defer func() {
+		lipgloss.SetColorProfile(before)
+		applyTheme(themes[0])
+	}()
+
 	task := todo.New("Short title")
 	task.Tags = []string{"a-tag-name-far-too-long-for-the-task-list-column"}
-	m := modelWithTasks(t, task)
+	other := todo.New("Other task")
+	m := modelWithTasks(t, task, other)
 	m.termWidth = 60
+	for i := range m.cache.active {
+		if m.cache.active[i].ID == task.ID {
+			m.cursor = (i + 1) % len(m.cache.active) // keep the overflow row unselected
+			break
+		}
+	}
 
-	var row string
+	var rawRow, row string
 	for _, line := range strings.Split(m.View(), "\n") {
 		plain := ansi.Strip(line)
 		if strings.Contains(plain, "Short title") {
+			rawRow = line
 			row = plain
 			break
 		}
@@ -325,6 +341,12 @@ func TestTaskTagOverflowShowsTruncationMarker(t *testing.T) {
 	}
 	if strings.Contains(row, "a-tag-name-far-too-long") {
 		t.Errorf("overflowing tag should not leak past the marker: %q", row)
+	}
+	markerPos := strings.Index(rawRow, "(…)")
+	wantTagPrefix := newFastStyle(tagStyle).prefix
+	if markerPos < 0 || !strings.Contains(rawRow[:markerPos], wantTagPrefix) {
+		t.Errorf("overflow marker should be rendered as a Tags-column value in tag colour (%q): %q",
+			wantTagPrefix, rawRow)
 	}
 }
 

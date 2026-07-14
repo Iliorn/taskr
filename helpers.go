@@ -144,6 +144,26 @@ func renderSelectedTaskTagsPart(tags []string) string {
 	return taskTagSelectedRowStyle.Render(sb.String())
 }
 
+// renderTaskTagOverflow places a tag-coloured (…) in the Tags column when the
+// actual chips do not fit. It trims only as much trailing space/content from
+// the preceding columns as is needed to reserve the marker plus its one-cell
+// column gap, keeping the complete row inside contentW.
+func renderTaskTagOverflow(line string, contentW int, selected bool) (string, string) {
+	const markerW = 3 // display width of (…)
+	runes := []rune(line)
+	trim := len(runes) + 1 + markerW - contentW
+	if trim > 0 {
+		if trim > len(runes) {
+			trim = len(runes)
+		}
+		line = string(runes[:len(runes)-trim])
+	}
+	if selected {
+		return line, taskTagSelectedRowStyle.Render(" (…)")
+	}
+	return line, " " + tagStyle.Render("(…)")
+}
+
 // listCols decides which columns of the task/history list fit at the current
 // terminal width. Columns are dropped least-important-first as the window
 // narrows so list lines never wrap inside the panel.
