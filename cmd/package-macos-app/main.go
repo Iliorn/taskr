@@ -105,7 +105,7 @@ func writeAppBundle(zw *zip.Writer, plist, binary []byte) error {
 func addZipEntry(zw *zip.Writer, name string, mode os.FileMode, method uint16, data []byte) error {
 	header := &zip.FileHeader{Name: name, Method: method}
 	header.SetMode(mode)
-	header.SetModTime(zipTimestamp)
+	header.Modified = zipTimestamp
 	w, err := zw.CreateHeader(header)
 	if err != nil {
 		return fmt.Errorf("create archive entry %s: %w", name, err)
