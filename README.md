@@ -40,9 +40,11 @@ mv taskr ~/.local/bin/   # or anywhere on your PATH
 
 **Pre-built binary** (Linux / Windows / macOS):
 
-Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page — `taskr` for Linux, `taskr.exe` for Windows (x64), and for macOS pick `taskr-macos-apple-silicon` (Apple Silicon — M1/M2/M3/M4, i.e. any Mac from 2020 onward) or `taskr-macos-intel` (older Intel-based Macs).
+Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page — `taskr` for Linux and `taskr.exe` for Windows (x64).
 
-On macOS, run `chmod +x taskr-macos-*` after downloading; if Gatekeeper blocks it, clear the quarantine flag with `xattr -d com.apple.quarantine taskr-macos-*`.
+On macOS, download `taskr-macos-apple-silicon-app.zip` for M1/M2/M3/M4 Macs (2020 onward), or `taskr-macos-intel-app.zip` for older Intel Macs. Unzip it and double-click **Taskr.app**; it opens Terminal and starts taskr automatically. Because taskr is not yet notarized by Apple, the first launch may be blocked: try opening it once, then choose **System Settings → Privacy & Security → Open Anyway**. No Terminal commands are required.
+
+The raw `taskr-macos-apple-silicon` and `taskr-macos-intel` assets remain available for command-line installation and taskr's self-updater.
 
 On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. Self-update (Settings tab → "Update to latest release") requires the [GitHub CLI](https://cli.github.com/) on all platforms.
 

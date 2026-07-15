@@ -27,6 +27,13 @@ func main() {
 		os.Exit(code)
 	}
 
+	// Finder launches app-bundle executables without an interactive terminal.
+	// On macOS, hand the same executable to Terminal so a double-clickable
+	// Taskr.app can host the TUI without asking the user to type commands.
+	if relaunchInTerminalIfNeeded() {
+		return
+	}
+
 	p := tea.NewProgram(initialModel(newSQLiteRepo()), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

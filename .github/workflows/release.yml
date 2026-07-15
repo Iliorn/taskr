@@ -37,10 +37,16 @@ jobs:
           GOOS=darwin  GOARCH=arm64 go build -ldflags "$LDFLAGS" -o taskr-macos-apple-silicon .
           GOOS=darwin  GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr-macos-intel .
 
+          # Finder-friendly app bundles for users who are not comfortable in
+          # Terminal. The raw binaries above remain load-bearing for self-update.
+          go run ./cmd/package-macos-app taskr-macos-apple-silicon taskr-macos-apple-silicon-app.zip "$V"
+          go run ./cmd/package-macos-app taskr-macos-intel taskr-macos-intel-app.zip "$V"
+
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
           V: ${{ github.ref_name }}
         run: |
           gh release create "$V" --title "$V" --generate-notes \
-            taskr taskr.exe taskr-macos-apple-silicon taskr-macos-intel
+            taskr taskr.exe taskr-macos-apple-silicon taskr-macos-intel \
+            taskr-macos-apple-silicon-app.zip taskr-macos-intel-app.zip

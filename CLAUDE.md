@@ -36,6 +36,8 @@ Self-update depends on **exact release asset names** — they are load-bearing, 
 
 - `taskr` (Linux x64) · `taskr.exe` (Windows x64) · `taskr-macos-apple-silicon` (arm64) · `taskr-macos-intel` (amd64)
 
+The four raw names above are load-bearing for self-update. Releases also attach `taskr-macos-apple-silicon-app.zip` and `taskr-macos-intel-app.zip`, Finder-friendly `Taskr.app` bundles built by `cmd/package-macos-app` for users who should not need Terminal installation commands.
+
 Settings tab → "Update to latest release" shells out to the **GitHub CLI** (`gh`) to fetch the matching asset, so `gh` must be installed at runtime for self-update.
 
 The version lives **only in git tags + the release** — there is no version constant in the tree (`appVersion` defaults to `"dev"` and is injected at build time). So the next version = bump the latest tag from `gh release list`; don't trust local `git tag` (release tags may exist on the remote but not locally).
@@ -50,7 +52,7 @@ git push origin v1.10.0       # ← triggers the build + release
 
 Patch bumps are the norm for stat/layout tweaks; minor bumps for new interactive features.
 
-The manual equivalent (if ever building locally) is the same four `go build -ldflags "-s -w -X main.appVersion=$V"` invocations feeding `gh release create $V ... taskr taskr.exe taskr-macos-apple-silicon taskr-macos-intel`. `-s -w` strips the symbol table and DWARF debug info, cutting ~30% off each binary with no functional change; local dev builds (`go run .` / `go build .`) deliberately keep them so `dlv` and rich panic traces still work.
+The manual equivalent (if ever building locally) is the same four `go build -ldflags "-s -w -X main.appVersion=$V"` invocations, followed by `go run ./cmd/package-macos-app` for both Darwin binaries, feeding all six assets to `gh release create`. `-s -w` strips the symbol table and DWARF debug info, cutting ~30% off each binary with no functional change; local dev builds (`go run .` / `go build .`) deliberately keep them so `dlv` and rich panic traces still work.
 
 ## Architecture
 
