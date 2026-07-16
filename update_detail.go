@@ -120,6 +120,16 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case "#":
+		// Tags are commonly entered through quick-add syntax, so make the same
+		// sigil a direct route to the tag picker from anywhere in details.
+		return m.openTagSearch()
+
+	case "@":
+		// Mirror quick-add's project sigil without making the user navigate back
+		// to the Project field first.
+		return m.openProjectSearch()
+
 	case "a":
 		return m.detailAdd()
 
@@ -346,17 +356,9 @@ func (m model) detailAdd() (tea.Model, tea.Cmd) {
 		m.depSearchInput.Focus()
 		return m, textinput.Blink
 	case fieldTags:
-		m.mode = modeSearchTag
-		m.tagSearchInput.SetValue("")
-		m.tagSearch = searchState{}
-		m.tagSearchInput.Focus()
-		return m, textinput.Blink
+		return m.openTagSearch()
 	case fieldProject:
-		m.mode = modeSearchProject
-		m.projSearchInput.SetValue("")
-		m.projSearch = searchState{}
-		m.projSearchInput.Focus()
-		return m, textinput.Blink
+		return m.openProjectSearch()
 	case fieldLearnings:
 		m.mode = modeAddLearning
 		m.textInput.SetValue("")
@@ -371,6 +373,22 @@ func (m model) detailAdd() (tea.Model, tea.Cmd) {
 		return m, textinput.Blink
 	}
 	return m, nil
+}
+
+func (m model) openTagSearch() (tea.Model, tea.Cmd) {
+	m.mode = modeSearchTag
+	m.tagSearchInput.SetValue("")
+	m.tagSearch = searchState{}
+	m.tagSearchInput.Focus()
+	return m, textinput.Blink
+}
+
+func (m model) openProjectSearch() (tea.Model, tea.Cmd) {
+	m.mode = modeSearchProject
+	m.projSearchInput.SetValue("")
+	m.projSearch = searchState{}
+	m.projSearchInput.Focus()
+	return m, textinput.Blink
 }
 
 func (m model) detailDelete() (tea.Model, tea.Cmd) {

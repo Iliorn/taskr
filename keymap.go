@@ -97,6 +97,8 @@ var keymap = []binding{
 	{ctxTasksDetail, "←/→", "detailsection", "jump section", secDetail, true, false},
 	{ctxTasksDetail, "enter", "editfield", "edit field / open subtask", secDetail, true, false},
 	{ctxTasksDetail, "a", "add", "add tag / dep / comment / learning / subtask", secDetail, true, false},
+	{ctxTasksDetail, "#", "quicktag", "quick add tag", secDetail, true, false},
+	{ctxTasksDetail, "@", "quickproject", "quick add / change project", secDetail, true, false},
 	{ctxTasksDetail, "d", "done", "toggle subtask done", secDetail, true, false},
 	{ctxTasksDetail, "t", "track", "start/stop subtask timer", secDetail, false, false},
 	{ctxTasksDetail, "T", "timeentry", "add manual time entry", secDetail, false, false},

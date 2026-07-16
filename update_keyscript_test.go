@@ -359,6 +359,43 @@ func TestEnterOpensSelectedSubtaskDetail(t *testing.T) {
 	}
 }
 
+func TestDetailSigilsQuickAddTagAndProjectFromAnyField(t *testing.T) {
+	task := todo.New("Target")
+	m := modelWithTasks(t, task)
+	m.pane = paneDetail
+	m.detailTaskID = task.ID
+	m.detail = detailState{field: fieldComments}
+	m.pushFocus(stateDetailPane)
+
+	m = sendKey(t, m, "#")
+	if m.mode != modeSearchTag {
+		t.Fatalf("after '#': mode = %v, want modeSearchTag", m.mode)
+	}
+	if m.detail.field != fieldComments {
+		t.Fatalf("'#' moved detail cursor to %v, want fieldComments", m.detail.field)
+	}
+	m = script(t, m, "urgent", "enter")
+	if got := m.get(task.ID).Tags; len(got) != 1 || got[0] != "urgent" {
+		t.Fatalf("tags after quick add = %v, want [urgent]", got)
+	}
+
+	m.detail.field = fieldStartDate
+	m = sendKey(t, m, "@")
+	if m.mode != modeSearchProject {
+		t.Fatalf("after '@': mode = %v, want modeSearchProject", m.mode)
+	}
+	if m.detail.field != fieldStartDate {
+		t.Fatalf("'@' moved detail cursor to %v, want fieldStartDate", m.detail.field)
+	}
+	m = script(t, m, "launch", "enter")
+	if got := m.get(task.ID).Project; got != "launch" {
+		t.Fatalf("project after quick add = %q, want %q", got, "launch")
+	}
+	if !m.savePending && !m.saveScheduled {
+		t.Error("quick detail mutations did not schedule a save")
+	}
+}
+
 func TestRRenamesSelectedSubtask(t *testing.T) {
 	parent := todo.New("Parent task")
 	child := todo.NewSubtask("Old child title", parent.ID)

@@ -259,6 +259,8 @@ var daTranslations = map[string]string{
 	"jump section":                "hop til sektion",
 	"edit field / open subtask":   "rediger felt / åbn delopgave",
 	"add tag / dep / comment / learning / subtask": "tilføj mærke / afh. / kommentar / læring / delopgave",
+	"quick add tag":                                "tilføj hurtigt mærke",
+	"quick add / change project":                   "tilføj / skift projekt hurtigt",
 	"toggle subtask done":                          "skift delopgave færdig",
 	"rename subtask / edit time entry":             "omdøb delopgave / rediger tidsregistrering",
 	"remove field / delete subtask":                "fjern felt / slet delopgave",
