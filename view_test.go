@@ -377,6 +377,26 @@ func TestOverdueSubtaskIsRedInDetailWithoutParentMarker(t *testing.T) {
 	}
 }
 
+func TestDetailPanelTitleMarksSubtask(t *testing.T) {
+	parent := todo.New("Parent task")
+	child := todo.NewSubtask("Child task", parent.ID)
+	m := modelWithTasks(t, parent, child)
+	m.pane = paneDetail
+
+	// Top-level detail: the title is the bare task name, no marker.
+	m.detailTaskID = parent.ID
+	if got := m.detailPanelTitle(); got != parent.Title {
+		t.Fatalf("top-level detail title = %q, want %q", got, parent.Title)
+	}
+
+	// Drilled into a subtask: the title carries the chevron marker.
+	m.detailTaskID = child.ID
+	m.detailStack = []string{parent.ID}
+	if got := m.detailPanelTitle(); got != "↳ "+child.Title {
+		t.Fatalf("subtask detail title = %q, want %q", got, "↳ "+child.Title)
+	}
+}
+
 func TestSelectedTaskRowHighlightIncludesTags(t *testing.T) {
 	before := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)

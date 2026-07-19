@@ -165,6 +165,12 @@ func (m model) detailPanelTitle() string {
 		return tr("Activity")
 	default:
 		if t := m.currentTodo(); t != nil {
+			// A drilled-in subtask is not a top-level task; prefix a chevron
+			// so the border makes clear you're inside a subtask, not viewing
+			// the parent. withBorderTitle truncates the title, not the marker.
+			if len(m.detailStack) > 0 {
+				return "↳ " + t.Title
+			}
 			return t.Title
 		}
 		return tr("Detail")

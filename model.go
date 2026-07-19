@@ -76,6 +76,7 @@ type tabView struct {
 	pane         pane
 	search       string
 	detailTaskID string
+	detailStack  []string
 }
 
 type detailField int
@@ -322,6 +323,7 @@ type model struct {
 	focusStack           []focusEntry
 	expandedTasks        map[string]bool
 	detailTaskID         string
+	detailStack          []string
 	editingTagName       string
 	editingProjectName   string
 	tagSort              tagSortMode

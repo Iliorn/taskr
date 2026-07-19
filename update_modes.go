@@ -62,6 +62,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.followTask(t.ID)
 					if cur := m.currentTodo(); cur != nil && cur.ID == t.ID {
 						m.detailTaskID = t.ID
+						m.detailStack = nil
 						m.pane = paneDetail
 						m.detail = detailState{field: fieldStartDate}
 						m.invalidateDetailCache()

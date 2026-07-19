@@ -916,6 +916,7 @@ func (m *model) switchTab(t tab) {
 		pane:         m.pane,
 		search:       m.searchQuery,
 		detailTaskID: m.detailTaskID,
+		detailStack:  m.detailStack,
 	}
 	m.tab = t
 	v := m.tabViews[t]
@@ -924,6 +925,7 @@ func (m *model) switchTab(t tab) {
 	m.pane = v.pane
 	m.searchQuery = v.search
 	m.detailTaskID = v.detailTaskID
+	m.detailStack = v.detailStack
 
 	m.invalidateDetailCache()
 	m.markFilterDirty()
@@ -1274,6 +1276,7 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 			}
 		} else if t := m.currentTodo(); t != nil {
 			m.detailTaskID = t.ID
+			m.detailStack = nil
 			m.pane = paneDetail
 			m.detail = detailState{field: fieldStartDate}
 			m.invalidateDetailCache()
@@ -1282,6 +1285,7 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 	case tabTasks:
 		if t := m.currentTodo(); t != nil {
 			m.detailTaskID = t.ID
+			m.detailStack = nil
 			m.pane = paneDetail
 			m.detail = detailState{field: fieldStartDate}
 			m.invalidateDetailCache()

@@ -350,9 +350,22 @@ func TestEnterOpensSelectedSubtaskDetail(t *testing.T) {
 		t.Fatalf("Enter should open nested child details, current task = %+v", cur)
 	}
 
+	// Esc backs out one level per press — grandchild → child → parent → list —
+	// instead of collapsing straight back to the list.
+	m = script(t, m, "esc")
+	if m.pane != paneDetail || m.detailTaskID != child.ID {
+		t.Fatalf("first Esc should return to child detail: pane=%v target=%q", m.pane, m.detailTaskID)
+	}
+	if m.detail.field != fieldSubtasks {
+		t.Fatalf("returning up a level should land on the Subtasks section, field=%v", m.detail.field)
+	}
+	m = script(t, m, "esc")
+	if m.pane != paneDetail || m.detailTaskID != parent.ID {
+		t.Fatalf("second Esc should return to parent detail: pane=%v target=%q", m.pane, m.detailTaskID)
+	}
 	m = script(t, m, "esc")
 	if m.pane != paneList || m.detailTaskID != "" {
-		t.Fatalf("Esc should return to list and clear detail target: pane=%v target=%q", m.pane, m.detailTaskID)
+		t.Fatalf("final Esc should return to list and clear detail target: pane=%v target=%q", m.pane, m.detailTaskID)
 	}
 	if cur := m.currentTodo(); cur == nil || cur.ID != parent.ID {
 		t.Fatalf("list cursor should remain on parent after closing nested details, got %+v", cur)

@@ -43,6 +43,9 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "esc":
+		if len(m.detailStack) > 0 {
+			return m.popSubtaskDetail()
+		}
 		m.popFocus()
 
 	case "tab":
@@ -588,6 +591,7 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 					m.dropFocus(stateDetailPane)
 					m.pane = paneList
 					m.detailTaskID = ""
+					m.detailStack = nil
 					m.cursor = i
 					m.tab = tabTasks
 					m.invalidateDetailCache()
@@ -637,8 +641,24 @@ func (m model) openSelectedSubtaskDetail() (tea.Model, tea.Cmd) {
 	if sub == nil {
 		return m, nil
 	}
+	// Remember the task we drilled from so esc can walk back up the chain one
+	// level at a time instead of collapsing straight to the list.
+	m.detailStack = append(m.detailStack, m.detailTaskID)
 	m.detailTaskID = sub.ID
 	m.detail = detailState{field: fieldStartDate}
+	m.invalidateDetailCache()
+	return m, nil
+}
+
+// popSubtaskDetail backs out of a drilled-in subtask detail to its parent's
+// detail pane, one level per esc. It lands on the Subtasks section — where the
+// user drilled from — and keeps the pane open; only the top-level detail (an
+// empty stack) exits to the list, which the caller handles via popFocus.
+func (m model) popSubtaskDetail() (tea.Model, tea.Cmd) {
+	n := len(m.detailStack)
+	m.detailTaskID = m.detailStack[n-1]
+	m.detailStack = m.detailStack[:n-1]
+	m.detail = detailState{field: fieldSubtasks}
 	m.invalidateDetailCache()
 	return m, nil
 }

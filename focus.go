@@ -106,6 +106,7 @@ func (m *model) exitFocus(s uiState) {
 	case stateDetailPane:
 		m.pane = paneList
 		m.detailTaskID = ""
+		m.detailStack = nil
 		m.detail = detailState{field: fieldStartDate}
 		m.invalidateDetailCache()
 	case stateProjectDrill:
