@@ -370,8 +370,8 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 	sizeLabel := padCenter(tr("Size"), sizeColW)
 	dueLabel := padRight(tr("Due"), dueW)
 	lastLabel := padRight(tr("Score"), scoreColW)
-	// The active-sort cue lives in the fixed status line (renderStatusLine),
-	// so column headers stay plain — no >..< decoration to reflow.
+	// The active-sort cue lives in the panel border title, so column headers
+	// stay plain — no >..< decoration to reflow.
 	title := tr("Active tasks")
 	if isHistory {
 		title = tr("Completed tasks")

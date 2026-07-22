@@ -173,8 +173,8 @@ var (
 	toastSuccessStyle lipgloss.Style
 	toastInfoStyle    lipgloss.Style
 
-	// Fixed status-line pieces: filter chips on the left, sort label and
-	// sync-health glyph on the right. See renderStatusLine.
+	// Fixed status-line pieces: filter chips on the left, the Tags-tab sort
+	// label and sync-health glyph on the right. See renderStatusLine.
 	focusChipStyle  lipgloss.Style
 	searchChipStyle lipgloss.Style
 	statusSortStyle lipgloss.Style

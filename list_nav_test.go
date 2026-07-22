@@ -2,10 +2,8 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
-	"github.com/charmbracelet/x/ansi"
 	"taskr/todo"
 )
 
@@ -63,23 +61,17 @@ func TestListJumpAndPageNavigation(t *testing.T) {
 	}
 }
 
-// The Tasks header carries a right-aligned cursor/total position indicator.
+// The Tasks panel title carries the cursor/total position indicator before the
+// sort status, with each piece enclosed in brackets.
 func TestTaskListPositionIndicator(t *testing.T) {
 	m := tenTaskModel(t)
 
 	m.cursor = 0
-	if got := ansi.Strip(m.renderTaskList()); !strings.Contains(got, "1/10") {
-		t.Errorf("header should show 1/10 at the top; got first line:\n%s", firstLine(got))
+	if got, want := m.listPanelTitle(), "Overview [1/10] [sort: score]"; got != want {
+		t.Errorf("panel title at top = %q, want %q", got, want)
 	}
 	m.cursor = 9
-	if got := ansi.Strip(m.renderTaskList()); !strings.Contains(got, "10/10") {
-		t.Errorf("header should show 10/10 at the bottom; got first line:\n%s", firstLine(got))
+	if got, want := m.listPanelTitle(), "Overview [10/10] [sort: score]"; got != want {
+		t.Errorf("panel title at bottom = %q, want %q", got, want)
 	}
-}
-
-func firstLine(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i]
-	}
-	return s
 }

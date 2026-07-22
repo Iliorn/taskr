@@ -240,6 +240,40 @@ func TestPersistentPanelsUseContextualBorderTitles(t *testing.T) {
 	}
 }
 
+func TestTaskPositionAndSortAppearInPanelTitle(t *testing.T) {
+	applyLang(string(langEN))
+	t.Cleanup(func() { applyLang(string(langEN)) })
+
+	m := modelWithTasks(t, todo.New("alpha"), todo.New("beta"))
+	m.termWidth = 120
+	m.termHeight = 40
+	m.taskSort = taskSortSize
+	m.refreshCaches()
+
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, "╭─ Overview [1/2] [sort: size] ") {
+		t.Fatalf("task panel title missing bracketed position and sort status:\n%s", view)
+	}
+	if count := strings.Count(view, "1/2"); count != 1 {
+		t.Errorf("task position should appear only in the panel title; found %d occurrences", count)
+	}
+	if status := ansi.Strip(m.renderStatusLine()); strings.Contains(status, "sort:") {
+		t.Errorf("Tasks status line should no longer contain sort status: %q", status)
+	}
+
+	m.showHistory = true
+	m.cursor = 0
+	for i := range m.cache.active {
+		task := m.get(m.cache.active[i].ID)
+		task.Status = todo.Done
+	}
+	m.refreshCaches()
+	historyView := ansi.Strip(m.View())
+	if !strings.Contains(historyView, "╭─ History [1/2] [sort: completed] ") {
+		t.Fatalf("history panel title missing bracketed position and sort status:\n%s", historyView)
+	}
+}
+
 // Focusing the right-hand detail must not reduce the number of rows rendered
 // in the left-hand list. buildSideBySide narrows a model copy so list columns
 // reflow; that narrowed width must not make the height calculation mistake the

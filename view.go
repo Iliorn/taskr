@@ -183,10 +183,19 @@ func (m model) detailPanelTitle() string {
 func (m model) listPanelTitle() string {
 	switch m.tab {
 	case tabTasks:
+		title := tr("Overview")
 		if m.showHistory {
-			return tr("History")
+			title = tr("History")
 		}
-		return tr("Overview")
+
+		total := m.visibleActiveLen()
+		if m.showHistory {
+			total = len(m.completedTodos())
+		}
+		if pos := listPosLabel(m.cursor, total); pos != "" {
+			title += " [" + pos + "]"
+		}
+		return title + " [" + tr("sort:") + " " + m.sortLabel() + "]"
 	case tabTags:
 		return tr("Overview")
 	case tabBoard:
@@ -356,10 +365,9 @@ func (m model) View() string {
 // ── Status line ────────────────────────────────────────────────────────────────
 
 // renderStatusLine builds the single fixed header status line under the tab
-// bar: filter chips on the left, active-sort label and sync-health glyph on
-// the right. History mode has no chip — the "Completed tasks" column header
-// and the "sort: completed" cue already make it obvious. A toast (m.err)
-// overlays the whole line for its lifetime
+// bar: filter chips on the left, the Tags-tab sort label and sync-health glyph
+// on the right. The Tasks-tab sort label lives beside its cursor/total counter
+// in the Overview or History panel title. A toast (m.err) overlays the whole line for its lifetime
 // instead of claiming its own row, so filters and toasts coming and going never
 // reflow the list below.
 func (m model) renderStatusLine() string {
@@ -395,11 +403,8 @@ func (m model) renderStatusLine() string {
 	left := strings.Join(chips, " ")
 
 	var right []string
-	if m.tab == tabTasks {
-		right = append(right, statusSortStyle.Render(tr("sort: ")+m.sortLabel()))
-	}
 	if m.tab == tabTags {
-		right = append(right, statusSortStyle.Render(tr("sort: ")+m.tagSortLabel()))
+		right = append(right, statusSortStyle.Render(tr("sort:")+" "+m.tagSortLabel()))
 	}
 	if g := m.syncGlyph(); g != "" {
 		right = append(right, g)

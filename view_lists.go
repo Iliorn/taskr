@@ -733,7 +733,8 @@ func (m model) renderTaskList() string {
 	// rescan every task — see cache.go.
 	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax, m.cache.activeColHasDue, dueColMax(m.cache.active, m.frameTime), m.cache.activeColProjectMax)
 	total := m.visibleActiveLen()
-	renderListHeader(b, m.termWidth, false, cols, listPosLabel(m.cursor, total))
+	// Cursor/total and sort status are shown in the Overview border title.
+	renderListHeader(b, m.termWidth, false, cols, "")
 
 	maxVisible := m.estimateListHeight()
 	startIdx := m.listOffset
@@ -794,7 +795,8 @@ func (m model) renderHistoryList() string {
 	}
 	// dueMax (0) is ignored for history — it forces its fixed 12-wide date column.
 	cols := taskListCols(m.termWidth, true, contentMax, tagsMax, hasDue, 0, 0)
-	renderListHeader(b, m.termWidth, true, cols, listPosLabel(m.cursor, len(completed)))
+	// Cursor/total and sort status are shown in the History border title.
+	renderListHeader(b, m.termWidth, true, cols, "")
 
 	maxVisible := m.estimateListHeight()
 	startIdx := m.listOffset
