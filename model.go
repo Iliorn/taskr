@@ -31,9 +31,9 @@ const (
 
 const numTabs = 7
 
-// Rows in the Settings tab. Bias rows come first because they're the
-// sequencing engine's only user-visible knob; cosmetic rows (theme, language)
-// sit below to keep the visual layout consistent.
+// Stable row IDs for the Settings tab. The renderer groups them into separate
+// Preferences and Sequencer panes; their numeric order remains independent of
+// their visual navigation order.
 const (
 	settingBiasDeadline = iota
 	settingBiasPriority

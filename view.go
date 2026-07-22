@@ -759,6 +759,9 @@ func (m model) buildListContent(w, outerH int) string {
 	if m.tab == tabCalendar {
 		return m.buildCalendarContent(w, outerH)
 	}
+	if m.tab == tabSettings {
+		return m.buildSettingsContent(w, outerH)
+	}
 	if m.sideBySide() {
 		return m.buildSideBySide(w, outerH)
 	}

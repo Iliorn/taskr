@@ -138,6 +138,44 @@ func TestSettingsTopPreviewEmptyWhenNoTasks(t *testing.T) {
 	}
 }
 
+func TestSettingsRenderSeparatePreferencesAndSequencerPanes(t *testing.T) {
+	m := modelWithTasks(t, todo.New("Ranked task"))
+	m.tab = tabSettings
+	m.termHeight = 40
+	applyBiases(defaultBiases())
+	m.ensureCache()
+	preferences, sequencer := m.renderSettingsSections(50)
+	preferences = ansi.Strip(preferences)
+	sequencer = ansi.Strip(sequencer)
+	if !strings.Contains(preferences, "Theme") || strings.Contains(preferences, "Deadline pressure") {
+		t.Fatalf("Preferences pane has the wrong setting group:\n%s", preferences)
+	}
+	if !strings.Contains(sequencer, "Deadline pressure") || strings.Contains(sequencer, "Sync server") {
+		t.Fatalf("Sequencer pane has the wrong setting group:\n%s", sequencer)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		width int
+	}{
+		{name: "side by side", width: 120},
+		{name: "stacked", width: 60},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m.termWidth = tc.width
+			out := ansi.Strip(m.View())
+			preferencesAt := strings.Index(out, "╭─ Preferences ")
+			sequencerAt := strings.Index(out, "╭─ Sequencer ")
+			if preferencesAt < 0 || sequencerAt < 0 {
+				t.Fatalf("Settings should render separate Preferences and Sequencer panes:\n%s", out)
+			}
+			if tc.width < settingsSideBySideMinWidth && sequencerAt < preferencesAt {
+				t.Fatalf("stacked Sequencer pane should follow Preferences:\n%s", out)
+			}
+		})
+	}
+}
+
 // TestSettingsTopPreviewRespectsWeights verifies that the preview ranks tasks
 // in the order the biases imply: with Priority=Intense and Deadline=Relaxed,
 // a high-priority task with no due date should rank above a medium-priority

@@ -238,6 +238,7 @@ var daTranslations = map[string]string{
 	"Workflow":    "Arbejdsgang",
 	"Summary":     "Overblik",
 	"Preferences": "Præferencer",
+	"Sequencer":   "Sekventering",
 	"Overview":    "Oversigt",
 	"History":     "Historik",
 	"Timeline":    "Tidslinje",

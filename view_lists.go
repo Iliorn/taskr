@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"taskr/todo"
 )
@@ -1187,10 +1188,9 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 
 // ── Settings list ─────────────────────────────────────────────────────────────
 
-// Settings split into two visual columns. Right column clusters the
-// score/sequencing knobs so the bias mix reads as one tool; left column holds
-// the unrelated app-prefs and system rows.
-var settingsLeftCol = []int{
+// Settings are split into two independent panes. Preferences owns general app,
+// sync, server, and update controls; Sequencer owns every ranking control.
+var settingsPreferences = []int{
 	settingAutoCloseParent,
 	settingAutoCloseSubtasks,
 	settingTheme,
@@ -1205,24 +1205,23 @@ var settingsLeftCol = []int{
 	settingVersion,
 	settingCheckUpdate,
 }
-var settingsRightCol = []int{
+var settingsSequencer = []int{
 	settingBiasDeadline,
 	settingBiasPriority,
 	settingBiasMomentum,
 	settingAging,
 }
 
-// twoColumnSettingsMinWidth is the minimum available content width at which the
-// Settings tab uses the two-column layout. Below this it falls back to a single
-// stacked column so labels and values still fit without wrapping.
-const twoColumnSettingsMinWidth = 80
+// settingsSideBySideMinWidth is the minimum available content width at which
+// the two panes sit beside each other. Below this they stack vertically.
+const settingsSideBySideMinWidth = 80
 
 // settingsNavOrder returns the linear up/down traversal order across both
-// columns: left column top→bottom, then right column top→bottom.
+// panes: Preferences top→bottom, then Sequencer top→bottom.
 func settingsNavOrder() []int {
-	out := make([]int, 0, len(settingsLeftCol)+len(settingsRightCol))
-	out = append(out, settingsLeftCol...)
-	out = append(out, settingsRightCol...)
+	out := make([]int, 0, len(settingsPreferences)+len(settingsSequencer))
+	out = append(out, settingsPreferences...)
+	out = append(out, settingsSequencer...)
 	return out
 }
 
@@ -1247,10 +1246,10 @@ func settingsCursorStep(cur, delta int) int {
 	return order[idx]
 }
 
-func (m model) renderSettingsList() string {
-	b := getBuilder()
-	defer putBuilder(b)
-
+// renderSettingsSections builds the unboxed content for the two Settings panes.
+// sequencerW controls wrapping and truncation in the ranking explanation and
+// live preview; the pane builder applies the final per-line width contract.
+func (m model) renderSettingsSections(sequencerW int) (string, string) {
 	labels := map[int]string{
 		settingBiasDeadline:      tr("Deadline pressure"),
 		settingBiasPriority:      tr("Priority focus"),
@@ -1353,56 +1352,138 @@ func (m model) renderSettingsList() string {
 
 	// Personality summary: what the current bias mix "feels like", so tweaking a
 	// single bias gives immediate feedback that the sequence has shifted. It
-	// belongs next to the biases that produce it (the right column).
+	// belongs next to the biases that produce it in the Sequencer pane.
 	name, descr := personality(activeBiases)
 
-	availW := m.termWidth - 8
-	if availW >= twoColumnSettingsMinWidth {
-		gap := 4
-		leftW := (availW - gap) / 2
-		rightW := availW - leftW - gap
-		leftLabelW := maxLabelW(settingsLeftCol)
-		rightLabelW := maxLabelW(settingsRightCol)
-		var left, right strings.Builder
-		for _, id := range settingsLeftCol {
-			left.WriteString(renderRow(id, leftLabelW) + "\n")
-		}
-		for _, id := range settingsRightCol {
-			right.WriteString(renderRow(id, rightLabelW) + "\n")
-		}
-		// Drop the sequence summary directly under the bias controls, wrapped to
-		// the column width so it respects the no-wrap contract.
-		right.WriteString("\n  " + activeCountStyle.Render(tr("Sequence: ")+name) + "\n")
-		for _, line := range wrapText(descr, rightW-4) {
-			right.WriteString("    " + helpStyle.Render(line) + "\n")
-		}
-		// Live preview: show the top-N tasks ranked with the current knob values
-		// so the user can see the effect without switching tabs.
-		if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, rightW); preview != "" {
-			right.WriteString(preview)
-		}
-		b.WriteString(joinColumns(left.String(), right.String(), leftW, gap))
-	} else {
-		// Narrow layout has no columns, so the summary stays a stacked footer.
-		order := settingsNavOrder()
-		labelW := maxLabelW(order)
-		for _, id := range order {
-			b.WriteString(renderRow(id, labelW) + "\n")
-		}
-		b.WriteString("\n  " + activeCountStyle.Render(tr("Sequence: ")+name) +
-			"  " + helpStyle.Render(descr) + "\n")
-		if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, availW); preview != "" {
-			b.WriteString(preview)
-		}
+	if sequencerW < 8 {
+		sequencerW = 8
+	}
+	preferencesLabelW := maxLabelW(settingsPreferences)
+	sequencerLabelW := maxLabelW(settingsSequencer)
+	var preferences, sequencer strings.Builder
+	for _, id := range settingsPreferences {
+		preferences.WriteString(renderRow(id, preferencesLabelW) + "\n")
+	}
+	for _, id := range settingsSequencer {
+		sequencer.WriteString(renderRow(id, sequencerLabelW) + "\n")
+	}
+	sequencer.WriteString("\n  " + activeCountStyle.Render(tr("Sequence: ")+name) + "\n")
+	for _, line := range wrapText(descr, sequencerW-4) {
+		sequencer.WriteString("    " + helpStyle.Render(line) + "\n")
+	}
+	// Live preview: show the top-N tasks ranked with the current knob values so
+	// the user can see the effect without switching tabs.
+	if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, sequencerW); preview != "" {
+		sequencer.WriteString(preview)
 	}
 
 	if m.updateStatus != "" {
-		b.WriteString("\n  " + activeCountStyle.Render(m.updateStatus) + "\n")
+		preferences.WriteString("\n  " + activeCountStyle.Render(m.updateStatus) + "\n")
 	}
 	if m.syncStatus != "" {
-		b.WriteString("\n  " + helpStyle.Render(m.syncStatus) + "\n")
+		preferences.WriteString("\n  " + helpStyle.Render(m.syncStatus) + "\n")
 	}
-	return b.String()
+	return preferences.String(), sequencer.String()
+}
+
+// renderSettingsList preserves a plain, unboxed rendering for focused unit
+// tests and other callers. View uses buildSettingsContent to place the same two
+// sections in independently titled panes.
+func (m model) renderSettingsList() string {
+	availW := m.termWidth - 8
+	if availW < 8 {
+		availW = 8
+	}
+	if availW >= settingsSideBySideMinWidth {
+		const gap = 4
+		preferencesW := (availW - gap) / 2
+		sequencerW := availW - preferencesW - gap
+		preferences, sequencer := m.renderSettingsSections(sequencerW)
+		return joinColumns(preferences, sequencer, preferencesW, gap)
+	}
+	preferences, sequencer := m.renderSettingsSections(availW)
+	return strings.TrimRight(preferences, "\n") + "\n\n" + sequencer
+}
+
+func settingRowIndex(rows []int, setting int) int {
+	for i, row := range rows {
+		if row == setting {
+			return i
+		}
+	}
+	return -1
+}
+
+// fitSettingsPane keeps the selected row visible when a narrow/short terminal
+// cannot show an entire pane, then pads the pane to its assigned height.
+func fitSettingsPane(content string, height, width, selectedLine int) []string {
+	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		lines = nil
+	}
+	start := 0
+	if selectedLine >= height {
+		start = selectedLine - height + 1
+	}
+	if start+height > len(lines) {
+		start = len(lines) - height
+	}
+	if start < 0 {
+		start = 0
+	}
+	end := start + height
+	if end > len(lines) {
+		end = len(lines)
+	}
+	lines = append([]string(nil), lines[start:end]...)
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	truncateLines(lines, width)
+	return lines
+}
+
+// buildSettingsContent renders Preferences and Sequencer as distinct bordered
+// panes. They sit side by side when space permits and stack on narrow terminals.
+func (m model) buildSettingsContent(w, outerH int) string {
+	if outerH < 6 {
+		outerH = 6 // two panes need one content row plus two borders apiece
+	}
+	const gap = 4
+	wide := w >= settingsSideBySideMinWidth
+	preferencesW, sequencerW := w, w
+	if wide {
+		preferencesW = (w - gap) / 2
+		sequencerW = w - preferencesW - gap
+	}
+
+	preferences, sequencer := m.renderSettingsSections(sequencerW - 2)
+	preferencesSelected := settingRowIndex(settingsPreferences, m.settingsCursor)
+	sequencerSelected := settingRowIndex(settingsSequencer, m.settingsCursor)
+
+	preferencesH, sequencerH := outerH-2, outerH-2
+	if !wide {
+		contentH := outerH - 4
+		preferencesH = contentH / 2
+		sequencerH = contentH - preferencesH
+	}
+	preferencesLines := fitSettingsPane(preferences, preferencesH, preferencesW-2, preferencesSelected)
+	sequencerLines := fitSettingsPane(sequencer, sequencerH, sequencerW-2, sequencerSelected)
+
+	preferencesStyle, sequencerStyle := listPanelStyle, listPanelStyle
+	if preferencesSelected >= 0 {
+		preferencesStyle = listPanelFocusedStyle
+	} else {
+		sequencerStyle = listPanelFocusedStyle
+	}
+	preferencesPanel := preferencesStyle.Width(preferencesW).Render(strings.Join(preferencesLines, "\n"))
+	sequencerPanel := sequencerStyle.Width(sequencerW).Render(strings.Join(sequencerLines, "\n"))
+	preferencesPanel = withBorderTitle(preferencesPanel, tr("Preferences"), preferencesW, preferencesSelected >= 0)
+	sequencerPanel = withBorderTitle(sequencerPanel, tr("Sequencer"), sequencerW, sequencerSelected >= 0)
+	if wide {
+		return lipgloss.JoinHorizontal(lipgloss.Top, preferencesPanel, sequencerPanel)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, preferencesPanel, sequencerPanel)
 }
 
 // settingsPreviewN is the number of ranked rows shown in the bias-knob preview.
