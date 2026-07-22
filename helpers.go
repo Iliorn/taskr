@@ -798,6 +798,19 @@ func runningFromHomebrew() bool {
 	return err == nil && isHomebrewCellarPath(execPath)
 }
 
+func selfUpdateAsset(goos string) (string, error) {
+	switch goos {
+	case "linux":
+		return "taskr", nil
+	case "windows":
+		return "taskr.exe", nil
+	case "darwin":
+		return "", fmt.Errorf("macOS updates are distributed via Homebrew; run `brew install iliorn/tap/taskr`")
+	default:
+		return "", fmt.Errorf("self-update is not available for %s", goos)
+	}
+}
+
 func selfUpdate() error {
 	execPath, err := os.Executable()
 	if err != nil {
@@ -811,17 +824,9 @@ func selfUpdate() error {
 		return fmt.Errorf("installed via Homebrew; run `brew update && brew upgrade taskr`")
 	}
 
-	assetName := "taskr"
-	switch runtime.GOOS {
-	case "windows":
-		assetName = "taskr.exe"
-	case "darwin":
-		// Friendly asset names so Mac users don't need to know their CPU arch.
-		if runtime.GOARCH == "arm64" {
-			assetName = "taskr-macos-apple-silicon"
-		} else {
-			assetName = "taskr-macos-intel"
-		}
+	assetName, err := selfUpdateAsset(runtime.GOOS)
+	if err != nil {
+		return err
 	}
 	// Stage the download in a private temp dir, not the shared os.TempDir():
 	// a fixed, predictable path like /tmp/taskr is writable by any local user,

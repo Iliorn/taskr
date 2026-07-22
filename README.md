@@ -34,10 +34,10 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 brew install iliorn/tap/taskr
 ```
 
-This builds the tagged source and installs the `taskr` terminal command without
-using a downloaded `.app` bundle. Update it with `brew update && brew upgrade
-taskr`; Taskr detects Homebrew installations and will point you to that command
-instead of trying to overwrite Homebrew's managed files.
+This builds the tagged source and installs the `taskr` terminal command. Update
+it with `brew update && brew upgrade taskr`; Taskr detects Homebrew installations
+and will point you to that command instead of trying to overwrite Homebrew's
+managed files.
 
 **From source:**
 
@@ -49,19 +49,11 @@ go build -ldflags "-X main.appVersion=$(git describe --tags --abbrev=0)" -o task
 mv taskr ~/.local/bin/   # or anywhere on your PATH
 ```
 
-**Pre-built binary** (Linux / Windows / macOS):
+**Pre-built binary** (Linux / Windows):
 
 Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page — `taskr` for Linux and `taskr.exe` for Windows (x64).
 
-On macOS, unsigned `.app` bundles remain available as
-`taskr-macos-apple-silicon-app.zip` for Apple Silicon and
-`taskr-macos-intel-app.zip` for Intel. Because they are not signed or notarized,
-macOS may report that the app is damaged; use the Homebrew installation above
-for the smoother free installation path.
-
-The raw `taskr-macos-apple-silicon` and `taskr-macos-intel` assets remain available for command-line installation and taskr's self-updater.
-
-On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. Self-update (Settings tab → "Update to latest release") requires the [GitHub CLI](https://cli.github.com/) for non-Homebrew installations.
+On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. On Linux and Windows, self-update (Settings tab → "Update to latest release") requires the [GitHub CLI](https://cli.github.com/). macOS updates are managed by Homebrew.
 
 ## Usage
 

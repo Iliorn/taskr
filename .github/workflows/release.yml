@@ -2,9 +2,10 @@ name: Release
 
 # Push a version tag to cut a release:
 #   git tag v1.10.0 && git push origin v1.10.0
-# This builds all four targets with the tag baked in as the version and
+# This builds the Linux and Windows targets with the tag baked in as the version and
 # publishes them as a GitHub release. Asset names are load-bearing — the
 # in-app self-update fetches these exact names; do not rename them.
+# macOS is distributed from tagged source through Homebrew, not release assets.
 
 on:
   push:
@@ -25,24 +26,16 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build all targets
+      - name: Build release binaries
         # `-s -w` strips the symbol table and DWARF debug info, cutting
         # ~30% off each release binary with no functional change. Local
         # `go build .` (used during development) does NOT pass these flags
         # so `dlv` and rich panic stack traces stay available there.
         env:
-          V: ${{ github.ref_name }}
           LDFLAGS: -s -w -X main.appVersion=${{ github.ref_name }}
         run: |
           GOOS=linux   GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr .
           GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr.exe .
-          GOOS=darwin  GOARCH=arm64 go build -ldflags "$LDFLAGS" -o taskr-macos-apple-silicon .
-          GOOS=darwin  GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr-macos-intel .
-
-          # Finder-friendly app bundles for users who are not comfortable in
-          # Terminal. The raw binaries above remain load-bearing for self-update.
-          go run ./cmd/package-macos-app taskr-macos-apple-silicon taskr-macos-apple-silicon-app.zip "$V"
-          go run ./cmd/package-macos-app taskr-macos-intel taskr-macos-intel-app.zip "$V"
 
       - name: Create release
         env:
@@ -50,5 +43,4 @@ jobs:
           V: ${{ github.ref_name }}
         run: |
           gh release create "$V" --title "$V" --generate-notes \
-            taskr taskr.exe taskr-macos-apple-silicon taskr-macos-intel \
-            taskr-macos-apple-silicon-app.zip taskr-macos-intel-app.zip
+            taskr taskr.exe

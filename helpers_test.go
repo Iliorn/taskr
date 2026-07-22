@@ -19,7 +19,6 @@ func TestIsHomebrewCellarPath(t *testing.T) {
 		{"Intel Homebrew", "/usr/local/Cellar/taskr/1.30.0/bin/taskr", true},
 		{"Linuxbrew", "/home/linuxbrew/.linuxbrew/Cellar/taskr/1.30.0/bin/taskr", true},
 		{"unresolved Homebrew symlink", "/opt/homebrew/bin/taskr", false},
-		{"macOS app", "/Applications/Taskr.app/Contents/MacOS/taskr", false},
 		{"manual install", "/usr/local/bin/taskr", false},
 	}
 
@@ -27,6 +26,31 @@ func TestIsHomebrewCellarPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := isHomebrewCellarPath(tt.path); got != tt.want {
 				t.Errorf("isHomebrewCellarPath(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSelfUpdateAsset(t *testing.T) {
+	tests := []struct {
+		goos      string
+		wantAsset string
+		wantErr   bool
+	}{
+		{"linux", "taskr", false},
+		{"windows", "taskr.exe", false},
+		{"darwin", "", true},
+		{"freebsd", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.goos, func(t *testing.T) {
+			asset, err := selfUpdateAsset(tt.goos)
+			if asset != tt.wantAsset {
+				t.Errorf("selfUpdateAsset(%q) asset = %q, want %q", tt.goos, asset, tt.wantAsset)
+			}
+			if (err != nil) != tt.wantErr {
+				t.Errorf("selfUpdateAsset(%q) error = %v, wantErr %v", tt.goos, err, tt.wantErr)
 			}
 		})
 	}

@@ -113,6 +113,11 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.flashInfo(m.updateStatus)
 			return m, clearErrAfter()
 		}
+		if runtime.GOOS == "darwin" {
+			m.updateStatus = tr("Update available: ") + msg.latest + tr(" — install with `brew install iliorn/tap/taskr`")
+			m.flashInfo(m.updateStatus)
+			return m, clearErrAfter()
+		}
 		// Newer release available — ask before pulling it.
 		m.updateStatus = tr("Update available: ") + msg.latest
 		m.mode = modeConfirmUpdate
