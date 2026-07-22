@@ -88,6 +88,16 @@ func truncateLines(lines []string, maxW int) {
 	}
 }
 
+// panelContentHeight returns the rows available to pane content after the top
+// and bottom borders and the shared blank row below the border title.
+func panelContentHeight(outerH int) int {
+	h := outerH - 3
+	if h < 1 {
+		return 1
+	}
+	return h
+}
+
 // withBorderTitle rewrites the top border line of a lipgloss-rendered
 // rounded-border box to embed the title text, producing the standard TUI look:
 //
@@ -766,10 +776,7 @@ func (m model) buildListContent(w, outerH int) string {
 		return m.buildSideBySide(w, outerH)
 	}
 
-	innerH := outerH - 2 // subtract top and bottom border lines
-	if innerH < 1 {
-		innerH = 1
-	}
+	innerH := panelContentHeight(outerH)
 	rawList := m.buildListLines()
 	for len(rawList) < innerH {
 		rawList = append(rawList, "")
@@ -791,10 +798,7 @@ func (m model) buildListContent(w, outerH int) string {
 // contract, the detail's own two-column threshold) applies per column
 // unchanged. The focused pane carries the accent border.
 func (m model) buildSideBySide(w, outerH int) string {
-	innerH := outerH - 2
-	if innerH < 1 {
-		innerH = 1
-	}
+	innerH := panelContentHeight(outerH)
 	detailW := w * sideDetailColPct / 100
 	if detailW < sideDetailColMin {
 		detailW = sideDetailColMin
@@ -859,10 +863,7 @@ func (m model) buildProjectListContent(w, listH int) string {
 		if m.searchQuery != "" {
 			empty = normalStyle.Render(tr("  No projects match your search."))
 		}
-		innerH := listH - 2
-		if innerH < 1 {
-			innerH = 1
-		}
+		innerH := panelContentHeight(listH)
 		emptyLines := strings.Split(empty, "\n")
 		for len(emptyLines) < innerH {
 			emptyLines = append(emptyLines, "")
@@ -907,13 +908,10 @@ func (m model) buildProjectListContent(w, listH int) string {
 
 	projRenderedLines := strings.Split(projRendered, "\n")
 	ganttOuterH := listH - len(projRenderedLines)
-	if ganttOuterH < minListPanelLines+2 {
-		ganttOuterH = minListPanelLines + 2
+	if ganttOuterH < minListPanelLines+3 {
+		ganttOuterH = minListPanelLines + 3
 	}
-	ganttInnerH := ganttOuterH - 2
-	if ganttInnerH < 1 {
-		ganttInnerH = 1
-	}
+	ganttInnerH := panelContentHeight(ganttOuterH)
 
 	var ganttLines []string
 	if m.projectCursor < len(projects) {
@@ -956,10 +954,7 @@ func (m model) buildProjectListContent(w, listH int) string {
 // is rendered through a model copy whose termWidth is the column's share, and
 // the focused pane carries the accent border.
 func (m model) buildProjectDrillContent(projects []string, w, outerH int) string {
-	innerH := outerH - 2
-	if innerH < 1 {
-		innerH = 1
-	}
+	innerH := panelContentHeight(outerH)
 
 	// Column widths: Gantt needs a reasonable minimum to be legible; the task
 	// list takes the remainder. Mirror the sideDetailCol constants but keep the

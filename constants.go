@@ -77,9 +77,10 @@ const (
 	// fixed 12-col width to match its Completed column.
 	dueColW = 11
 
-	footerHeight      = 1
-	minHeaderLines    = 2
-	detailBorderLines = 2
+	footerHeight   = 1
+	minHeaderLines = 2
+	// Two border rows plus the shared blank row below a pane's border title.
+	detailBorderLines = 3
 	minListPanelLines = 3
 	minDetailHeight   = 3
 	minListHeight     = 1

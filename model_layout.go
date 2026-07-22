@@ -143,9 +143,12 @@ func (m model) listVisible() int {
 		if maxH := m.maxDetailHeight(); contentH > maxH {
 			contentH = maxH
 		}
-		detailTotal = contentH + 4
+		// Content plus the detail pane's borders, title spacing row, and the
+		// separator used when it is stacked below the list.
+		detailTotal = contentH + 5
 	}
-	fixedLines := 4
+	// Header/footer chrome plus the list pane's blank title-spacing row.
+	fixedLines := 5
 	if m.err != "" {
 		fixedLines++
 	}
@@ -181,9 +184,9 @@ func (m model) estimateListHeight() int {
 	}
 	detailH := 0
 	if m.detailVisible() && m.tab != tabStats {
-		detailH = 12
+		detailH = 13
 	}
-	available := m.termHeight - headerH - footerHeight - detailH - 2
+	available := m.termHeight - headerH - footerHeight - detailH - 3
 	if available < minListHeight {
 		return minListHeight
 	}
@@ -207,7 +210,8 @@ func (m model) projectListVisibleRows() int {
 
 // projectDrillTaskVisibleRows is the number of task rows shown in the left
 // column of the drilled-in Projects view. The left panel inner height equals
-// estimateListHeight() (same formula as buildListContent's innerH = outerH-2),
+// estimateListHeight() (same formula as buildListContent's content height,
+// including the shared blank row below the border title),
 // and the renderer emits one header line above the task rows, so the task row
 // count is estimateListHeight()-1. Both renderProjectDrillTaskList and the
 // projectTaskMode offset clamp read this helper, so the two windows agree

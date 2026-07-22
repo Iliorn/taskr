@@ -176,10 +176,7 @@ func (m model) dueDaysInRange(from, to time.Time) map[string]bool {
 // ── Calendar tab layout ───────────────────────────────────────────────────────
 
 func (m model) buildCalendarContent(w, outerH int) string {
-	innerH := outerH - 2
-	if innerH < 1 {
-		innerH = 1
-	}
+	innerH := panelContentHeight(outerH)
 	tlW := w - calPanelWidth - 4
 	if tlW < minInnerWidth {
 		tlW = minInnerWidth

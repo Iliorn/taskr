@@ -343,10 +343,17 @@ var daTranslations = map[string]string{
 	"  Avg (7d)":            "  Gns. (7d)",
 	"%.1f tasks/day":        "%.1f opgaver/dag",
 
-	// Priority words (todo.Priority.String)
-	"high":   "høj",
-	"medium": "mellem",
-	"low":    "lav",
+	// Priority, size, and recurrence words
+	"high":     "høj",
+	"medium":   "mellem",
+	"low":      "lav",
+	"small":    "lille",
+	"large":    "stor",
+	"daily":    "dagligt",
+	"weekly":   "ugentligt",
+	"monthly":  "månedligt",
+	"yearly":   "årligt",
+	"weekdays": "hverdage",
 
 	// List headers / sort
 	"Task":              "Opgave",
@@ -426,6 +433,8 @@ var daTranslations = map[string]string{
 	" ⚠ overdue":                         " ⚠ forfalden",
 	"Start date":                         "Startdato",
 	"Due date":                           "Forfaldsdato",
+	"Recurrence":                         "Gentagelse",
+	"Size":                               "Størrelse",
 	"Notes":                              "Noter",
 	"none (press enter or 'n' to edit)":  "ingen (tryk enter eller 'n' for at redigere)",
 	"Created:":                           "Oprettet:",
@@ -447,6 +456,8 @@ var daTranslations = map[string]string{
 	"No learnings yet. Press 'a' to add one.":            "Ingen læring endnu. Tryk 'a' for at tilføje en.",
 	"Comments:":                              "Kommentarer:",
 	"No comments yet. Press 'a' to add one.": "Ingen kommentarer endnu. Tryk 'a' for at tilføje en.",
+	"Time entries:":                          "Tidsregistreringer:",
+	"No time entries. Press 'T' to add one.": "Ingen tidsregistreringer. Tryk 'T' for at tilføje en.",
 
 	// Calendar
 	"month ":                     "måned ",

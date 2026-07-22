@@ -191,6 +191,62 @@ func TestDetailPanelTitleOnBorder(t *testing.T) {
 	}
 }
 
+// Pane titles live in the top border. Keep one blank interior row beneath
+// them so the title does not crowd the first column heading or detail field.
+func TestPanelsLeaveSpaceBelowBorderTitle(t *testing.T) {
+	task := todo.New("Spacing check")
+	m := initialModel(&fakeRepo{todos: []todo.Todo{task}})
+	m.termWidth = 120
+	m.termHeight = 30
+	m.cursor = 0
+	m.tab = tabTasks
+	m.pane = paneDetail
+	lm := m
+	lm.termWidth = sideBySideMinWidth - 10
+	lm.pane = paneList
+
+	panels := map[string]string{
+		"detail": renderStandaloneDetailPanel(m),
+		"list":   lm.buildListContent(lm.termWidth-6, 12),
+	}
+	for name, panel := range panels {
+		lines := strings.Split(panel, "\n")
+		if len(lines) < 2 {
+			t.Fatalf("%s panel has fewer than two lines: %q", name, panel)
+		}
+		row := strings.TrimSpace(ansi.Strip(lines[1]))
+		if !strings.HasPrefix(row, "│") || !strings.HasSuffix(row, "│") {
+			t.Fatalf("%s first interior row is not bordered: %q", name, row)
+		}
+		inside := strings.TrimSuffix(strings.TrimPrefix(row, "│"), "│")
+		if strings.TrimSpace(inside) != "" {
+			t.Errorf("%s panel has content directly below its title: %q", name, row)
+		}
+	}
+}
+
+func TestDanishDetailLabels(t *testing.T) {
+	t.Cleanup(func() { applyLang(string(langEN)) })
+	applyLang(string(langDA))
+
+	cases := map[string]string{
+		"Recurrence":    "Gentagelse",
+		"Size":          "Størrelse",
+		"Time entries:": "Tidsregistreringer:",
+	}
+	for source, want := range cases {
+		if got := tr(source); got != want {
+			t.Errorf("tr(%q) = %q, want %q", source, got, want)
+		}
+	}
+	if got := trRecurrence("weekly"); got != "ugentligt" {
+		t.Errorf("trRecurrence(weekly) = %q, want ugentligt", got)
+	}
+	if got := trSize(todo.SizeLarge); got != "stor" {
+		t.Errorf("trSize(SizeLarge) = %q, want stor", got)
+	}
+}
+
 // TestDetailBorderTitleNoWrap guards the no-wrap contract for the full stacked
 // detail panel (border included) at several widths.
 func TestDetailBorderTitleNoWrap(t *testing.T) {

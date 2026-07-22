@@ -273,8 +273,11 @@ func applyTheme(t theme) {
 	syncOkStyle = lipgloss.NewStyle().Foreground(t.dim)
 	syncFailStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
 
-	listPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.dim).Padding(0, 1).MarginLeft(2)
-	detailPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.dim).Padding(0, 1).MarginLeft(2)
+	// Leave one quiet row below the border title before the pane's first
+	// heading or field. Padding only at the top keeps related rows compact and
+	// gives list and detail panes the same visual rhythm.
+	listPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.dim).Padding(0, 1).PaddingTop(1).MarginLeft(2)
+	detailPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.dim).Padding(0, 1).PaddingTop(1).MarginLeft(2)
 	listPanelFocusedStyle = listPanelStyle.BorderForeground(t.accent)
 	detailPanelFocusedStyle = detailPanelStyle.BorderForeground(t.accent)
 
