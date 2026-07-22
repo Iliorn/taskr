@@ -9,6 +9,29 @@ import (
 	"taskr/todo"
 )
 
+func TestIsHomebrewCellarPath(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"Apple Silicon Homebrew", "/opt/homebrew/Cellar/taskr/1.30.0/bin/taskr", true},
+		{"Intel Homebrew", "/usr/local/Cellar/taskr/1.30.0/bin/taskr", true},
+		{"Linuxbrew", "/home/linuxbrew/.linuxbrew/Cellar/taskr/1.30.0/bin/taskr", true},
+		{"unresolved Homebrew symlink", "/opt/homebrew/bin/taskr", false},
+		{"macOS app", "/Applications/Taskr.app/Contents/MacOS/taskr", false},
+		{"manual install", "/usr/local/bin/taskr", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isHomebrewCellarPath(tt.path); got != tt.want {
+				t.Errorf("isHomebrewCellarPath(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 // ── clamp ─────────────────────────────────────────────────────────────────────
 
 func TestClamp(t *testing.T) {

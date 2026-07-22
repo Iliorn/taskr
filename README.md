@@ -28,6 +28,17 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 
 ## Installation
 
+**macOS with Homebrew (recommended):**
+
+```sh
+brew install iliorn/tap/taskr
+```
+
+This builds the tagged source and installs the `taskr` terminal command without
+using a downloaded `.app` bundle. Update it with `brew update && brew upgrade
+taskr`; Taskr detects Homebrew installations and will point you to that command
+instead of trying to overwrite Homebrew's managed files.
+
 **From source:**
 
 ```sh
@@ -42,11 +53,15 @@ mv taskr ~/.local/bin/   # or anywhere on your PATH
 
 Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page — `taskr` for Linux and `taskr.exe` for Windows (x64).
 
-On macOS, download `taskr-macos-apple-silicon-app.zip` for M1/M2/M3/M4 Macs (2020 onward), or `taskr-macos-intel-app.zip` for older Intel Macs. Unzip it and double-click **Taskr.app**; it opens Terminal and starts taskr automatically. Because taskr is not yet notarized by Apple, the first launch may be blocked: try opening it once, then choose **System Settings → Privacy & Security → Open Anyway**. No Terminal commands are required.
+On macOS, unsigned `.app` bundles remain available as
+`taskr-macos-apple-silicon-app.zip` for Apple Silicon and
+`taskr-macos-intel-app.zip` for Intel. Because they are not signed or notarized,
+macOS may report that the app is damaged; use the Homebrew installation above
+for the smoother free installation path.
 
 The raw `taskr-macos-apple-silicon` and `taskr-macos-intel` assets remain available for command-line installation and taskr's self-updater.
 
-On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. Self-update (Settings tab → "Update to latest release") requires the [GitHub CLI](https://cli.github.com/) on all platforms.
+On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. Self-update (Settings tab → "Update to latest release") requires the [GitHub CLI](https://cli.github.com/) for non-Homebrew installations.
 
 ## Usage
 

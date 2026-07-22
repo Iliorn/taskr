@@ -781,6 +781,23 @@ func putBuilder(b *strings.Builder) {
 
 // ── Self-update ───────────────────────────────────────────────────────────────
 
+// isHomebrewCellarPath reports whether path belongs to Taskr's Homebrew keg.
+// Homebrew exposes the command through a symlink, so callers must resolve
+// symlinks before checking it.
+func isHomebrewCellarPath(path string) bool {
+	path = filepath.ToSlash(filepath.Clean(path))
+	return strings.Contains(path, "/Cellar/taskr/")
+}
+
+func runningFromHomebrew() bool {
+	execPath, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	execPath, err = filepath.EvalSymlinks(execPath)
+	return err == nil && isHomebrewCellarPath(execPath)
+}
+
 func selfUpdate() error {
 	execPath, err := os.Executable()
 	if err != nil {
@@ -789,6 +806,9 @@ func selfUpdate() error {
 	execPath, err = filepath.EvalSymlinks(execPath)
 	if err != nil {
 		return fmt.Errorf("could not resolve executable path: %w", err)
+	}
+	if isHomebrewCellarPath(execPath) {
+		return fmt.Errorf("installed via Homebrew; run `brew update && brew upgrade taskr`")
 	}
 
 	assetName := "taskr"

@@ -108,6 +108,11 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateStatus = tr("Up to date (") + appVersion + ")"
 			return m, nil
 		}
+		if runningFromHomebrew() {
+			m.updateStatus = tr("Update available: ") + msg.latest + tr(" — run `brew upgrade taskr`")
+			m.flashInfo(m.updateStatus)
+			return m, clearErrAfter()
+		}
 		// Newer release available — ask before pulling it.
 		m.updateStatus = tr("Update available: ") + msg.latest
 		m.mode = modeConfirmUpdate

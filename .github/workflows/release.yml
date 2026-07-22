@@ -12,11 +12,13 @@ on:
       - 'v*'
 
 permissions:
-  contents: write # required to create the release
+  contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to create the release
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6

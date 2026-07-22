@@ -473,6 +473,7 @@ var daTranslations = map[string]string{
 	"Check failed":                      "Søgning mislykkedes",
 	"Up to date (":                      "Opdateret (",
 	"Update available: ":                "Opdatering tilgængelig: ",
+	" — run `brew upgrade taskr`":       " — kør `brew upgrade taskr`",
 	" is available — update now? (y/n)": " er tilgængelig — opdatér nu? (y/n)",
 	"Checking…":                         "Søger…",
 	"Updating…":                         "Opdaterer…",
