@@ -291,6 +291,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m.updateEditTitle(msg)
 	case modeEditProjectInline:
 		newModel, cmd = m.updateEditProjectInline(msg)
+	case modeEditStages:
+		newModel, cmd = m.updateEditStages(msg)
 	case modeEditSyncURL:
 		newModel, cmd = m.updateEditSyncURL(msg)
 	case modeEditSyncToken:
@@ -596,23 +598,15 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.openEditorForNotes()
 			}
 
-		case "1":
-			m.switchTab(tabTasks)
-		case "2":
-			m.switchTab(tabCalendar)
-		case "3":
-			m.switchTab(tabProjects)
-		case "4":
-			m.switchTab(tabTags)
-		case "5":
-			m.switchTab(tabBoard)
-		case "6":
-			m.switchTab(tabStats)
-		case "7":
-			m.switchTab(tabSettings)
+		case "1", "2", "3", "4", "5", "6", "7":
+			if t, ok := tabForNumberKey(key.String()); ok {
+				m.switchTab(t)
+			}
 
 		case "tab":
-			m.switchTab((m.tab + 1) % numTabs)
+			m.switchTab(nextTab(m.tab, 1))
+		case "shift+tab":
+			m.switchTab(nextTab(m.tab, -1))
 
 		case "h":
 			if m.tab == tabTasks {
@@ -910,6 +904,35 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // ── List helper methods ───────────────────────────────────────────────────────
+
+// tabForNumberKey maps a digit shortcut to its tab. It is the one place the
+// number→tab assignment lives, so the list pane and the detail pane can't
+// drift apart on it — the help advertises the digits as global, and they are.
+func tabForNumberKey(key string) (tab, bool) {
+	switch key {
+	case "1":
+		return tabTasks, true
+	case "2":
+		return tabCalendar, true
+	case "3":
+		return tabProjects, true
+	case "4":
+		return tabTags, true
+	case "5":
+		return tabBoard, true
+	case "6":
+		return tabStats, true
+	case "7":
+		return tabSettings, true
+	}
+	return tabTasks, false
+}
+
+// nextTab steps delta tabs from cur, wrapping in both directions — tab walks
+// forward, shift+tab back.
+func nextTab(cur tab, delta int) tab {
+	return tab((int(cur) + delta + numTabs) % numTabs)
+}
 
 func (m *model) switchTab(t tab) {
 	if t == m.tab {
@@ -1343,6 +1366,12 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		m.cycleLang(1)
 	case settingSyncAuto:
 		m.toggleSyncAuto()
+	case settingStages:
+		m.mode = modeEditStages
+		m.textInput.SetValue(stagesDisplay())
+		m.textInput.Placeholder = tr("Board columns, comma-separated")
+		m.textInput.Focus()
+		return m, textinput.Blink
 	case settingSyncServer:
 		m.mode = modeEditSyncURL
 		m.textInput.SetValue(m.syncCfg.URL)

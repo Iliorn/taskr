@@ -32,6 +32,8 @@ func sendKey(t *testing.T, m model, k string) model {
 	switch k {
 	case "tab":
 		msg = tea.KeyMsg{Type: tea.KeyTab}
+	case "shift+tab":
+		msg = tea.KeyMsg{Type: tea.KeyShiftTab}
 	case "enter":
 		msg = tea.KeyMsg{Type: tea.KeyEnter}
 	case "esc":

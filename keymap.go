@@ -69,12 +69,16 @@ const (
 // within a section follows this slice.
 var keymap = []binding{
 	// ── Navigation (global) ──────────────────────────────────────────────
-	{ctxAll, "↑/↓", "navigate", "navigate list", secNavigation, false, false},
-	{ctxAll, "home/end · pgup/pgdn", "listpage", "jump to ends / page through list", secNavigation, false, false},
+	// Registered contexts are the contexts where the key actually does
+	// something: the Stats tab has no list cursor, and the jump/page keys only
+	// drive the linear list tabs (listNavTarget), so neither is claimed
+	// everywhere. A binding the help shows must be a binding dispatch honours.
+	{ctxAll &^ ctxStats, "↑/↓", "navigate", "navigate list", secNavigation, false, false},
+	{ctxTasksList | ctxProjects | ctxTags, "home/end · pgup/pgdn", "listpage", "jump to ends / page through list", secNavigation, false, false},
 	// enter has no global meaning — each context defines its own (open details,
 	// edit field, activate, cycle) — so it is registered per context, not here.
 	{ctxAll, "esc", "back", "go back", secNavigation, false, false},
-	{ctxAll, "tab / 1-8", "tabs", "switch tabs", secNavigation, false, false},
+	{ctxAll, "tab / shift+tab / 1-7", "tabs", "switch tabs (forward / back / direct)", secNavigation, false, false},
 	{ctxAll, "?", "help", "toggle this help", secNavigation, false, false},
 
 	// ── Tasks list ───────────────────────────────────────────────────────
@@ -137,7 +141,7 @@ var keymap = []binding{
 	// ── Settings ─────────────────────────────────────────────────────────
 	{ctxSettings, "↑/↓", "navigate", "select setting", secSettings, true, false},
 	{ctxSettings, "←/→", "setchange", "change value / theme", secSettings, true, false},
-	{ctxSettings, "enter", "setapply", "apply theme / check for updates", secSettings, true, false},
+	{ctxSettings, "enter", "setapply", "activate / edit the selected setting", secSettings, true, false},
 	{ctxSettings, "y / n", "confirmupdate", "confirm update when one is offered", secSettings, false, false},
 
 	// ── App (global) ─────────────────────────────────────────────────────

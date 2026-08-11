@@ -49,7 +49,18 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.popFocus()
 
 	case "tab":
-		m.switchTab((m.tab + 1) % numTabs)
+		m.switchTab(nextTab(m.tab, 1))
+		return m, nil
+	case "shift+tab":
+		m.switchTab(nextTab(m.tab, -1))
+		return m, nil
+
+	case "1", "2", "3", "4", "5", "6", "7":
+		// The digits are advertised as global navigation, so they must leave
+		// the detail pane too — without this they silently did nothing here.
+		if t, ok := tabForNumberKey(key.String()); ok {
+			m.switchTab(t)
+		}
 		return m, nil
 
 	case "left":

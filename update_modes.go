@@ -773,6 +773,80 @@ func (m model) updateEditTimeEntry(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateEditStages handles the Settings-tab editor for the kanban stage list:
+// one comma-separated line of column names. Applying it re-renders the Board
+// immediately and persists to settings.json "stages", so the columns are no
+// longer something you have to leave the app to rename.
+func (m model) updateEditStages(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "enter":
+			m.applyStageEdit(parseStagesInput(m.textInput.Value()))
+			m.mode = modeNormal
+			return m, nil
+		case "esc":
+			m.mode = modeNormal
+			return m, nil
+		}
+	}
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
+// applyStageEdit swaps the active stage list for next, carries the cards of
+// any renamed/dropped stage over to their new column (stageRemap), persists
+// the list, and invalidates the board column cache. A no-op edit changes
+// nothing — no task touched, no save.
+//
+// Deliberately not undoable, like the other settings (theme, language, the
+// bias knobs): the undo stack holds task state only, so a `u` here would
+// restore the cards' old stage names *under the new column list* and strand
+// every one of them in the first column. The edit is its own inverse instead —
+// renaming QA back to Review carries the same cards back, because stageRemap
+// is positional.
+func (m *model) applyStageEdit(next []string) {
+	prev := activeStages
+	if len(prev) == len(next) {
+		same := true
+		for i := range prev {
+			if prev[i] != next[i] {
+				same = false
+				break
+			}
+		}
+		if same {
+			return
+		}
+	}
+	// Collect the affected cards before the list is swapped, while their
+	// stored stage names still key into the remap.
+	remap := stageRemap(prev, next)
+	var touched []*todo.Todo
+	if len(remap) > 0 {
+		for _, t := range m.tasks {
+			if t.Stage == "" {
+				continue // already the first column; nothing to carry over
+			}
+			if _, ok := remap[strings.ToLower(t.Stage)]; ok {
+				touched = append(touched, t)
+			}
+		}
+	}
+	applyStages(next)
+	ids := make([]string, 0, len(touched))
+	for _, t := range touched {
+		t.SetStage(remap[strings.ToLower(t.Stage)])
+		ids = append(ids, t.ID)
+	}
+	if len(ids) > 0 {
+		m.markModified(ids...)
+	} else {
+		m.markCacheDirty() // the board columns themselves changed
+	}
+	m.persistSettings()
+}
+
 func (m model) updateIdlePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {

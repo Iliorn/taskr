@@ -561,7 +561,7 @@ func (m model) buildFooterContent(w int) string {
 		modeAddLearning, modeEditLearning, modeAddSubtask, modeEditSubtask,
 		modeEditProjectInline, modeEditTimeEntry, modeAddTimeEntry,
 		modeEditSyncURL, modeEditSyncToken,
-		modeEditServerListen, modeEditServerToken:
+		modeEditServerListen, modeEditServerToken, modeEditStages:
 		field := inputStyle.Width(w).Render(m.textInput.View())
 		if m.mode == modeInput && m.pane == paneList {
 			// Quick-add: on a blank input show the syntax reference (the keywords
@@ -573,6 +573,12 @@ func (m model) buildFooterContent(w int) string {
 					helpStyle.Render("    "+truncate(tr("#tag @project due:tomorrow p:high s:l r:weekly dep:^"), w))
 			}
 			return field + "\n" + renderQuickAddPreview(m.textInput.Value(), w)
+		}
+		if m.mode == modeEditStages {
+			// The board's Done column is Status==Done itself, never a stage —
+			// say so under the field so nobody types it in and wonders why it
+			// shows up twice.
+			return field + "\n" + helpStyle.Render("    "+truncate(tr("Comma-separated column names · Done is always the last column"), w))
 		}
 		// The single-line comment/learning inputs get a ctrl+e escape hatch to
 		// compose in $EDITOR; advertise it under the field.

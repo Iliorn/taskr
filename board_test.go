@@ -134,3 +134,63 @@ func TestBoardSelectionClamps(t *testing.T) {
 		t.Errorf("selected task = %v, want Only card", sel)
 	}
 }
+
+func TestParseStagesInput(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"splits and trims", "Todo, Doing , Waiting", []string{"Todo", "Doing", "Waiting"}},
+		{"drops blanks from stray commas", "Todo,,Doing,", []string{"Todo", "Doing"}},
+		{"dedupes like a hand-edited settings.json", "Todo, todo", []string{"Todo"}},
+		{"empty line falls back to the defaults", "   ", defaultStages()},
+	}
+	for _, c := range cases {
+		if got := parseStagesInput(c.in); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: parseStagesInput(%q) = %v, want %v", c.name, c.in, got, c.want)
+		}
+	}
+}
+
+// A stage list edited in Settings must carry its cards along: renaming a
+// column in place keeps them where they were, and dropping the last column
+// hands them to the new last one, instead of stageIndex silently dumping every
+// stranded card into the first column.
+func TestStageRemap(t *testing.T) {
+	cases := []struct {
+		name     string
+		old, new []string
+		want     map[string]string
+	}{
+		{
+			"rename in place keeps the column",
+			[]string{"Backlog", "In progress", "Review"},
+			[]string{"Backlog", "In progress", "QA"},
+			map[string]string{"review": "QA"},
+		},
+		{
+			"dropped tail column hands cards to the last one",
+			[]string{"Backlog", "In progress", "Review"},
+			[]string{"Backlog", "In progress"},
+			map[string]string{"review": "In progress"},
+		},
+		{
+			"unchanged names are not remapped",
+			[]string{"Backlog", "Doing"},
+			[]string{"Backlog", "Doing", "Review"},
+			map[string]string{},
+		},
+		{
+			"case-only rename is a no-op for the cards",
+			[]string{"Backlog"},
+			[]string{"backlog"},
+			map[string]string{},
+		},
+	}
+	for _, c := range cases {
+		if got := stageRemap(c.old, c.new); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: stageRemap(%v, %v) = %v, want %v", c.name, c.old, c.new, got, c.want)
+		}
+	}
+}

@@ -63,11 +63,60 @@ func stageIndex(stage string) int {
 // configured spelling of a stage name, so the stored value always matches the
 // settings list letter-for-letter. ok=false when the name isn't configured.
 func canonicalStage(input string) (string, bool) {
+	return canonicalStageIn(activeStages, input)
+}
+
+// canonicalStageIn is canonicalStage against an arbitrary list — used while
+// editing the stage list, where the new list isn't live yet.
+func canonicalStageIn(stages []string, input string) (string, bool) {
 	name := strings.TrimSpace(input)
-	for _, s := range activeStages {
+	for _, s := range stages {
 		if strings.EqualFold(s, name) {
 			return s, true
 		}
 	}
 	return "", false
+}
+
+// stagesDisplay is the Settings-row rendering (and the pre-fill of its editor)
+// of the active stage list: the same comma-separated form the editor parses.
+func stagesDisplay() string {
+	return strings.Join(activeStages, ", ")
+}
+
+// parseStagesInput turns the Settings editor's comma-separated line into a
+// stage list, running it through the same sanitizer a hand-edited
+// settings.json goes through — so both entry points accept exactly the same
+// input and degrade the same way (all-blank falls back to the defaults).
+func parseStagesInput(line string) []string {
+	parts := strings.Split(line, ",")
+	return stagesFromSettings(appSettings{Stages: parts})
+}
+
+// stageRemap describes where the cards of each dropped stage should go when
+// the stage list is edited, keyed by the lower-cased old name. Mapping is by
+// position: a stage renamed in place (old index i → new index i) keeps its
+// cards in the same column, and a stage that fell off a shortened list hands
+// its cards to the last remaining column. Names still present in the new list
+// are absent from the map — there is nothing to move.
+//
+// Without this, stageIndex's unknown-name fallback would dump every card of a
+// renamed column into the first one, so renaming "Review" to "QA" would look
+// like the board had lost its layout.
+func stageRemap(oldStages, newStages []string) map[string]string {
+	if len(newStages) == 0 {
+		return nil
+	}
+	out := make(map[string]string)
+	for i, old := range oldStages {
+		if _, ok := canonicalStageIn(newStages, old); ok {
+			continue
+		}
+		j := i
+		if j >= len(newStages) {
+			j = len(newStages) - 1
+		}
+		out[strings.ToLower(strings.TrimSpace(old))] = newStages[j]
+	}
+	return out
 }

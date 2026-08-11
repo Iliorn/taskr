@@ -318,7 +318,7 @@ func (m model) extraOverheadLines() int {
 		modeSearch, modeAddLearning, modeEditLearning, modeAddSubtask,
 		modeEditSubtask, modeEditProjectInline, modeEditTimeEntry,
 		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken,
-		modeEditServerListen, modeEditServerToken:
+		modeEditServerListen, modeEditServerToken, modeEditStages:
 		return 3
 	case modeSearchDep, modeSearchTag, modeSearchProject:
 		return 8

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -819,5 +820,159 @@ func TestScriptBoardDoneKeySharesCloseSemantics(t *testing.T) {
 	m = script(t, m, "n")
 	if got := m.get(parent.ID); got.Status != todo.Pending {
 		t.Errorf("declined close still toggled the parent: %v", got.Status)
+	}
+}
+
+// tab walks the tab bar forward; shift+tab must walk it back, from both panes.
+// Before shift+tab existed, reaching the previous tab meant cycling all the way
+// around — the registry now advertises it, so dispatch has to honour it.
+func TestScriptShiftTabWalksTabsBackwards(t *testing.T) {
+	m := modelWithTasks(t, todo.New("write the report"))
+
+	m = sendKey(t, m, "shift+tab")
+	if m.tab != tabSettings {
+		t.Fatalf("shift+tab from Tasks: tab = %v, want tabSettings (wrap backwards)", m.tab)
+	}
+	m = sendKey(t, m, "tab")
+	if m.tab != tabTasks {
+		t.Fatalf("tab from Settings: tab = %v, want tabTasks", m.tab)
+	}
+
+	// …and from inside the detail pane, where only forward tab used to work.
+	m = sendKey(t, m, "enter")
+	if m.pane != paneDetail {
+		t.Fatalf("enter on a task: pane = %v, want paneDetail", m.pane)
+	}
+	m = sendKey(t, m, "shift+tab")
+	if m.tab != tabSettings {
+		t.Fatalf("shift+tab from the detail pane: tab = %v, want tabSettings", m.tab)
+	}
+}
+
+// The help advertises the digit shortcuts as global navigation. They only ever
+// worked in the list pane, so pressing 5 with a task open did nothing at all.
+func TestScriptNumberKeysSwitchTabsFromDetailPane(t *testing.T) {
+	m := modelWithTasks(t, todo.New("write the report"))
+	m = sendKey(t, m, "enter")
+	if m.pane != paneDetail {
+		t.Fatalf("enter on a task: pane = %v, want paneDetail", m.pane)
+	}
+	for key, want := range map[string]tab{
+		"5": tabBoard,
+		"2": tabCalendar,
+		"7": tabSettings,
+		"1": tabTasks,
+	} {
+		m = sendKey(t, m, key)
+		if m.tab != want {
+			t.Errorf("%q from the detail pane: tab = %v, want %v", key, m.tab, want)
+		}
+	}
+}
+
+// restoreStages registers a cleanup that puts both the active stage list and
+// the persisted one back the way they were — the Settings editor writes
+// settings.json, which initialModel reads back in every later test.
+func restoreStages(t *testing.T) {
+	t.Helper()
+	prev := activeStages
+	t.Cleanup(func() {
+		applyStages(prev)
+		if s, err := loadSettings(); err == nil {
+			s.Stages = prev
+			_ = saveSettings(s)
+		}
+	})
+}
+
+// settingsCursorTo walks the Settings cursor to a row with real key presses.
+// The traversal order is Preferences then Sequencer and the ends clamp, so it
+// tries both directions and gives up rather than looping forever.
+func settingsCursorTo(t *testing.T, m model, row int) model {
+	t.Helper()
+	for _, key := range []string{"up", "down"} {
+		for i := 0; i < numSettingsRows; i++ {
+			if m.settingsCursor == row {
+				return m
+			}
+			m = sendKey(t, m, key)
+		}
+	}
+	if m.settingsCursor != row {
+		t.Fatalf("could not reach settings row %d, stuck on %d", row, m.settingsCursor)
+	}
+	return m
+}
+
+// Editing the board columns in Settings: enter opens the inline editor, enter
+// again applies the list, persists it, and carries the cards of a renamed
+// column across so the board keeps its layout. Undo puts the cards back.
+func TestScriptEditBoardColumnsFromSettings(t *testing.T) {
+	card := todo.New("ship the release")
+	card.Stage = "Review"
+	m := modelWithTasks(t, card)
+	// initialModel applies the stored stage list, so swap the global *after*
+	// building the model — and put both the global and the file back, or the
+	// edited list leaks into every model a later test builds.
+	restoreStages(t)
+	applyStages([]string{"Backlog", "In progress", "Review"})
+	m.markCacheDirty()
+
+	m = sendKey(t, m, "7")
+	m = settingsCursorTo(t, m, settingStages)
+	m = sendKey(t, m, "enter")
+	if m.mode != modeEditStages {
+		t.Fatalf("enter on the Board columns row: mode = %v, want modeEditStages", m.mode)
+	}
+	if got := m.textInput.Value(); got != "Backlog, In progress, Review" {
+		t.Fatalf("editor pre-fill = %q, want the current list", got)
+	}
+
+	m.textInput.SetValue("Backlog, In progress, QA")
+	m = sendKey(t, m, "enter")
+
+	if m.mode != modeNormal {
+		t.Fatalf("after applying: mode = %v, want modeNormal", m.mode)
+	}
+	if want := []string{"Backlog", "In progress", "QA"}; !reflect.DeepEqual(activeStages, want) {
+		t.Fatalf("activeStages = %v, want %v", activeStages, want)
+	}
+	if got := m.get(card.ID); got == nil || got.Stage != "QA" {
+		t.Fatalf("renamed column: card stage = %v, want QA (cards follow the rename)", got)
+	}
+	if !m.savePending && !m.saveScheduled {
+		t.Error("moving cards between stages did not schedule a save")
+	}
+
+	// The edit is its own inverse: renaming the column back carries the same
+	// cards back with it. (It is deliberately not on the undo stack — see
+	// applyStageEdit.)
+	m = settingsCursorTo(t, m, settingStages)
+	m = sendKey(t, m, "enter")
+	m.textInput.SetValue("Backlog, In progress, Review")
+	m = sendKey(t, m, "enter")
+	if got := m.get(card.ID); got == nil || got.Stage != "Review" {
+		t.Fatalf("after renaming the column back: card stage = %v, want Review", got)
+	}
+}
+
+// esc leaves the stage editor without touching the list — the same escape
+// hatch every other inline Settings editor gives.
+func TestScriptEditBoardColumnsEscapeKeepsList(t *testing.T) {
+	m := modelWithTasks(t, todo.New("ship the release"))
+	restoreStages(t)
+	applyStages([]string{"Backlog", "In progress", "Review"})
+	m.markCacheDirty()
+	m = sendKey(t, m, "7")
+	m = settingsCursorTo(t, m, settingStages)
+	m = sendKey(t, m, "enter")
+	m.textInput.SetValue("Nope")
+	m = sendKey(t, m, "esc")
+
+	if m.mode != modeNormal {
+		t.Fatalf("esc: mode = %v, want modeNormal", m.mode)
+	}
+	if want := []string{"Backlog", "In progress", "Review"}; !reflect.DeepEqual(activeStages, want) {
+		t.Errorf("activeStages = %v, want the list unchanged %v", activeStages, want)
 	}
 }

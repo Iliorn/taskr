@@ -17,14 +17,14 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 - **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
 - **Projects** — group tasks, Gantt timeline view
 - **Tags** — tag tasks, filter by tag, rename/delete globally
-- **Board** — kanban view of your pending tasks: one column per stage plus Done. Stage names are yours to define (`"stages"` in `~/.taskr/settings.json`; default Backlog / In progress / Review). `←/→` switch columns, `H`/`L` move the selected card between stages — into Done completes the task exactly like `d` would, out of Done reopens it (confirmed). Also `taskr edit <ref> --stage <name>` from the CLI
+- **Board** — kanban view of your pending tasks: one column per stage plus Done. Stage names are yours to define — edit them in Settings → "Board columns" (comma-separated), or in `"stages"` in `~/.taskr/settings.json`; default Backlog / In progress / Review. Renaming a column takes its cards with it. `←/→` switch columns, `H`/`L` move the selected card between stages — into Done completes the task exactly like `d` would, out of Done reopens it (confirmed). Also `taskr edit <ref> --stage <name>` from the CLI
 - **Learnings** — attach takeaways to tasks in the detail view; recall them across tasks with `taskr learnings` (text or `#tag` filter, `--json`)
 - **Stats** — productivity overview with an activity heatmap
 - **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
 - **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`), plus a live score breakdown so you can see why a task ranks where it does
 - **Search** — live filter across tasks, projects and tags; fuzzy title matching plus field filters (`#tag @project p:high due:<fri overdue`); the Stats tab follows the active filter, so `#tag` scopes every stat to that tag
 - **Undo** — multi-level undo for all mutations
-- **Settings** — three sequencing-bias knobs, theme, language, version, in-app self-update (tab 7)
+- **Settings** — three sequencing-bias knobs, theme, language, board columns, version, in-app self-update (tab 7)
 
 ## Installation
 
@@ -77,7 +77,8 @@ taskr
 | `/` | Search / filter |
 | `enter` | Open detail view |
 | `u` | Undo |
-| `tab` / `1–7` | Switch tabs (7 = Settings) |
+| `tab` / `shift+tab` | Next / previous tab |
+| `1–7` | Jump straight to a tab (7 = Settings) |
 | `?` | Show all shortcuts |
 
 ### Quick-add syntax

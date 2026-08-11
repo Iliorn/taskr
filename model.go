@@ -43,6 +43,7 @@ const (
 	settingAutoCloseSubtasks
 	settingTheme
 	settingLanguage
+	settingStages
 	settingSyncAuto
 	settingSyncServer
 	settingSyncToken
@@ -128,6 +129,7 @@ const (
 	modeEditSyncToken
 	modeEditServerListen
 	modeEditServerToken
+	modeEditStages
 )
 
 type tagSortMode int

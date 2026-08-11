@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
+
+	"taskr/todo"
 )
 
 // A canonical action must use the same key in every context it appears in —
@@ -86,5 +90,84 @@ func TestKeymapGeneratesHintsAndHelp(t *testing.T) {
 	// Stats has a single binding; assert it at least appears.
 	if !strings.Contains(hintString(ctxStats, false), "cycle activity range") {
 		t.Error("stats hint should mention cycling the activity range")
+	}
+}
+
+// The tabs binding advertises the digit shortcuts as a range. It used to
+// promise "1-8" against seven tabs, so assert the advertised range, numTabs,
+// and the digits dispatch actually accepts all agree.
+func TestKeymapDigitRangeMatchesTabCount(t *testing.T) {
+	var key string
+	for _, b := range keymap {
+		if b.action == "tabs" {
+			key = b.key
+		}
+	}
+	if want := fmt.Sprintf("1-%d", numTabs); !strings.Contains(key, want) {
+		t.Errorf("tabs binding key = %q, want it to advertise %q", key, want)
+	}
+	if !strings.Contains(key, "shift+tab") {
+		t.Errorf("tabs binding key = %q, want it to advertise shift+tab", key)
+	}
+	for d := 1; d <= numTabs; d++ {
+		if _, ok := tabForNumberKey(strconv.Itoa(d)); !ok {
+			t.Errorf("digit %d is advertised but not handled by tabForNumberKey", d)
+		}
+	}
+	if _, ok := tabForNumberKey(strconv.Itoa(numTabs + 1)); ok {
+		t.Errorf("digit %d is handled but there are only %d tabs", numTabs+1, numTabs)
+	}
+}
+
+// The jump/page keys only drive tabs with a linear list (listNavTarget). The
+// registry claimed them globally, so the help promised them on Calendar,
+// Stats, Settings and Board where they do nothing. Assert the claim tracks
+// dispatch in both directions.
+func TestKeymapListpageClaimedOnlyWhereItWorks(t *testing.T) {
+	var claimed keyCtx
+	for _, b := range keymap {
+		if b.action == "listpage" {
+			claimed = b.ctx
+		}
+	}
+	for _, c := range []struct {
+		name string
+		ctx  keyCtx
+		tab  tab
+	}{
+		{"tasks", ctxTasksList, tabTasks},
+		{"projects", ctxProjects, tabProjects},
+		{"tags", ctxTags, tabTags},
+		{"board", ctxBoard, tabBoard},
+		{"stats", ctxStats, tabStats},
+		{"calendar", ctxCalendar, tabCalendar},
+		{"settings", ctxSettings, tabSettings},
+	} {
+		m := modelWithTasks(t, todo.New("a task"))
+		m.tab = c.tab
+		cursor, _ := m.listNavTarget()
+		works, advertised := cursor != nil, claimed&c.ctx != 0
+		if works != advertised {
+			t.Errorf("%s: home/end·pgup/pgdn advertised = %v but dispatch handles it = %v",
+				c.name, advertised, works)
+		}
+	}
+}
+
+// ↑/↓ is registered globally, which is only honest because every context but
+// Stats moves a cursor. Guard the exception so re-adding a Stats cursor (or
+// dropping one elsewhere) forces the registry to be updated with it.
+func TestKeymapNavigateSkipsStats(t *testing.T) {
+	for _, b := range keymap {
+		if b.action == "navigate" && b.section == secNavigation && b.ctx&ctxStats != 0 {
+			t.Error("navigate is advertised on the Stats tab, which has no list cursor")
+		}
+	}
+	m := modelWithTasks(t, todo.New("a task"))
+	m.tab = tabStats
+	before := m.cursor
+	m.moveCursorDown()
+	if m.cursor != before {
+		t.Errorf("Stats grew a cursor (%d → %d) — re-register ↑/↓ for ctxStats", before, m.cursor)
 	}
 }
