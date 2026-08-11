@@ -292,6 +292,11 @@ type model struct {
 	projSearchInput   textinput.Model
 	tagTabSearchInput textinput.Model
 
+	// suggestCursor is the highlighted chip of the quick-add completion row
+	// (suggest.go). Reset to 0 whenever the field's text or caret moves, so
+	// typing always re-aims at the best match.
+	suggestCursor int
+
 	// UI state
 	confirmMsg string
 	// confirmOnYes is the action modeConfirm runs on y/enter; nil is a no-op.

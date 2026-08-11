@@ -568,6 +568,12 @@ func (m model) buildFooterContent(w int) string {
 			// stay English in every language — parsing is locale-free — so only
 			// the example words are translated); once typing, replace it with a
 			// live preview of the parsed fields so a mistyped token is visible.
+			// While the caret sits in a #tag / @project token, the completion
+			// row is the useful feedback — the parse preview comes back the
+			// moment the token is finished.
+			if sigil, matches := m.quickAddMatches(); len(matches) > 0 {
+				return field + "\n" + renderQuickAddSuggestions(sigil, matches, m.suggestIndex(len(matches)), w)
+			}
 			if strings.TrimSpace(m.textInput.Value()) == "" {
 				return field + "\n" +
 					helpStyle.Render("    "+truncate(tr("#tag @project due:tomorrow p:high s:l r:weekly dep:^"), w))

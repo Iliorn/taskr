@@ -976,3 +976,78 @@ func TestScriptEditBoardColumnsEscapeKeepsList(t *testing.T) {
 		t.Errorf("activeStages = %v, want the list unchanged %v", activeStages, want)
 	}
 }
+
+// Quick-add completion, driven the way a user would: type '#', see the
+// existing tags, tab to splice one in, enter to file the task. The tag on the
+// created task is what proves the completion reached the parser, not just the
+// footer.
+func TestScriptQuickAddCompletesTag(t *testing.T) {
+	existing := todo.New("Fix boiler")
+	existing.AddTag("home")
+	existing.AddTag("house-stuff")
+	m := modelWithTasks(t, existing)
+
+	m = sendKey(t, m, "a")
+	m = script(t, m, "buy milk #")
+	sigil, matches := m.quickAddMatches()
+	if sigil != "#" || len(matches) == 0 {
+		t.Fatalf("after typing '#': sigil %q, matches %v — want the existing tags offered", sigil, matches)
+	}
+
+	m = sendKey(t, m, "tab")
+	if got, want := m.textInput.Value(), "buy milk #"+matches[0]+" "; got != want {
+		t.Fatalf("after tab: input = %q, want %q", got, want)
+	}
+	m = sendKey(t, m, "enter")
+
+	created := m.currentTodo()
+	if created == nil || created.Title != "Buy milk" {
+		t.Fatalf("created = %+v, want the completed task", created)
+	}
+	if len(created.Tags) != 1 || created.Tags[0] != matches[0] {
+		t.Errorf("tags = %v, want the completed tag %q", created.Tags, matches[0])
+	}
+}
+
+// ↑/↓ pick a different chip before tab accepts it, and both keys keep their
+// normal meaning once the completion row is gone.
+func TestScriptQuickAddPicksSuggestionWithArrows(t *testing.T) {
+	existing := todo.New("Fix boiler")
+	existing.AddTag("home")
+	existing.AddTag("house-stuff")
+	m := modelWithTasks(t, existing)
+
+	m = sendKey(t, m, "a")
+	m = script(t, m, "buy milk #h")
+	_, matches := m.quickAddMatches()
+	if len(matches) < 2 {
+		t.Fatalf("matches = %v, want at least two to pick between", matches)
+	}
+	m = sendKey(t, m, "down")
+	if m.suggestCursor != 1 {
+		t.Fatalf("after ↓: suggestCursor = %d, want 1", m.suggestCursor)
+	}
+	m = sendKey(t, m, "tab")
+	if got, want := m.textInput.Value(), "buy milk #"+matches[1]+" "; got != want {
+		t.Errorf("after ↓ then tab: input = %q, want the second chip %q", got, want)
+	}
+	// The completed token ends the row, so the highlight is back at the top.
+	if m.suggestCursor != 0 {
+		t.Errorf("suggestCursor = %d, want it reset after accepting", m.suggestCursor)
+	}
+}
+
+// Typing past the token retires the completion row, and tab must then do
+// nothing rather than splice a stale suggestion into the middle of the title.
+func TestScriptQuickAddTabIsInertWithoutSuggestions(t *testing.T) {
+	m := modelWithTasks(t, todo.New("Fix boiler"))
+	m = sendKey(t, m, "a")
+	m = script(t, m, "buy milk")
+	if _, matches := m.quickAddMatches(); len(matches) != 0 {
+		t.Fatalf("plain title offered completions: %v", matches)
+	}
+	m = sendKey(t, m, "tab")
+	if got := m.textInput.Value(); got != "buy milk" {
+		t.Errorf("tab with no completion row changed the input to %q", got)
+	}
+}

@@ -51,6 +51,10 @@ const (
 	maxTagSearchResults  = 5
 	maxProjSearchResults = 5
 
+	// Quick-add completions render as one chip row under the input, so the cap
+	// is what fits a line comfortably rather than the pickers' window height.
+	maxQuickAddSuggestions = 5
+
 	// sizeColW is the Size column on the Tasks list. Rendered as 2-left + letter
 	// + 5-right asymmetric pad: the 2 left spaces extend the Due column's
 	// 3-trailing into the 5-char inter-column gap; the 5 right spaces form the

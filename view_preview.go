@@ -52,6 +52,29 @@ func renderQuickAddPreview(input string, w int) string {
 	return ansi.Truncate(line, w, "…")
 }
 
+// renderQuickAddSuggestions renders the completion row under the quick-add
+// field: the candidate chips with the highlighted one selected, and the keys
+// that drive them. Deliberately one line — it takes the row the parse preview
+// would have used, so the footer never grows and the layout math around it is
+// untouched.
+func renderQuickAddSuggestions(sigil string, matches []string, sel, w int) string {
+	chips := make([]string, 0, len(matches))
+	for i, name := range matches {
+		label := sigil + name
+		switch {
+		case i == sel:
+			chips = append(chips, selectedStyle.Render(label))
+		case sigil == "#":
+			chips = append(chips, tagStyle.Render(label))
+		default:
+			chips = append(chips, projLabelStyle.Render(label))
+		}
+	}
+	line := helpStyle.Render("    ") + strings.Join(chips, "  ") +
+		helpStyle.Render("   "+tr("tab insert · ↑/↓ pick"))
+	return ansi.Truncate(line, w, "…")
+}
+
 // renderSearchPreview mirrors compileSearch's tokenisation to show the active
 // filters as the user types: recognised tokens become chips, and any leftover
 // (including a mistyped p:/due:) is shown as the fuzzy title-match query.

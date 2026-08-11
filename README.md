@@ -87,7 +87,7 @@ taskr
 Buy groceries #shopping due:friday p:high size:s @personal
 ```
 
-Supports `#tag`, `due:date`, `p:high/medium/low`, `size:s/m/l`, `@project` inline when adding a task. Tags are lowercase slugs; whitespace entered in the tag editor is normalized to `-` (for example, `Deep Work` becomes `#deep-work`).
+Supports `#tag`, `due:date`, `p:high/medium/low`, `size:s/m/l`, `@project` inline when adding a task. Typing `#` or `@` offers your existing tags/projects (most recently used first) as chips under the field — `tab` inserts the highlighted one, `↑/↓` pick a different one — so you don't have to remember the exact spelling. Projects whose name contains a space aren't offered, since quick-add tokenises on whitespace; add those from the detail pane's `@` picker. Tags are lowercase slugs; whitespace entered in the tag editor is normalized to `-` (for example, `Deep Work` becomes `#deep-work`).
 
 ### Search syntax
 

@@ -471,6 +471,7 @@ var daTranslations = map[string]string{
 	// Settings
 	"Theme":                          "Tema",
 	"Language":                       "Sprog",
+	"tab insert · ↑/↓ pick":          "tab indsæt · ↑/↓ vælg",
 	"Board columns":                  "Tavlekolonner",
 	"Board columns, comma-separated": "Tavlekolonner, adskilt af komma",
 	"Comma-separated column names · Done is always the last column": "Kolonnenavne adskilt af komma · Færdig er altid sidste kolonne",

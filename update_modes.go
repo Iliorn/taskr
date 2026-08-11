@@ -139,9 +139,36 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.pane != paneList && m.detail.field == fieldComments {
 				return m, m.openEditorForInput()
 			}
+		case "tab":
+			// Accept the highlighted quick-add completion. Enter deliberately
+			// still submits the task: a completion row must never stand
+			// between you and the fastest path in the app.
+			if _, matches := m.quickAddMatches(); len(matches) > 0 {
+				val, pos, ok := acceptQuickAddSuggestion(
+					m.textInput.Value(), m.textInput.Position(), matches[m.suggestIndex(len(matches))])
+				if ok {
+					m.textInput.SetValue(val)
+					m.textInput.SetCursor(pos)
+					m.suggestCursor = 0
+				}
+				return m, nil
+			}
+		case "up", "down":
+			if _, matches := m.quickAddMatches(); len(matches) > 0 {
+				step := 1
+				if key.String() == "up" {
+					step = -1
+				}
+				m.suggestCursor = (m.suggestIndex(len(matches)) + step + len(matches)) % len(matches)
+				return m, nil
+			}
 		}
 	}
+	before, beforePos := m.textInput.Value(), m.textInput.Position()
 	m.textInput, cmd = m.textInput.Update(msg)
+	if m.textInput.Value() != before || m.textInput.Position() != beforePos {
+		m.suggestCursor = 0 // the token changed — re-aim at the best match
+	}
 	return m, cmd
 }
 
