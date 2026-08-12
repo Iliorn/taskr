@@ -331,7 +331,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if nm, ok := newModel.(model); ok {
-		nm.clampDrillCursor()
+		nm.clampCursors()
 		if nm.dirty {
 			nm.dirty = false
 			nm.savePending = true
@@ -992,19 +992,43 @@ func (m model) stageDeleteTask() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// clampDrillCursor keeps the drill cursor inside its list. The list shrinks
-// from under it whenever a task is deleted, completed out of the tag, or the
-// tag is removed from it, and a cursor past the end selects nothing at all.
-func (m *model) clampDrillCursor() {
-	tasks, drilled := m.drillTaskList()
-	if !drilled {
-		return
+// clampCursors keeps every list cursor addressing a row that exists. Lists
+// shrink out from under their cursor constantly — an undo that removes the task
+// you were on, a delete confirmed from a modal, a filter narrowing, a tab
+// switch restoring a cursor saved when the list was longer — and a cursor past
+// the end selects nothing, which turns the next keystroke into a silent no-op
+// (press d, nothing happens). The movement keys wrap modulo the length, so they
+// recover on their own; everything else needs this.
+//
+// Called once per dispatch, after the handlers, so no individual mutation has
+// to remember to clamp. Cursors that cannot go stale (the Settings rows are
+// stable IDs; the board clamps at selection time) are not listed.
+func (m *model) clampCursors() {
+	clamp := func(cursor *int, n int) {
+		if *cursor >= n {
+			*cursor = n - 1
+		}
+		if *cursor < 0 {
+			*cursor = 0
+		}
 	}
-	if m.cursor >= len(tasks) {
-		m.cursor = len(tasks) - 1
+	// The tag and project cursors are tab-private state that survives a detour
+	// to another tab, so they can go stale while you are elsewhere — deleting a
+	// task's last tag from the Tasks tab shortens the tag list. Both lists are
+	// cached lookups, so clamp them regardless of the live tab. The calendar's
+	// entry cursor needs an uncached scan, so it is only clamped where it is
+	// actually in use.
+	clamp(&m.tagTabCursor, len(m.getFilteredTagsForTab()))
+	clamp(&m.projectCursor, len(m.allProjectsForList()))
+	if tasks, drilled := m.drillTaskList(); drilled {
+		clamp(&m.cursor, len(tasks))
+		return // the drill owns m.cursor while it is open
 	}
-	if m.cursor < 0 {
-		m.cursor = 0
+	switch m.tab {
+	case tabTasks:
+		clamp(&m.cursor, m.currentTaskListLen())
+	case tabCalendar:
+		clamp(&m.calendar.entryCursor, len(m.activitiesForDay(m.calendar.selected)))
 	}
 }
 

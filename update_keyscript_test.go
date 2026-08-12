@@ -1220,3 +1220,36 @@ func TestScriptProjectDeleteClearsGrouping(t *testing.T) {
 		t.Errorf("after undo: project = %v, want it restored", got)
 	}
 }
+
+// Completing a task in the Projects drill must leave the cursor on it, and the
+// next key must still reach it. (The resolution path reads the project list
+// through its accessor rather than the raw cache field refreshCaches
+// invalidates; updateList's own tail happens to re-warm that cache, so this
+// asserts the behaviour, not the ordering.)
+func TestScriptProjectDrillKeepsCursorAfterMutation(t *testing.T) {
+	first := todo.New("Alpha")
+	first.Project = "House"
+	second := todo.New("Beta")
+	second.Project = "House"
+	m := modelWithTasks(t, first, second)
+	m.tab = tabProjects
+
+	m = script(t, m, "enter", "down")
+	target := m.currentTodo()
+	if target == nil || target.Title != "Beta" {
+		t.Fatalf("cursor on %v, want Beta", target)
+	}
+
+	m = sendKey(t, m, "d")
+	if got := m.get(second.ID); got == nil || got.Status != todo.Done {
+		t.Fatalf("d did not complete the task under the cursor: %v", got)
+	}
+	if got := m.currentTodo(); got == nil || got.ID != second.ID {
+		t.Fatalf("cursor moved to %v after the mutation, want it to stay on Beta", got)
+	}
+	// …and the next key still lands on that task rather than on nothing.
+	m = sendKey(t, m, "p")
+	if got := m.get(second.ID); got.Priority == todo.PriorityMedium {
+		t.Error("the follow-up key did not reach the task under the cursor")
+	}
+}

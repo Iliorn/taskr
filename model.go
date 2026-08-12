@@ -922,22 +922,12 @@ func (m model) currentTodo() *todo.Todo {
 			return nil
 		}
 		return m.visibleActiveAt(m.cursor)
-	case tabTags:
-		if m.tagTaskMode {
-			tasks := m.currentTagTasks()
-			if m.cursor < len(tasks) {
-				return m.get(tasks[m.cursor].ID)
-			}
-		}
-	case tabProjects:
-		if m.projectTaskMode {
-			projects := m.cache.projects
-			if m.projectCursor < len(projects) {
-				tasks := m.getProjectTasks(projects[m.projectCursor])
-				if m.cursor < len(tasks) {
-					return m.get(tasks[m.cursor].ID)
-				}
-			}
+	case tabTags, tabProjects:
+		// Both tabs resolve through the same drill list the keys and the cursor
+		// bookkeeping use, so a task can't be under the cursor for one and
+		// absent for the other.
+		if tasks, ok := m.drillTaskList(); ok && m.cursor < len(tasks) {
+			return m.get(tasks[m.cursor].ID)
 		}
 	}
 	return nil
@@ -1451,7 +1441,11 @@ func (m model) drillTaskList() ([]todo.Todo, bool) {
 	case m.tab == tabTags && m.tagTaskMode:
 		return m.currentTagTasks(), true
 	case m.tab == tabProjects && m.projectTaskMode:
-		projects := m.cache.projects
+		// Through the accessor, not m.cache.projects: refreshCaches invalidates
+		// that field and only allProjectsForList rebuilds it, so reading it raw
+		// made every key between a mutation and the next render see no project
+		// at all — the drill cursor jumped to the top after each edit.
+		projects := m.allProjectsForList()
 		if m.projectCursor >= len(projects) {
 			return nil, true
 		}
