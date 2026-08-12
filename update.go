@@ -292,6 +292,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m.updateEditTitle(msg)
 	case modeEditProjectInline:
 		newModel, cmd = m.updateEditProjectInline(msg)
+	case modePalette:
+		newModel, cmd = m.updatePalette(msg)
 	case modeEditStages:
 		newModel, cmd = m.updateEditStages(msg)
 	case modeEditSyncURL:
@@ -656,6 +658,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			m.mode = modeHelp
 			return m, nil
+		case "ctrl+k":
+			return m, m.openPalette()
 		case "u":
 			return m, m.performUndo()
 

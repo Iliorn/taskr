@@ -322,6 +322,8 @@ func (m model) extraOverheadLines() int {
 		return 3
 	case modeSearchDep, modeSearchTag, modeSearchProject:
 		return 8
+	case modePalette:
+		return 3 + maxPaletteResults
 	case modeSearchTagTab:
 		return 3
 	case modeConfirm, modeConfirmUpdate, modeIdlePrompt:

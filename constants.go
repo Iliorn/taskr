@@ -58,6 +58,11 @@ const (
 	maxTagSearchResults  = 5
 	maxProjSearchResults = 5
 
+	// maxPaletteResults is how many command-palette rows are shown at once. The
+	// palette replaces the footer hint while it is open, so the budget is what
+	// fits there comfortably rather than the whole list.
+	maxPaletteResults = 7
+
 	// Quick-add completions render as one chip row under the input, so the cap
 	// is what fits a line comfortably rather than the pickers' window height.
 	maxQuickAddSuggestions = 5

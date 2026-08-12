@@ -90,6 +90,7 @@ var keymap = []binding{
 	{ctxAll, "esc", "back", "go back", secNavigation, false, false},
 	{ctxAll, "tab / shift+tab / 1-7", "tabs", "switch tabs (forward / back / direct)", secNavigation, false, false},
 	{ctxAll, "?", "help", "toggle this help", secNavigation, false, false},
+	{ctxAll, "ctrl+k", "palette", "command palette — find any action by name", secNavigation, false, false},
 
 	// ── Tasks list ───────────────────────────────────────────────────────
 	{ctxTasksList, "enter", "detail", "open details", secTasks, true, false},

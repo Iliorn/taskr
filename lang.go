@@ -188,7 +188,18 @@ var translations = map[language]map[string]string{
 
 var daTranslations = map[string]string{
 	// Header / chrome
-	"? shortcuts": "? genveje",
+	"? shortcuts":                               "? genveje",
+	"? shortcuts · ctrl+k commands":             "? genveje · ctrl+k kommandoer",
+	"Type a command…":                           "Skriv en kommando…",
+	"No command matches that.":                  "Ingen kommando matcher det.",
+	"command palette — find any action by name": "kommandopalet — find enhver handling ved navn",
+	"Go to Tasks":                               "Gå til Opgaver",
+	"Go to Calendar":                            "Gå til Kalender",
+	"Go to Projects":                            "Gå til Projekter",
+	"Go to Tags":                                "Gå til Mærker",
+	"Go to Board":                               "Gå til Tavle",
+	"Go to Stats":                               "Gå til Statistik",
+	"Go to Settings":                            "Gå til Indstillinger",
 	"⚡ FOCUS: today + overdue only (f to toggle)": "⚡ FOKUS: kun i dag + forfaldne (f for at skifte)",
 	"(untagged)": "(uden mærke)",
 

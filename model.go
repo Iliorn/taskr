@@ -130,6 +130,7 @@ const (
 	modeEditServerListen
 	modeEditServerToken
 	modeEditStages
+	modePalette
 )
 
 type tagSortMode int
@@ -291,6 +292,10 @@ type model struct {
 	tagSearchInput    textinput.Model
 	projSearchInput   textinput.Model
 	tagTabSearchInput textinput.Model
+	paletteInput      textinput.Model
+
+	// paletteCursor is the highlighted row of the command palette (palette.go).
+	paletteCursor int
 
 	// suggestCursor is the highlighted chip of the quick-add completion row
 	// (suggest.go). Reset to 0 whenever the field's text or caret moves, so
@@ -419,6 +424,9 @@ func initialModel(repo Repository) model {
 	proji := textinput.New()
 	proji.CharLimit = 100
 
+	pal := textinput.New()
+	pal.Placeholder = tr("Type a command…")
+	pal.Prompt = "❯ "
 	tagTabSearch := textinput.New()
 	tagTabSearch.CharLimit = 50
 
@@ -468,6 +476,7 @@ func initialModel(repo Repository) model {
 		tagSearchInput:    tagi,
 		projSearchInput:   proji,
 		tagTabSearchInput: tagTabSearch,
+		paletteInput:      pal,
 		mode:              modeNormal,
 		pane:              paneList,
 		tab:               tabTasks,

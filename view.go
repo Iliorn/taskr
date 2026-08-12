@@ -251,7 +251,7 @@ func (m model) View() string {
 	w := m.termWidth - 6
 
 	// ── HEADER ───────────────────────────────────────────────────────────
-	shortcutHint := helpStyle.Render(tr("? shortcuts"))
+	shortcutHint := helpStyle.Render(tr("? shortcuts · ctrl+k commands"))
 	title := titleStyle.Render("taskr")
 	// Width left for the tab bar between the title and the right-aligned hint.
 	avail := m.termWidth - ansi.StringWidth(title) - 2 - ansi.StringWidth(shortcutHint) - 4
@@ -748,10 +748,64 @@ func (m model) footerContentFor(w int) string {
 			shown++
 		}
 		return b.String()
+	case modePalette:
+		return m.renderPalette(w)
 	case modeConfirm:
 		return confirmStyle.Render(m.confirmMsg)
 	}
 	return ""
+}
+
+// renderPalette draws the command palette: the query field, then the matching
+// commands with the key each one presses and the tab it belongs to. Sized to
+// maxPaletteResults so the block above it never reflows as the list narrows.
+func (m model) renderPalette(w int) string {
+	b := getBuilder()
+	defer putBuilder(b)
+	b.WriteString(searchStyle.Width(w).Render(m.paletteInput.View()))
+
+	results := paletteResults(m.paletteInput.Value())
+	sel := m.paletteSelection(len(results))
+	if len(results) == 0 {
+		b.WriteString("\n" + dimStyle.Render("  "+tr("No command matches that.")))
+		for i := 1; i < maxPaletteResults; i++ {
+			b.WriteString("\n")
+		}
+		return b.String()
+	}
+	start, hasAbove, hasBelow := pickerWindowStart(sel, len(results), maxPaletteResults)
+	for slot := 0; slot < maxPaletteResults; slot++ {
+		idx := start + slot
+		switch {
+		case hasAbove && slot == 0:
+			b.WriteString("\n" + dimStyle.Render(fmt.Sprintf("  … %d more above", start+1)))
+		case hasBelow && slot == maxPaletteResults-1:
+			b.WriteString("\n" + dimStyle.Render(fmt.Sprintf("  … %d more below", len(results)-(start+slot))))
+		case idx < len(results):
+			c := results[idx]
+			// Right-align the key + section so the labels form a readable
+			// column on the left, the way the list tabs do.
+			meta := c.key
+			if c.section != "" {
+				meta += "  " + c.section
+			}
+			label := c.label
+			gap := w - 4 - len([]rune(label)) - len([]rune(meta))
+			if gap < 2 {
+				gap = 2
+				label = truncate(label, w-6-len([]rune(meta)))
+			}
+			row := "  " + label + strings.Repeat(" ", gap) + meta
+			if idx == sel {
+				b.WriteString("\n" + selectedStyle.Render("→"+row))
+			} else {
+				b.WriteString("\n" + normalStyle.Render(" "+row[1:]) + "")
+			}
+		default:
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
 }
 
 // ── Key hints ─────────────────────────────────────────────────────────────────

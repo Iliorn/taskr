@@ -23,6 +23,7 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 - **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
 - **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`), plus a live score breakdown so you can see why a task ranks where it does
 - **Search** — live filter across tasks, projects and tags; fuzzy title matching plus field filters (`#tag @project p:high due:<fri overdue`); the Stats tab follows the active filter, so `#tag` scopes every stat to that tag
+- **Command palette** — `ctrl+k` finds any action by name (fuzzy, ranked) and shows the key that performs it, so nothing is gated behind remembering a letter; an action belonging to another tab switches there first
 - **Undo** — multi-level undo for all mutations
 - **Settings** — three sequencing-bias knobs, theme, language, board columns, version, in-app self-update (tab 7)
 
@@ -79,6 +80,7 @@ taskr
 | `u` | Undo |
 | `tab` / `shift+tab` | Next / previous tab |
 | `1–7` | Jump straight to a tab (7 = Settings) |
+| `ctrl+k` | Command palette — find any action by name |
 | `?` | Show all shortcuts (`/` filters them) |
 
 On the Tags and Projects tabs, `enter` walks in one level at a time — row → its tasks → the selected task's detail — and `esc` walks back out the same way. While you're inside, the row-level keys act on the task under the cursor, exactly as they do on the Tasks tab.

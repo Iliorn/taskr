@@ -24,6 +24,8 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "?":
 		m.mode = modeHelp
 		return m, nil
+	case "ctrl+k":
+		return m, m.openPalette()
 	case "u":
 		return m, m.performUndo()
 	case "n":

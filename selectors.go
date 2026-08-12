@@ -29,7 +29,7 @@ func todoMatchesSearch(t todo.Todo, search string) bool {
 // substring), `p:high|med|low`, `due:<date` / `due:>date` / `due:date`
 // (comparison, "<"/">"/"<="/">=" or exact day), and the bare keyword `overdue`.
 // Any leftover bare words are joined and fuzzy-matched against the title
-// (subsequence, so "grcry" finds "Buy groceries"). The two click-driven sentinels
+// (subsequence, so "grcrs" finds "Buy groceries"). The two click-driven sentinels
 // — empty (match all) and untaggedKey (no tags) — keep their exact-string meaning.
 func compileSearch(search string) func(todo.Todo) bool {
 	switch search {
@@ -101,7 +101,8 @@ func compileSearch(search string) func(todo.Todo) bool {
 
 // subsequenceFold reports whether every rune of needle appears in haystack in
 // order (not necessarily contiguous), case-insensitively. Empty needle matches.
-// This is the fuzzy form of strings.Contains: "grcry" matches "Buy groceries".
+// This is the fuzzy form of strings.Contains: "grcrs" matches "Buy groceries"
+// (every rune must appear, in order — "grcry" does not, there is no trailing y).
 func subsequenceFold(haystack, needle string) bool {
 	if needle == "" {
 		return true
