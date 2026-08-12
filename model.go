@@ -325,22 +325,29 @@ type model struct {
 	helpScroll           int
 	tabViews             [numTabs]tabView
 	projectTaskMode      bool
-	showHistory          bool
-	focusFilter          bool
-	focusStack           []focusEntry
-	expandedTasks        map[string]bool
-	detailTaskID         string
-	detailStack          []string
-	editingTagName       string
-	editingProjectName   string
-	tagSort              tagSortMode
-	taskSort             taskSortMode
-	historySort          historySortMode
-	statsRange           statsRangeMode
-	themeName            string
-	updateStatus         string
-	autoCloseParent      bool
-	autoCloseSubtasks    bool
+	// tagTaskMode is the Tags-tab mirror of projectTaskMode: the cursor has
+	// left the tag list and is walking the selected tag's tasks, where the
+	// row-level keys (d/t/p/r/x/enter) act on the task under it.
+	tagTaskMode        bool
+	showHistory        bool
+	focusFilter        bool
+	focusStack         []focusEntry
+	expandedTasks      map[string]bool
+	detailTaskID       string
+	detailStack        []string
+	editingTagName     string
+	editingProjectName string
+	// pendingProjectName is the project the x confirm on the Projects tab is
+	// about to clear off its tasks.
+	pendingProjectName string
+	tagSort            tagSortMode
+	taskSort           taskSortMode
+	historySort        historySortMode
+	statsRange         statsRangeMode
+	themeName          string
+	updateStatus       string
+	autoCloseParent    bool
+	autoCloseSubtasks  bool
 
 	// Persistence
 	dirty         bool
@@ -695,8 +702,14 @@ func (m *model) currentTaskID() string {
 	// reorders the list (cycling priority, changing due date, …) should keep the
 	// cursor on the same task, not the same row. Arrow/nav keys move the cursor
 	// directly without markModified, so they still move freely.
+	//
+	// The tag/project drill lists re-sort on the same edits (completing a task
+	// sinks it), so they anchor too — otherwise the cursor slides onto the
+	// neighbouring task and the next key hits the wrong one.
 	if m.tab != tabTasks {
-		return ""
+		if _, drilled := m.drillTaskList(); !drilled {
+			return ""
+		}
 	}
 	if t := m.currentTodo(); t != nil {
 		return t.ID
@@ -706,6 +719,18 @@ func (m *model) currentTaskID() string {
 
 func (m *model) followTask(taskID string) {
 	if taskID == "" {
+		return
+	}
+	// A drill-in list (tag / project) has its own index space, so translating
+	// to the Tasks-tab index here would throw the cursor across the list on
+	// every mutation. Follow the task inside the list actually on screen.
+	if tasks, ok := m.drillTaskList(); ok {
+		for i := range tasks {
+			if tasks[i].ID == taskID {
+				m.cursor = i
+				return
+			}
+		}
 		return
 	}
 	if m.showHistory {
@@ -897,6 +922,13 @@ func (m model) currentTodo() *todo.Todo {
 			return nil
 		}
 		return m.visibleActiveAt(m.cursor)
+	case tabTags:
+		if m.tagTaskMode {
+			tasks := m.currentTagTasks()
+			if m.cursor < len(tasks) {
+				return m.get(tasks[m.cursor].ID)
+			}
+		}
 	case tabProjects:
 		if m.projectTaskMode {
 			projects := m.cache.projects
@@ -1349,6 +1381,83 @@ func (m model) getFilteredTagsForTab() []string {
 		return append([]string{untaggedKey}, result...)
 	}
 	return result
+}
+
+// tagTaskList returns the tasks carrying tag — or the untagged set for the
+// virtual (untagged) row — in the order the Tags tab presents them: overdue
+// first, then active, then done, alphabetical within each group. Subtasks are
+// excluded, mirroring selectActiveDone, so the tab counts and the list agree.
+//
+// One list feeds both the detail pane and the drill cursor, which is the whole
+// point: the row you see highlighted is the row the keys act on.
+func (m model) tagTaskList(tag string) []todo.Todo {
+	untagged := tag == untaggedKey
+	out := make([]todo.Todo, 0, 16)
+	for _, t := range m.tasks {
+		if t.ParentID != "" {
+			continue
+		}
+		match := len(t.Tags) == 0
+		if !untagged {
+			match = false
+			for _, tt := range t.Tags {
+				if tt == tag {
+					match = true
+					break
+				}
+			}
+		}
+		if match {
+			out = append(out, *t)
+		}
+	}
+	cat := func(t todo.Todo) int {
+		switch {
+		case t.Status == todo.Done:
+			return 2
+		case t.IsOverdue():
+			return 0
+		default:
+			return 1
+		}
+	}
+	sort.Slice(out, func(a, b int) bool {
+		if ca, cb := cat(out[a]), cat(out[b]); ca != cb {
+			return ca < cb
+		}
+		if la, lb := strings.ToLower(out[a].Title), strings.ToLower(out[b].Title); la != lb {
+			return la < lb
+		}
+		return out[a].ID < out[b].ID // stable across redraws; map order is not
+	})
+	return out
+}
+
+// currentTagTasks is tagTaskList for the tag under the Tags-tab cursor.
+func (m model) currentTagTasks() []todo.Todo {
+	tags := m.getFilteredTagsForTab()
+	if m.tagTabCursor >= len(tags) {
+		return nil
+	}
+	return m.tagTaskList(tags[m.tagTabCursor])
+}
+
+// drillTaskList returns the task list the cursor is walking when the Tags or
+// Projects tab is drilled into a row, and false when it isn't. The single
+// place that answers "is the cursor on a task right now?", so the row-level
+// keys and the cursor bookkeeping can't disagree about it.
+func (m model) drillTaskList() ([]todo.Todo, bool) {
+	switch {
+	case m.tab == tabTags && m.tagTaskMode:
+		return m.currentTagTasks(), true
+	case m.tab == tabProjects && m.projectTaskMode:
+		projects := m.cache.projects
+		if m.projectCursor >= len(projects) {
+			return nil, true
+		}
+		return m.getProjectTasks(projects[m.projectCursor]), true
+	}
+	return nil, false
 }
 
 func (m model) tagSearchResults() []string {

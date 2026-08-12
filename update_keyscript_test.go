@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -1049,5 +1050,173 @@ func TestScriptQuickAddTabIsInertWithoutSuggestions(t *testing.T) {
 	m = sendKey(t, m, "tab")
 	if got := m.textInput.Value(); got != "buy milk" {
 		t.Errorf("tab with no completion row changed the input to %q", got)
+	}
+}
+
+// The Tags tab used to be read-only: enter left for the Tasks tab and the task
+// list under the cursor was a picture. Now enter drills into it and the
+// row-level keys act on the task you can see highlighted.
+func TestScriptTagDrillActsOnTasks(t *testing.T) {
+	a := todo.New("Alpha")
+	a.AddTag("home")
+	b := todo.New("Beta")
+	b.AddTag("home")
+	m := modelWithTasks(t, a, b)
+	m.tab = tabTags
+
+	m = sendKey(t, m, "enter")
+	if !m.tagTaskMode {
+		t.Fatal("enter on a tag did not drill into its tasks")
+	}
+	if got := m.currentTodo(); got == nil || got.Title != "Alpha" {
+		t.Fatalf("cursor landed on %v, want the first task", got)
+	}
+
+	// d completes the task under the cursor, and the cursor stays on it even
+	// though completing re-sorts the list (done sinks to the bottom).
+	m = sendKey(t, m, "d")
+	if got := m.get(a.ID); got == nil || got.Status != todo.Done {
+		t.Fatalf("d in the drill did not complete the task: %v", got)
+	}
+	if got := m.currentTodo(); got == nil || got.ID != a.ID {
+		t.Errorf("cursor jumped to %v after the re-sort, want it to follow the task", got)
+	}
+	if !m.savePending && !m.saveScheduled {
+		t.Error("completing from the drill did not schedule a save")
+	}
+
+	// p cycles priority on the same row.
+	m = sendKey(t, m, "p")
+	if got := m.get(a.ID); got.Priority == todo.PriorityMedium {
+		t.Error("p in the drill did not change the priority")
+	}
+
+	// esc backs out one level, to the tag list.
+	m = sendKey(t, m, "esc")
+	if m.tagTaskMode {
+		t.Error("esc did not leave the drill")
+	}
+	if m.tab != tabTags {
+		t.Errorf("esc left the tab entirely: %v", m.tab)
+	}
+}
+
+// enter twice walks tag → task → detail, and the pane shows that task rather
+// than the tag summary it was showing a keystroke earlier.
+func TestScriptTagDrillOpensTaskDetail(t *testing.T) {
+	a := todo.New("Alpha")
+	a.AddTag("home")
+	m := modelWithTasks(t, a)
+	m.tab = tabTags
+
+	m = script(t, m, "enter", "enter")
+	if m.pane != paneDetail || m.detailTaskID != a.ID {
+		t.Fatalf("enter in the drill: pane %v, detailTaskID %q, want the task's detail", m.pane, m.detailTaskID)
+	}
+	if got := m.detailPanelTitle(); got != "Alpha" {
+		t.Errorf("detail panel title = %q, want the task title", got)
+	}
+	// The tag summary always carries an "N active · N done · N overdue" line;
+	// the task detail never does.
+	if body := m.buildDetailContent(); strings.Contains(body, "active ·") {
+		t.Error("the detail pane is still rendering the tag summary")
+	}
+	// esc unwinds one level at a time: detail → drill → tag list.
+	m = sendKey(t, m, "esc")
+	if m.pane == paneDetail || !m.tagTaskMode {
+		t.Fatalf("first esc: pane %v, drill %v — want back in the drill", m.pane, m.tagTaskMode)
+	}
+	m = sendKey(t, m, "esc")
+	if m.tagTaskMode {
+		t.Error("second esc did not return to the tag list")
+	}
+}
+
+// 'a' on a tag row opens quick-add already carrying the tag, so capturing into
+// the tag you are looking at costs one key.
+func TestScriptTagAddSeedsTheTag(t *testing.T) {
+	a := todo.New("Alpha")
+	a.AddTag("home")
+	m := modelWithTasks(t, a)
+	m.tab = tabTags
+
+	m = sendKey(t, m, "a")
+	if m.mode != modeInput {
+		t.Fatalf("'a' on the Tags tab: mode = %v, want modeInput", m.mode)
+	}
+	if got := m.textInput.Value(); got != "#home " {
+		t.Fatalf("quick-add seed = %q, want %q", got, "#home ")
+	}
+	m = script(t, m, "paint the shed", "enter")
+
+	var created *todo.Todo
+	for _, task := range m.tasks {
+		if task.Title == "Paint the shed" {
+			created = task
+		}
+	}
+	if created == nil {
+		t.Fatal("the seeded quick-add did not create a task")
+	}
+	if len(created.Tags) != 1 || created.Tags[0] != "home" {
+		t.Errorf("tags = %v, want the seeded tag", created.Tags)
+	}
+}
+
+// f keeps the old enter behaviour — the tag as a filter on the Tasks tab.
+func TestScriptTagFilterJumpsToTasks(t *testing.T) {
+	a := todo.New("Alpha")
+	a.AddTag("home")
+	m := modelWithTasks(t, a)
+	m.tab = tabTags
+
+	m = sendKey(t, m, "f")
+	if m.tab != tabTasks {
+		t.Fatalf("f on a tag: tab = %v, want tabTasks", m.tab)
+	}
+	if m.searchQuery != "#home" {
+		t.Errorf("searchQuery = %q, want the tag filter", m.searchQuery)
+	}
+}
+
+// The Projects drill could only ever open a detail; the task keys were dead
+// there. They now match the Tags drill.
+func TestScriptProjectDrillActsOnTasks(t *testing.T) {
+	a := todo.New("Alpha")
+	a.Project = "House"
+	m := modelWithTasks(t, a)
+	m.tab = tabProjects
+
+	m = sendKey(t, m, "enter")
+	if !m.projectTaskMode {
+		t.Fatal("enter did not drill into the project")
+	}
+	m = sendKey(t, m, "d")
+	if got := m.get(a.ID); got == nil || got.Status != todo.Done {
+		t.Fatalf("d in the project drill did not complete the task: %v", got)
+	}
+}
+
+// x on a project row was advertised in the help but wired to nothing. It now
+// clears the project off its tasks, leaving the tasks themselves alone.
+func TestScriptProjectDeleteClearsGrouping(t *testing.T) {
+	a := todo.New("Alpha")
+	a.Project = "House"
+	m := modelWithTasks(t, a)
+	m.tab = tabProjects
+
+	m = sendKey(t, m, "x")
+	if m.mode != modeConfirm {
+		t.Fatalf("x on a project row: mode = %v, want a confirm prompt", m.mode)
+	}
+	m = sendKey(t, m, "y")
+	if got := m.get(a.ID); got == nil {
+		t.Fatal("deleting the project deleted the task")
+	} else if got.Project != "" {
+		t.Errorf("project = %q, want it cleared", got.Project)
+	}
+	m = sendKey(t, m, "u")
+	if got := m.get(a.ID); got == nil || got.Project != "House" {
+		t.Errorf("after undo: project = %v, want it restored", got)
 	}
 }

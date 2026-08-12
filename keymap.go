@@ -27,12 +27,21 @@ const (
 	ctxCalendarTimeline
 	ctxSettings
 	ctxBoard
+	// The Tags and Projects tabs have a second level: the cursor drills into
+	// the selected row's task list, where the row-level task keys take over
+	// from the tag/project ones. That is a distinct keyset, so it is a
+	// distinct context.
+	ctxTagDrill
+	ctxProjectDrill
 
 	// ctxAll marks the global bindings (navigation, help, undo, quit) that are
 	// live in every context.
 	ctxAll = ctxTasksList | ctxTasksDetail | ctxProjects | ctxTags |
 		ctxStats | ctxCalendar | ctxCalendarTimeline | ctxSettings |
-		ctxBoard
+		ctxBoard | ctxTagDrill | ctxProjectDrill
+
+	// ctxDrill is the pair of drill-in lists, which share their whole keyset.
+	ctxDrill = ctxTagDrill | ctxProjectDrill
 )
 
 // binding is one row of the registry.
@@ -58,6 +67,7 @@ const (
 	secTasks        = "Tasks"
 	secDetail       = "Detail view"
 	secTagsProjects = "Tags & Projects"
+	secDrill        = "Inside a tag / project"
 	secBoard        = "Board"
 	secCalendar     = "Calendar"
 	secStats        = "Stats"
@@ -74,7 +84,7 @@ var keymap = []binding{
 	// drive the linear list tabs (listNavTarget), so neither is claimed
 	// everywhere. A binding the help shows must be a binding dispatch honours.
 	{ctxAll &^ ctxStats, "↑/↓", "navigate", "navigate list", secNavigation, false, false},
-	{ctxTasksList | ctxProjects | ctxTags, "home/end · pgup/pgdn", "listpage", "jump to ends / page through list", secNavigation, false, false},
+	{ctxTasksList | ctxProjects | ctxTags | ctxDrill, "home/end · pgup/pgdn", "listpage", "jump to ends / page through list", secNavigation, false, false},
 	// enter has no global meaning — each context defines its own (open details,
 	// edit field, activate, cycle) — so it is registered per context, not here.
 	{ctxAll, "esc", "back", "go back", secNavigation, false, false},
@@ -112,11 +122,25 @@ var keymap = []binding{
 	{ctxTasksDetail, "esc", "back", "back to list", secDetail, true, false},
 
 	// ── Tags & Projects ──────────────────────────────────────────────────
+	{ctxProjects | ctxTags, "enter", "detail", "open the tasks in it", secTagsProjects, true, true},
+	{ctxProjects | ctxTags, "a", "add", "new task in it", secTagsProjects, true, false},
+	{ctxTags, "f", "tagfilter", "show its tasks on the Tasks tab", secTagsProjects, true, false},
 	{ctxProjects | ctxTags, "r", "edit", "rename globally", secTagsProjects, true, false},
 	{ctxTags, "m", "merge", "merge tags (Tags tab)", secTagsProjects, true, false},
 	{ctxProjects | ctxTags, "x", "delete", "delete globally", secTagsProjects, true, false},
 	{ctxTags, "s", "sort", "cycle sort order", secTagsProjects, true, false},
 	{ctxProjects | ctxTags, "/", "search", "filter", secTagsProjects, true, true},
+
+	// ── Inside a tag / project (the drilled-in task list) ────────────────
+	{ctxDrill, "enter", "detail", "open details", secDrill, true, true},
+	{ctxDrill, "d", "done", "toggle done", secDrill, true, true},
+	{ctxDrill, "t", "track", "start/stop time tracking", secDrill, true, true},
+	{ctxDrill, "T", "timeentry", "add manual time entry", secDrill, false, false},
+	{ctxDrill, "p", "priority", "cycle priority low/med/high", secDrill, true, false},
+	{ctxDrill, "a", "add", "new task in it", secDrill, true, false},
+	{ctxDrill, "r", "edit", "rename task", secDrill, true, false},
+	{ctxDrill, "x", "delete", "delete task", secDrill, true, true},
+	{ctxDrill, "esc", "back", "back to the list", secDrill, true, false},
 
 	// ── Learnings ────────────────────────────────────────────────────────
 
@@ -159,8 +183,14 @@ func (m model) currentKeyCtx() keyCtx {
 		}
 		return ctxTasksList
 	case tabProjects:
+		if m.projectTaskMode {
+			return ctxProjectDrill
+		}
 		return ctxProjects
 	case tabTags:
+		if m.tagTaskMode {
+			return ctxTagDrill
+		}
 		return ctxTags
 	case tabStats:
 		return ctxStats

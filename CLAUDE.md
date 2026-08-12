@@ -60,7 +60,7 @@ Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file co
 
 - **`model.go`** — the `model` struct (large, flat), all the enums (`tab`, `appMode`, `pane`, sort modes), message types, `initialModel`, undo stack, and most pure model-mutation/lookup helpers.
 - **`model_layout.go`** — `model`-method geometry helpers split out of `model.go`: detail-scroll cursor estimation (`estimateDetailCursorLine`), list-offset clamping, and the detail/list height math (`detailVisible`, `listVisible`, `maxDetailHeight`, the per-page `detailPageNContentHeight`). Pairs with the pure width/height math in `layout.go`.
-- **`update.go`** — top-level `Update`, the normal-mode list key handling, tab switching, editor launching, self-update plumbing.
+- **`update.go`** — top-level `Update`, the normal-mode list key handling, tab switching, editor launching, self-update plumbing. Row-level task keys (`d`/`t`/`p`/`T`/`r`/`x`) gate on `drilledIntoTasks()` so the Tasks tab and both drill-in lists stay one behaviour, not three.
 - **`update_detail.go`** — `Update` handlers for the detail pane (`updateDetail`, detail cursor moves, `detailAdd`/`detailDelete`, `startEditing`); the input-side mirror of `view_detail.go`.
 - **`update_modes.go`** — `Update` handlers for the text-entry / search modes (`updateInput`, `updateSearch`, `updateEditTitle`, etc.). When adding a modal interaction, the handler usually lives here.
 - **`view.go`** — top-level `View` + the Tasks tab and shared rendering helpers; dispatches to `view_lists.go` (projects/tags/stats), `view_calendar.go`, `view_detail.go`.
@@ -83,6 +83,8 @@ Standard Bubble Tea MVU (`Model`/`Init`/`Update`/`View`), but the single-file co
 - `m.markCacheDirty()` — caches only, no undo, no `dirty` flag.
 
 `refreshCaches()` rebuilds derived data; it also calls `followTask` so the cursor stays on the same task ID across re-sorts. Tasks are addressed by **string ID**, not slice position — use `findTodoByID` / `currentTodoIndex`, since sorting/filtering constantly reorders the slice.
+
+One consequence worth knowing: the **drill-in lists** (Tags/Projects `enter` → the row's tasks, `drillTaskList`) are *not* cached — they re-derive from the store on every read, so a mutation re-sorts them before `markModified` can note which task the cursor was on. `updateList` therefore anchors the drill cursor itself: it captures the task ID up front and re-follows it after the key, unless the key moved the cursor on purpose. Add a mutating key to the drill and you inherit that; add a cache for the drill list and you can drop it.
 
 **2. Global theme state.** lipgloss styles are **package-level vars** reassigned by `applyTheme(theme)` (called at startup and on theme switch). Rendering code reads these globals directly; it does not receive a style set. Switching theme = call `applyTheme` with a different palette from `themes`. `init()` in `styles.go` applies `themes[0]` so styles are never nil in tests.
 

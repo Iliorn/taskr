@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -330,6 +331,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if nm, ok := newModel.(model); ok {
+		nm.clampDrillCursor()
 		if nm.dirty {
 			nm.dirty = false
 			nm.savePending = true
@@ -582,6 +584,18 @@ func (m model) updateHelp(msg tea.Msg) (tea.Model, tea.Cmd) {
 // ── List pane ─────────────────────────────────────────────────────────────────
 
 func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// The Tasks list is served from a cache that markModified refreshes after
+	// it has noted which task the cursor was on. A drill-in list has no such
+	// cache — it re-derives from the store, so completing a task re-sorts the
+	// list out from under the cursor before anything can anchor it. Note the
+	// task here, and put the cursor back on it below unless the key was a
+	// navigation key that moved the cursor on purpose.
+	anchorID, anchorCursor := "", m.cursor
+	if _, drilled := m.drillTaskList(); drilled {
+		if t := m.currentTodo(); t != nil {
+			anchorID = t.ID
+		}
+	}
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "q": // ctrl+c is handled globally in dispatch
@@ -621,6 +635,10 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "f":
+			if m.tab == tabTags {
+				m.filterTasksByCurrentTag()
+				return m, nil
+			}
 			if m.tab == tabTasks && !m.showHistory {
 				m.focusFilter = !m.focusFilter
 				if m.focusFilter {
@@ -719,7 +737,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.calendar.selected = startOfDay(time.Now())
 				m.calendar.entryCursor = 0
 				m.calendar.focusTimeline = false
-			} else if m.tab == tabTasks {
+			} else if m.tab == tabTasks || m.drilledIntoTasks() {
 				if t := m.currentTodo(); t != nil {
 					// History view: only allow stopping a running
 					// timer — a done task shouldn't accrue new tracked
@@ -757,7 +775,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Manual time entry — log work that wasn't captured by the live
 			// timer. Available on the Tasks tab so the user can backfill
 			// before marking a task done.
-			if m.tab == tabTasks && !m.showHistory {
+			if (m.tab == tabTasks && !m.showHistory) || m.drilledIntoTasks() {
 				if t := m.currentTodo(); t != nil {
 					m.pendingEntryTaskID = t.ID
 					m.mode = modeAddTimeEntry
@@ -818,9 +836,14 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleListDelete()
 
 		case "a":
-			if m.tab == tabTasks && !m.showHistory {
+			// Quick-add, pre-seeded with the grouping you are standing in: on
+			// the Tags/Projects tab the new task lands in the tag or project
+			// you are looking at, so capturing into it costs one key instead
+			// of a tab switch and a remembered spelling.
+			if seed, ok := m.quickAddSeed(); ok {
 				m.mode = modeInput
-				m.textInput.SetValue("")
+				m.textInput.SetValue(seed)
+				m.textInput.SetCursor(len([]rune(seed)))
 				// Syntax lives in the persistent hint line under the input
 				// (buildFooterContent) — a placeholder vanishes on the first
 				// keystroke, exactly when the syntax reference is needed.
@@ -830,7 +853,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "d":
-			if m.tab == tabTasks {
+			if m.tab == tabTasks || m.drilledIntoTasks() {
 				if t := m.currentTodo(); t != nil {
 					// Un-marking a done task is a state change the user
 					// rarely means (usually a stray 'd' on a completed row)
@@ -848,7 +871,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// disappear from active and the cursor would land on
 					// the next row — decrement so it lands on the previous
 					// one instead.
-					if t.ParentID == "" && m.cursor > 0 {
+					if m.tab == tabTasks && t.ParentID == "" && m.cursor > 0 {
 						m.cursor--
 					}
 				}
@@ -865,7 +888,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "p":
-			if m.tab == tabTasks && !m.showHistory {
+			if (m.tab == tabTasks && !m.showHistory) || m.drilledIntoTasks() {
 				if t := m.currentTodo(); t != nil {
 					m.pushUndo("cycle priority", t.ID)
 					switch t.Priority {
@@ -880,6 +903,10 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+	}
+
+	if anchorID != "" && m.cursor == anchorCursor {
+		m.followTask(anchorID)
 	}
 
 	switch m.tab {
@@ -904,6 +931,116 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // ── List helper methods ───────────────────────────────────────────────────────
+
+// quickAddSeed reports whether 'a' opens the quick-add field here, and with
+// what text already in it. The Tags and Projects tabs seed the token for the
+// row you are on — including while drilled into its tasks, where adding one
+// more task to the same group is the obvious next move. A project whose name
+// carries a space cannot round-trip through quick-add's whitespace
+// tokenisation (see suggest.go), so it seeds an empty field rather than a line
+// that would parse wrong.
+func (m model) quickAddSeed() (string, bool) {
+	switch m.tab {
+	case tabTasks:
+		return "", !m.showHistory
+	case tabTags:
+		tags := m.getFilteredTagsForTab()
+		if m.tagTabCursor >= len(tags) || tags[m.tagTabCursor] == untaggedKey {
+			return "", true
+		}
+		return "#" + tags[m.tagTabCursor] + " ", true
+	case tabProjects:
+		projects := m.allProjectsForList()
+		if m.projectCursor >= len(projects) || strings.ContainsFunc(projects[m.projectCursor], unicode.IsSpace) {
+			return "", true
+		}
+		return "@" + projects[m.projectCursor] + " ", true
+	}
+	return "", false
+}
+
+// startEditTaskTitle opens the rename editor for the task under the cursor —
+// shared by the Tasks tab and both drill-in lists, so a task is renamed the
+// same way wherever you meet it.
+func (m model) startEditTaskTitle() (tea.Model, tea.Cmd) {
+	t := m.currentTodo()
+	if t == nil {
+		return m, nil
+	}
+	m.mode = modeEditTitle
+	m.textInput.SetValue(t.Title)
+	m.textInput.Placeholder = tr("Edit task title...")
+	m.textInput.Focus()
+	return m, textinput.Blink
+}
+
+// stageDeleteTask stages the delete confirm for the task under the cursor,
+// counting the subtasks that would go with it.
+func (m model) stageDeleteTask() (tea.Model, tea.Cmd) {
+	t := m.currentTodo()
+	if t == nil {
+		return m, nil
+	}
+	m.mode = modeConfirm
+	m.confirmOnYes = (*model).confirmDeleteTask
+	m.pendingDeleteID = t.ID
+	if n := len(m.descendantIDs(t.ID)) - 1; n > 0 {
+		m.confirmMsg = fmt.Sprintf(tr("Delete '%s' and %d subtask(s)? (y/n)"), t.Title, n)
+	} else {
+		m.confirmMsg = fmt.Sprintf(tr("Delete '%s'? (y/n)"), t.Title)
+	}
+	return m, nil
+}
+
+// clampDrillCursor keeps the drill cursor inside its list. The list shrinks
+// from under it whenever a task is deleted, completed out of the tag, or the
+// tag is removed from it, and a cursor past the end selects nothing at all.
+func (m *model) clampDrillCursor() {
+	tasks, drilled := m.drillTaskList()
+	if !drilled {
+		return
+	}
+	if m.cursor >= len(tasks) {
+		m.cursor = len(tasks) - 1
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+}
+
+// drilledIntoTasks reports whether the cursor has walked into a row's task
+// list on the Tags or Projects tab. The row-level keys (d/t/p/T/r/x) gate on
+// it, so "the cursor is on a task" has one answer instead of a per-key list of
+// tabs that drifts apart.
+func (m model) drilledIntoTasks() bool {
+	_, drilled := m.drillTaskList()
+	return drilled
+}
+
+// filterTasksByCurrentTag jumps to the Tasks tab filtered by the tag under the
+// Tags-tab cursor — the tab's old enter behaviour, now on f, since enter drills
+// into the tag's tasks instead.
+func (m *model) filterTasksByCurrentTag() {
+	tags := m.getFilteredTagsForTab()
+	if m.tagTabCursor >= len(tags) {
+		return
+	}
+	tag := tags[m.tagTabCursor]
+	m.switchTab(tabTasks)
+	// A fresh filter, so start at the top rather than the Tasks cursor
+	// switchTab just restored.
+	if tag == untaggedKey {
+		m.searchQuery = untaggedKey
+	} else {
+		m.searchQuery = "#" + tag
+	}
+	// switchTab already moved us to Tasks, so the entry lands on the tab the
+	// search filters.
+	m.pushFocus(stateSearch)
+	m.cursor = 0
+	m.listOffset = 0
+	m.markFilterDirty()
+}
 
 // tabForNumberKey maps a digit shortcut to its tab. It is the one place the
 // number→tab assignment lives, so the list pane and the detail pane can't
@@ -1153,7 +1290,11 @@ func (m *model) moveCursorUp() {
 			m.moveCalendarDay(-7)
 		}
 	case tabTags:
-		if n := len(m.getFilteredTagsForTab()); n > 0 {
+		if m.tagTaskMode {
+			if n := len(m.currentTagTasks()); n > 0 {
+				m.cursor = (m.cursor - 1 + n) % n
+			}
+		} else if n := len(m.getFilteredTagsForTab()); n > 0 {
 			m.tagTabCursor = (m.tagTabCursor - 1 + n) % n
 		}
 	case tabSettings:
@@ -1188,7 +1329,11 @@ func (m *model) moveCursorDown() {
 			m.moveCalendarDay(7)
 		}
 	case tabTags:
-		if n := len(m.getFilteredTagsForTab()); n > 0 {
+		if m.tagTaskMode {
+			if n := len(m.currentTagTasks()); n > 0 {
+				m.cursor = (m.cursor + 1) % n
+			}
+		} else if n := len(m.getFilteredTagsForTab()); n > 0 {
 			m.tagTabCursor = (m.tagTabCursor + 1) % n
 		}
 	case tabSettings:
@@ -1219,6 +1364,9 @@ func (m *model) listNavTarget() (*int, int) {
 	case tabTasks:
 		return &m.cursor, m.currentTaskListLen()
 	case tabTags:
+		if m.tagTaskMode {
+			return &m.cursor, len(m.currentTagTasks())
+		}
 		return &m.tagTabCursor, len(m.getFilteredTagsForTab())
 	case tabProjects:
 		if m.projectTaskMode {
@@ -1325,22 +1473,23 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 			m.pushFocus(stateDetailPane)
 		}
 	case tabTags:
-		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
-			tag := tags[m.tagTabCursor]
-			m.switchTab(tabTasks)
-			// Drilling in applies a fresh filter, so start at the top rather
-			// than the Tasks cursor switchTab just restored.
-			if tag == untaggedKey {
-				m.searchQuery = untaggedKey
-			} else {
-				m.searchQuery = "#" + tag
+		// Enter walks in one level at a time, exactly like the Projects tab:
+		// tag → its tasks → the selected task's detail. The old "jump to the
+		// Tasks tab filtered by this tag" moved to f, which is what it always
+		// was: a filter.
+		if !m.tagTaskMode {
+			if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
+				m.tagTaskMode = true
+				m.cursor = 0
+				m.pushFocus(stateTagDrill)
 			}
-			// switchTab already moved us to Tasks, so the entry lands on
-			// the tab the search filters.
-			m.pushFocus(stateSearch)
-			m.cursor = 0
-			m.listOffset = 0
-			m.markFilterDirty()
+		} else if t := m.currentTodo(); t != nil {
+			m.detailTaskID = t.ID
+			m.detailStack = nil
+			m.pane = paneDetail
+			m.detail = detailState{field: fieldStartDate}
+			m.invalidateDetailCache()
+			m.pushFocus(stateDetailPane)
 		}
 	case tabStats:
 		m.statsRange = (m.statsRange + 1) % statsRangeCount
@@ -1499,6 +1648,9 @@ func (m model) handleListRename() (tea.Model, tea.Cmd) {
 			}
 		}
 	case tabTags:
+		if m.tagTaskMode {
+			return m.startEditTaskTitle()
+		}
 		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) && tags[m.tagTabCursor] != untaggedKey {
 			m.editingTagName = tags[m.tagTabCursor]
 			m.mode = modeEditTag
@@ -1509,16 +1661,13 @@ func (m model) handleListRename() (tea.Model, tea.Cmd) {
 		}
 	case tabTasks:
 		if !m.showHistory {
-			if t := m.currentTodo(); t != nil {
-				m.mode = modeEditTitle
-				m.textInput.SetValue(t.Title)
-				m.textInput.Placeholder = tr("Edit task title...")
-				m.textInput.Focus()
-				return m, textinput.Blink
-			}
+			return m.startEditTaskTitle()
 		}
 	case tabProjects:
-		if !m.projectTaskMode {
+		if m.projectTaskMode {
+			return m.startEditTaskTitle()
+		}
+		{
 			if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
 				m.editingProjectName = projects[m.projectCursor]
 				m.mode = modeEditProjectInline
@@ -1547,22 +1696,29 @@ func (m model) handleListDelete() (tea.Model, tea.Cmd) {
 			}
 		}
 	case tabTags:
+		if m.tagTaskMode {
+			return m.stageDeleteTask()
+		}
 		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) && tags[m.tagTabCursor] != untaggedKey {
 			m.mode = modeConfirm
 			m.confirmOnYes = (*model).confirmDeleteTagGlobal
 			m.confirmMsg = fmt.Sprintf(tr("Delete tag '#%s' from ALL tasks? (y/n)"), tags[m.tagTabCursor])
 		}
-	case tabTasks:
-		if t := m.currentTodo(); t != nil {
-			m.mode = modeConfirm
-			m.confirmOnYes = (*model).confirmDeleteTask
-			m.pendingDeleteID = t.ID
-			if n := len(m.descendantIDs(t.ID)) - 1; n > 0 {
-				m.confirmMsg = fmt.Sprintf(tr("Delete '%s' and %d subtask(s)? (y/n)"), t.Title, n)
-			} else {
-				m.confirmMsg = fmt.Sprintf(tr("Delete '%s'? (y/n)"), t.Title)
-			}
+	case tabProjects:
+		if m.projectTaskMode {
+			return m.stageDeleteTask()
 		}
+		// The help has always advertised x as "delete globally" here, but
+		// nothing was wired to it. Clearing the project off its tasks is the
+		// mirror of the r rename, and leaves the tasks themselves alone.
+		if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
+			m.pendingProjectName = projects[m.projectCursor]
+			m.mode = modeConfirm
+			m.confirmOnYes = (*model).confirmDeleteProjectGlobal
+			m.confirmMsg = fmt.Sprintf(tr("Remove project '%s' from ALL its tasks? (y/n)"), projects[m.projectCursor])
+		}
+	case tabTasks:
+		return m.stageDeleteTask()
 	}
 	return m, nil
 }

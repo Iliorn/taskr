@@ -973,6 +973,35 @@ func (m *model) confirmDeleteTagGlobal() tea.Cmd {
 	return nil
 }
 
+// confirmDeleteProjectGlobal clears the pending project off every task
+// carrying it — the Projects-tab mirror of confirmDeleteTagGlobal. The tasks
+// survive; only the grouping goes, which is why it is not a task delete.
+func (m *model) confirmDeleteProjectGlobal() tea.Cmd {
+	name := m.pendingProjectName
+	m.pendingProjectName = ""
+	if name == "" {
+		return nil
+	}
+	// A stale row (nothing carries the project any more) must not leave an
+	// undo entry that restores nothing.
+	carried := false
+	for _, t := range m.tasks {
+		if t.Project == name {
+			carried = true
+			break
+		}
+	}
+	if !carried {
+		return nil
+	}
+	m.pushUndo("delete project")
+	m.markModified(m.renameProjectGlobally(name, "")...)
+	if projects := m.allProjectsForList(); m.projectCursor >= len(projects) && m.projectCursor > 0 {
+		m.projectCursor = len(projects) - 1
+	}
+	return nil
+}
+
 func (m *model) confirmDeleteProject() tea.Cmd {
 	if t := m.currentTodo(); t != nil {
 		m.pushUndo("remove project", t.ID)

@@ -14,6 +14,7 @@ type uiState uint8
 const (
 	stateDetailPane uiState = iota
 	stateProjectDrill
+	stateTagDrill
 	stateCalTimeline
 	stateHistory
 	stateFocusFilter
@@ -67,6 +68,8 @@ func (m *model) focusActive(e focusEntry) bool {
 		return m.pane == paneDetail
 	case stateProjectDrill:
 		return m.projectTaskMode
+	case stateTagDrill:
+		return m.tagTaskMode
 	case stateCalTimeline:
 		return m.calendar.focusTimeline
 	case stateHistory:
@@ -111,6 +114,9 @@ func (m *model) exitFocus(s uiState) {
 		m.invalidateDetailCache()
 	case stateProjectDrill:
 		m.projectTaskMode = false
+		m.cursor = 0
+	case stateTagDrill:
+		m.tagTaskMode = false
 		m.cursor = 0
 	case stateCalTimeline:
 		m.calendar.focusTimeline = false

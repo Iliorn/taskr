@@ -15,8 +15,8 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 - **Sequencing engine** — a weighted score (deadline + priority + size + age) decides the next-best task automatically; cycle `s` to switch between Sequence / Due / Size sort. Tune the weights in Settings (Relaxed / Balanced / Intense for each dimension)
 - **Dependency-aware ordering** — a task that blocks others inherits their urgency, so the prerequisite for an urgent task surfaces right above it (critical-path behaviour). In the list, `↥` marks a blocker (something depends on it) and `↧` marks a blocked task (waiting on an unfinished dependency)
 - **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
-- **Projects** — group tasks, Gantt timeline view
-- **Tags** — tag tasks, filter by tag, rename/delete globally
+- **Projects** — group tasks, Gantt timeline view. `enter` drills into a project's tasks, where the task keys (`d` done, `t` track, `p` priority, `r` rename, `x` delete, `enter` details) all work; `a` starts a new task already in that project, `x` on the project row clears the grouping off its tasks
+- **Tags** — tag tasks, rename/merge/delete globally, and work the tag's tasks in place: `enter` drills into them with the same task keys as the Tasks tab, `a` adds a task already carrying the tag, `f` shows the tag's tasks on the Tasks tab as a filter
 - **Board** — kanban view of your pending tasks: one column per stage plus Done. Stage names are yours to define — edit them in Settings → "Board columns" (comma-separated), or in `"stages"` in `~/.taskr/settings.json`; default Backlog / In progress / Review. Renaming a column takes its cards with it. `←/→` switch columns, `H`/`L` move the selected card between stages — into Done completes the task exactly like `d` would, out of Done reopens it (confirmed). Also `taskr edit <ref> --stage <name>` from the CLI
 - **Learnings** — attach takeaways to tasks in the detail view; recall them across tasks with `taskr learnings` (text or `#tag` filter, `--json`)
 - **Stats** — productivity overview with an activity heatmap
@@ -80,6 +80,8 @@ taskr
 | `tab` / `shift+tab` | Next / previous tab |
 | `1–7` | Jump straight to a tab (7 = Settings) |
 | `?` | Show all shortcuts |
+
+On the Tags and Projects tabs, `enter` walks in one level at a time — row → its tasks → the selected task's detail — and `esc` walks back out the same way. While you're inside, the row-level keys act on the task under the cursor, exactly as they do on the Tasks tab.
 
 ### Quick-add syntax
 

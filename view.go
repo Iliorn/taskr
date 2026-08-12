@@ -162,6 +162,11 @@ func withBorderTitle(rendered, title string, boxW int, focused bool) string {
 func (m model) detailPanelTitle() string {
 	switch m.tab {
 	case tabTags:
+		if m.pane == paneDetail {
+			if t := m.currentTodo(); t != nil {
+				return t.Title
+			}
+		}
 		tags := m.getFilteredTagsForTab()
 		if m.tagTabCursor < len(tags) {
 			tag := tags[m.tagTabCursor]
@@ -300,8 +305,9 @@ func (m model) View() string {
 
 		if detailContent != "" {
 			// The stacked detail only exists while it owns keystrokes on the
-			// enter-to-open tabs; the always-on previews (Tags/Stats) never do.
-			focused := m.pane == paneDetail
+			// enter-to-open tabs; the always-on previews (Tags/Stats) never do
+			// — except a drilled-into tag, whose task list the cursor is in.
+			focused := m.pane == paneDetail || (m.tab == tabTags && m.tagTaskMode)
 			dst := detailPanelStyle
 			if focused {
 				dst = detailPanelFocusedStyle
@@ -751,6 +757,17 @@ func (m model) renderKeyHints(w int) string {
 
 func (m model) buildDetailContent() string {
 	switch {
+	// A task opened out of the tag drill takes the pane over — same as the
+	// Projects tab, where the right column swaps the Gantt for the task
+	// detail. Without this the pane would keep showing the tag summary while
+	// the detail keyset was live.
+	case m.tab == tabTags && m.pane == paneDetail:
+		if t := m.currentTodo(); t != nil {
+			return m.renderDetailPage1(t) + "\n" +
+				m.renderDetailPage2(t) + "\n" +
+				m.renderDetailPage3(t)
+		}
+		return strings.Join(m.buildTagDetailLines(), "\n")
 	case m.tab == tabTags:
 		lines := m.buildTagDetailLines()
 		if len(lines) == 0 {
@@ -856,7 +873,9 @@ func (m model) buildSideBySide(w, outerH int) string {
 	detailLines = fitLines(detailLines, innerH, detailW-2)
 
 	listStyle, detailStyle := listPanelFocusedStyle, detailPanelStyle
-	detailFocused := m.pane == paneDetail
+	// Drilling into a tag moves the cursor into the right column, so the accent
+	// border has to move with it.
+	detailFocused := m.pane == paneDetail || (m.tab == tabTags && m.tagTaskMode)
 	if detailFocused {
 		listStyle, detailStyle = listPanelStyle, detailPanelFocusedStyle
 	}
@@ -1552,32 +1571,16 @@ func (m model) buildTagDetailLines() []string {
 
 	untagged := tag == untaggedKey
 
-	// One pass: split active/done/overdue, tally co-occurring tags, and collect
-	// the matching task IDs to list below.
-	var matches []string
+	// The task list comes from tagTaskList — the same ordered slice the drill
+	// cursor walks, so the row highlighted here is the row the keys act on.
+	// Counts and co-occurring tags are tallied off it.
+	tasks := m.tagTaskList(tag)
+	matches := make([]string, 0, len(tasks))
 	active, done, overdue := 0, 0, 0
 	cooccur := make(map[string]int)
-	for id, t := range m.tasks {
-		// Mirror selectActiveDone: the Tasks tab list is top-level
-		// only, so the detail count must not include subtasks.
-		if t.ParentID != "" {
-			continue
-		}
-		match := false
-		if untagged {
-			match = len(t.Tags) == 0
-		} else {
-			for _, tt := range t.Tags {
-				if tt == tag {
-					match = true
-					break
-				}
-			}
-		}
-		if !match {
-			continue
-		}
-		matches = append(matches, id)
+	for i := range tasks {
+		t := tasks[i]
+		matches = append(matches, t.ID)
 		if t.Status == todo.Done {
 			done++
 		} else {
@@ -1599,10 +1602,13 @@ func (m model) buildTagDetailLines() []string {
 		countWord = tr("%d tasks")
 	}
 	hint := "  (" + fmt.Sprintf(countWord, count)
-	if untagged {
-		hint += tr(" · enter: filter)")
-	} else {
-		hint += tr(" · enter: filter · r: rename)")
+	switch {
+	case m.tagTaskMode:
+		hint += tr(" · d: done · t: track · enter: details · esc: back)")
+	case untagged:
+		hint += tr(" · enter: open · f: filter)")
+	default:
+		hint += tr(" · enter: open · f: filter · r: rename)")
 	}
 	b.WriteString(dimStyle.Render(truncate(hint, availW)) + "\n")
 
@@ -1653,29 +1659,6 @@ func (m model) buildTagDetailLines() []string {
 		return strings.Split(b.String(), "\n")
 	}
 
-	// Order: overdue first, then active, then done; alphabetical within each
-	// group so the height-capped list always shows the most relevant tasks.
-	cat := func(t *todo.Todo) int {
-		switch {
-		case t.Status == todo.Done:
-			return 2
-		case t.IsOverdue():
-			return 0
-		default:
-			return 1
-		}
-	}
-	sort.SliceStable(matches, func(a, b int) bool {
-		ta, tb := m.get(matches[a]), m.get(matches[b])
-		if ta == nil || tb == nil {
-			return false
-		}
-		if ca, cb := cat(ta), cat(tb); ca != cb {
-			return ca < cb
-		}
-		return strings.ToLower(ta.Title) < strings.ToLower(tb.Title)
-	})
-
 	// The detail pane is height-capped (see applyDetailScroll). Rather than let
 	// the generic scroll indicator hide the overflow, cap the list ourselves and
 	// state how many are hidden.
@@ -1688,16 +1671,35 @@ func (m model) buildTagDetailLines() []string {
 		taskBudget = 1
 	}
 	hidden := 0
+	sel := -1
+	if m.tagTaskMode {
+		sel = m.cursor
+	}
 	if len(matches) > taskBudget {
 		shown := taskBudget - 1 // reserve a line for the "and N more" notice
 		if shown < 0 {
 			shown = 0
 		}
 		hidden = len(matches) - shown
-		matches = matches[:shown]
+		// Window the capped list around the cursor, so drilling past the
+		// budget scrolls instead of parking the selection out of sight.
+		start := 0
+		if sel >= shown {
+			start = sel - shown + 1
+		}
+		if start+shown > len(matches) {
+			start = len(matches) - shown
+		}
+		if start < 0 {
+			start = 0
+		}
+		matches = matches[start : start+shown]
+		if sel >= 0 {
+			sel -= start
+		}
 	}
 
-	for _, id := range matches {
+	for i, id := range matches {
 		t := m.get(id)
 		if t == nil {
 			continue
@@ -1717,8 +1719,15 @@ func (m model) buildTagDetailLines() []string {
 		if t.Project != "" {
 			projStr = "  [" + t.Project + "]"
 		}
-		line := truncate(fmt.Sprintf("  %s %s%s%s", status, t.Title, dueStr, projStr), availW)
+		lead := "  "
+		if i == sel {
+			lead = "→ "
+		}
+		line := truncate(fmt.Sprintf("%s%s %s%s%s", lead, status, t.Title, dueStr, projStr), availW)
 		switch {
+		case i == sel:
+			b.WriteString(selectedStyle.Render(line) + "\n")
+			continue
 		case t.IsOverdue():
 			b.WriteString(overdueStyle.Render(line) + "\n")
 		case t.Status == todo.Done:

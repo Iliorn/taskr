@@ -38,6 +38,7 @@ func TestKeymapNoIntraContextCollision(t *testing.T) {
 	ctxs := []keyCtx{
 		ctxTasksList, ctxTasksDetail, ctxProjects, ctxTags, ctxBoard,
 		ctxStats, ctxCalendar, ctxCalendarTimeline, ctxSettings,
+		ctxTagDrill, ctxProjectDrill,
 	}
 	for _, ctx := range ctxs {
 		seen := map[string]string{} // key -> action
@@ -81,6 +82,7 @@ func TestKeymapGeneratesHintsAndHelp(t *testing.T) {
 		"tasks": ctxTasksList, "detail": ctxTasksDetail, "projects": ctxProjects,
 		"tags": ctxTags, "board": ctxBoard, "calendar": ctxCalendar,
 		"calendarTimeline": ctxCalendarTimeline, "settings": ctxSettings,
+		"tagDrill": ctxTagDrill, "projectDrill": ctxProjectDrill,
 	}
 	for name, ctx := range ctxs {
 		if hintString(ctx, false) == "" {
@@ -169,5 +171,37 @@ func TestKeymapNavigateSkipsStats(t *testing.T) {
 	m.moveCursorDown()
 	if m.cursor != before {
 		t.Errorf("Stats grew a cursor (%d → %d) — re-register ↑/↓ for ctxStats", before, m.cursor)
+	}
+}
+
+// The drill-in contexts are only honest if the keys they advertise reach a
+// task. Assert the live context follows the drill state and that the row-level
+// keys dispatch there, both of which the registry now promises.
+func TestKeymapDrillContextsMatchState(t *testing.T) {
+	tagged := todo.New("Alpha")
+	tagged.AddTag("home")
+	m := modelWithTasks(t, tagged)
+
+	m.tab = tabTags
+	if got := m.currentKeyCtx(); got != ctxTags {
+		t.Errorf("tag list ctx = %d, want ctxTags", got)
+	}
+	m.tagTaskMode = true
+	if got := m.currentKeyCtx(); got != ctxTagDrill {
+		t.Errorf("drilled-in ctx = %d, want ctxTagDrill", got)
+	}
+	if m.currentTodo() == nil {
+		t.Error("the drill context is live but no task is under the cursor")
+	}
+	cursor, n := m.listNavTarget()
+	if cursor == nil || n == 0 {
+		t.Error("home/end·pgup/pgdn is advertised in the drill but has no list to move")
+	}
+
+	m = modelWithTasks(t, todo.New("Alpha"))
+	m.tab = tabProjects
+	m.projectTaskMode = true
+	if got := m.currentKeyCtx(); got != ctxProjectDrill {
+		t.Errorf("project drill ctx = %d, want ctxProjectDrill", got)
 	}
 }

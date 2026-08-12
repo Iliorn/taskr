@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -335,5 +336,43 @@ func TestTagBarPartialFillGlyphs(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected a partial-block glyph (▏▎▍▌▋▊▉) in the tag bar output, got:\n%s", plain)
+	}
+}
+
+// tagTaskList is what both the tag pane and the drill cursor read, so its
+// order is a contract: overdue first, then active, then done, alphabetical
+// inside each group, and never a subtask (the tab counts top-level only).
+func TestTagTaskListOrder(t *testing.T) {
+	overdue := todo.New("Zulu overdue")
+	overdue.AddTag("home")
+	overdue.DueDate = time.Now().Add(-48 * time.Hour)
+	active := todo.New("alpha active") // todo.New capitalizes: "Alpha active"
+	active.AddTag("home")
+	other := todo.New("Beta active")
+	other.AddTag("home")
+	finished := todo.New("Aardvark done")
+	finished.AddTag("home")
+	finished.Status = todo.Done
+	elsewhere := todo.New("Not tagged")
+	sub := todo.NewSubtask("Subtask", active.ID)
+	sub.AddTag("home")
+
+	m := modelWithTasks(t, overdue, active, other, finished, elsewhere, sub)
+
+	var got []string
+	for _, task := range m.tagTaskList("home") {
+		got = append(got, task.Title)
+	}
+	want := []string{"Zulu overdue", "Alpha active", "Beta active", "Aardvark done"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("tagTaskList = %v, want %v", got, want)
+	}
+
+	var untagged []string
+	for _, task := range m.tagTaskList(untaggedKey) {
+		untagged = append(untagged, task.Title)
+	}
+	if !reflect.DeepEqual(untagged, []string{"Not tagged"}) {
+		t.Errorf("untagged list = %v, want just the untagged top-level task", untagged)
 	}
 }
