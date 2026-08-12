@@ -18,8 +18,15 @@ go vet ./...                                          # vet
 golangci-lint run ./...                               # lint (config in .golangci.yml)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `go vet` + `go test` + `go build` and a
-separate `golangci-lint` job. The check suite is `go test`, `go vet`, and
+CI (`.github/workflows/ci.yml`) runs `go vet` + `go test` + `go build` on the
+platforms taskr ships — ubuntu, windows and macos runners — plus a `cross` job
+that cross-compiles the release targets (linux/amd64, windows/amd64,
+darwin/arm64+amd64) and a separate `golangci-lint` job. The matrix is the point:
+Linux-only CI meant the Windows binary was first compiled by the release job,
+after the tag existed, and its platform-specific paths were never run. Note that
+`os.UserHomeDir` reads `%USERPROFILE%` on Windows and `$HOME` elsewhere, so
+`TestMain` sets both — `TestStorageStaysInsideTheTestHome` fails loudly if the
+redirect ever stops covering a platform. The check suite is `go test`, `go vet`, and
 golangci-lint (standard linters; `.golangci.yml` excludes the conventional
 ignored errors and the opinionated QF* style nits). Tests live alongside code
 (`*_test.go`) and cover storage, helpers, layout, tags, stats, and the
