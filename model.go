@@ -323,8 +323,13 @@ type model struct {
 	tagTabSearchQuery    string
 	listOffset           int
 	helpScroll           int
-	tabViews             [numTabs]tabView
-	projectTaskMode      bool
+	// helpFilter narrows the help overlay's rows; helpFiltering is true while
+	// the user is typing it, so the overlay's own keys (q, space, ?) don't get
+	// swallowed by the filter and vice versa.
+	helpFilter      string
+	helpFiltering   bool
+	tabViews        [numTabs]tabView
+	projectTaskMode bool
 	// tagTaskMode is the Tags-tab mirror of projectTaskMode: the cursor has
 	// left the tag list and is walking the selected tag's tasks, where the
 	// row-level keys (d/t/p/r/x/enter) act on the task under it.

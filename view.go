@@ -1144,11 +1144,42 @@ const helpChromeLines = 7
 // section plus the date-input reference — as one styled line per slice entry,
 // with a blank line between sections. Title and footer are chrome and live in
 // renderHelpFullscreen. Shared with the scroll clamp so both agree on length.
-func (m model) helpBodyLines() []string {
-	type helpSec struct {
-		title string
-		keys  [][2]string
+// helpSec is one titled block of the help overlay: a section name and its
+// key/description rows.
+type helpSec struct {
+	title string
+	keys  [][2]string
+}
+
+// filterHelpSections keeps the rows matching query — case-insensitively, in the
+// key, the description or the section title, so both "x" and "delete" and
+// "board" find something — and drops sections left with no rows. An empty query
+// keeps everything.
+func filterHelpSections(sections []helpSec, query string) []helpSec {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return sections
 	}
+	out := make([]helpSec, 0, len(sections))
+	for _, sec := range sections {
+		if strings.Contains(strings.ToLower(sec.title), q) {
+			out = append(out, sec)
+			continue
+		}
+		var kept [][2]string
+		for _, kv := range sec.keys {
+			if strings.Contains(strings.ToLower(kv[0]), q) || strings.Contains(strings.ToLower(kv[1]), q) {
+				kept = append(kept, kv)
+			}
+		}
+		if len(kept) > 0 {
+			out = append(out, helpSec{sec.title, kept})
+		}
+	}
+	return out
+}
+
+func (m model) helpBodyLines() []string {
 	// Key sections are generated from the keymap registry (keymap.go), so the
 	// help overlay can't drift from the footer hints or from dispatch.
 	var sections []helpSec
@@ -1163,6 +1194,29 @@ func (m model) helpBodyLines() []string {
 			sections = append(sections, helpSec{tr(title), keys})
 		}
 	}
+	// Reference sections: the token grammars. They lived only in the README and
+	// in the one-line hint under the input, which is gone the moment you need to
+	// look something up. Keep in sync with parseQuickAdd (helpers.go) and
+	// compileSearch — TestHelpDocumentsEveryToken asserts every token the
+	// parsers accept appears here.
+	sections = append(sections, helpSec{tr("Quick-add syntax"), [][2]string{
+		{"#tag", tr("add a tag (existing tags are suggested; tab inserts)")},
+		{"@project", tr("put it in a project")},
+		{"due:tomorrow", tr("set a due date (see Date input below)")},
+		{"p:high", tr("priority: high / medium / low (p:h, p:m, p:l)")},
+		{"s:l", tr("size: s / m / l (also size:large)")},
+		{"r:weekly", tr("repeat: daily / weekdays / weekly / monthly / yearly")},
+		{"dep:^", tr("block on the last added task (or dep:<id prefix>)")},
+	}})
+	sections = append(sections, helpSec{tr("Search filters"), [][2]string{
+		{"#tag", tr("only tasks carrying the tag")},
+		{"@project", tr("only tasks in the project")},
+		{"p:high", tr("only that priority")},
+		{"due:<friday", tr("due before a date (also due:>, due:<=, due:>=, due:date)")},
+		{"overdue", tr("only overdue tasks")},
+		{"grcrs", tr("anything else fuzzy-matches the title (→ \"Buy groceries\")")},
+	}})
+
 	// Reference section: the annotation glyphs a task row can carry. Not key
 	// bindings, so like Date input it lives outside the keymap registry. Keep in
 	// sync with renderTaskLineWithSet.
@@ -1187,6 +1241,13 @@ func (m model) helpBodyLines() []string {
 		{"monday..sunday", tr("next occurrence of weekday")},
 		{"+3d / +2w / +1m", tr("relative days/weeks/months")},
 	}})
+
+	// A filter narrows the rows and drops the sections left empty, so a query
+	// answers "which key was it?" without scrolling the whole registry.
+	sections = filterHelpSections(sections, m.helpFilter)
+	if len(sections) == 0 {
+		return []string{helpStyle.Render("  " + tr("No shortcut matches that."))}
+	}
 
 	var lines []string
 	for _, section := range sections {
@@ -1242,7 +1303,17 @@ func (m model) renderHelpFullscreen() string {
 	defer putBuilder(b)
 
 	b.WriteString("\n")
-	b.WriteString(titleStyle.Render("  "+tr("Keyboard shortcuts")) + "\n")
+	title := titleStyle.Render("  " + tr("Keyboard shortcuts"))
+	if m.helpFilter != "" || m.helpFiltering {
+		caret := ""
+		if m.helpFiltering {
+			caret = "▌"
+		}
+		// A plain inline suffix, not searchStyle — that one draws the boxed
+		// input used at the bottom of the screen.
+		title += helpStyle.Render("   /") + selectedStyle.Render(m.helpFilter+caret)
+	}
+	b.WriteString(title + "\n")
 	b.WriteString("\n")
 
 	for _, line := range body[scroll:end] {
@@ -1250,7 +1321,12 @@ func (m model) renderHelpFullscreen() string {
 	}
 
 	b.WriteString("\n")
-	hint := tr("Press ? or esc to close")
+	hint := tr("/ filter  ·  ? or esc to close")
+	if m.helpFiltering {
+		hint = tr("type to filter  ·  enter keep  ·  esc clear")
+	} else if m.helpFilter != "" {
+		hint = tr("/ filter  ·  esc clear  ·  ? to close")
+	}
 	if len(body) > vh {
 		var scrollHint string
 		switch {

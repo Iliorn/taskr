@@ -79,7 +79,7 @@ taskr
 | `u` | Undo |
 | `tab` / `shift+tab` | Next / previous tab |
 | `1–7` | Jump straight to a tab (7 = Settings) |
-| `?` | Show all shortcuts |
+| `?` | Show all shortcuts (`/` filters them) |
 
 On the Tags and Projects tabs, `enter` walks in one level at a time — row → its tasks → the selected task's detail — and `esc` walks back out the same way. While you're inside, the row-level keys act on the task under the cursor, exactly as they do on the Tasks tab.
 
@@ -98,10 +98,10 @@ The `/` filter tokenises on whitespace and ANDs the tokens together, reusing the
 ```
 @work p:high due:<friday        # high-priority Work tasks due before Friday
 #urgent overdue                 # overdue tasks tagged urgent
-grcry                           # fuzzy title match → "Buy groceries"
+grcrs                           # fuzzy title match → "Buy groceries"
 ```
 
-Supported tokens: `#tag`, `@project`, `p:high/medium/low`, `due:<date` / `due:>date` / `due:date` (`<=`/`>=` too), and the bare keyword `overdue`. Anything left over fuzzy-matches the title (subsequence, so `dply` finds "Deploy release").
+Supported tokens: `#tag`, `@project`, `p:high/medium/low`, `due:<date` / `due:>date` / `due:date` (`<=`/`>=` too), and the bare keyword `overdue`. Anything left over fuzzy-matches the title (a subsequence, so `dply` finds "Deploy release" — every letter must appear in order, which is why `grcrs` finds "Buy groceries" and `grcry` does not).
 
 ### Date formats
 

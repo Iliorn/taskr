@@ -563,20 +563,72 @@ func (m *model) touchRestored(ids []string) {
 // ── Help overlay ──────────────────────────────────────────────────────────────
 
 func (m model) updateHelp(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	// While typing a filter the printable keys belong to it, so the overlay's
+	// own single-letter keys are off the table until enter or esc ends the
+	// typing. Scrolling stays live — narrowing and then scrolling the result is
+	// the normal way to use this.
+	if m.helpFiltering {
 		switch key.String() {
-		case "?", "esc", "q":
-			m.mode = modeNormal
+		case "enter":
+			m.helpFiltering = false // keep the filter, hand the keys back
+			return m, nil
+		case "esc":
+			m.helpFiltering = false
+			m.helpFilter = ""
 			m.helpScroll = 0
-		case "up":
-			m.helpScroll = clampHelpScroll(m.helpScroll-1, len(m.helpBodyLines()), m.helpViewportH())
-		case "down":
-			m.helpScroll = clampHelpScroll(m.helpScroll+1, len(m.helpBodyLines()), m.helpViewportH())
-		case "pgup":
-			m.helpScroll = clampHelpScroll(m.helpScroll-m.helpViewportH(), len(m.helpBodyLines()), m.helpViewportH())
-		case "pgdown", " ":
-			m.helpScroll = clampHelpScroll(m.helpScroll+m.helpViewportH(), len(m.helpBodyLines()), m.helpViewportH())
+			return m, nil
+		case "backspace":
+			if r := []rune(m.helpFilter); len(r) > 0 {
+				m.helpFilter = string(r[:len(r)-1])
+			} else {
+				m.helpFiltering = false
+			}
+			m.helpScroll = 0
+			return m, nil
+		case "up", "down", "pgup", "pgdown":
+			// fall through to the scroll handling below
+		default:
+			if key.Type == tea.KeyRunes || key.String() == " " {
+				m.helpFilter += string(key.Runes)
+				if key.String() == " " {
+					m.helpFilter += " "
+				}
+				m.helpScroll = 0
+				return m, nil
+			}
+			return m, nil
 		}
+	}
+	switch key.String() {
+	case "/":
+		m.helpFiltering = true
+		m.helpScroll = 0
+		return m, nil
+	case "?", "q":
+		m.mode = modeNormal
+		m.helpScroll = 0
+		m.helpFilter = ""
+	case "esc":
+		// esc peels one layer: clear an active filter first, close second.
+		if m.helpFilter != "" {
+			m.helpFilter = ""
+			m.helpScroll = 0
+			return m, nil
+		}
+		m.mode = modeNormal
+		m.helpScroll = 0
+	case "up":
+		m.helpScroll = clampHelpScroll(m.helpScroll-1, len(m.helpBodyLines()), m.helpViewportH())
+	case "down":
+		m.helpScroll = clampHelpScroll(m.helpScroll+1, len(m.helpBodyLines()), m.helpViewportH())
+	case "pgup":
+		m.helpScroll = clampHelpScroll(m.helpScroll-m.helpViewportH(), len(m.helpBodyLines()), m.helpViewportH())
+	case "pgdown", " ":
+		m.helpScroll = clampHelpScroll(m.helpScroll+m.helpViewportH(), len(m.helpBodyLines()), m.helpViewportH())
 	}
 	return m, nil
 }
