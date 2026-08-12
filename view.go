@@ -312,7 +312,13 @@ func (m model) View() string {
 			if focused {
 				dst = detailPanelFocusedStyle
 			}
-			detailContent = dst.Width(w).Render(m.applyDetailScroll(detailContent))
+			// Clip to the panel's inner width first (w covers the two padding
+			// columns). lipgloss cannot break a long unbroken token, so an
+			// unclipped line pushes the whole box past the terminal edge on a
+			// narrow window — every other pane clips for the same reason.
+			detailBody := strings.Split(m.applyDetailScroll(detailContent), "\n")
+			truncateLines(detailBody, w-2)
+			detailContent = dst.Width(w).Render(strings.Join(detailBody, "\n"))
 			detailContent = withBorderTitle(detailContent, m.detailPanelTitle(), w, focused)
 			detailSplit := strings.Split(detailContent, "\n")
 			for len(detailSplit) > 0 && strings.TrimSpace(detailSplit[len(detailSplit)-1]) == "" {
@@ -548,7 +554,23 @@ func (m model) applyDetailScrollN(content string, maxVisible int) string {
 
 // ── Footer builder ────────────────────────────────────────────────────────────
 
+// buildFooterContent renders the footer for the current mode and clips it to
+// the window. The clip lives here rather than in each branch because every
+// footer variant has a minimum width of its own — the text input's box, the
+// picker rows, a confirm sentence — and on a narrow window any of them would
+// otherwise push past the terminal edge. View pads every line with one leading
+// space, so the budget is one column less than the terminal.
 func (m model) buildFooterContent(w int) string {
+	out := m.footerContentFor(w)
+	if out == "" || m.termWidth <= 1 {
+		return out
+	}
+	lines := strings.Split(out, "\n")
+	truncateLines(lines, m.termWidth-1)
+	return strings.Join(lines, "\n")
+}
+
+func (m model) footerContentFor(w int) string {
 	switch m.mode {
 	case modeNormal:
 		hints := m.renderKeyHints(w)
@@ -984,8 +1006,46 @@ func (m model) buildProjectListContent(w, listH int) string {
 // task, pane == paneDetail). Mirrors buildSideBySide's contract — each column
 // is rendered through a model copy whose termWidth is the column's share, and
 // the focused pane carries the accent border.
+// buildProjectDrillNarrow is the single-column drilled-in project view for
+// windows too small to carry the Gantt beside the task list: the list (or the
+// open task's detail) takes the whole width, with no floor to overflow past.
+func (m model) buildProjectDrillNarrow(projects []string, w, innerH int) string {
+	if w < 0 {
+		w = 0 // borders only; a floor here would push the box past the window
+	}
+	cm := m
+	cm.termWidth = w + 6 // the column renderers take termWidth-6 as their width
+	var lines []string
+	title := projectTasksTitle("")
+	if m.projectCursor < len(projects) {
+		title = projectTasksTitle(projects[m.projectCursor])
+	}
+	if m.pane == paneDetail {
+		lines = strings.Split(cm.applyDetailScrollN(cm.buildDetailContent(), innerH), "\n")
+		title = cm.detailPanelTitle()
+	} else {
+		var tasks []todo.Todo
+		if m.projectCursor < len(projects) {
+			tasks = m.getProjectTasks(projects[m.projectCursor])
+		}
+		lines = cm.renderProjectDrillTaskList(tasks)
+	}
+	if len(lines) > innerH {
+		lines = lines[:innerH]
+	}
+	for len(lines) < innerH {
+		lines = append(lines, "")
+	}
+	truncateLines(lines, w-2)
+	panel := listPanelFocusedStyle.Width(w).Render(strings.Join(lines, "\n"))
+	return withBorderTitle(panel, title, w, true)
+}
+
 func (m model) buildProjectDrillContent(projects []string, w, outerH int) string {
 	innerH := panelContentHeight(outerH)
+	if w < projDrillMinWidth {
+		return m.buildProjectDrillNarrow(projects, w, innerH)
+	}
 
 	// Column widths: Gantt needs a reasonable minimum to be legible; the task
 	// list takes the remainder. Mirror the sideDetailCol constants but keep the
@@ -1206,7 +1266,17 @@ func (m model) renderHelpFullscreen() string {
 	b.WriteString(helpStyle.Render("  "+hint) + "\n")
 
 	lines := strings.Split(b.String(), "\n")
+	// The overlay is full-screen chrome of its own, so it clips itself — the
+	// key column alone is wider than a narrow window.
+	if m.termWidth > 0 {
+		truncateLines(lines, m.termWidth)
+	}
+	// A terminal reporting height 0 (startup, a mid-drag resize) would make the
+	// target negative and slice out of range below.
 	target := m.termHeight - 1
+	if target < 0 {
+		target = 0
+	}
 	for len(lines) < target {
 		lines = append(lines, "")
 	}

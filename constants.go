@@ -30,9 +30,16 @@ const (
 	// falls back to its stacked layout. The detail column takes sideDetailColPct
 	// of the content width, clamped so neither column gets unusably narrow.
 	sideBySideMinWidth = 110
-	sideDetailColPct   = 38
-	sideDetailColMin   = 36
-	sideDetailColMax   = 56
+	// projDrillMinWidth is the narrowest window where the drilled-in project
+	// view can hold its Gantt column beside the task list (the Gantt floor plus
+	// the list floor plus the borders between them). Below it the Gantt is
+	// dropped and the task list takes the window, the same way the Calendar
+	// drops its month grid — two floored columns joined on a narrow window is
+	// how lines end up wider than the terminal.
+	projDrillMinWidth = sideDetailColMin + minInnerWidth + 4
+	sideDetailColPct  = 38
+	sideDetailColMin  = 36
+	sideDetailColMax  = 56
 
 	ganttSuffixWidth  = 16
 	ganttChartPadding = 8
@@ -94,4 +101,10 @@ const (
 	statsValueWidth = 12
 
 	calPanelWidth = 22
+
+	// calSideBySideMinWidth is the narrowest window that fits the fixed-width
+	// month grid beside a usable day timeline (grid + timeline floor + the
+	// borders/gap between them). Below it buildCalendarContent drops the grid
+	// rather than emitting lines wider than the terminal.
+	calSideBySideMinWidth = calPanelWidth + minInnerWidth + 4
 )

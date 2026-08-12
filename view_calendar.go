@@ -177,6 +177,16 @@ func (m model) dueDaysInRange(from, to time.Time) map[string]bool {
 
 func (m model) buildCalendarContent(w, outerH int) string {
 	innerH := panelContentHeight(outerH)
+	// The month grid is a fixed 22-column block, and the timeline used to floor
+	// at minInnerWidth — so on a narrow window the two panes were joined into
+	// lines wider than the terminal, which is the one place the no-wrap
+	// contract broke (everything else clips). Below the threshold, drop the
+	// grid and give the timeline the whole width: ← / → and [ / ] still move
+	// the day and month, so nothing becomes unreachable, and the month title
+	// moves onto the timeline's border so you can still see where you are.
+	if w < calSideBySideMinWidth {
+		return m.buildCalendarNarrow(w, innerH)
+	}
 	tlW := w - calPanelWidth - 4
 	if tlW < minInnerWidth {
 		tlW = minInnerWidth
@@ -209,6 +219,27 @@ func (m model) buildCalendarContent(w, outerH int) string {
 	tlPanel = withBorderTitle(tlPanel, localizedDayDateAbbrev(m.calendar.selected), tlW, m.calendar.focusTimeline)
 	calPanel = withBorderTitle(calPanel, localizedMonthYear(m.calendar.selected), calPanelWidth, !m.calendar.focusTimeline)
 	return lipgloss.JoinHorizontal(lipgloss.Top, tlPanel, calPanel)
+}
+
+// buildCalendarNarrow is the single-pane calendar for windows too small to
+// hold the month grid beside the timeline. The timeline takes the full width
+// with no floor, so it clips to the window instead of overflowing it.
+func (m model) buildCalendarNarrow(w, innerH int) string {
+	if w < 0 {
+		w = 0 // borders only; a floor here would push the box past the window
+	}
+	lines := m.renderTimelineLines(w-2, innerH)
+	if len(lines) > innerH {
+		lines = lines[:innerH]
+	}
+	for len(lines) < innerH {
+		lines = append(lines, "")
+	}
+	truncateLines(lines, w-2)
+
+	panel := listPanelFocusedStyle.Width(w).Render(strings.Join(lines, "\n"))
+	title := localizedDayDateAbbrev(m.calendar.selected) + " · " + localizedMonthYear(m.calendar.selected)
+	return withBorderTitle(panel, title, w, true)
 }
 
 // ── Month calendar (right panel) ──────────────────────────────────────────────

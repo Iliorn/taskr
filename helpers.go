@@ -28,6 +28,13 @@ func clamp(val, min, max int) int {
 }
 
 func truncate(s string, max int) string {
+	// A width budget computed from the terminal size (termWidth-6 and friends)
+	// goes negative on a very small window. Clamping here rather than at every
+	// call site is what keeps the whole render path from panicking on a slice
+	// bound when the user drags the terminal down to a few columns.
+	if max <= 0 {
+		return ""
+	}
 	r := []rune(s)
 	if len(r) <= max {
 		return s
@@ -47,7 +54,14 @@ func shortID(id string) string {
 	return id[:8]
 }
 
+// padRight/padLeft/padCenter all clamp a negative width to zero for the same
+// reason truncate does: the widths are computed from the terminal size, and a
+// few-column window drives them below zero — where the rune slice below would
+// panic and strings.Repeat would too.
 func padRight(s string, width int) string {
+	if width < 0 {
+		width = 0
+	}
 	r := []rune(s)
 	if len(r) >= width {
 		return string(r[:width])
@@ -56,6 +70,9 @@ func padRight(s string, width int) string {
 }
 
 func padLeft(s string, width int) string {
+	if width < 0 {
+		width = 0
+	}
 	r := []rune(s)
 	if len(r) >= width {
 		return string(r[:width])
@@ -64,6 +81,9 @@ func padLeft(s string, width int) string {
 }
 
 func padCenter(s string, width int) string {
+	if width < 0 {
+		width = 0
+	}
 	r := []rune(s)
 	if len(r) >= width {
 		return string(r[:width])
