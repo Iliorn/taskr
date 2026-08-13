@@ -393,7 +393,7 @@ func TestSQLiteChildTombstoneClampsSlowClock(t *testing.T) {
 func TestImportFromJSONSeedsFreshDB(t *testing.T) {
 	// Point storage at a temp HOME so loadTodosJSON reads our fixture.
 	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
+	setTestHome(t, tmp)
 
 	seed := []todo.Todo{todo.New("imported one"), todo.New("imported two")}
 	if err := os.MkdirAll(filepath.Dir(getStoragePath()), 0755); err != nil {
@@ -458,7 +458,7 @@ func TestFileBackedRoundTrip(t *testing.T) {
 // task (tombstoning all rows) and reopening must NOT re-import the still-present
 // JSON, or deleted tasks would rise from the dead.
 func TestImportGatedOnFreshDB(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	if err := ensureStorageDir(); err != nil {
 		t.Fatal(err)
 	}

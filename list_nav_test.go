@@ -65,6 +65,12 @@ func TestListJumpAndPageNavigation(t *testing.T) {
 // sort status, with each piece enclosed in brackets.
 func TestTaskListPositionIndicator(t *testing.T) {
 	m := tenTaskModel(t)
+	// The sort mode is a persisted preference, and the suite has tests that
+	// cycle it (the key sweeps press s). Assert against the mode this test is
+	// about rather than against whatever the last test left in settings.json —
+	// that dependency is what made this fail on Windows and pass on Linux,
+	// purely on which tests had polluted the shared home first.
+	m.taskSort = taskSortSequence
 
 	m.cursor = 0
 	if got, want := m.listPanelTitle(), "Overview [1/10] [sort: score]"; got != want {

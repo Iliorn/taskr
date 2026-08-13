@@ -36,6 +36,18 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// setTestHome points os.UserHomeDir at dir for the duration of one test,
+// restoring the previous value afterwards. Both variables, for the reason
+// TestMain sets both: t.Setenv("HOME", …) alone is a no-op on Windows, where
+// os.UserHomeDir reads %USERPROFILE% — so a test "isolating" itself that way
+// was still writing into the shared test home, and the files it left behind
+// (a legacy tasks.json, a settings.json) leaked into every later test.
+func setTestHome(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+}
+
 // The redirect is load-bearing: if it silently stops working on some platform,
 // the suite starts writing to the developer's real ~/.taskr. Assert every
 // storage path lands inside the temp home instead of finding out the hard way.
@@ -54,6 +66,32 @@ func TestStorageStaysInsideTheTestHome(t *testing.T) {
 	for _, path := range []string{taskrDir(), dbPath(), getStoragePath(), settingsPath()} {
 		if !strings.HasPrefix(path, testHome+string(filepath.Separator)) {
 			t.Errorf("%q is outside the test home %q", path, testHome)
+		}
+	}
+}
+
+// A test that redirects the home directory must do it for every platform. The
+// bare t.Setenv("HOME", …) form silently does nothing on Windows, where
+// os.UserHomeDir reads %USERPROFILE% — the test then writes into the shared
+// test home and leaves files behind for everything that runs after it. That is
+// exactly how three Windows-only failures appeared: a legacy tasks.json from an
+// import test seeded every database opened afterwards.
+func TestNoBareHomeRedirectsInTests(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), "_test.go") || e.Name() == "main_test.go" {
+			continue
+		}
+		data, err := os.ReadFile(e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), `Setenv("HOME"`) {
+			t.Errorf(`%s redirects HOME directly — use setTestHome(t, dir), which also sets `+
+				`USERPROFILE so the redirect works on Windows`, e.Name())
 		}
 	}
 }
