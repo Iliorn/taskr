@@ -885,7 +885,7 @@ func TestComputeTagStats(t *testing.T) {
 		{Tags: []string{"personal"}, Status: todo.Pending},
 	}
 
-	stats := computeTagStats(todos)
+	stats := computeTagStats(todoPtrs(todos))
 
 	if stats["work"].total != 2 {
 		t.Errorf("work total = %d, want 2", stats["work"].total)
@@ -907,13 +907,13 @@ func TestComputeTagStats(t *testing.T) {
 	}
 
 	// Empty list
-	empty := computeTagStats([]todo.Todo{})
+	empty := computeTagStats(todoPtrs([]todo.Todo{}))
 	if len(empty) != 0 {
 		t.Errorf("expected empty stats, got %d entries", len(empty))
 	}
 
 	// No tags
-	noTags := computeTagStats([]todo.Todo{{Title: "No tags"}})
+	noTags := computeTagStats(todoPtrs([]todo.Todo{{Title: "No tags"}}))
 	if len(noTags) != 0 {
 		t.Errorf("expected empty stats for tagless todos, got %d", len(noTags))
 	}

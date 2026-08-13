@@ -209,7 +209,7 @@ func TestSettingsTopPreviewRespectsWeights(t *testing.T) {
 		Momentum: biasBalanced,
 		Aging:    true,
 	}
-	ranked := rankTopBySequenceWith(todos, intensePri, heat, now)
+	ranked := rankTopBySequenceWith(todoPtrs(todos), intensePri, heat, now)
 	if len(ranked) != 2 {
 		t.Fatalf("expected 2 ranked tasks, got %d", len(ranked))
 	}
@@ -231,7 +231,7 @@ func TestSettingsTopPreviewRespectsWeights(t *testing.T) {
 		Momentum: biasBalanced,
 		Aging:    true,
 	}
-	ranked2 := rankTopBySequenceWith(todos, intenseDeadline, heat, now)
+	ranked2 := rankTopBySequenceWith(todoPtrs(todos), intenseDeadline, heat, now)
 	if len(ranked2) != 2 {
 		t.Fatalf("expected 2 ranked tasks, got %d", len(ranked2))
 	}

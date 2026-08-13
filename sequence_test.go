@@ -178,7 +178,7 @@ func TestComputeActivityHeat(t *testing.T) {
 	ghost.Deleted = true
 	ghost.Project = "epsilon"
 
-	h := computeActivityHeat(now, []todo.Todo{fresh, old, commented, tracked, ghost})
+	h := computeActivityHeat(now, todoPtrs([]todo.Todo{fresh, old, commented, tracked, ghost}))
 
 	for _, want := range []struct {
 		kind string
@@ -335,15 +335,15 @@ func TestCaptureSeqRankAtDone(t *testing.T) {
 	sub.ParentID = "top"
 	todos := []todo.Todo{low, mid, top, sub}
 
-	captureSeqRankAtDone(todos, &top)
+	captureSeqRankAtDone(todoPtrs(todos), &top)
 	if top.SeqRankAtDone != 1 {
 		t.Errorf("top rank = %d, want 1", top.SeqRankAtDone)
 	}
-	captureSeqRankAtDone(todos, &low)
+	captureSeqRankAtDone(todoPtrs(todos), &low)
 	if low.SeqRankAtDone != 3 {
 		t.Errorf("low rank = %d, want 3", low.SeqRankAtDone)
 	}
-	captureSeqRankAtDone(todos, &sub)
+	captureSeqRankAtDone(todoPtrs(todos), &sub)
 	if sub.SeqRankAtDone != 0 {
 		t.Errorf("subtask rank = %d, want 0 (not recorded)", sub.SeqRankAtDone)
 	}
@@ -380,7 +380,7 @@ func TestSequenceHitStats(t *testing.T) {
 	pendingNoise := todo.New("pending")
 	todos = append(todos, pendingNoise)
 
-	hits, rated := sequenceHitStats(todos, 3)
+	hits, rated := sequenceHitStats(todoPtrs(todos), 3)
 	if rated != 3 || hits != 2 {
 		t.Errorf("hits/rated = %d/%d, want 2/3 (window keeps the 3 newest rated)", hits, rated)
 	}
@@ -450,7 +450,7 @@ func TestComputeActivityHeatAtBounds(t *testing.T) {
 		StoppedAt: at.Add(-3 * 24 * time.Hour),
 	}}
 
-	h := computeActivityHeatAt(at, []todo.Todo{self, prior, future, spanning, stale})
+	h := computeActivityHeatAt(at, todoPtrs([]todo.Todo{self, prior, future, spanning, stale}))
 
 	for id, hot := range map[string]bool{
 		"self":     false,
@@ -492,7 +492,7 @@ func TestAnalyzeSeqMissesDeadlineGap(t *testing.T) {
 	miss3 := seqDone("miss3", 8, base.Add(-1*24*time.Hour))
 
 	todos := []todo.Todo{hit1, miss1, hit2, miss2, miss3}
-	a := analyzeSeqMisses(todos, todos, seqHitWindow, defaultBiases())
+	a := analyzeSeqMisses(todoPtrs(todos), todoPtrs(todos), seqHitWindow, defaultBiases())
 
 	if a.Hits != 2 || a.Rated != 5 {
 		t.Fatalf("hits/rated = %d/%d, want 2/5", a.Hits, a.Rated)
@@ -540,7 +540,7 @@ func TestAnalyzeSeqMissesMomentumIntenseHint(t *testing.T) {
 	miss2 := mkMiss("miss2", 11, base.Add(-2*24*time.Hour))
 	miss3 := mkMiss("miss3", 9, base.Add(-1*24*time.Hour))
 
-	a := analyzeSeqMisses([]todo.Todo{hit1, miss1, miss2, miss3}, []todo.Todo{hit1, miss1, miss2, miss3}, seqHitWindow, defaultBiases())
+	a := analyzeSeqMisses(todoPtrs([]todo.Todo{hit1, miss1, miss2, miss3}), todoPtrs([]todo.Todo{hit1, miss1, miss2, miss3}), seqHitWindow, defaultBiases())
 
 	if !approxEq(a.Gap[2], 10.0) {
 		t.Fatalf("Momentum gap = %v, want +10", a.Gap[2])
@@ -558,7 +558,7 @@ func TestSeqSuggestionGates(t *testing.T) {
 		seqDone("m1", 9, base.Add(-2*24*time.Hour)),
 		seqDone("m2", 8, base.Add(-1*24*time.Hour)),
 	}
-	few := analyzeSeqMisses(fewSet, fewSet, seqHitWindow, defaultBiases())
+	few := analyzeSeqMisses(todoPtrs(fewSet), todoPtrs(fewSet), seqHitWindow, defaultBiases())
 	if s := seqSuggestion(few, defaultBiases()); s != "" {
 		t.Errorf("suggestion with 2 misses = %q, want empty", s)
 	}
@@ -569,7 +569,7 @@ func TestSeqSuggestionGates(t *testing.T) {
 		seqDone("m2", 8, base.Add(-2*24*time.Hour)),
 		seqDone("m3", 7, base.Add(-1*24*time.Hour)),
 	}
-	flat := analyzeSeqMisses(flatSet, flatSet, seqHitWindow, defaultBiases())
+	flat := analyzeSeqMisses(todoPtrs(flatSet), todoPtrs(flatSet), seqHitWindow, defaultBiases())
 	if s := seqSuggestion(flat, defaultBiases()); !strings.Contains(s, "calibrated") {
 		t.Errorf("suggestion with flat gaps = %q, want the calibrated note", s)
 	}

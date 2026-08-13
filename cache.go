@@ -85,7 +85,7 @@ func (m *model) refreshCaches() {
 	}
 	for i := range all {
 		if p := all[i].Project; p != "" {
-			m.cache.projectTasks[p] = append(m.cache.projectTasks[p], all[i])
+			m.cache.projectTasks[p] = append(m.cache.projectTasks[p], *all[i])
 		}
 	}
 	for p, tasks := range m.cache.projectTasks {
@@ -107,7 +107,7 @@ func (m *model) refreshCaches() {
 // A task is "blocked" if any task it depends on is still pending (not Done); that
 // depended-on task is in turn a "blocker". Dependencies on a Done or deleted task
 // don't count — they're already cleared — so a dangling/finished dep never blocks.
-func (m *model) rebuildDependencySets(all []todo.Todo) {
+func (m *model) rebuildDependencySets(all []*todo.Todo) {
 	for k := range m.cache.blockedSet {
 		delete(m.cache.blockedSet, k)
 	}
@@ -137,7 +137,7 @@ func (m *model) rebuildDependencySets(all []todo.Todo) {
 // any task carrying it. Detail-pane tag/project search uses these to surface the
 // most-recently-used entries first (see sortByRecency). Computed once per cache
 // refresh rather than per frame, mirroring the projectTasks rebuild above.
-func (m *model) refreshUsageRecency(all []todo.Todo) {
+func (m *model) refreshUsageRecency(all []*todo.Todo) {
 	for k := range m.cache.tagLastUsed {
 		delete(m.cache.tagLastUsed, k)
 	}
@@ -227,7 +227,7 @@ func (m *model) refreshFilteredCaches() {
 // is the expensive part of the Tags tab (a full scan + sort) and was previously
 // recomputed on every render; cache it alongside tagStats and invalidate it
 // the same way (on data change, and on sort-mode toggle via sortCachedTags).
-func (m *model) rebuildSortedTagsFrom(todos []todo.Todo) {
+func (m *model) rebuildSortedTagsFrom(todos []*todo.Todo) {
 	m.cache.tagsSorted, m.cache.untaggedTotal, m.cache.untaggedDone =
 		selectSortedTags(todos, m.tagSort, m.cache.tags, m.cache.tagLastUsed)
 	m.cache.tagsSortMode = m.tagSort

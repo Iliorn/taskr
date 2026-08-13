@@ -128,7 +128,7 @@ func TestRenderSeqAnalysisTextTable(t *testing.T) {
 		mk("m2", 12, base.Add(-2*24*time.Hour), false),
 		mk("m3", 8, base.Add(-1*24*time.Hour), false),
 	}
-	a := analyzeSeqMisses(todos, todos, seqHitWindow, defaultBiases())
+	a := analyzeSeqMisses(todoPtrs(todos), todoPtrs(todos), seqHitWindow, defaultBiases())
 	out := renderSeqAnalysisText(a, defaultBiases())
 	for _, want := range []string{"largest gap", "Deadline: relaxed", "recent misses:", "rank   9"} {
 		if !strings.Contains(out, want) {

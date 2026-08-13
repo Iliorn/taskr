@@ -206,7 +206,7 @@ type activityHeat struct {
 // computeActivityHeat scans the full task set (done tasks included — their
 // completions are the strongest signal) and marks the task, its project, and
 // its tags hot when any signal lands inside the window ending at `now`.
-func computeActivityHeat(now time.Time, todos []todo.Todo) activityHeat {
+func computeActivityHeat(now time.Time, todos []*todo.Todo) activityHeat {
 	cutoff := now.Add(-momentumWindow)
 	recent := func(ts time.Time) bool { return !ts.IsZero() && ts.After(cutoff) }
 	return scanHeat(todos, func(t *todo.Todo) bool {
@@ -236,7 +236,7 @@ func computeActivityHeat(now time.Time, todos []todo.Todo) activityHeat {
 // count toward its own momentum. The live path keeps its open upper edge on
 // purpose — cross-device clock skew after a sync can put a legitimate hot
 // signal slightly in the future, and dropping it there would be wrong.
-func computeActivityHeatAt(at time.Time, todos []todo.Todo) activityHeat {
+func computeActivityHeatAt(at time.Time, todos []*todo.Todo) activityHeat {
 	cutoff := at.Add(-momentumWindow)
 	inWindow := func(ts time.Time) bool {
 		return !ts.IsZero() && ts.After(cutoff) && ts.Before(at)
@@ -266,14 +266,13 @@ func computeActivityHeatAt(at time.Time, todos []todo.Todo) activityHeat {
 // scanHeat builds an activityHeat by testing every live task against `hot`
 // and marking the task, its project, and its tags when it fires. The two
 // heat builders above share it; only their notion of "recent" differs.
-func scanHeat(todos []todo.Todo, hot func(*todo.Todo) bool) activityHeat {
+func scanHeat(todos []*todo.Todo, hot func(*todo.Todo) bool) activityHeat {
 	h := activityHeat{
 		tasks:    make(map[string]bool),
 		projects: make(map[string]bool),
 		tags:     make(map[string]bool),
 	}
-	for i := range todos {
-		t := &todos[i]
+	for _, t := range todos {
 		if t.Deleted || !hot(t) {
 			continue
 		}
@@ -461,7 +460,7 @@ func sequenceScore(t *todo.Todo) float64 {
 // a preview ranking without touching the activeBiases / activeHeat globals.
 // The result is the same critical-path ordering (subtask + dependency rollups
 // applied) as the live path — only the scoring inputs differ.
-func rankTopBySequenceWith(todos []todo.Todo, b biases, heat activityHeat, now time.Time) []todo.Todo {
+func rankTopBySequenceWith(todos []*todo.Todo, b biases, heat activityHeat, now time.Time) []todo.Todo {
 	return rankTopBySequenceBy(todos, func(t *todo.Todo) float64 {
 		return sequenceComponentsAt(now, t, b, heat).Total
 	})
@@ -480,7 +479,7 @@ const (
 // call it just before Toggle flips the status; auto-closed parents and
 // recurrence spawns don't, so the metric only reads deliberate picks —
 // "when you finished something, was it what the engine suggested".
-func captureSeqRankAtDone(todos []todo.Todo, t *todo.Todo) {
+func captureSeqRankAtDone(todos []*todo.Todo, t *todo.Todo) {
 	t.SeqRankAtDone = 0
 	if t.ParentID != "" {
 		return
@@ -497,10 +496,9 @@ func captureSeqRankAtDone(todos []todo.Todo, t *todo.Todo) {
 // reads — done, top-level, stamped, timestamped — most recent first, truncated
 // to `window`. Shared by sequenceHitStats and analyzeSeqMisses so the two
 // always agree on which completions count.
-func ratedCompletions(todos []todo.Todo, window int) []*todo.Todo {
+func ratedCompletions(todos []*todo.Todo, window int) []*todo.Todo {
 	var recent []*todo.Todo
-	for i := range todos {
-		t := &todos[i]
+	for _, t := range todos {
 		if t.Status != todo.Done || t.ParentID != "" || t.SeqRankAtDone <= 0 || t.CompletedAt.IsZero() {
 			continue
 		}
@@ -517,7 +515,7 @@ func ratedCompletions(todos []todo.Todo, window int) []*todo.Todo {
 // completions, how many closed inside the top seqHitTopN. rated counts the
 // completions considered, so callers can render "39/50" and hide the stat
 // entirely while no history exists.
-func sequenceHitStats(todos []todo.Todo, window int) (hits, rated int) {
+func sequenceHitStats(todos []*todo.Todo, window int) (hits, rated int) {
 	for _, t := range ratedCompletions(todos, window) {
 		rated++
 		if t.SeqRankAtDone <= seqHitTopN {
@@ -584,7 +582,7 @@ type seqAnalysis struct {
 // reconstructed from — pass the FULL set even when `todos` is a filtered
 // stats scope, or completions outside the filter stop warming their
 // project/tags and the momentum readings go colder than the rank stamp saw.
-func analyzeSeqMisses(todos, heatSource []todo.Todo, window int, b biases) seqAnalysis {
+func analyzeSeqMisses(todos, heatSource []*todo.Todo, window int, b biases) seqAnalysis {
 	a := seqAnalysis{TopN: seqHitTopN, Window: window, Dimensions: seqDimNames}
 	type scored struct {
 		t    *todo.Todo

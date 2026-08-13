@@ -170,18 +170,22 @@ func (s *Store) len() int { return len(s.tasks) }
 // cache rebuilds, selector inputs, and undo snapshots — anywhere the caller
 // wants an iterable slice. Each call allocates the slice.
 //
-// READ-ONLY CONTRACT: the returned structs are shallow copies — their slice
-// fields (Tags, Dependencies, Comments, Learnings, TimeEntries) still alias the
-// backing arrays of the live *Todo in the store. Treat the result as read-only.
-// The in-place slice mutators in the todo package (RemoveTag, DeleteComment, …)
-// scribble those same arrays, so a caller that both holds an allTodos() result
-// and mutates the store would see torn data. Every current caller either only
-// reads, or deep-copies first with copyTodo (as pushUndo does) — keep it that
-// way; if you need to mutate a returned task, copyTodo it first.
-func (s *Store) allTodos() []todo.Todo {
-	out := make([]todo.Todo, 0, len(s.tasks))
+// READ-ONLY CONTRACT: these are the live pointers, not copies. Walk them, read
+// them, index them — but do not write through them, and do not hold one across
+// a mutation that could remove the task. Anything that needs a durable value
+// (an undo snapshot, the sync wire format) must copyTodo first, as pushUndo
+// does.
+//
+// It used to return []todo.Todo, which meant a full 416-byte struct copy per
+// task on every cache refresh — about a megabyte and a millisecond per refresh
+// at 2000 tasks, on the path that runs for every search keystroke. The contract
+// was already "treat as read-only", so handing out the pointers costs nothing
+// semantically. Callers that legitimately hold values (the CLI, storage, the
+// sync package, tests) adapt with todoPtrs.
+func (s *Store) allTodos() []*todo.Todo {
+	out := make([]*todo.Todo, 0, len(s.tasks))
 	for _, t := range s.tasks {
-		out = append(out, *t)
+		out = append(out, t)
 	}
 	return out
 }
@@ -277,9 +281,9 @@ func (s *Store) pushUndo(desc string, ids ...string) {
 	var entry undoEntry
 	entry.desc = desc
 	if len(ids) == 0 {
-		full := s.allTodos()
-		for i := range full {
-			full[i] = copyTodo(full[i])
+		full := make([]todo.Todo, 0, len(s.tasks))
+		for _, t := range s.tasks {
+			full = append(full, copyTodo(*t))
 		}
 		entry.full = full
 	} else {

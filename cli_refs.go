@@ -23,7 +23,7 @@ func loadForCLI() (Repository, []todo.Todo, error) {
 	if err == nil {
 		// Momentum reads recent activity; snapshot it so CLI output ranks
 		// the same way the TUI does after its cache refresh.
-		applyActivityHeat(computeActivityHeat(time.Now(), todos))
+		applyActivityHeat(computeActivityHeat(time.Now(), todoPtrs(todos)))
 	}
 	return repo, todos, err
 }
@@ -32,7 +32,7 @@ func loadForCLI() (Repository, []todo.Todo, error) {
 // most recently added task, per the last-added sidecar — before the usual
 // id-prefix/title lookup. Cheap dependency capture: a decomposed plan gets
 // typed as "step one", "step two dep:^", ... without ever looking up an id.
-func resolveDepRef(todos []todo.Todo, ref string) (*todo.Todo, error) {
+func resolveDepRef(todos []*todo.Todo, ref string) (*todo.Todo, error) {
 	if strings.TrimSpace(ref) == "^" {
 		id := loadLastAddedID()
 		if id == "" {
@@ -62,7 +62,7 @@ func resolveDepRef(todos []todo.Todo, ref string) (*todo.Todo, error) {
 //     … matches zero                             → error "no task matches"
 //
 // Both comparisons are case-insensitive.
-func findTaskByRef(todos []todo.Todo, ref string) (*todo.Todo, error) {
+func findTaskByRef(todos []*todo.Todo, ref string) (*todo.Todo, error) {
 	t, _, err := findTaskByRefKind(todos, ref)
 	return t, err
 }
@@ -77,7 +77,7 @@ const (
 	refMatchTitle
 )
 
-func findTaskByRefKind(todos []todo.Todo, ref string) (*todo.Todo, refMatch, error) {
+func findTaskByRefKind(todos []*todo.Todo, ref string) (*todo.Todo, refMatch, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		return nil, refMatchID, fmt.Errorf("empty task reference (need id-prefix or title substring)")
@@ -93,7 +93,7 @@ func findTaskByRefKind(todos []todo.Todo, ref string) (*todo.Todo, refMatch, err
 	}
 	switch len(idMatches) {
 	case 1:
-		return &todos[idMatches[0]], refMatchID, nil
+		return todos[idMatches[0]], refMatchID, nil
 	case 0:
 		// fall through to title-substring
 	default:
@@ -111,13 +111,13 @@ func findTaskByRefKind(todos []todo.Todo, ref string) (*todo.Todo, refMatch, err
 	case 0:
 		return nil, refMatchTitle, fmt.Errorf("no task matches %q (tried id-prefix and title substring)", ref)
 	case 1:
-		return &todos[titleMatches[0]], refMatchTitle, nil
+		return todos[titleMatches[0]], refMatchTitle, nil
 	default:
 		return nil, refMatchTitle, ambiguousMatchError("title", ref, todos, titleMatches)
 	}
 }
 
-func ambiguousMatchError(kind, ref string, todos []todo.Todo, matches []int) error {
+func ambiguousMatchError(kind, ref string, todos []*todo.Todo, matches []int) error {
 	lines := make([]string, len(matches))
 	for i, m := range matches {
 		lines[i] = fmt.Sprintf("    %s  %s", todos[m].ID[:8], todos[m].Title)
@@ -127,7 +127,7 @@ func ambiguousMatchError(kind, ref string, todos []todo.Todo, matches []int) err
 
 // findByPrefix is preserved as a thin alias so existing call-sites (and
 // tests) keep working while the name catches up everywhere.
-func findByPrefix(todos []todo.Todo, ref string) (*todo.Todo, error) {
+func findByPrefix(todos []*todo.Todo, ref string) (*todo.Todo, error) {
 	return findTaskByRef(todos, ref)
 }
 
@@ -135,7 +135,7 @@ func findByPrefix(todos []todo.Todo, ref string) (*todo.Todo, error) {
 // or ambiguous one. Used by batch verbs (`done a b c`) so we can validate the
 // whole set before mutating anything. Duplicate refs collapse to the first
 // match — `done abc abc` is a single done, not an error.
-func resolveRefs(todos []todo.Todo, refs []string) ([]*todo.Todo, error) {
+func resolveRefs(todos []*todo.Todo, refs []string) ([]*todo.Todo, error) {
 	out := make([]*todo.Todo, 0, len(refs))
 	seen := map[string]bool{}
 	for _, ref := range refs {

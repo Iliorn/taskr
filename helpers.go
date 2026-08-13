@@ -509,11 +509,10 @@ type tagStats struct {
 	tracked   time.Duration // Σ time-entry durations across all tasks
 }
 
-func computeTagStats(todos []todo.Todo) map[string]tagStats {
+func computeTagStats(todos []*todo.Todo) map[string]tagStats {
 	now := time.Now()
 	stats := make(map[string]tagStats, 16)
-	for i := range todos {
-		t := &todos[i]
+	for _, t := range todos {
 		// The Tasks tab list is top-level only, so counting subtasks
 		// here would inflate a tag row past what pressing Enter shows.
 		if t.ParentID != "" {
@@ -1026,7 +1025,7 @@ func parsePositiveInt(s string) (int, bool) {
 // dependentsOf returns the pending tasks that depend on id — the inbound
 // side of the dependency graph ("Blocks"). Outbound dependencies live on the
 // task itself; the inbound list only exists by scanning the full set.
-func dependentsOf(todos []todo.Todo, id string) []*todo.Todo {
+func dependentsOf(todos []*todo.Todo, id string) []*todo.Todo {
 	var out []*todo.Todo
 	for i := range todos {
 		if todos[i].Status != todo.Pending {
@@ -1034,7 +1033,7 @@ func dependentsOf(todos []todo.Todo, id string) []*todo.Todo {
 		}
 		for _, dep := range todos[i].Dependencies {
 			if dep == id {
-				out = append(out, &todos[i])
+				out = append(out, todos[i])
 				break
 			}
 		}

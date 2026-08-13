@@ -277,7 +277,7 @@ func TestCliImportVersion1Envelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadForCLI: %v", err)
 	}
-	_, err = findTaskByRef(todos, "cli-import-envelope-check")
+	_, err = findTaskByRef(todoPtrs(todos), "cli-import-envelope-check")
 	if err != nil {
 		t.Errorf("imported task not found: %v", err)
 	}

@@ -179,7 +179,7 @@ func TestTagStatsAgeAndTracked(t *testing.T) {
 	c.Status = todo.Done
 	c.CreatedAt = time.Now().AddDate(0, 0, -100) // done → excluded from avg age
 
-	stats := computeTagStats([]todo.Todo{a, b, c})
+	stats := computeTagStats(todoPtrs([]todo.Todo{a, b, c}))
 	s := stats["work"]
 	if s.openCount != 2 {
 		t.Fatalf("openCount = %d, want 2 (done task excluded)", s.openCount)

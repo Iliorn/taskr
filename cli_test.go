@@ -44,39 +44,39 @@ func TestFindByPrefix(t *testing.T) {
 	todos := []todo.Todo{a, b, c}
 
 	t.Run("unique short prefix", func(t *testing.T) {
-		got, err := findByPrefix(todos, "fed")
+		got, err := findByPrefix(todoPtrs(todos), "fed")
 		if err != nil || got.ID != c.ID {
 			t.Fatalf("got=%v err=%v, want %s", got, err, c.ID)
 		}
 	})
 
 	t.Run("ambiguous prefix errors", func(t *testing.T) {
-		if _, err := findByPrefix(todos, "abc"); err == nil {
+		if _, err := findByPrefix(todoPtrs(todos), "abc"); err == nil {
 			t.Error("expected ambiguity error, got nil")
 		}
 	})
 
 	t.Run("no match errors", func(t *testing.T) {
-		if _, err := findByPrefix(todos, "zzz"); err == nil {
+		if _, err := findByPrefix(todoPtrs(todos), "zzz"); err == nil {
 			t.Error("expected no-match error, got nil")
 		}
 	})
 
 	t.Run("empty prefix rejected", func(t *testing.T) {
-		if _, err := findByPrefix(todos, ""); err == nil {
+		if _, err := findByPrefix(todoPtrs(todos), ""); err == nil {
 			t.Error("expected empty-prefix error, got nil")
 		}
 	})
 
 	t.Run("case insensitive", func(t *testing.T) {
-		got, err := findByPrefix(todos, "FED")
+		got, err := findByPrefix(todoPtrs(todos), "FED")
 		if err != nil || got.ID != c.ID {
 			t.Fatalf("got=%v err=%v, want %s", got, err, c.ID)
 		}
 	})
 
 	t.Run("full id matches one", func(t *testing.T) {
-		got, err := findByPrefix(todos, a.ID)
+		got, err := findByPrefix(todoPtrs(todos), a.ID)
 		if err != nil || got.ID != a.ID {
 			t.Fatalf("got=%v err=%v, want %s", got, err, a.ID)
 		}
@@ -181,14 +181,14 @@ func TestFindTaskByRefFallsBackToTitleSubstring(t *testing.T) {
 	todos := []todo.Todo{a, b, c}
 
 	t.Run("substring matches one", func(t *testing.T) {
-		got, err := findTaskByRef(todos, "milk")
+		got, err := findTaskByRef(todoPtrs(todos), "milk")
 		if err != nil || got.ID != a.ID {
 			t.Fatalf("got=%v err=%v, want a", got, err)
 		}
 	})
 
 	t.Run("substring case-insensitive", func(t *testing.T) {
-		got, err := findTaskByRef(todos, "LANDLORD")
+		got, err := findTaskByRef(todoPtrs(todos), "LANDLORD")
 		if err != nil || got.ID != b.ID {
 			t.Fatalf("got=%v err=%v, want b", got, err)
 		}
@@ -197,7 +197,7 @@ func TestFindTaskByRefFallsBackToTitleSubstring(t *testing.T) {
 	t.Run("substring matches multiple errors", func(t *testing.T) {
 		// Add a second task containing "milk" to force ambiguity.
 		more := append(todos, todo.New("Buy more milk"))
-		if _, err := findTaskByRef(more, "milk"); err == nil {
+		if _, err := findTaskByRef(todoPtrs(more), "milk"); err == nil {
 			t.Error("expected ambiguity error")
 		}
 	})
@@ -207,20 +207,20 @@ func TestFindTaskByRefFallsBackToTitleSubstring(t *testing.T) {
 		// id path should still win for determinism. Construct that scenario.
 		shared := todo.New("contains 1aa in title")
 		shared.ID = "4ddddd00-dddd"
-		got, err := findTaskByRef(append(todos, shared), "1aa")
+		got, err := findTaskByRef(todoPtrs(append(todos, shared)), "1aa")
 		if err != nil || got.ID != a.ID {
 			t.Fatalf("got=%v err=%v, want a (id-prefix path wins)", got, err)
 		}
 	})
 
 	t.Run("no match anywhere", func(t *testing.T) {
-		if _, err := findTaskByRef(todos, "wombat"); err == nil {
+		if _, err := findTaskByRef(todoPtrs(todos), "wombat"); err == nil {
 			t.Error("expected no-match error")
 		}
 	})
 
 	t.Run("whitespace-only ref rejected", func(t *testing.T) {
-		if _, err := findTaskByRef(todos, "   "); err == nil {
+		if _, err := findTaskByRef(todoPtrs(todos), "   "); err == nil {
 			t.Error("expected empty-ref error")
 		}
 	})
@@ -306,7 +306,7 @@ func TestCliAddNoteAndComment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, title)
+	got, err := findTaskByRef(todoPtrs(todos), title)
 	if err != nil {
 		t.Fatalf("find task: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestCliAddQuietIDPrintsOnlyID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, id)
+	got, err := findTaskByRef(todoPtrs(todos), id)
 	if err != nil {
 		t.Fatalf("printed id %q does not resolve: %v", id, err)
 	}
@@ -363,7 +363,7 @@ func TestCliDoneShortCommentAndListHintsHiddenDone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, id)
+	got, err := findTaskByRef(todoPtrs(todos), id)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -624,7 +624,7 @@ func TestCliDoneStampsSeqRank(t *testing.T) {
 		t.Errorf("SeqRankAtDone = %d, want >= 1 (stamped at completion)", probe.SeqRankAtDone)
 	}
 	// And the stat pipeline sees it.
-	if hits, rated := sequenceHitStats(todos, seqHitWindow); rated < 1 || hits < 1 {
+	if hits, rated := sequenceHitStats(todoPtrs(todos), seqHitWindow); rated < 1 || hits < 1 {
 		t.Errorf("hit stats = %d/%d, want at least 1/1 (high-pri due-today closes as a top-5 hit)", hits, rated)
 	}
 }
@@ -648,11 +648,11 @@ func TestCliEditAddDepLinksAndRefusesLoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	leaf, err := findTaskByRef(todos, "edit-dep-leaf")
+	leaf, err := findTaskByRef(todoPtrs(todos), "edit-dep-leaf")
 	if err != nil {
 		t.Fatalf("find leaf: %v", err)
 	}
-	base, err := findTaskByRef(todos, "edit-dep-base")
+	base, err := findTaskByRef(todoPtrs(todos), "edit-dep-base")
 	if err != nil {
 		t.Fatalf("find base: %v", err)
 	}
@@ -681,7 +681,7 @@ func TestCliEditRemoveDep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	leaf, err := findTaskByRef(todos, "rmdep-leaf")
+	leaf, err := findTaskByRef(todoPtrs(todos), "rmdep-leaf")
 	if err != nil {
 		t.Fatalf("find leaf: %v", err)
 	}
@@ -718,7 +718,7 @@ func TestRankTopBySequenceLiftsBlockerAboveDependent(t *testing.T) {
 	dependent.DueDate = time.Now()
 	dependent.AddDependency(blocker.ID)
 
-	ranked := rankTopBySequence([]todo.Todo{dependent, blocker})
+	ranked := rankTopBySequence(todoPtrs([]todo.Todo{dependent, blocker}))
 
 	pos := make(map[string]int, len(ranked))
 	for i := range ranked {
@@ -929,19 +929,19 @@ func TestResolveRefs(t *testing.T) {
 	todos := []todo.Todo{a, b}
 
 	t.Run("two refs", func(t *testing.T) {
-		got, err := resolveRefs(todos, []string{"aaaa", "bbbb"})
+		got, err := resolveRefs(todoPtrs(todos), []string{"aaaa", "bbbb"})
 		if err != nil || len(got) != 2 {
 			t.Fatalf("want 2 targets, got %d err=%v", len(got), err)
 		}
 	})
 	t.Run("duplicate refs collapse", func(t *testing.T) {
-		got, err := resolveRefs(todos, []string{"aaaa", "aaaa", "milk"})
+		got, err := resolveRefs(todoPtrs(todos), []string{"aaaa", "aaaa", "milk"})
 		if err != nil || len(got) != 1 {
 			t.Fatalf("want 1 target after dedup, got %d err=%v", len(got), err)
 		}
 	})
 	t.Run("first failure aborts the batch", func(t *testing.T) {
-		if _, err := resolveRefs(todos, []string{"aaaa", "nope"}); err == nil {
+		if _, err := resolveRefs(todoPtrs(todos), []string{"aaaa", "nope"}); err == nil {
 			t.Error("want error from missing ref")
 		}
 	})
@@ -1082,10 +1082,10 @@ func TestFindTaskByRefKindReportsMatchPath(t *testing.T) {
 	b.ID = "2bbbbb00-bbbb"
 	todos := []todo.Todo{a, b}
 
-	if _, kind, err := findTaskByRefKind(todos, "1aaa"); err != nil || kind != refMatchID {
+	if _, kind, err := findTaskByRefKind(todoPtrs(todos), "1aaa"); err != nil || kind != refMatchID {
 		t.Errorf("id prefix: kind=%v err=%v, want refMatchID", kind, err)
 	}
-	if _, kind, err := findTaskByRefKind(todos, "landlord"); err != nil || kind != refMatchTitle {
+	if _, kind, err := findTaskByRefKind(todoPtrs(todos), "landlord"); err != nil || kind != refMatchTitle {
 		t.Errorf("title substring: kind=%v err=%v, want refMatchTitle", kind, err)
 	}
 }
@@ -1100,7 +1100,7 @@ func TestCliAddParsesQuickAddTokens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, "Buy milk")
+	got, err := findTaskByRef(todoPtrs(todos), "Buy milk")
 	if err != nil {
 		t.Fatalf("find task: %v", err)
 	}
@@ -1136,7 +1136,7 @@ func TestCliEditParentDuePropagatesAndClearsSubtree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load parent: %v", err)
 	}
-	parent, err := findTaskByRef(tasks, "CLI due propagation parent")
+	parent, err := findTaskByRef(todoPtrs(tasks), "CLI due propagation parent")
 	if err != nil {
 		t.Fatalf("find parent: %v", err)
 	}
@@ -1144,7 +1144,7 @@ func TestCliEditParentDuePropagatesAndClearsSubtree(t *testing.T) {
 		t.Fatalf("add child: exit %d", code)
 	}
 	_, tasks, _ = loadForCLI()
-	child, err := findTaskByRef(tasks, "CLI due propagation child")
+	child, err := findTaskByRef(todoPtrs(tasks), "CLI due propagation child")
 	if err != nil {
 		t.Fatalf("find child: %v", err)
 	}
@@ -1156,9 +1156,9 @@ func TestCliEditParentDuePropagatesAndClearsSubtree(t *testing.T) {
 		t.Fatalf("edit parent due: exit %d", code)
 	}
 	_, tasks, _ = loadForCLI()
-	parent, _ = findTaskByRef(tasks, "CLI due propagation parent")
-	child, _ = findTaskByRef(tasks, "CLI due propagation child")
-	grandchild, _ := findTaskByRef(tasks, "CLI due propagation grandchild")
+	parent, _ = findTaskByRef(todoPtrs(tasks), "CLI due propagation parent")
+	child, _ = findTaskByRef(todoPtrs(tasks), "CLI due propagation child")
+	grandchild, _ := findTaskByRef(todoPtrs(tasks), "CLI due propagation grandchild")
 	for _, task := range []*todo.Todo{child, grandchild} {
 		if !task.DueDate.Equal(parent.DueDate) {
 			t.Errorf("%s due = %v, want parent due %v", task.Title, task.DueDate, parent.DueDate)
@@ -1170,7 +1170,7 @@ func TestCliEditParentDuePropagatesAndClearsSubtree(t *testing.T) {
 	}
 	_, tasks, _ = loadForCLI()
 	for _, title := range []string{"CLI due propagation parent", "CLI due propagation child", "CLI due propagation grandchild"} {
-		task, findErr := findTaskByRef(tasks, title)
+		task, findErr := findTaskByRef(todoPtrs(tasks), title)
 		if findErr != nil {
 			t.Fatalf("find %q after clear: %v", title, findErr)
 		}
@@ -1189,7 +1189,7 @@ func TestCliAddFlagOverridesToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, "Flag wins")
+	got, err := findTaskByRef(todoPtrs(todos), "Flag wins")
 	if err != nil {
 		t.Fatalf("find task: %v", err)
 	}
@@ -1211,7 +1211,7 @@ func TestCliAddLikeNotClobberedByTokenlessTitle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, "Cloned task")
+	got, err := findTaskByRef(todoPtrs(todos), "Cloned task")
 	if err != nil {
 		t.Fatalf("find clone: %v", err)
 	}
@@ -1230,7 +1230,7 @@ func TestCliUndeleteRestoresTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, "Undelete restore target")
+	got, err := findTaskByRef(todoPtrs(todos), "Undelete restore target")
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
@@ -1240,7 +1240,7 @@ func TestCliUndeleteRestoresTask(t *testing.T) {
 		t.Fatalf("delete: exit %d", code)
 	}
 	_, live, _ := loadForCLI()
-	if _, err := findTaskByRef(live, "Undelete restore target"); err == nil {
+	if _, err := findTaskByRef(todoPtrs(live), "Undelete restore target"); err == nil {
 		t.Fatal("task should be gone from the live set after delete")
 	}
 
@@ -1248,7 +1248,7 @@ func TestCliUndeleteRestoresTask(t *testing.T) {
 		t.Fatalf("undelete: exit %d", code)
 	}
 	_, back, _ := loadForCLI()
-	restored, err := findTaskByRef(back, "Undelete restore target")
+	restored, err := findTaskByRef(todoPtrs(back), "Undelete restore target")
 	if err != nil {
 		t.Fatalf("task should be restored to the live set: %v", err)
 	}
@@ -1274,7 +1274,7 @@ func TestCliUndoRestoreBeatsSlowClockTombstone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, "Undo tie target")
+	got, err := findTaskByRef(todoPtrs(todos), "Undo tie target")
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
@@ -1296,7 +1296,7 @@ func TestCliUndoRestoreBeatsSlowClockTombstone(t *testing.T) {
 		t.Fatalf("undo: exit %d", code)
 	}
 	_, back, _ := loadForCLI()
-	restored, err := findTaskByRef(back, "Undo tie target")
+	restored, err := findTaskByRef(todoPtrs(back), "Undo tie target")
 	if err != nil {
 		t.Fatalf("task should be restored: %v", err)
 	}
@@ -1315,7 +1315,7 @@ func TestCliUndeleteListShowsDeleted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, "Undelete list target")
+	got, err := findTaskByRef(todoPtrs(todos), "Undelete list target")
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
@@ -1342,7 +1342,7 @@ func TestCliUndeleteRestoresSubtree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	parent, err := findTaskByRef(todos, "Undelete parent target")
+	parent, err := findTaskByRef(todoPtrs(todos), "Undelete parent target")
 	if err != nil {
 		t.Fatalf("find parent: %v", err)
 	}
@@ -1353,7 +1353,7 @@ func TestCliUndeleteRestoresSubtree(t *testing.T) {
 		t.Fatalf("delete parent: exit %d", code)
 	}
 	_, live, _ := loadForCLI()
-	if _, err := findTaskByRef(live, "child of undelete parent"); err == nil {
+	if _, err := findTaskByRef(todoPtrs(live), "child of undelete parent"); err == nil {
 		t.Fatal("child should be cascade-deleted with the parent")
 	}
 
@@ -1361,11 +1361,11 @@ func TestCliUndeleteRestoresSubtree(t *testing.T) {
 		t.Fatalf("undelete: exit %d", code)
 	}
 	_, back, _ := loadForCLI()
-	p, err := findTaskByRef(back, "Undelete parent target")
+	p, err := findTaskByRef(todoPtrs(back), "Undelete parent target")
 	if err != nil {
 		t.Fatalf("parent should be restored: %v", err)
 	}
-	c, err := findTaskByRef(back, "child of undelete parent")
+	c, err := findTaskByRef(todoPtrs(back), "child of undelete parent")
 	if err != nil {
 		t.Fatalf("child should be restored with the subtree: %v", err)
 	}
@@ -1460,7 +1460,7 @@ func TestCliAddNoteFromStdin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, "note-stdin-task")
+	got, err := findTaskByRef(todoPtrs(todos), "note-stdin-task")
 	if err != nil {
 		t.Fatalf("find task: %v", err)
 	}
@@ -1503,7 +1503,7 @@ func TestCliAddPriorityAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, "priority-alias-task")
+	got, err := findTaskByRef(todoPtrs(todos), "priority-alias-task")
 	if err != nil {
 		t.Fatalf("find task: %v", err)
 	}
@@ -1522,7 +1522,7 @@ func TestCliAddPriorityShortFlagStillWorks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, "priority-short-task")
+	got, err := findTaskByRef(todoPtrs(todos), "priority-short-task")
 	if err != nil {
 		t.Fatalf("find task: %v", err)
 	}
@@ -1544,7 +1544,7 @@ func TestCliEditPriorityAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	got, err := findTaskByRef(todos, "edit-priority-alias-task")
+	got, err := findTaskByRef(todoPtrs(todos), "edit-priority-alias-task")
 	if err != nil {
 		t.Fatalf("find task: %v", err)
 	}

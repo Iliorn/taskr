@@ -42,7 +42,7 @@ func TestSelectActiveDoneFilterAndSort(t *testing.T) {
 	sub.ParentID = "a" // subtasks are excluded from the top-level lists
 	todos := []todo.Todo{a, b, c, sub}
 
-	active, done := selectActiveDone(todos, "", false, taskSortDueDate, historySortCompleted)
+	active, done := selectActiveDone(todoPtrs(todos), "", false, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 2 || got[0] != "b" || got[1] != "a" {
 		t.Fatalf("active = %v, want [b a] (sorted by due date, subtask excluded)", got)
 	}
@@ -67,13 +67,13 @@ func TestSelectActiveDoneHistorySort(t *testing.T) {
 	todos := []todo.Todo{a, b, c}
 
 	// Completed mode: most recent first, regardless of the active sort mode.
-	_, done := selectActiveDone(todos, "", false, taskSortSequence, historySortCompleted)
+	_, done := selectActiveDone(todoPtrs(todos), "", false, taskSortSequence, historySortCompleted)
 	if got := ids(done); len(got) != 3 || got[0] != "c" || got[1] != "b" || got[2] != "a" {
 		t.Fatalf("history completed = %v, want [c b a] (most recent first)", got)
 	}
 
 	// Alpha mode: title A→Z.
-	_, done = selectActiveDone(todos, "", false, taskSortSize, historySortAlpha)
+	_, done = selectActiveDone(todoPtrs(todos), "", false, taskSortSize, historySortAlpha)
 	if got := ids(done); len(got) != 3 || got[0] != "b" || got[1] != "c" || got[2] != "a" {
 		t.Fatalf("history alpha = %v, want [b c a] (apple, mango, zebra)", got)
 	}
@@ -94,7 +94,7 @@ func TestDependencyBoostLiftsBlockerAboveDependent(t *testing.T) {
 		t.Fatalf("precondition: blocker raw score should be below urgent")
 	}
 
-	active, _ := selectActiveDone([]todo.Todo{blocker, urgent}, "", false, taskSortSequence, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{blocker, urgent}), "", false, taskSortSequence, historySortCompleted)
 	if got := ids(active); len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Fatalf("active = %v, want [a b] (blocker lifted above its dependent)", got)
 	}
@@ -112,7 +112,7 @@ func TestDependencyBoostTransitiveChain(t *testing.T) {
 	c.Priority = todo.PriorityHigh
 	c.Dependencies = []string{"b"}
 
-	active, _ := selectActiveDone([]todo.Todo{a, b, c}, "", false, taskSortSequence, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{a, b, c}), "", false, taskSortSequence, historySortCompleted)
 	if got := ids(active); len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {
 		t.Fatalf("active = %v, want [a b c] (chain lifted in dependency order)", got)
 	}
@@ -137,7 +137,7 @@ func TestDependencyFanOutBonus(t *testing.T) {
 		mk("e1", "narrow"),
 	}
 
-	rollup := dependencyScoreRollup(todos, nil)
+	rollup := dependencyScoreRollup(todoPtrs(todos), nil)
 	// Same inherited score on both blockers; only the fan-out differs:
 	// wide = +min(4×0.5, 2) = +2, narrow = +0.5 → gap of exactly 1.5.
 	gap := rollup["wide"] - rollup["narrow"]
@@ -147,13 +147,13 @@ func TestDependencyFanOutBonus(t *testing.T) {
 
 	// Five dependents still cap at +2 — no gain over four.
 	todos = append(todos, mk("d5", "wide"))
-	capped := dependencyScoreRollup(todos, nil)
+	capped := dependencyScoreRollup(todoPtrs(todos), nil)
 	if diff := capped["wide"] - rollup["wide"]; diff > 1e-9 {
 		t.Fatalf("fifth dependent raised the bonus by %v, want capped at +2", diff)
 	}
 
 	// And the ranking reflects it: wide sorts above narrow.
-	active, _ := selectActiveDone(todos, "", false, taskSortSequence, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs(todos), "", false, taskSortSequence, historySortCompleted)
 	wideAt, narrowAt := -1, -1
 	for i, id := range ids(active) {
 		switch id {
@@ -175,7 +175,7 @@ func TestDependencyBoostCycleSafe(t *testing.T) {
 	b := mkTodo("b", "b", todo.Pending)
 	b.Dependencies = []string{"a"}
 	// Just assert it returns; a non-terminating walk would hang the test.
-	selectActiveDone([]todo.Todo{a, b}, "", false, taskSortSequence, historySortCompleted)
+	selectActiveDone(todoPtrs([]todo.Todo{a, b}), "", false, taskSortSequence, historySortCompleted)
 }
 
 // The dependency picker must hide tasks that would close a loop: the current
@@ -214,7 +214,7 @@ func TestLoopingDepCandidates(t *testing.T) {
 func TestSelectActiveDoneSearch(t *testing.T) {
 	p1 := mkTodo("a", "buy milk", todo.Pending)
 	p2 := mkTodo("b", "walk dog", todo.Pending)
-	active, _ := selectActiveDone([]todo.Todo{p1, p2}, "milk", false, taskSortDueDate, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{p1, p2}), "milk", false, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 1 || got[0] != "a" {
 		t.Fatalf("search active = %v, want [a]", got)
 	}
@@ -236,13 +236,13 @@ func TestSelectActiveDoneStableUnderShuffle(t *testing.T) {
 	base := []todo.Todo{mkDone("a"), mkDone("b"), mkDone("c"), mkDone("d")}
 
 	for _, mode := range []taskSortMode{taskSortSequence, taskSortDueDate, taskSortSize} {
-		_, want := selectActiveDone(base, "", false, mode, historySortCompleted)
+		_, want := selectActiveDone(todoPtrs(base), "", false, mode, historySortCompleted)
 		for shuffle, perm := range [][]int{{3, 2, 1, 0}, {1, 3, 0, 2}, {2, 0, 3, 1}} {
 			in := make([]todo.Todo, len(base))
 			for i, p := range perm {
 				in[i] = base[p]
 			}
-			_, got := selectActiveDone(in, "", false, mode, historySortCompleted)
+			_, got := selectActiveDone(todoPtrs(in), "", false, mode, historySortCompleted)
 			if w, g := ids(want), ids(got); !equalStrings(w, g) {
 				t.Errorf("mode=%v shuffle=%d: got %v, want %v", mode, shuffle, g, w)
 			}
@@ -269,7 +269,7 @@ func TestSelectActiveDoneFocusFilter(t *testing.T) {
 	future := mkTodo("f", "future", todo.Pending)
 	future.DueDate = now.AddDate(0, 0, 10)
 	// focus filter keeps only overdue/due-today
-	active, _ := selectActiveDone([]todo.Todo{overdue, future}, "", true, taskSortDueDate, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{overdue, future}), "", true, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 1 || got[0] != "o" {
 		t.Fatalf("focus active = %v, want [o]", got)
 	}
@@ -282,9 +282,9 @@ func TestSelectSortedTags(t *testing.T) {
 	t2.Tags = []string{"work"}
 	t3 := mkTodo("c", "z", todo.Done) // untagged + done
 	todos := []todo.Todo{t1, t2, t3}
-	stats := computeTagStats(todos)
+	stats := computeTagStats(todoPtrs(todos))
 
-	sorted, ut, ud := selectSortedTags(todos, tagSortAlpha, stats, nil)
+	sorted, ut, ud := selectSortedTags(todoPtrs(todos), tagSortAlpha, stats, nil)
 	if len(sorted) != 2 || sorted[0] != "urgent" || sorted[1] != "work" {
 		t.Fatalf("alpha tags = %v, want [urgent work]", sorted)
 	}
@@ -292,7 +292,7 @@ func TestSelectSortedTags(t *testing.T) {
 		t.Fatalf("untagged total=%d done=%d, want 1/1", ut, ud)
 	}
 
-	byCount, _, _ := selectSortedTags(todos, tagSortCount, stats, nil)
+	byCount, _, _ := selectSortedTags(todoPtrs(todos), tagSortCount, stats, nil)
 	if byCount[0] != "work" {
 		t.Fatalf("count tags = %v, want work first (2 > 1)", byCount)
 	}
@@ -308,9 +308,9 @@ func TestSelectSortedTagsProgressAndRecent(t *testing.T) {
 	noneDone := mkTodo("d", "open", todo.Pending)
 	noneDone.Tags = []string{"untouched"}
 	todos := []todo.Todo{halfDone, halfDone2, allDone, noneDone}
-	stats := computeTagStats(todos)
+	stats := computeTagStats(todoPtrs(todos))
 
-	byProgress, _, _ := selectSortedTags(todos, tagSortProgress, stats, nil)
+	byProgress, _, _ := selectSortedTags(todoPtrs(todos), tagSortProgress, stats, nil)
 	if len(byProgress) != 3 || byProgress[0] != "untouched" ||
 		byProgress[1] != "half" || byProgress[2] != "finished" {
 		t.Fatalf("progress tags = %v, want [untouched half finished]", byProgress)
@@ -322,7 +322,7 @@ func TestSelectSortedTagsProgressAndRecent(t *testing.T) {
 		"finished":  now,
 		"untouched": now.Add(-1 * time.Hour),
 	}
-	byRecent, _, _ := selectSortedTags(todos, tagSortRecent, stats, lastUsed)
+	byRecent, _, _ := selectSortedTags(todoPtrs(todos), tagSortRecent, stats, lastUsed)
 	if len(byRecent) != 3 || byRecent[0] != "finished" ||
 		byRecent[1] != "untouched" || byRecent[2] != "half" {
 		t.Fatalf("recent tags = %v, want [finished untouched half]", byRecent)
@@ -342,7 +342,7 @@ func TestSelectSortedTagsSkipsSubtasks(t *testing.T) {
 	subOnlyTag.Tags = []string{"orphan"}
 
 	sorted, ut, ud := selectSortedTags(
-		[]todo.Todo{parent, untaggedSub, subOnlyTag}, tagSortAlpha, nil, nil)
+		todoPtrs([]todo.Todo{parent, untaggedSub, subOnlyTag}), tagSortAlpha, nil, nil)
 	if ut != 0 || ud != 0 {
 		t.Fatalf("untagged total=%d done=%d, want 0/0 (subtask must not count)", ut, ud)
 	}
@@ -352,7 +352,7 @@ func TestSelectSortedTagsSkipsSubtasks(t *testing.T) {
 		}
 	}
 
-	stats := computeTagStats([]todo.Todo{parent, untaggedSub, subOnlyTag})
+	stats := computeTagStats(todoPtrs([]todo.Todo{parent, untaggedSub, subOnlyTag}))
 	if _, ok := stats["orphan"]; ok {
 		t.Errorf("computeTagStats included subtask-only tag: %v", stats)
 	}
@@ -371,11 +371,11 @@ func TestSelectProjects(t *testing.T) {
 	d := mkTodo("d", "w", todo.Pending)
 	todos := []todo.Todo{a, b, c, d}
 
-	got := selectProjects(todos, "")
+	got := selectProjects(todoPtrs(todos), "")
 	if len(got) != 2 || got[0] != "alpha" || got[1] != "zeta" {
 		t.Fatalf("projects = %v, want [alpha zeta]", got)
 	}
-	if f := selectProjects(todos, "alph"); len(f) != 1 || f[0] != "alpha" {
+	if f := selectProjects(todoPtrs(todos), "alph"); len(f) != 1 || f[0] != "alpha" {
 		t.Fatalf("search projects = %v, want [alpha]", f)
 	}
 }
@@ -392,12 +392,12 @@ func TestSelectLearnings(t *testing.T) {
 	b.Learnings = []todo.Learning{{ID: "l2", Text: "learned testing", CreatedAt: now.Add(-1 * time.Hour)}}
 	todos := []todo.Todo{a, b}
 
-	if got := learnIDs(selectLearnings(todos, "", learningSortDate)); len(got) != 2 || got[0] != "l2" {
+	if got := learnIDs(selectLearnings(todoPtrs(todos), "", learningSortDate)); len(got) != 2 || got[0] != "l2" {
 		t.Fatalf("date sort = %v, want [l2 l1] (newest first)", got)
 	}
 
 	// Tags are derived from each learning's parent task.
-	for _, l := range selectLearnings(todos, "", learningSortDate) {
+	for _, l := range selectLearnings(todoPtrs(todos), "", learningSortDate) {
 		switch l.ID {
 		case "l1":
 			if len(l.Tags) != 1 || l.Tags[0] != "go" {
@@ -410,14 +410,14 @@ func TestSelectLearnings(t *testing.T) {
 		}
 	}
 
-	if got := learnIDs(selectLearnings(todos, "maps", learningSortDate)); len(got) != 1 || got[0] != "l1" {
+	if got := learnIDs(selectLearnings(todoPtrs(todos), "maps", learningSortDate)); len(got) != 1 || got[0] != "l1" {
 		t.Fatalf("text search = %v, want [l1]", got)
 	}
 	// #test matches only l2, whose parent (B) carries the 'test' tag.
-	if got := learnIDs(selectLearnings(todos, "#test", learningSortDate)); len(got) != 1 || got[0] != "l2" {
+	if got := learnIDs(selectLearnings(todoPtrs(todos), "#test", learningSortDate)); len(got) != 1 || got[0] != "l2" {
 		t.Fatalf("tag search = %v, want [l2]", got)
 	}
-	if got := selectLearnings(todos, "", learningSortAlpha); got[0].Text != "learned go maps" {
+	if got := selectLearnings(todoPtrs(todos), "", learningSortAlpha); got[0].Text != "learned go maps" {
 		t.Fatalf("alpha sort first = %q, want 'learned go maps'", got[0].Text)
 	}
 }

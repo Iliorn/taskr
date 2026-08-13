@@ -640,6 +640,29 @@ func (m *model) flushPendingWrites() {
 
 // copyTodo deep-copies the nested slices of a single task so the result can be
 // safely mutated (or read from another goroutine) without affecting the source.
+// todoValues is todoPtrs' inverse: a copied value slice, for the places that
+// genuinely need one — the sync wire format, an undo snapshot, a digest. It
+// copies, so reach for it only when a durable snapshot is the point.
+func todoValues(ptrs []*todo.Todo) []todo.Todo {
+	out := make([]todo.Todo, 0, len(ptrs))
+	for _, t := range ptrs {
+		out = append(out, *t)
+	}
+	return out
+}
+
+// todoPtrs adapts a value slice to the pointer form the read-only selectors
+// take. The pointers alias the caller's slice, so it is for reading only —
+// exactly the contract Store.allTodos carries. Used where a []todo.Todo is the
+// natural shape: the CLI (loaded from storage), the sync package, and tests.
+func todoPtrs(todos []todo.Todo) []*todo.Todo {
+	out := make([]*todo.Todo, len(todos))
+	for i := range todos {
+		out[i] = &todos[i]
+	}
+	return out
+}
+
 func copyTodo(t todo.Todo) todo.Todo {
 	cp := t
 	if len(t.Tags) > 0 {

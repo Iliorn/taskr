@@ -192,17 +192,20 @@ func todoMatchesFocus(t todo.Todo, focus bool) bool {
 // descendants for ranking only — the displayed score stays the parent's own —
 // so a high-priority subtask pulls its parent up rather than hiding beneath a
 // calmer one.
-func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
+func selectActiveDone(todos []*todo.Todo, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
 	match := compileSearch(search)
 	for _, t := range todos {
 		if t.ParentID != "" {
 			continue
 		}
+		// The caches hold values: they outlive this call and are read while the
+		// store mutates, so the split materializes copies here even though the
+		// input is the live set.
 		switch {
-		case t.Status == todo.Pending && match(t) && todoMatchesFocus(t, focus):
-			active = append(active, t)
-		case t.Status == todo.Done && match(t):
-			done = append(done, t)
+		case t.Status == todo.Pending && match(*t) && todoMatchesFocus(*t, focus):
+			active = append(active, *t)
+		case t.Status == todo.Done && match(*t):
+			done = append(done, *t)
 		}
 	}
 	// Active tasks rank by taskSort; the done list has its own history sort,
@@ -223,14 +226,14 @@ func selectActiveDone(todos []todo.Todo, search string, focus bool, sortMode tas
 // Pure: builds its own parent index in one pass and follows ParentID chains
 // instead of relying on the model's subtaskOf cache. Tasks without subtasks
 // don't appear in the map.
-func descendantScoreRollup(todos []todo.Todo) map[string]float64 {
+func descendantScoreRollup(todos []*todo.Todo) map[string]float64 {
 	return descendantScoreRollupWith(todos, sequenceScore)
 }
 
 // descendantScoreRollupWith is the parameterised form of descendantScoreRollup:
 // it accepts an arbitrary score function so callers can compute the rollup with
 // explicit biases/clock rather than the activeBiases / activeHeat globals.
-func descendantScoreRollupWith(todos []todo.Todo, score func(*todo.Todo) float64) map[string]float64 {
+func descendantScoreRollupWith(todos []*todo.Todo, score func(*todo.Todo) float64) map[string]float64 {
 	if len(todos) == 0 {
 		return nil
 	}
@@ -245,7 +248,7 @@ func descendantScoreRollupWith(todos []todo.Todo, score func(*todo.Todo) float64
 		}
 		// Walk up to the top-level ancestor, lifting the boost at every
 		// level so a deeply-nested high-pri grandchild reaches the root.
-		s := score(&todos[i])
+		s := score(todos[i])
 		cur := todos[i].ParentID
 		for cur != "" {
 			if rollup[cur] < s {
@@ -285,14 +288,14 @@ const (
 	fanOutBonusCap  = 2.0
 )
 
-func dependencyScoreRollup(todos []todo.Todo, base map[string]float64) map[string]float64 {
+func dependencyScoreRollup(todos []*todo.Todo, base map[string]float64) map[string]float64 {
 	return dependencyScoreRollupWith(todos, base, sequenceScore)
 }
 
 // dependencyScoreRollupWith is the parameterised form of dependencyScoreRollup:
 // it accepts an arbitrary score function so callers can compute the rollup with
 // explicit biases/clock rather than the activeBiases / activeHeat globals.
-func dependencyScoreRollupWith(todos []todo.Todo, base map[string]float64, score func(*todo.Todo) float64) map[string]float64 {
+func dependencyScoreRollupWith(todos []*todo.Todo, base map[string]float64, score func(*todo.Todo) float64) map[string]float64 {
 	if len(todos) == 0 {
 		return base
 	}
@@ -322,7 +325,7 @@ func dependencyScoreRollupWith(todos []todo.Todo, base map[string]float64, score
 		idx[todos[i].ID] = i
 	}
 	effBase := func(id string) float64 {
-		s := score(&todos[idx[id]])
+		s := score(todos[idx[id]])
 		if b, ok := base[id]; ok && b > s {
 			s = b
 		}
@@ -376,7 +379,7 @@ func dependencyScoreRollupWith(todos []todo.Todo, base map[string]float64, score
 
 // selectSortedTags returns the unique tags across all tasks (sorted by mode)
 // plus the count of untagged tasks (total and done) shown as a virtual row.
-func selectSortedTags(todos []todo.Todo, mode tagSortMode, stats map[string]tagStats, lastUsed map[string]time.Time) (sorted []string, untaggedTotal, untaggedDone int) {
+func selectSortedTags(todos []*todo.Todo, mode tagSortMode, stats map[string]tagStats, lastUsed map[string]time.Time) (sorted []string, untaggedTotal, untaggedDone int) {
 	seen := make(map[string]struct{}, len(stats))
 	for i := range todos {
 		// The Tasks tab list excludes subtasks, so counting them here
@@ -407,7 +410,7 @@ func selectSortedTags(todos []todo.Todo, mode tagSortMode, stats map[string]tagS
 
 // selectProjects returns the distinct non-empty project names (sorted), filtered
 // by the search query.
-func selectProjects(todos []todo.Todo, search string) []string {
+func selectProjects(todos []*todo.Todo, search string) []string {
 	seen := make(map[string]struct{})
 	var projects []string
 	for i := range todos {
@@ -448,7 +451,7 @@ type learningView struct {
 // selectLearnings gathers every task's learnings (tagged with the parent's
 // tags), filters by the search query (a leading '#' searches those tags), and
 // sorts by mode.
-func selectLearnings(todos []todo.Todo, search string, sortMode learningSortMode) []learningView {
+func selectLearnings(todos []*todo.Todo, search string, sortMode learningSortMode) []learningView {
 	var result []learningView
 	for i := range todos {
 		for _, l := range todos[i].Learnings {

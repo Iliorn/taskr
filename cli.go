@@ -274,7 +274,7 @@ func cliAdd(args []string) int {
 		existing = loaded
 	}
 	if *like != "" {
-		src, err := findTaskByRef(existing, *like)
+		src, err := findTaskByRef(todoPtrs(existing), *like)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
@@ -282,7 +282,7 @@ func cliAdd(args []string) int {
 		likeSrc = src
 	}
 	if *depends != "" {
-		dep, err := resolveDepRef(existing, *depends)
+		dep, err := resolveDepRef(todoPtrs(existing), *depends)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
@@ -295,7 +295,7 @@ func cliAdd(args []string) int {
 	tokenDepIDs := make([][]string, len(titles))
 	for i := range parsedTitles {
 		for _, ref := range parsedTitles[i].deps {
-			dep, err := resolveDepRef(existing, ref)
+			dep, err := resolveDepRef(todoPtrs(existing), ref)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				return 2
@@ -706,7 +706,7 @@ func cliDone(args []string) int {
 	}
 	// Resolve every ref before mutating anything — that way an ambiguity in
 	// position 3 doesn't leave the first two already toggled.
-	targets, err := resolveRefs(todos, positionals)
+	targets, err := resolveRefs(todoPtrs(todos), positionals)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -768,7 +768,7 @@ func cliDone(args []string) int {
 			t.StopTimer()
 			stopped = append(stopped, t)
 		}
-		captureSeqRankAtDone(todos, t)
+		captureSeqRankAtDone(todoPtrs(todos), t)
 		t.Toggle()
 		closed[t.ID] = true
 		dirty = append(dirty, t)
@@ -794,7 +794,7 @@ func cliDone(args []string) int {
 					s.StopTimer()
 					stopped = append(stopped, s)
 				}
-				captureSeqRankAtDone(todos, s)
+				captureSeqRankAtDone(todoPtrs(todos), s)
 				s.Toggle()
 				closed[s.ID] = true
 				cascaded = append(cascaded, s)
@@ -845,7 +845,7 @@ func cliDone(args []string) int {
 // dependency targets, not just the top-level rows. Pure; the caller applies any
 // -n limit. `taskr top`'s displayed SCORE stays each task's own score (matching
 // the TUI); only the ordering reflects the boost.
-func rankTopBySequence(todos []todo.Todo) []todo.Todo {
+func rankTopBySequence(todos []*todo.Todo) []todo.Todo {
 	return rankTopBySequenceBy(todos, sequenceScore)
 }
 
@@ -854,11 +854,11 @@ func rankTopBySequence(todos []todo.Todo) []todo.Todo {
 // supply explicit biases/clock (the preview path) or the live globals (the CLI
 // and TUI paths). The rollup and sort logic — subtask inheritance, critical-path
 // dependency boost, fan-out bonus, cycle-safe DFS — is identical for both.
-func rankTopBySequenceBy(todos []todo.Todo, score func(*todo.Todo) float64) []todo.Todo {
+func rankTopBySequenceBy(todos []*todo.Todo, score func(*todo.Todo) float64) []todo.Todo {
 	rows := make([]todo.Todo, 0, len(todos))
 	for _, t := range todos {
 		if t.ParentID == "" && t.Status == todo.Pending {
-			rows = append(rows, t)
+			rows = append(rows, *t)
 		}
 	}
 	rollup := descendantScoreRollupWith(todos, score)
@@ -882,7 +882,7 @@ func cliTop(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	rows := rankTopBySequence(todos)
+	rows := rankTopBySequence(todoPtrs(todos))
 	if *n > 0 && len(rows) > *n {
 		rows = rows[:*n]
 	}
@@ -963,7 +963,7 @@ func cliShow(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, err := findTaskByRef(todos, positionals[0])
+	t, err := findTaskByRef(todoPtrs(todos), positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -1040,7 +1040,7 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo) {
 	// One merged dependency list, direction carried by the glyph: ↧ = this
 	// task waits on it (outbound, stored on t), ↥ = it waits on this task
 	// (inbound, derived). Mirrors the TUI detail pane.
-	inbound := dependentsOf(todos, t.ID)
+	inbound := dependentsOf(todoPtrs(todos), t.ID)
 	if len(t.Dependencies) > 0 || len(inbound) > 0 {
 		fmt.Printf("\nDependencies (%d):\n", len(t.Dependencies)+len(inbound))
 		for _, dep := range t.Dependencies {
@@ -1126,7 +1126,7 @@ func cliEdit(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, err := findByPrefix(todos, positionals[0])
+	t, err := findByPrefix(todoPtrs(todos), positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -1200,7 +1200,7 @@ func cliEdit(args []string) int {
 		changed = true
 	}
 	if *addDep != "" {
-		dep, err := findTaskByRef(todos, *addDep)
+		dep, err := findTaskByRef(todoPtrs(todos), *addDep)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
@@ -1219,7 +1219,7 @@ func cliEdit(args []string) int {
 		changed = true
 	}
 	if *removeDep != "" {
-		dep, err := findTaskByRef(todos, *removeDep)
+		dep, err := findTaskByRef(todoPtrs(todos), *removeDep)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
@@ -1312,7 +1312,7 @@ func cliDelete(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, kind, err := findTaskByRefKind(todos, positionals[0])
+	t, kind, err := findTaskByRefKind(todoPtrs(todos), positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -1425,7 +1425,7 @@ func cliUndelete(args []string) int {
 		return 0
 	}
 
-	t, err := findTaskByRef(deleted, positionals[0])
+	t, err := findTaskByRef(todoPtrs(deleted), positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -1622,7 +1622,7 @@ func cliComment(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, err := findTaskByRef(todos, positionals[0])
+	t, err := findTaskByRef(todoPtrs(todos), positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -1816,11 +1816,11 @@ func cliStats(args []string) int {
 		})
 	}
 	s := computeStats(scoped, time.Now())
-	s.SeqHitsRecent, s.SeqRatedRecent = sequenceHitStats(scoped, seqHitWindow)
+	s.SeqHitsRecent, s.SeqRatedRecent = sequenceHitStats(todoPtrs(scoped), seqHitWindow)
 	if *seq {
 		// Heat always reconstructs from the full set: completions outside the
 		// filter still warmed their projects/tags at the time.
-		a := analyzeSeqMisses(scoped, todos, seqHitWindow, activeBiases)
+		a := analyzeSeqMisses(todoPtrs(scoped), todoPtrs(todos), seqHitWindow, activeBiases)
 		s.Seq = &a
 	}
 	switch strings.ToLower(*format) {
@@ -1940,7 +1940,7 @@ func cliStart(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	target, err := findTaskByRef(todos, fs.Arg(0))
+	target, err := findTaskByRef(todoPtrs(todos), fs.Arg(0))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -1987,7 +1987,7 @@ func cliStop(args []string) int {
 	var target *todo.Todo
 	if fs.NArg() == 1 {
 		// Explicit ref: stop the named task if it's actually running.
-		t, err := findTaskByRef(todos, fs.Arg(0))
+		t, err := findTaskByRef(todoPtrs(todos), fs.Arg(0))
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
@@ -2073,7 +2073,7 @@ func cliLog(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, err := findTaskByRef(todos, positionals[0])
+	t, err := findTaskByRef(todoPtrs(todos), positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -2145,7 +2145,7 @@ func cliSubtask(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	parent, err := findTaskByRef(todos, positionals[0])
+	parent, err := findTaskByRef(todoPtrs(todos), positionals[0])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
@@ -2512,7 +2512,7 @@ func cliLearnings(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	rows := selectLearnings(todos, *search, sortMode)
+	rows := selectLearnings(todoPtrs(todos), *search, sortMode)
 	if *limit > 0 && len(rows) > *limit {
 		rows = rows[:*limit]
 	}

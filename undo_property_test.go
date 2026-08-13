@@ -28,7 +28,7 @@ func undoDigest(m model) [32]byte {
 	for i := range ts {
 		ts[i].ModifiedAt = time.Time{}
 	}
-	return tasksync.StoreDigest(ts)
+	return tasksync.StoreDigest(todoValues(ts))
 }
 
 // normalize escs the model back to the list pane in normal mode, cancelling

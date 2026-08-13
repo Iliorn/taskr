@@ -77,7 +77,7 @@ func TestCliDoneParentWithPendingSubtasks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadForCLI: %v", err)
 	}
-	parent, err := findTaskByRef(todos, pid)
+	parent, err := findTaskByRef(todoPtrs(todos), pid)
 	if err != nil {
 		t.Fatalf("findTaskByRef: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestCliDoneParentWithPendingSubtasks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadForCLI: %v", err)
 	}
-	parent2, err := findTaskByRef(todos, pid2)
+	parent2, err := findTaskByRef(todoPtrs(todos), pid2)
 	if err != nil {
 		t.Fatalf("findTaskByRef parent2: %v", err)
 	}

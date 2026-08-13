@@ -232,7 +232,7 @@ func TestDescendantScoreRollupLiftsChildScore(t *testing.T) {
 	child.Priority = todo.PriorityHigh
 	child.DueDate = time.Now().Add(-24 * time.Hour) // overdue + high priority
 
-	rollup := descendantScoreRollup([]todo.Todo{parent, child})
+	rollup := descendantScoreRollup(todoPtrs([]todo.Todo{parent, child}))
 	if rollup["p"] == 0 {
 		t.Error("rollup should report a non-zero score for parent (child is overdue+high)")
 	}

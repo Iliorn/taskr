@@ -262,15 +262,15 @@ func (m model) renderTagList() string {
 // Subtasks are dropped from the filtered form; every stats bucket reads
 // top-level rows anyway, and the active `/query` chip already tells the user
 // the page is scoped.
-func (m model) statsScopedTodos() []todo.Todo {
+func (m model) statsScopedTodos() []*todo.Todo {
 	all := m.allTodos()
 	if m.searchQuery == "" {
 		return all
 	}
 	match := compileSearch(m.searchQuery)
-	scoped := make([]todo.Todo, 0, len(all))
+	scoped := make([]*todo.Todo, 0, len(all))
 	for _, t := range all {
-		if t.ParentID == "" && match(t) {
+		if t.ParentID == "" && match(*t) {
 			scoped = append(scoped, t)
 		}
 	}
@@ -308,8 +308,7 @@ func (m model) renderStatsList() string {
 	var pendingBySize [3]int
 
 	scope := m.statsScopedTodos()
-	for i := range scope {
-		t := &scope[i]
+	for _, t := range scope {
 		if t.ParentID != "" {
 			continue
 		}
