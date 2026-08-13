@@ -383,6 +383,9 @@ type model struct {
 	// Filesystem watcher state. nil if the watcher couldn't start (in which
 	// case the TUI behaves exactly as before — no live reload, no errors).
 	watcher *watcherState
+	// watcherStop releases the watcher's file descriptor. Call it through
+	// closeWatcher, which is idempotent.
+	watcherStop func()
 
 	// Cross-device sync config, loaded once at startup. autoSync gates the
 	// periodic background sync (and the launch/exit syncs); it is on whenever a
@@ -521,17 +524,6 @@ func initialModel(repo Repository) model {
 	if err := m.repo.ResyncScores(); err != nil {
 		m.flashError(fmt.Sprintf("Score resync failed: %v", err))
 	}
-	// Spin up the filesystem watcher so CLI writes (and any other process
-	// touching ~/.taskr/tasks.db) refresh the TUI without a restart. If it
-	// fails to start (e.g. weird filesystem, permissions, OS limits), the
-	// TUI keeps working — live reload just isn't available.
-	if home, err := os.UserHomeDir(); err == nil {
-		watchDir := filepath.Join(home, ".taskr")
-		state := newWatcherState()
-		if _, werr := startWatcher(state, watchDir); werr == nil {
-			m.watcher = state
-		}
-	}
 	// Load cross-device sync config once; auto-sync drives launch/periodic/exit
 	// syncs when a server is configured.
 	m.syncCfg = loadSyncConfig()
@@ -622,6 +614,38 @@ func scheduleSave() tea.Cmd {
 	return tea.Tick(saveDebounceDuration, func(t time.Time) tea.Msg {
 		return saveTickMsg{}
 	})
+}
+
+// startModelWatcher spins up the filesystem watcher so CLI writes (and any
+// other process touching ~/.taskr/tasks.db) refresh the TUI without a restart.
+// If it fails to start (weird filesystem, permissions, OS limits), the TUI keeps
+// working — live reload just isn't available.
+//
+// Called from main rather than initialModel because a watcher is a live OS
+// resource with a file descriptor, and only a running program wants one. Doing
+// it in the constructor meant the test binary opened one per model — 129 by the
+// end of the suite — which is exactly how many the macOS runner ran out of
+// (a process there may hold 256 open files).
+func startModelWatcher(m *model) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	state := newWatcherState()
+	if stop, werr := startWatcher(state, filepath.Join(home, ".taskr")); werr == nil {
+		m.watcher = state
+		m.watcherStop = stop
+	}
+}
+
+// closeWatcher releases the filesystem watcher. Idempotent, so the quit path
+// and a test cleanup can both call it.
+func (m *model) closeWatcher() {
+	if m.watcherStop != nil {
+		m.watcherStop()
+		m.watcherStop = nil
+	}
+	m.watcher = nil
 }
 
 // flushPendingWrites synchronously persists any dirty tasks / tombstones. The

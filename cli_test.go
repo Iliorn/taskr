@@ -25,10 +25,21 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 	os.Stdout = w
 	defer func() { os.Stdout = orig }()
+
+	// Drain while fn runs. Reading only afterwards deadlocks as soon as the
+	// output exceeds the pipe buffer — which `taskr completion fish` does, and
+	// which showed up as a ten-minute test timeout on Windows, where the buffer
+	// is far smaller than Linux's 64 KB.
+	var buf bytes.Buffer
+	done := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(&buf, r)
+		done <- err
+	}()
+
 	fn()
 	w.Close()
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
+	if err := <-done; err != nil {
 		t.Fatalf("read captured stdout: %v", err)
 	}
 	return buf.String()

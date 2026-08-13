@@ -20,6 +20,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch key.String() {
 	case "q": // ctrl+c is handled globally in dispatch
 		m.flushPendingWrites()
+		m.closeWatcher()
 		return m, tea.Quit
 	case "?":
 		m.mode = modeHelp

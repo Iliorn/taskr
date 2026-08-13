@@ -60,8 +60,23 @@ func TestSnapshotFileBackedProducesOpenableCopy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("glob: %v", err)
 	}
-	if len(matches) != 1 || matches[0] != backupPath {
-		t.Errorf("backup at unexpected path: glob=%v, returned=%s", matches, backupPath)
+	// Compare through EvalSymlinks: on macOS the temp dir is handed out as
+	// /var/folders/... while the opened file resolves to /private/var/folders/...
+	// — the same file, two spellings, and a plain string compare fails there
+	// and only there.
+	if len(matches) != 1 {
+		t.Fatalf("backup at unexpected path: glob=%v, returned=%s", matches, backupPath)
+	}
+	gotPath, err := filepath.EvalSymlinks(matches[0])
+	if err != nil {
+		t.Fatalf("resolve %s: %v", matches[0], err)
+	}
+	wantPath, err := filepath.EvalSymlinks(backupPath)
+	if err != nil {
+		t.Fatalf("resolve %s: %v", backupPath, err)
+	}
+	if gotPath != wantPath {
+		t.Errorf("backup at unexpected path: glob=%s, returned=%s", gotPath, wantPath)
 	}
 
 	// Open the backup as a fresh independent SQLite handle and confirm the

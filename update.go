@@ -51,6 +51,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// silently did nothing.
 	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
 		m.flushPendingWrites()
+		m.closeWatcher()
 		return m, tea.Quit
 	}
 
@@ -668,6 +669,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "q": // ctrl+c is handled globally in dispatch
 			m.flushPendingWrites()
+			m.closeWatcher()
 			return m, tea.Quit
 		case "?":
 			m.mode = modeHelp

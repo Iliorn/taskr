@@ -178,9 +178,16 @@ func startWatcher(state *watcherState, dir string) (cleanup func(), err error) {
 		}
 	}()
 
+	// Idempotent: the model is a value type, so several copies can hold this
+	// same func (the quit path and a test cleanup, say) and each will call it.
+	// Without the Once, the second call closes an already-closed channel and
+	// panics.
+	var once sync.Once
 	return func() {
-		close(stop)
-		w.Close()
+		once.Do(func() {
+			close(stop)
+			w.Close()
+		})
 	}, nil
 }
 

@@ -19,10 +19,19 @@ func captureStderr(t *testing.T, fn func()) string {
 	}
 	os.Stderr = w
 	defer func() { os.Stderr = orig }()
+
+	// Drained concurrently for the same reason as captureStdout: a usage block
+	// bigger than the pipe buffer would otherwise block the writer forever.
+	var buf bytes.Buffer
+	done := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(&buf, r)
+		done <- err
+	}()
+
 	fn()
 	w.Close()
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
+	if err := <-done; err != nil {
 		t.Fatalf("read captured stderr: %v", err)
 	}
 	return buf.String()

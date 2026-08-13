@@ -27,7 +27,11 @@ func main() {
 		os.Exit(code)
 	}
 
-	p := tea.NewProgram(initialModel(newSQLiteRepo()), tea.WithAltScreen())
+	m := initialModel(newSQLiteRepo())
+	// Live reload of out-of-process writes. Started here, not in initialModel:
+	// it holds a file descriptor, and only a running program wants one.
+	startModelWatcher(&m)
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
