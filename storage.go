@@ -221,6 +221,131 @@ func loadTodosJSON() ([]todo.Todo, error) {
 	return todos, nil
 }
 
+// ── Sort comparators ─────────────────────────────────────────────────────────
+//
+// Each mode's ordering lives in one less-function over *todo.Todo, shared by
+// the value sorts (which the CLI and storage use) and the pointer sorts the
+// cache refresh uses. Every chain ends at ID, so each is a *total* order — that
+// is what lets the sorts below use sort.Slice instead of sort.SliceStable: with
+// no ties left to preserve, the stable merge only bought slower sorting.
+
+func lessByDueDate(a, b *todo.Todo) bool {
+	aZero, bZero := a.DueDate.IsZero(), b.DueDate.IsZero()
+	if aZero && bZero {
+		if !a.CreatedAt.Equal(b.CreatedAt) {
+			return a.CreatedAt.Before(b.CreatedAt)
+		}
+		return a.ID < b.ID
+	}
+	if aZero {
+		return false
+	}
+	if bZero {
+		return true
+	}
+	if !a.DueDate.Equal(b.DueDate) {
+		return a.DueDate.Before(b.DueDate)
+	}
+	if !a.CreatedAt.Equal(b.CreatedAt) {
+		return a.CreatedAt.Before(b.CreatedAt)
+	}
+	return a.ID < b.ID
+}
+
+func lessBySize(a, b *todo.Todo) bool {
+	if ra, rb := sizeRank(a.Size), sizeRank(b.Size); ra != rb {
+		return ra < rb
+	}
+	if !a.CreatedAt.Equal(b.CreatedAt) {
+		return a.CreatedAt.Before(b.CreatedAt)
+	}
+	return a.ID < b.ID
+}
+
+func lessByTitle(a, b *todo.Todo) bool {
+	ta, tb := strings.ToLower(a.Title), strings.ToLower(b.Title)
+	if ta != tb {
+		return ta < tb
+	}
+	return a.ID < b.ID
+}
+
+func lessByCompletedAt(a, b *todo.Todo) bool {
+	if !a.CompletedAt.Equal(b.CompletedAt) {
+		return a.CompletedAt.After(b.CompletedAt)
+	}
+	return a.ID < b.ID
+}
+
+// lessBySequenceTie is the tie-break chain applied once two tasks score equal,
+// each key meaningful rather than arbitrary:
+//  1. due proximity (a real due date beats none; sooner beats later)
+//  2. size ascending (the quick win first)
+//  3. CreatedAt ascending (tasks entered as a burst — a decomposed plan typed
+//     in execution order — keep that entry order)
+//  4. ID — the absolute backstop so tasks identical on every key (common in
+//     the Done list, where score is uniformly 0) don't inherit the random
+//     order they came out of Store.allTodos in, which would otherwise
+//     reshuffle them on every cache rebuild (e.g. while the search-input
+//     cursor blinks).
+func lessBySequenceTie(a, b *todo.Todo) bool {
+	aZero, bZero := a.DueDate.IsZero(), b.DueDate.IsZero()
+	if aZero != bZero {
+		return bZero
+	}
+	if !aZero && !a.DueDate.Equal(b.DueDate) {
+		return a.DueDate.Before(b.DueDate)
+	}
+	if ra, rb := sizeRank(a.Size), sizeRank(b.Size); ra != rb {
+		return ra < rb
+	}
+	if !a.CreatedAt.Equal(b.CreatedAt) {
+		return a.CreatedAt.Before(b.CreatedAt)
+	}
+	return a.ID < b.ID
+}
+
+// sortTodoPtrs sorts a pointer slice with one of the comparators above. This is
+// the form the cache refresh uses: sorting []todo.Todo moves 416-byte structs
+// on every swap, which made the stable merge inside selectActiveDone the single
+// most expensive thing in a refresh. Sorting pointers moves 8 bytes.
+func sortTodoPtrs(todos []*todo.Todo, less func(a, b *todo.Todo) bool) {
+	sort.Slice(todos, func(i, j int) bool { return less(todos[i], todos[j]) })
+}
+
+// sortTodoPtrsBySequence sorts by sequence score descending, then the tie-break
+// chain. The score is computed once per task into the slice being sorted, so
+// the comparator reads a float field instead of hashing an ID into a score map
+// on every comparison.
+func sortTodoPtrsBySequence(todos []*todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) {
+	if len(todos) <= 1 {
+		return
+	}
+	type scored struct {
+		t     *todo.Todo
+		score float64
+	}
+	rows := make([]scored, len(todos))
+	for i, t := range todos {
+		s := score(t)
+		if rollup != nil {
+			if boost, ok := rollup[t.ID]; ok && boost > s {
+				s = boost
+			}
+		}
+		rows[i] = scored{t, s}
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].score != rows[j].score {
+			return rows[i].score > rows[j].score
+		}
+		return lessBySequenceTie(rows[i].t, rows[j].t)
+	})
+	for i := range rows {
+		todos[i] = rows[i].t
+	}
+}
+
 // sortTodosByMode sorts todos by the given mode. After the sequencing engine
 // only two modes exist; any other value falls through to Sequence.
 func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
@@ -229,46 +354,20 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 	}
 	switch mode {
 	case taskSortDueDate:
-		sort.SliceStable(todos, func(i, j int) bool {
-			iZero := todos[i].DueDate.IsZero()
-			jZero := todos[j].DueDate.IsZero()
-			if iZero && jZero {
-				if !todos[i].CreatedAt.Equal(todos[j].CreatedAt) {
-					return todos[i].CreatedAt.Before(todos[j].CreatedAt)
-				}
-				return todos[i].ID < todos[j].ID
-			}
-			if iZero {
-				return false
-			}
-			if jZero {
-				return true
-			}
-			if !todos[i].DueDate.Equal(todos[j].DueDate) {
-				return todos[i].DueDate.Before(todos[j].DueDate)
-			}
-			if !todos[i].CreatedAt.Equal(todos[j].CreatedAt) {
-				return todos[i].CreatedAt.Before(todos[j].CreatedAt)
-			}
-			return todos[i].ID < todos[j].ID
-		})
+		sortTodoValues(todos, lessByDueDate)
 	case taskSortSize:
 		// Small first, then Medium, then Large — "sort by Size" is the same
-		// intent as "show me the quick wins". Ties break by CreatedAt for
-		// stability.
-		sort.SliceStable(todos, func(i, j int) bool {
-			ri, rj := sizeRank(todos[i].Size), sizeRank(todos[j].Size)
-			if ri != rj {
-				return ri < rj
-			}
-			if !todos[i].CreatedAt.Equal(todos[j].CreatedAt) {
-				return todos[i].CreatedAt.Before(todos[j].CreatedAt)
-			}
-			return todos[i].ID < todos[j].ID
-		})
+		// intent as "show me the quick wins".
+		sortTodoValues(todos, lessBySize)
 	default: // taskSortSequence
 		sortTodosBySequenceWithRollup(todos, nil)
 	}
+}
+
+// sortTodoValues is the value-slice form of sortTodoPtrs, for the callers that
+// hold a []todo.Todo (the CLI, the on-disk load path).
+func sortTodoValues(todos []todo.Todo, less func(a, b *todo.Todo) bool) {
+	sort.Slice(todos, func(i, j int) bool { return less(&todos[i], &todos[j]) })
 }
 
 // sortTodosBySequenceWithRollup is the sequence-mode sort, with an optional
@@ -290,47 +389,15 @@ func sortTodosBySequenceWithRollupBy(todos []todo.Todo, rollup map[string]float6
 	if len(todos) <= 1 {
 		return
 	}
-	scores := make(map[string]float64, len(todos))
-	for i := range todos {
-		s := score(&todos[i])
-		if rollup != nil {
-			if boost, ok := rollup[todos[i].ID]; ok && boost > s {
-				s = boost
-			}
-		}
-		scores[todos[i].ID] = s
+	// Sort the pointers, then permute the values once: the same ordering with
+	// 8-byte swaps instead of 416-byte ones.
+	ptrs := todoPtrs(todos)
+	sortTodoPtrsBySequence(ptrs, rollup, score)
+	sorted := make([]todo.Todo, len(todos))
+	for i, t := range ptrs {
+		sorted[i] = *t
 	}
-	sort.SliceStable(todos, func(i, j int) bool {
-		si, sj := scores[todos[i].ID], scores[todos[j].ID]
-		if si != sj {
-			return si > sj
-		}
-		// Tie on score → the documented tie-break chain, each key meaningful
-		// rather than arbitrary:
-		//   1. due proximity (a real due date beats none; sooner beats later)
-		//   2. size ascending (the quick win first)
-		//   3. CreatedAt ascending (tasks entered as a burst — a decomposed
-		//      plan typed in execution order — keep that entry order)
-		//   4. ID — the absolute backstop so tasks identical on every key
-		//      (common in the Done list, where score is uniformly 0) don't
-		//      inherit the random order they came out of Store.allTodos()
-		//      in, which would otherwise reshuffle them on every cache
-		//      rebuild (e.g. while the search-input cursor blinks).
-		iZero, jZero := todos[i].DueDate.IsZero(), todos[j].DueDate.IsZero()
-		if iZero != jZero {
-			return jZero
-		}
-		if !iZero && !todos[i].DueDate.Equal(todos[j].DueDate) {
-			return todos[i].DueDate.Before(todos[j].DueDate)
-		}
-		if ri, rj := sizeRank(todos[i].Size), sizeRank(todos[j].Size); ri != rj {
-			return ri < rj
-		}
-		if !todos[i].CreatedAt.Equal(todos[j].CreatedAt) {
-			return todos[i].CreatedAt.Before(todos[j].CreatedAt)
-		}
-		return todos[i].ID < todos[j].ID
-	})
+	copy(todos, sorted)
 }
 
 // sizeRank orders sizes Small < Medium < Large for sorting — smaller first
@@ -350,46 +417,47 @@ func sizeRank(s todo.Size) int {
 // the active-task taskSort. Completed mode is most-recent-first (the usual
 // "what did I just finish" view); Alpha is case-insensitive title A→Z. Ties
 // break by ID for a stable order across cache rebuilds.
-func sortHistory(todos []todo.Todo, mode historySortMode) {
-	if len(todos) <= 1 {
-		return
+// historyLess picks the completed-list comparator: Completed mode is
+// most-recent-first (the usual "what did I just finish" view); Alpha is
+// case-insensitive title A→Z.
+func historyLess(mode historySortMode) func(a, b *todo.Todo) bool {
+	if mode == historySortAlpha {
+		return lessByTitle
 	}
-	switch mode {
-	case historySortAlpha:
-		sort.SliceStable(todos, func(i, j int) bool {
-			ti := strings.ToLower(todos[i].Title)
-			tj := strings.ToLower(todos[j].Title)
-			if ti != tj {
-				return ti < tj
-			}
-			return todos[i].ID < todos[j].ID
-		})
-	default: // historySortCompleted — most recent first
-		sort.SliceStable(todos, func(i, j int) bool {
-			if !todos[i].CompletedAt.Equal(todos[j].CompletedAt) {
-				return todos[i].CompletedAt.After(todos[j].CompletedAt)
-			}
-			return todos[i].ID < todos[j].ID
-		})
-	}
+	return lessByCompletedAt
 }
 
 func sortTodosByStartDate(todos []todo.Todo) []todo.Todo {
 	result := make([]todo.Todo, len(todos))
 	copy(result, todos)
-	sort.SliceStable(result, func(i, j int) bool {
-		iZero := result[i].StartDate.IsZero()
-		jZero := result[j].StartDate.IsZero()
-		if iZero && jZero {
-			return result[i].CreatedAt.Before(result[j].CreatedAt)
-		}
-		if iZero {
-			return false
-		}
-		if jZero {
-			return true
-		}
-		return result[i].StartDate.Before(result[j].StartDate)
-	})
+	sortTodoValues(result, lessByStartDate)
 	return result
+}
+
+// lessByStartDate orders a project's tasks along the Gantt: dated tasks first
+// in start order, undated last in entry order. Ties end at ID, both so the sort
+// is a total order (sort.Slice, no stable merge) and because the stable form was
+// only ever preserving the order tasks came out of the store's map in — which
+// reshuffled between refreshes.
+func lessByStartDate(a, b *todo.Todo) bool {
+	aZero, bZero := a.StartDate.IsZero(), b.StartDate.IsZero()
+	if aZero && bZero {
+		if !a.CreatedAt.Equal(b.CreatedAt) {
+			return a.CreatedAt.Before(b.CreatedAt)
+		}
+		return a.ID < b.ID
+	}
+	if aZero {
+		return false
+	}
+	if bZero {
+		return true
+	}
+	if !a.StartDate.Equal(b.StartDate) {
+		return a.StartDate.Before(b.StartDate)
+	}
+	if !a.CreatedAt.Equal(b.CreatedAt) {
+		return a.CreatedAt.Before(b.CreatedAt)
+	}
+	return a.ID < b.ID
 }

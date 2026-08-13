@@ -640,6 +640,9 @@ func (m *model) flushPendingWrites() {
 
 // copyTodo deep-copies the nested slices of a single task so the result can be
 // safely mutated (or read from another goroutine) without affecting the source.
+// subProgress is one parent's subtask tally, cached per refresh.
+type subProgress struct{ done, total int }
+
 // todoValues is todoPtrs' inverse: a copied value slice, for the places that
 // genuinely need one — the sync wire format, an undo snapshot, a digest. It
 // copies, so reach for it only when a durable snapshot is the point.
@@ -1142,6 +1145,16 @@ func (m model) descendantIDs(rootID string) []string {
 // children. The Tasks-tab badge `(2/5)` reads this — direct children match
 // the visible tree better than counting transitive descendants.
 func (m *model) subtaskProgress(parentID string) (done, total int) {
+	// Served from the cache the refresh builds in one pass. A *missing* key
+	// means "no subtasks", which is most tasks — so the warm signal has to be
+	// the map's existence, not the lookup's ok. Treating a miss as cold sent
+	// every childless task down the walk below, which is what kept this at a
+	// sixth of the whole refresh. The walk stays as the cold path: tests and the
+	// CLI never build the cache.
+	if m.cache.subProgress != nil {
+		p := m.cache.subProgress[parentID]
+		return p.done, p.total
+	}
 	ids := m.subtaskIDs(parentID)
 	total = len(ids)
 	for _, id := range ids {

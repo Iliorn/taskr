@@ -194,31 +194,38 @@ func todoMatchesFocus(t todo.Todo, focus bool) bool {
 // calmer one.
 func selectActiveDone(todos []*todo.Todo, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
 	match := compileSearch(search)
+	// Split and sort as pointers, then materialize once at the end. The caches
+	// hold values — they outlive this call and are read while the store mutates
+	// — but sorting them as values meant every swap moved a 416-byte struct,
+	// which made this the most expensive step of a cache refresh.
+	var activeP, doneP []*todo.Todo
 	for _, t := range todos {
 		if t.ParentID != "" {
 			continue
 		}
-		// The caches hold values: they outlive this call and are read while the
-		// store mutates, so the split materializes copies here even though the
-		// input is the live set.
 		switch {
 		case t.Status == todo.Pending && match(*t) && todoMatchesFocus(*t, focus):
-			active = append(active, *t)
+			activeP = append(activeP, t)
 		case t.Status == todo.Done && match(*t):
-			done = append(done, *t)
+			doneP = append(doneP, t)
 		}
 	}
 	// Active tasks rank by taskSort; the done list has its own history sort,
 	// since the active modes (score, size) carry no meaning once tasks close.
-	if sortMode == taskSortSequence {
+	switch sortMode {
+	case taskSortSequence:
 		rollup := descendantScoreRollup(todos)
 		rollup = dependencyScoreRollup(todos, rollup)
-		sortTodosBySequenceWithRollup(active, rollup)
-	} else {
-		sortTodosByMode(active, sortMode)
+		sortTodoPtrsBySequence(activeP, rollup, sequenceScore)
+	case taskSortDueDate:
+		sortTodoPtrs(activeP, lessByDueDate)
+	case taskSortSize:
+		sortTodoPtrs(activeP, lessBySize)
+	default:
+		sortTodoPtrsBySequence(activeP, nil, sequenceScore)
 	}
-	sortHistory(done, historyMode)
-	return active, done
+	sortTodoPtrs(doneP, historyLess(historyMode))
+	return todoValues(activeP), todoValues(doneP)
 }
 
 // descendantScoreRollup walks the full task slice and returns, per top-level

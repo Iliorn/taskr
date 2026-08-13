@@ -241,3 +241,49 @@ func TestDescendantScoreRollupLiftsChildScore(t *testing.T) {
 		t.Errorf("rollup score %.2f should exceed parent's own %.2f", rollup["p"], parentOwn)
 	}
 }
+
+// subtaskProgress is served from a cache the refresh builds in one pass, with a
+// live walk as the cold path. The two must agree — and a task with no subtasks
+// must read as 0/0 from both, which is the case that made the cache useless
+// when a missing key was treated as "cache cold".
+func TestSubtaskProgressCacheMatchesLiveWalk(t *testing.T) {
+	parent := todo.New("Parent")
+	first := todo.NewSubtask("One", parent.ID)
+	second := todo.NewSubtask("Two", parent.ID)
+	second.Status = todo.Done
+	lonely := todo.New("No children")
+
+	warm := modelWithTasks(t, parent, first, second, lonely)
+	warm.ensureCache()
+	if warm.cache.subProgress == nil {
+		t.Fatal("the refresh did not build the subtask-progress cache")
+	}
+
+	cold := modelWithTasks(t, parent, first, second, lonely)
+	cold.cache.subProgress = nil // force the live walk
+
+	for _, id := range []string{parent.ID, lonely.ID, first.ID} {
+		wd, wt := warm.subtaskProgress(id)
+		cd, ct := cold.subtaskProgress(id)
+		if wd != cd || wt != ct {
+			t.Errorf("task %.6s: cached %d/%d, live walk %d/%d", id, wd, wt, cd, ct)
+		}
+	}
+	if d, total := warm.subtaskProgress(parent.ID); d != 1 || total != 2 {
+		t.Errorf("parent progress = %d/%d, want 1/2", d, total)
+	}
+	if d, total := warm.subtaskProgress(lonely.ID); d != 0 || total != 0 {
+		t.Errorf("childless task = %d/%d, want 0/0", d, total)
+	}
+
+	// A subtask closed after the last refresh must show up once the caches are
+	// refreshed, the same as every other derived view.
+	if sub := warm.get(first.ID); sub != nil {
+		sub.Status = todo.Done
+	}
+	warm.markCacheDirty()
+	warm.ensureCache()
+	if d, total := warm.subtaskProgress(parent.ID); d != 2 || total != 2 {
+		t.Errorf("after closing a subtask: %d/%d, want 2/2", d, total)
+	}
+}

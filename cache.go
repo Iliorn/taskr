@@ -29,8 +29,9 @@ type cacheState struct {
 	untaggedDone  int
 	projects      []string
 	projectTasks  map[string][]todo.Todo
-	tagLastUsed   map[string]time.Time // tag → latest ModifiedAt of a task using it
-	projLastUsed  map[string]time.Time // project → latest ModifiedAt of a task in it
+	tagLastUsed   map[string]time.Time   // tag → latest ModifiedAt of a task using it
+	subProgress   map[string]subProgress // parentID → subtask done/total; see refreshSubtaskProgress
+	projLastUsed  map[string]time.Time   // project → latest ModifiedAt of a task in it
 	tagRender     map[string]string
 	taskTagRender map[string]string
 	boardCols     [][]todo.Todo // Board-tab columns derived from active/done; see buildBoardColumns
@@ -94,6 +95,8 @@ func (m *model) refreshCaches() {
 
 	m.cache.projects = nil
 	m.cache.projectSearch = "\x00"
+
+	m.refreshSubtaskProgress(all)
 
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
@@ -299,6 +302,31 @@ func (m *model) refreshTagRenderCache() {
 			}
 			m.cache.taskTagRender[t.ID] = rendered
 		}
+	}
+}
+
+// refreshSubtaskProgress rebuilds the parent → (done, total) counts in a single
+// pass over the task set. It used to be computed per row by subtaskProgress,
+// which walked the child index and did a map lookup per child — 13% of a cache
+// refresh at 2000 tasks, because the row-metrics pass asks every active task
+// for it. One pass over the children answers it for every parent at once.
+func (m *model) refreshSubtaskProgress(all []*todo.Todo) {
+	if m.cache.subProgress == nil {
+		m.cache.subProgress = make(map[string]subProgress, 16)
+	}
+	for k := range m.cache.subProgress {
+		delete(m.cache.subProgress, k)
+	}
+	for _, t := range all {
+		if t.ParentID == "" {
+			continue
+		}
+		p := m.cache.subProgress[t.ParentID]
+		p.total++
+		if t.Status == todo.Done {
+			p.done++
+		}
+		m.cache.subProgress[t.ParentID] = p
 	}
 }
 
