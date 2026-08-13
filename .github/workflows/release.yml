@@ -4,7 +4,9 @@ name: Release
 #   git tag v1.10.0 && git push origin v1.10.0
 # This builds the Linux and Windows targets with the tag baked in as the version and
 # publishes them as a GitHub release. Asset names are load-bearing — the
-# in-app self-update fetches these exact names; do not rename them.
+# in-app self-update fetches these exact names (selfUpdateAsset in helpers.go),
+# and an already-installed binary looks for the name it was built to expect, so
+# a name can be added but never renamed.
 # macOS is distributed from tagged source through Homebrew, not release assets.
 
 on:
@@ -35,7 +37,12 @@ jobs:
           LDFLAGS: -s -w -X main.appVersion=${{ github.ref_name }}
         run: |
           GOOS=linux   GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr .
+          GOOS=linux   GOARCH=arm64 go build -ldflags "$LDFLAGS" -o taskr-linux-arm64 .
           GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr.exe .
+
+      # Lets anyone verify a download, and gives packagers something to pin.
+      - name: Checksums
+        run: sha256sum taskr taskr-linux-arm64 taskr.exe > SHA256SUMS
 
       - name: Create release
         env:
@@ -43,4 +50,4 @@ jobs:
           V: ${{ github.ref_name }}
         run: |
           gh release create "$V" --title "$V" --generate-notes \
-            taskr taskr.exe
+            taskr taskr-linux-arm64 taskr.exe SHA256SUMS

@@ -28,6 +28,11 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test ./...
+      # The app runs a sync hub, an SSE listener, a filesystem watcher and async
+      # saves, so the goroutine surface is wide enough that a data race is a
+      # question of when. The suite is race-clean today; -race keeps it that way.
+      - name: Test (race)
+        run: go test -race ./...
       - name: Build
         run: go build .
 

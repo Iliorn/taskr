@@ -819,12 +819,28 @@ func runningFromHomebrew() bool {
 	return err == nil && isHomebrewCellarPath(execPath)
 }
 
-func selfUpdateAsset(goos string) (string, error) {
+// selfUpdateAsset names the release asset for a platform. The names are
+// load-bearing in both directions: the release workflow attaches exactly these,
+// and an already-installed binary looks for the name *it* was built to expect —
+// so "taskr" and "taskr.exe" can never be renamed, and a new platform gets a new
+// name rather than a redefinition. Architecture is part of the lookup because
+// there are now two Linux builds; handing an arm64 machine the amd64 asset would
+// install a binary that cannot run.
+func selfUpdateAsset(goos, goarch string) (string, error) {
 	switch goos {
 	case "linux":
-		return "taskr", nil
+		switch goarch {
+		case "amd64":
+			return "taskr", nil
+		case "arm64":
+			return "taskr-linux-arm64", nil
+		}
+		return "", fmt.Errorf("no release build for linux/%s — install from source with `go install github.com/Iliorn/taskr@latest`", goarch)
 	case "windows":
-		return "taskr.exe", nil
+		if goarch == "amd64" {
+			return "taskr.exe", nil
+		}
+		return "", fmt.Errorf("no release build for windows/%s — install from source with `go install github.com/Iliorn/taskr@latest`", goarch)
 	case "darwin":
 		return "", fmt.Errorf("macOS updates are distributed via Homebrew; run `brew install iliorn/tap/taskr`")
 	default:
@@ -845,7 +861,7 @@ func selfUpdate() error {
 		return fmt.Errorf("installed via Homebrew; run `brew update && brew upgrade taskr`")
 	}
 
-	assetName, err := selfUpdateAsset(runtime.GOOS)
+	assetName, err := selfUpdateAsset(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return err
 	}

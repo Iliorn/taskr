@@ -50,9 +50,28 @@ go build -ldflags "-X main.appVersion=$(git describe --tags --abbrev=0)" -o task
 mv taskr ~/.local/bin/   # or anywhere on your PATH
 ```
 
+**With Go:**
+
+```sh
+go install github.com/Iliorn/taskr@latest
+```
+
+Builds from source on any platform Go supports, including architectures the
+release page doesn't carry. The version then reports as `dev`, since the release
+workflow is what bakes a tag in.
+
 **Pre-built binary** (Linux / Windows):
 
-Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page — `taskr` for Linux and `taskr.exe` for Windows (x64).
+Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page:
+
+| Asset | Platform |
+|-------|----------|
+| `taskr` | Linux x64 |
+| `taskr-linux-arm64` | Linux arm64 (Raspberry Pi, ARM servers/VMs) |
+| `taskr.exe` | Windows x64 |
+| `SHA256SUMS` | checksums for the three binaries |
+
+Verify a download with `sha256sum --check --ignore-missing SHA256SUMS`.
 
 On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. On Linux and Windows, self-update (Settings tab → "Update to latest release") downloads the release asset straight from the GitHub API — no extra tooling required. macOS and other Homebrew installations are pointed at `brew upgrade taskr` instead, since the binary there is a managed file.
 

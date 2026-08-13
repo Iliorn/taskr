@@ -39,9 +39,11 @@ flow for it.
 
 ### Releasing
 
-Linux/Windows self-update depends on **exact release asset names** — they are load-bearing, do not rename. Cross-compile two targets, each with the `-ldflags` version string, and attach them to a `gh release`:
+Linux/Windows self-update depends on **exact release asset names** — they are load-bearing, do not rename (an installed binary looks for the name it was built with, so a name can be *added* but never changed). Cross-compile the targets, each with the `-ldflags` version string, and attach them to a `gh release` along with `SHA256SUMS`:
 
-- `taskr` (Linux x64) · `taskr.exe` (Windows x64)
+- `taskr` (Linux x64) · `taskr-linux-arm64` (Linux arm64) · `taskr.exe` (Windows x64)
+
+`selfUpdateAsset(goos, goarch)` is the single map from platform to asset name; adding a build target means adding a case there too, or that platform's update button downloads a binary it cannot run.
 
 macOS is distributed from tagged source through the separate `Iliorn/homebrew-tap` repository (`brew install iliorn/tap/taskr`). Do not add macOS binaries or `.app` bundles to GitHub releases. The tap checks for new releases hourly, updates the formula URL/checksum, and validates source installation on macOS CI.
 

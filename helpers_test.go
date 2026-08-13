@@ -38,20 +38,27 @@ func TestIsHomebrewCellarPath(t *testing.T) {
 }
 
 func TestSelfUpdateAsset(t *testing.T) {
+	// The two original names are frozen: a binary already in the field looks for
+	// the name it was built with, so renaming one breaks self-update for every
+	// existing install.
 	tests := []struct {
 		goos      string
+		goarch    string
 		wantAsset string
 		wantErr   bool
 	}{
-		{"linux", "taskr", false},
-		{"windows", "taskr.exe", false},
-		{"darwin", "", true},
-		{"freebsd", "", true},
+		{"linux", "amd64", "taskr", false},
+		{"linux", "arm64", "taskr-linux-arm64", false},
+		{"linux", "386", "", true},
+		{"windows", "amd64", "taskr.exe", false},
+		{"windows", "arm64", "", true},
+		{"darwin", "arm64", "", true},
+		{"freebsd", "amd64", "", true},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.goos, func(t *testing.T) {
-			asset, err := selfUpdateAsset(tt.goos)
+		t.Run(tt.goos+"/"+tt.goarch, func(t *testing.T) {
+			asset, err := selfUpdateAsset(tt.goos, tt.goarch)
 			if asset != tt.wantAsset {
 				t.Errorf("selfUpdateAsset(%q) asset = %q, want %q", tt.goos, asset, tt.wantAsset)
 			}
