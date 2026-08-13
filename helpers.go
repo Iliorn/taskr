@@ -453,6 +453,34 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 // ── Editor support ────────────────────────────────────────────────────────────
 
 func resolveEditorCmd() string {
+	// Memoized on the inputs the answer depends on. A miss walks every PATH
+	// entry for up to six candidates, and on Windows each of those is
+	// multiplied by PATHEXT — a few thousand stat syscalls when no editor is
+	// installed, which is the normal case on a CI runner. initialModel calls
+	// this on every construction and the editor launch calls it again, so the
+	// uncached version turned a test that builds many models into a five
+	// minute one. Keyed rather than sync.Once so a changed $EDITOR (or PATH)
+	// is still honoured.
+	key := os.Getenv("EDITOR") + "\x00" + os.Getenv("PATH")
+	editorCmdMu.Lock()
+	defer editorCmdMu.Unlock()
+	if path, ok := editorCmdCache[key]; ok {
+		return path
+	}
+	path := lookUpEditorCmd()
+	if editorCmdCache == nil {
+		editorCmdCache = make(map[string]string, 1)
+	}
+	editorCmdCache[key] = path
+	return path
+}
+
+var (
+	editorCmdMu    sync.Mutex
+	editorCmdCache map[string]string
+)
+
+func lookUpEditorCmd() string {
 	if editor := os.Getenv("EDITOR"); editor != "" {
 		if path, err := exec.LookPath(editor); err == nil {
 			return path

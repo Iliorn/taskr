@@ -1160,3 +1160,29 @@ func TestDownloadReleaseAsset(t *testing.T) {
 		t.Error("an empty body should not be installed over the binary")
 	}
 }
+
+// ── Editor resolution ────────────────────────────────────────────────────────
+
+// resolveEditorCmd memoizes, because a miss walks the whole PATH for six
+// candidates — thousands of stat syscalls on Windows, where PATHEXT multiplies
+// every probe. The cache is keyed on the inputs, not a sync.Once, so a changed
+// $EDITOR still takes effect; this pins that.
+func TestResolveEditorCmdHonoursAChangedEditor(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Skipf("no executable path on this platform: %v", err)
+	}
+
+	t.Setenv("EDITOR", self)
+	if got := resolveEditorCmd(); got != self {
+		t.Fatalf("resolveEditorCmd() = %q, want the $EDITOR we set (%q)", got, self)
+	}
+	if got := resolveEditorCmd(); got != self {
+		t.Fatalf("second call = %q, want the same answer %q", got, self)
+	}
+
+	t.Setenv("EDITOR", "taskr-definitely-not-an-editor-zzz")
+	if got := resolveEditorCmd(); got == self {
+		t.Error("a stale cache answered with the previous $EDITOR after it changed")
+	}
+}
