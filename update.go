@@ -60,6 +60,20 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.invalidateDetailCache()
 	}
 
+	// A user-rebound key is translated into the key the handlers case on, so
+	// the dispatch below never has to know about settings.json "keys". Only in
+	// normal mode: a modal owns its keys (y/n on a confirm, the text being
+	// typed), and rewriting those would corrupt input.
+	if key, ok := msg.(tea.KeyMsg); ok && m.mode == modeNormal {
+		resolved, deliver := resolveKeyOverride(m.currentKeyCtx(), key.String())
+		if !deliver {
+			return m, nil
+		}
+		if resolved != key.String() {
+			msg = keyMsgFor(resolved)
+		}
+	}
+
 	switch msg := msg.(type) {
 	case clearErrMsg:
 		m.err = ""
@@ -1352,6 +1366,7 @@ func (m *model) persistSettings() {
 		AutoCloseParent:   m.autoCloseParent,
 		AutoCloseSubtasks: m.autoCloseSubtasks,
 		Stages:            activeStages,
+		Keys:              activeKeys,
 	}); err != nil {
 		m.flashError(fmt.Sprintf(tr("Error saving settings: %v"), err))
 	}

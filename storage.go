@@ -75,6 +75,12 @@ type appSettings struct {
 	// list out so the field is discoverable in settings.json. The board's
 	// final column is always Done and is not part of this list.
 	Stages []string `json:"stages,omitempty"`
+
+	// Keys rebinds actions to keys: {"done": "D", "search": "s"}. Keyed by the
+	// action ids in keymap.go, which is why they exist — see keys.go for what
+	// can be rebound and how a broken entry is handled (dropped with a warning,
+	// never leaving the action unreachable).
+	Keys map[string]string `json:"keys,omitempty"`
 }
 
 // migrateSettings brings settings saved under an older schema version up to

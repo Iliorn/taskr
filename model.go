@@ -451,6 +451,13 @@ func initialModel(repo Repository) model {
 	applyLang(settings.Language)
 	applyBiases(biasesFromSettings(settings))
 	applyStages(stagesFromSettings(settings))
+	// A rejected rebind must be visible: silently falling back to the default
+	// looks like the setting was ignored at random.
+	keys, keyProblems := sanitizeKeyOverrides(settings.Keys)
+	applyKeys(keys)
+	if len(keyProblems) > 0 && errMsg == "" {
+		errMsg = fmt.Sprintf("Keybinding ignored: %s", keyProblems[0])
+	}
 
 	store := Store{}
 	store.ensureTasks()

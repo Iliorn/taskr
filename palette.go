@@ -112,7 +112,7 @@ func paletteCommands() []paletteCmd {
 				}
 				out = append(out, paletteCmd{
 					label:   tr(bd.desc),
-					key:     bd.key,
+					key:     effectiveKey(bd.action, bd.key),
 					section: paletteTabName(tb),
 					tab:     tb,
 				})
@@ -181,9 +181,10 @@ func allWordsPresent(haystack string, words []string) bool {
 	return true
 }
 
-// paletteKeyMsg turns a registry key into the KeyMsg dispatch expects, so the
-// palette runs an action by pressing its key exactly as the user would.
-func paletteKeyMsg(key string) tea.KeyMsg {
+// keyMsgFor turns a key name into the KeyMsg dispatch expects. Shared by the
+// palette (which runs an action by pressing its key) and the rebinding
+// translation in dispatch.
+func keyMsgFor(key string) tea.KeyMsg {
 	switch key {
 	case "enter":
 		return tea.KeyMsg{Type: tea.KeyEnter}
@@ -219,7 +220,7 @@ func (m model) runPaletteCommand(c paletteCmd) (tea.Model, tea.Cmd) {
 		// list-level action, so make sure the list is what receives the key.
 		m.pane = paneList
 	}
-	return m.Update(paletteKeyMsg(c.key))
+	return m.Update(keyMsgFor(c.key))
 }
 
 // paletteSelection clamps the stored cursor against the live result count.

@@ -18,6 +18,10 @@ func loadForCLI() (Repository, []todo.Todo, error) {
 	}
 	applyBiases(biasesFromSettings(settings))
 	applyStages(stagesFromSettings(settings))
+	// The CLI has no keys of its own, but it persists settings on some paths;
+	// applying the overlay keeps a round trip from dropping it.
+	keys, _ := sanitizeKeyOverrides(settings.Keys)
+	applyKeys(keys)
 	repo := newSQLiteRepo()
 	todos, err := repo.Load()
 	if err == nil {

@@ -245,7 +245,7 @@ func hintString(ctx keyCtx, primaryOnly bool) string {
 			b = append(b, " · "...)
 		}
 		first = false
-		b = append(b, bd.key...)
+		b = append(b, effectiveKey(bd.action, bd.key)...)
 		b = append(b, ' ')
 		b = append(b, tr(label)...)
 	}

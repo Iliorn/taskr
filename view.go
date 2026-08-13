@@ -1241,7 +1241,7 @@ func (m model) helpBodyLines() []string {
 		var keys [][2]string
 		for i := range keymap {
 			if bd := &keymap[i]; bd.section == title {
-				keys = append(keys, [2]string{bd.key, tr(bd.desc)})
+				keys = append(keys, [2]string{effectiveKey(bd.action, bd.key), tr(bd.desc)})
 			}
 		}
 		if len(keys) > 0 {

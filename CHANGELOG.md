@@ -29,6 +29,9 @@ belong in the commit log, not here — unless they change behaviour.
   the detail pane too.
 - **Shell completions and a man page**: `taskr completion bash|zsh|fish` and
   `taskr man`. Task refs complete from the live store.
+- **Custom keybindings**: `"keys": {"done": "D"}` in `~/.taskr/settings.json`
+  rebinds any single-key action. The old key is freed, and the hints, help
+  overlay and palette all show the new one.
 - **linux/arm64 release binary** (`taskr-linux-arm64`) and a `SHA256SUMS` file
   on each release. `go install github.com/Iliorn/taskr@latest` is documented.
 

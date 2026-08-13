@@ -104,6 +104,30 @@ taskr
 
 On the Tags and Projects tabs, `enter` walks in one level at a time — row → its tasks → the selected task's detail — and `esc` walks back out the same way. While you're inside, the row-level keys act on the task under the cursor, exactly as they do on the Tasks tab.
 
+### Custom keybindings
+
+Every binding carries an action id, so rebinding one is a line in
+`~/.taskr/settings.json`:
+
+```json
+{
+  "keys": {
+    "done": "D",
+    "search": "s",
+    "sort": "/"
+  }
+}
+```
+
+The keys are action ids (the full list is the `?` overlay — every row with a
+single-key binding), the values are keys. A rebind moves the action: the old key
+stops working, so it is free for something else, and the footer hints, the help
+overlay and the command palette all show the new key. Entries that name an
+unknown action, use a key that isn't a single key, or collide with another
+binding in the same view are ignored with a warning rather than leaving the
+action unreachable — as is `ctrl+c`, which always quits. Bindings written as a
+pair or a range (`←/→`, `H/L`) can't be rebound.
+
 ### Quick-add syntax
 
 ```
