@@ -26,13 +26,17 @@ jobs:
           go-version-file: go.mod
       - name: Vet
         run: go vet ./...
+      # -timeout is below Go's 10m default on purpose: a test that hangs on
+      # one platform should dump every goroutine's stack while the job still
+      # has time to report it. Without it a Windows stall is indistinguishable
+      # from a runner that stopped making progress, and the job just sits there.
       - name: Test
-        run: go test ./...
+        run: go test -timeout 5m ./...
       # The app runs a sync hub, an SSE listener, a filesystem watcher and async
       # saves, so the goroutine surface is wide enough that a data race is a
       # question of when. The suite is race-clean today; -race keeps it that way.
       - name: Test (race)
-        run: go test -race ./...
+        run: go test -race -timeout 10m ./...
       - name: Build
         run: go build .
 
