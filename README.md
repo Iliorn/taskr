@@ -3,7 +3,7 @@
 A fast, keyboard-driven task manager for the terminal — built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
 [![CI](https://github.com/Iliorn/taskr/actions/workflows/ci.yml/badge.svg)](https://github.com/Iliorn/taskr/actions/workflows/ci.yml)
-![Go](https://img.shields.io/badge/Go-1.24-00ADD8?style=flat&logo=go)
+![Go](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat&logo=go)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=flat)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat)
 
@@ -293,6 +293,12 @@ tombstones so a deletion propagates instead of the row reappearing. Edit-vs-dele
 conflicts surface as a brief toast, and the losing version is appended to
 `~/.taskr/sync.log` for recovery. Clock-based LWW assumes roughly synced clocks
 (NTP); only tasks sync, not `settings.json`.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the build/test commands and the
+conventions worth knowing before a pull request; [CLAUDE.md](CLAUDE.md) is the
+architecture tour. Notable changes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

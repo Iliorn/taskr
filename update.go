@@ -171,10 +171,10 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.saveScheduled = false
 		if m.savePending {
 			m.savePending = false
-			// Drain only the dirty IDs and tombstones from the Store. Per-task
-			// deep copies in drainDirty keep the save goroutine safe from
-			// concurrent mutation. Step 5 (map[ID]*Todo) eliminates the copy
-			// once pointers become stable across slice growth.
+			// Drain only the dirty IDs and tombstones from the Store. The
+			// per-task deep copies drainDirty makes are what keep this save
+			// goroutine safe from the mutations the Update goroutine keeps
+			// making while it runs.
 			dirty, tombstones := m.Store.drainDirty()
 			if len(dirty) == 0 && len(tombstones) == 0 {
 				return m, nil

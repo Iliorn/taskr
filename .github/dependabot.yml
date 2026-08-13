@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # Go module dependencies. taskr has few, and they are the TUI stack plus a
+  # pure-Go SQLite driver — a stale one here is a rendering or storage bug
+  # waiting to happen.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      charm:
+        patterns:
+          - "github.com/charmbracelet/*"
+
+  # The workflows pin action versions; this keeps them current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
