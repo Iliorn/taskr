@@ -8,6 +8,8 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+## [1.31.0] - 2026-08-13
+
 ### Added
 
 - **Command palette** (`ctrl+k`): find any action by name, with the key that
