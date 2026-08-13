@@ -1227,10 +1227,18 @@ func TestScriptProjectDeleteClearsGrouping(t *testing.T) {
 // invalidates; updateList's own tail happens to re-warm that cache, so this
 // asserts the behaviour, not the ordering.)
 func TestScriptProjectDrillKeepsCursorAfterMutation(t *testing.T) {
+	// Stamp CreatedAt explicitly. The drill list sorts by start date, then
+	// CreatedAt, then ID — and two tasks created in the same clock tick fall
+	// through to the ID, which is a random UUID. Linux's nanosecond clock
+	// separates them; Windows' is coarse enough that it sometimes doesn't, so
+	// "the second task I made" is only a stable position if the test says so.
+	base := time.Now().Add(-time.Hour)
 	first := todo.New("Alpha")
 	first.Project = "House"
+	first.CreatedAt = base
 	second := todo.New("Beta")
 	second.Project = "House"
+	second.CreatedAt = base.Add(time.Minute)
 	m := modelWithTasks(t, first, second)
 	m.tab = tabProjects
 
