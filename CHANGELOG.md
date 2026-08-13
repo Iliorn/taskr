@@ -61,3 +61,11 @@ belong in the commit log, not here — unless they change behaviour.
   jump/page keys on tabs with no list) and hid `--each`, `--edit` and
   `--delete` from `taskr subtask --help` and `taskr comment --help`.
 - The README's fuzzy-search example (`grcry`) never actually matched.
+- **An undone deletion could delete itself again on the next sync.** The
+  restore was stamped from the clock, which on Windows ticks about every 15 ms
+  — often the same instant as the deletion two keystrokes earlier. A tie is
+  resolved by content hash, so the tombstone could win. A deletion now carries
+  the moment it happened, and the restore is ordered strictly after it.
+- **The editor was resolved from scratch every time it was launched**, statting
+  every entry on `PATH` (times every `PATHEXT` extension on Windows) before
+  opening the file.
