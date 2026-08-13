@@ -37,8 +37,54 @@ func saveTodos(t *testing.T, h *sql.DB, todos []todo.Todo, tombstones ...string)
 	for i := range todos {
 		ptrs[i] = &todos[i]
 	}
-	if err := saveNormalized(h, ptrs, tombstones); err != nil {
+	var dead map[string]time.Time
+	if len(tombstones) > 0 {
+		dead = make(map[string]time.Time, len(tombstones))
+		for _, id := range tombstones {
+			dead[id] = time.Now()
+		}
+	}
+	if err := saveNormalized(h, ptrs, dead); err != nil {
 		t.Fatalf("saveNormalized: %v", err)
+	}
+}
+
+// TestTombstoneCarriesTheDeletionsOwnTime: saves are debounced, so the row is
+// tombstoned up to 300ms after the user actually deleted the task. deleted_at
+// is the deletion's event time in the merge, so it must be the moment the
+// caller recorded — not the moment the flush happened to run — or a deletion
+// sorts after edits that genuinely came later.
+func TestTombstoneCarriesTheDeletionsOwnTime(t *testing.T) {
+	h := openTestDB(t)
+	x := todo.New("doomed")
+	x.ModifiedAt = time.Now().Add(-time.Hour)
+	saveTodos(t, h, []todo.Todo{x})
+
+	deletedAt := time.Now().Add(-30 * time.Second)
+	if err := saveNormalized(h, nil, map[string]time.Time{x.ID: deletedAt}); err != nil {
+		t.Fatalf("saveNormalized: %v", err)
+	}
+	if got := tombstoneDeletedAt(h, x.ID); !got.Equal(deletedAt) {
+		t.Errorf("deleted_at = %v, want the recorded deletion time %v", got, deletedAt)
+	}
+}
+
+// The recorded time is still clamped against the row it deletes: a deletion
+// stamped before the version it removes would lose the merge and the task
+// would resurrect on the next sync.
+func TestTombstoneOutTimesTheVersionItDeletes(t *testing.T) {
+	h := openTestDB(t)
+	x := todo.New("edited then deleted")
+	x.ModifiedAt = time.Now()
+	saveTodos(t, h, []todo.Todo{x})
+
+	// A clock that ran backwards between the edit and the delete.
+	stale := x.ModifiedAt.Add(-time.Minute)
+	if err := saveNormalized(h, nil, map[string]time.Time{x.ID: stale}); err != nil {
+		t.Fatalf("saveNormalized: %v", err)
+	}
+	if got := tombstoneDeletedAt(h, x.ID); !got.After(x.ModifiedAt) {
+		t.Errorf("deleted_at = %v, want after the version it deletes (%v)", got, x.ModifiedAt)
 	}
 }
 

@@ -261,7 +261,7 @@ type querier interface {
 // saveNormalized writes the dirty tasks and tombstones to the normalized
 // schema. One transaction; per task the scalars go into `todos` and the
 // children replace the previous child rows. Untouched tasks are not rewritten.
-func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
+func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones map[string]time.Time) error {
 	if len(dirty) == 0 && len(tombstones) == 0 {
 		return nil
 	}
@@ -279,7 +279,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones []string) error {
 // saveNormalizedIn is saveNormalized's body on a caller-owned transaction —
 // the caller commits (or rolls back). Split out so mergeIntoStore can bundle
 // the load, the merge and this write into one atomic unit.
-func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error {
+func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time.Time) error {
 	// Foreign-key checks are immediate by default, but a batch can hold a task
 	// and the task it depends on in either order (drainDirty iterates a map; the
 	// merge follows slice order), and each task's todos row is written just
@@ -467,17 +467,23 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones []string) error
 		defer tomb.Close()
 		// deleted_at is a merge-ordering stamp: delete-vs-edit resolves by
 		// comparing it against the live version's ModifiedAt, so it must be
-		// clamped against the row's own modified_at (StampModified) — a slow
-		// local clock would otherwise stamp a deleted_at older than the version
-		// it deleted, the deletion loses the merge, and the task resurrects on
-		// the next sync. Timestamps are TEXT with mixed second/nano precision,
-		// so the comparison happens in Go via parseTime, never in SQL.
-		for _, id := range tombstones {
+		// clamped against the row's own modified_at (StampAt) — a slow local
+		// clock would otherwise stamp a deleted_at older than the version it
+		// deleted, the deletion loses the merge, and the task resurrects on
+		// the next sync. The caller's time is the moment of the deletion, not
+		// of this flush; a zero time means the caller didn't record one, and
+		// now is the best available answer. Timestamps are TEXT with mixed
+		// second/nano precision, so the comparison happens in Go via
+		// parseTime, never in SQL.
+		for id, at := range tombstones {
 			var modifiedAt string
 			if err := tx.QueryRow(`SELECT modified_at FROM todos WHERE id=?`, id).Scan(&modifiedAt); err != nil && err != sql.ErrNoRows {
 				return err
 			}
-			if _, err := tomb.Exec(fmtTime(todo.StampModified(parseTime(modifiedAt))), id); err != nil {
+			if at.IsZero() {
+				at = time.Now()
+			}
+			if _, err := tomb.Exec(fmtTime(todo.StampAt(at, parseTime(modifiedAt))), id); err != nil {
 				return err
 			}
 		}
@@ -881,7 +887,7 @@ func (r *sqliteRepo) TopBySequence(n int) ([]string, error) {
 // Callers must guarantee the *Todo pointers are stable for the duration of
 // the call (no concurrent mutation). The Store.drainDirty path hands us a
 // deep-copied snapshot, which satisfies this.
-func (r *sqliteRepo) Save(dirty []*todo.Todo, tombstones []string) error {
+func (r *sqliteRepo) Save(dirty []*todo.Todo, tombstones map[string]time.Time) error {
 	if err := openStore(); err != nil {
 		return err
 	}

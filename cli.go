@@ -1345,7 +1345,12 @@ func cliDelete(args []string) int {
 	// will not load again. Matches the TUI's delete semantics: cascade to
 	// every descendant so subtasks don't get stranded with a parent_id
 	// pointing at a tombstone.
-	if err := repo.Save(nil, ids); err != nil {
+	deletedAt := time.Now()
+	tombstones := make(map[string]time.Time, len(ids))
+	for _, id := range ids {
+		tombstones[id] = deletedAt
+	}
+	if err := repo.Save(nil, tombstones); err != nil {
 		fmt.Fprintf(os.Stderr, "delete: %v\n", err)
 		return 1
 	}

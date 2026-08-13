@@ -18,10 +18,15 @@ import (
 // Order is *derived* — when the UI needs a sorted list it goes through a
 // selector against an ordered view, never directly through map iteration.
 type Store struct {
-	tasks      map[string]*todo.Todo
-	undoStack  []undoEntry
-	dirtyIDs   map[string]struct{}
-	tombstones map[string]struct{}
+	tasks     map[string]*todo.Todo
+	undoStack []undoEntry
+	dirtyIDs  map[string]struct{}
+	// tombstones maps a deleted ID to the moment it was deleted. The time is
+	// the deletion's *event* time for merge purposes: an undo restores the
+	// task with a ModifiedAt clamped past it (touchRestored), so the restore
+	// out-times its own deletion even on a clock too coarse to separate the
+	// two keystrokes.
+	tombstones map[string]time.Time
 
 	// Maintained indexes. Update them via Store mutators; never write directly
 	// or they will drift from `tasks`.
@@ -215,17 +220,20 @@ func (s *Store) markAllDirty() {
 	}
 }
 
-// markTombstone records a deletion. If the same ID was previously marked dirty,
-// the dirty entry is dropped — there is no point writing a row we're about to
-// tombstone in the same save.
+// markTombstone records a deletion at the current instant. If the same ID was
+// previously marked dirty, the dirty entry is dropped — there is no point
+// writing a row we're about to tombstone in the same save. Re-marking an
+// already-tombstoned ID keeps the first timestamp: the deletion happened once.
 func (s *Store) markTombstone(id string) {
 	if id == "" {
 		return
 	}
 	if s.tombstones == nil {
-		s.tombstones = make(map[string]struct{})
+		s.tombstones = make(map[string]time.Time)
 	}
-	s.tombstones[id] = struct{}{}
+	if _, ok := s.tombstones[id]; !ok {
+		s.tombstones[id] = time.Now()
+	}
 	delete(s.dirtyIDs, id)
 }
 
@@ -234,7 +242,7 @@ func (s *Store) markTombstone(id string) {
 // even if the Update goroutine continues mutating the stored pointer
 // concurrently. (Pointer stability across mutations is guaranteed by the map,
 // but field-level concurrent reads still need a snapshot.)
-func (s *Store) drainDirty() (dirty []*todo.Todo, tombstones []string) {
+func (s *Store) drainDirty() (dirty []*todo.Todo, tombstones map[string]time.Time) {
 	if n := len(s.dirtyIDs); n > 0 {
 		dirty = make([]*todo.Todo, 0, n)
 		for id := range s.dirtyIDs {
@@ -247,9 +255,9 @@ func (s *Store) drainDirty() (dirty []*todo.Todo, tombstones []string) {
 		}
 	}
 	if n := len(s.tombstones); n > 0 {
-		tombstones = make([]string, 0, n)
-		for id := range s.tombstones {
-			tombstones = append(tombstones, id)
+		tombstones = make(map[string]time.Time, n)
+		for id, at := range s.tombstones {
+			tombstones[id] = at
 		}
 	}
 	s.dirtyIDs = nil

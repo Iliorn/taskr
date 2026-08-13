@@ -1,6 +1,10 @@
 package main
 
-import "taskr/todo"
+import (
+	"time"
+
+	"taskr/todo"
+)
 
 // fakeRepo is an in-memory Repository for tests — no database, no filesystem.
 // This is the payoff of the port: model tests build with a fakeRepo instead of
@@ -17,7 +21,7 @@ func (r *fakeRepo) ResyncScores() error { return nil }
 // Save mirrors the whole-snapshot semantics of the SQLite adapter at this step:
 // dirty contains the full live set, tombstones is nil. We rebuild r.todos from
 // the dirty pointers (deep-copied for test isolation).
-func (r *fakeRepo) Save(dirty []*todo.Todo, tombstones []string) error {
+func (r *fakeRepo) Save(dirty []*todo.Todo, tombstones map[string]time.Time) error {
 	out := make([]todo.Todo, len(dirty))
 	for i, p := range dirty {
 		out[i] = *p

@@ -278,7 +278,15 @@ func TestUndoDeleteSurvivesSyncMerge(t *testing.T) {
 	if m.get("k") != nil {
 		t.Fatal("task should be deleted after x/y")
 	}
-	deletedAt := time.Now()
+	// The deletion's own event time — what the tombstone syncs out with, and
+	// what the restore has to beat. Read it from the pending tombstone rather
+	// than the wall clock: on a coarse clock (Windows ticks about every 15ms)
+	// a time.Now() here is not reliably distinguishable from the delete, and
+	// the assertion below would be testing the clock, not the code.
+	deletedAt, ok := m.tombstones["k"]
+	if !ok {
+		t.Fatal("delete should leave a pending tombstone")
+	}
 
 	m = sendKey(t, m, "u")
 	got := m.get("k")
@@ -288,6 +296,9 @@ func TestUndoDeleteSurvivesSyncMerge(t *testing.T) {
 	if !got.ModifiedAt.After(deletedAt) {
 		t.Errorf("restored ModifiedAt = %v, want after the deletion (%v) so the undo wins the merge",
 			got.ModifiedAt, deletedAt)
+	}
+	if _, still := m.tombstones["k"]; still {
+		t.Error("undo left the pending tombstone in place — the next save would re-delete the task")
 	}
 
 	// The server still holds the tombstone from before the undo. The restored
@@ -305,6 +316,34 @@ func TestUndoDeleteSurvivesSyncMerge(t *testing.T) {
 		}
 	}
 	t.Error("restored task missing from merge output")
+}
+
+// The same guarantee, independent of how fast the clock happens to tick: the
+// restore is clamped against the deletion's event time, so it out-times the
+// tombstone even when time.Now() has not moved since the delete (or has moved
+// backwards — an NTP step during the confirm prompt).
+func TestUndoOutTimesDeletionOnACoarseClock(t *testing.T) {
+	task := todo.New("keep me")
+	task.ID = "k"
+	m := modelWithTasks(t, task)
+
+	m.pushUndo("delete task", "k")
+	m.remove("k")
+	m.markTombstone("k")
+	// Stand in for a clock that cannot separate the two keystrokes: stamp the
+	// deletion ahead of every reading time.Now() can return during the undo.
+	deletedAt := time.Now().Add(2 * time.Second)
+	m.tombstones["k"] = deletedAt
+
+	m.performUndo()
+	got := m.get("k")
+	if got == nil {
+		t.Fatal("undo should restore the task")
+	}
+	if !got.ModifiedAt.After(deletedAt) {
+		t.Errorf("restored ModifiedAt = %v, want after the deletion (%v); an event-time tie is a hash coin flip the restore can lose",
+			got.ModifiedAt, deletedAt)
+	}
 }
 
 // ── Undo vs. the subtaskOf index ─────────────────────────────────────────────

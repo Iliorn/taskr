@@ -984,6 +984,22 @@ func TestRecurrenceMutators(t *testing.T) {
 
 // ── StampModified ─────────────────────────────────────────────────────────────
 
+// StampAt is the caller-supplied-clock form: the event's own moment wins
+// unless it would land at or before the version it replaces.
+func TestStampAt(t *testing.T) {
+	base := time.Now()
+	if got := StampAt(base, base.Add(-time.Hour)); !got.Equal(base) {
+		t.Errorf("StampAt(at, older) = %v, want the caller's at %v", got, base)
+	}
+	prev := base.Add(time.Minute)
+	if got, want := StampAt(base, prev), prev.Add(time.Millisecond); !got.Equal(want) {
+		t.Errorf("StampAt(at, newer prev) = %v, want prev+1ms %v", got, want)
+	}
+	if got, want := StampAt(base, base), base.Add(time.Millisecond); !got.Equal(want) {
+		t.Errorf("StampAt(at, at) = %v, want a strictly later stamp %v", got, want)
+	}
+}
+
 // TestStampModifiedNormalClock checks that, with a normal wall clock (prev well
 // behind now), StampModified returns approximately now (not the zero-time floor).
 func TestStampModifiedNormalClock(t *testing.T) {

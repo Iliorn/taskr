@@ -23,11 +23,19 @@ import (
 // previous version should pass the zero time; the max then collapses to
 // time.Now() since any real wall-clock value exceeds zero+1ms.
 func StampModified(prev time.Time) time.Time {
-	now := time.Now()
-	if floor := prev.Add(time.Millisecond); floor.After(now) {
+	return StampAt(time.Now(), prev)
+}
+
+// StampAt is StampModified with the "now" reading supplied by the caller: the
+// stamp is max(at, prev+1ms). Use it when the event being stamped happened at
+// a known moment that is not the moment of the call — a deletion recorded
+// when the user pressed the key but written by a debounced save 300ms later,
+// say. Ordering against prev is preserved either way.
+func StampAt(at, prev time.Time) time.Time {
+	if floor := prev.Add(time.Millisecond); floor.After(at) {
 		return floor
 	}
-	return now
+	return at
 }
 
 // CapitalizeTitle uppercases the first rune of s if it is a lowercase letter,

@@ -514,7 +514,6 @@ func (m *model) performUndo() tea.Cmd {
 		for _, id := range entry.ids {
 			if _, ok := captured[id]; ok {
 				restored = append(restored, id)
-				delete(m.tombstones, id) // restoration overrides any pending tombstone
 			} else {
 				removed = append(removed, id)
 			}
@@ -550,7 +549,10 @@ func (m *model) performUndo() tea.Cmd {
 	return clearErrAfter()
 }
 
-// touchRestored stamps ModifiedAt=now on each task an undo just restored. The
+// touchRestored stamps a fresh ModifiedAt on each task an undo just restored
+// and clears any pending tombstone for it — a restoration overrides a deletion
+// that has not been flushed yet. (Clearing happens here, after the stamp, so
+// the clamp below can still read the deletion's event time.) The
 // restored state carries its original (old) ModifiedAt, and the sync merge is
 // last-writer-wins by that timestamp — without the bump, the state being undone
 // (a delete's tombstone with a newer DeletedAt, or an already-synced edit with a
@@ -559,21 +561,26 @@ func (m *model) performUndo() tea.Cmd {
 func (m *model) touchRestored(ids []string) {
 	for _, id := range ids {
 		if t := m.get(id); t != nil {
-			// Clamp against the live tombstone's deleted_at, not just the
-			// restored snapshot's ModifiedAt: after a slow-clock delete both
-			// collapse to the same prev+1ms, and an exact event-time tie
-			// resolves by content hash (laterWins) — a coin flip the restore
-			// could lose on devices that already received the tombstone via
-			// the push sync. If the debounced save hasn't flushed the
-			// tombstone yet, tombstoneDeletedAt reads the still-live row
-			// (zero) and the clamp falls back to the snapshot stamp — fine,
-			// since a tombstone that never reached the DB never syncs out.
+			// Clamp against the deletion's own event time, not just the
+			// restored snapshot's ModifiedAt: "now" is not reliably later
+			// than the delete it undoes. Windows' clock ticks about every
+			// 15ms, so a delete and the undo two keystrokes later routinely
+			// read the *same* instant; an exact event-time tie resolves by
+			// content hash (laterWins), a coin flip the restore could lose on
+			// a device that already received the tombstone. Two sources, both
+			// clamped: the pending in-memory tombstone (the moment the user
+			// pressed delete, still un-flushed) and the row's deleted_at if
+			// the debounced save already wrote it — whichever is later.
 			prev := t.ModifiedAt
+			if d := m.tombstones[id]; d.After(prev) {
+				prev = d
+			}
 			if d := tombstoneDeletedAt(db, t.ID); d.After(prev) {
 				prev = d
 			}
 			t.ModifiedAt = todo.StampModified(prev)
 		}
+		delete(m.tombstones, id)
 	}
 }
 
