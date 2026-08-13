@@ -161,7 +161,29 @@ taskr export > backup.json       # versioned JSON snapshot of every live task
 taskr export --include-done > full.json  # include completed tasks
 taskr import backup.json         # merge an export file into the local store
 taskr import - < backup.json     # same, reading from stdin
+taskr completion fish > ~/.config/fish/completions/taskr.fish
+taskr man > ~/.local/share/man/man1/taskr.1
 taskr help
+```
+
+### Shell completion and man page
+
+`taskr completion bash|zsh|fish` prints a completion script; `taskr man` prints a
+roff man page. Both are generated from the same command table the CLI dispatches
+on, so they can't fall behind a new subcommand or flag — a test compares the
+table against the flags each command actually defines. Task refs complete from
+the live store (via `taskr list`), so tab-completing `taskr done ` offers your
+open tasks.
+
+```sh
+# bash
+taskr completion bash > /etc/bash_completion.d/taskr
+# zsh
+taskr completion zsh > "${fpath[1]}/_taskr"
+# fish
+taskr completion fish > ~/.config/fish/completions/taskr.fish
+# man page
+taskr man > ~/.local/share/man/man1/taskr.1
 ```
 
 **Task references** can be either a UUID prefix (`60b9`) or a case-insensitive substring of the title (`milk`). ID-prefix takes precedence so scripts stay deterministic. Ambiguous references fail with exit code 2 and list every match with its short ID for easy disambiguation:

@@ -32,7 +32,7 @@ func isCLICommand(arg string) bool {
 		"show", "edit", "delete", "rm", "undelete", "comment",
 		"stats", "start", "stop", "log", "export", "import", "subtask",
 		"search", "tags", "projects", "learnings", "serve", "sync", "undo",
-		"doctor", "help", "-h", "--help", "--version":
+		"doctor", "completion", "man", "help", "-h", "--help", "--version":
 		return true
 	}
 	return false
@@ -111,6 +111,10 @@ func dispatchCLI(args []string) int {
 		return cliServe(rest)
 	case "sync":
 		return cliSync(rest)
+	case "completion":
+		return cliCompletion(rest)
+	case "man":
+		return cliMan(rest)
 	case "doctor":
 		return cliDoctor(rest)
 	case "--version":
@@ -1606,6 +1610,7 @@ func cliComment(args []string) int {
   taskr comment <ref> -                   read comment text from stdin
   taskr comment <ref> --edit=N "new text" edit comment N (1-based)
   taskr comment <ref> --delete=N          delete comment N (1-based)`)
+		fs.PrintDefaults()
 	}
 	// comment supports interspersed flags so --edit / --delete can sit
 	// before or after the ref, just like other mutation commands.
@@ -2131,6 +2136,7 @@ func cliSubtask(args []string) int {
 		fmt.Fprintln(os.Stderr, `usage:
   taskr subtask <parent-ref> "title"                   one subtask (args after parent are joined)
   taskr subtask <parent-ref> --each "title1" "title2"  one subtask per remaining positional`)
+		fs.PrintDefaults()
 	}
 	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
@@ -2209,6 +2215,10 @@ Tasks:
   taskr undo [--list]                  restore the most recent deletion (task + subtasks)
   taskr undelete <ref> | --list        restore a specific deleted task by ref (browse with --list)
   taskr subtask <parent> "title"       create a subtask (--each for multiple titles)
+
+Shell integration:
+  taskr completion bash|zsh|fish       print a completion script (install paths in the man page)
+  taskr man                            print the man page in roff (e.g. > ~/.local/share/man/man1/taskr.1)
 
 Discovery:
   taskr tags [--json]                  pending tags with counts
