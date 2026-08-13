@@ -5,7 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"taskr/todo"
 )
 
@@ -1013,5 +1019,137 @@ func TestParseManualEntry(t *testing.T) {
 
 	if _, _, err := parseManualEntry("banana", now); err == nil {
 		t.Error("expected error for junk input")
+	}
+}
+
+// ── Release lookup over the API ───────────────────────────────────────────────
+
+// releaseServer stands in for api.github.com. Returns the base URL to point
+// releaseAPIBase at, restoring the real one when the test ends.
+func releaseServer(t *testing.T, h http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(h)
+	prev := releaseAPIBase
+	releaseAPIBase = srv.URL
+	t.Cleanup(func() {
+		releaseAPIBase = prev
+		srv.Close()
+	})
+	return srv
+}
+
+func TestFetchLatestReleaseParsesTagAndAssets(t *testing.T) {
+	var gotPath, gotAccept, gotAgent string
+	releaseServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotAccept, gotAgent = r.URL.Path, r.Header.Get("Accept"), r.Header.Get("User-Agent")
+		fmt.Fprint(w, `{"tag_name":"v1.20.0","assets":[
+			{"name":"taskr","browser_download_url":"https://example.invalid/taskr"},
+			{"name":"taskr.exe","browser_download_url":"https://example.invalid/taskr.exe"}]}`)
+	})
+
+	info, err := fetchLatestRelease()
+	if err != nil {
+		t.Fatalf("fetchLatestRelease: %v", err)
+	}
+	if info.TagName != "v1.20.0" {
+		t.Errorf("tag = %q, want v1.20.0", info.TagName)
+	}
+	if gotPath != "/repos/"+releaseRepo+"/releases/latest" {
+		t.Errorf("requested %q", gotPath)
+	}
+	// The API rejects requests with no User-Agent, and the Accept header is the
+	// documented one — both are easy to drop and only fail against the real host.
+	if gotAccept != "application/vnd.github+json" {
+		t.Errorf("Accept = %q", gotAccept)
+	}
+	if !strings.HasPrefix(gotAgent, "taskr/") {
+		t.Errorf("User-Agent = %q, want a taskr/… agent", gotAgent)
+	}
+
+	asset, err := findReleaseAsset(info, "taskr.exe")
+	if err != nil || asset.URL != "https://example.invalid/taskr.exe" {
+		t.Errorf("findReleaseAsset = %+v, %v", asset, err)
+	}
+	if _, err := findReleaseAsset(info, "taskr.dmg"); err == nil {
+		t.Error("a missing asset should be an error, not an empty download")
+	}
+	if _, err := findReleaseAsset(releaseInfo{TagName: "v1", Assets: []releaseAsset{{Name: "taskr"}}}, "taskr"); err == nil {
+		t.Error("an asset with no URL should be an error")
+	}
+}
+
+// The failure an unauthenticated caller actually hits is the hourly rate limit,
+// so it has to read as something other than a generic 403.
+func TestFetchLatestReleaseSurfacesRateLimit(t *testing.T) {
+	releaseServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.WriteHeader(http.StatusForbidden)
+	})
+	_, err := fetchLatestRelease()
+	if err == nil || !strings.Contains(err.Error(), "rate limit") {
+		t.Errorf("error = %v, want it to mention the rate limit", err)
+	}
+}
+
+func TestFetchLatestReleaseErrors(t *testing.T) {
+	releaseServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	if _, err := fetchLatestRelease(); err == nil || !strings.Contains(err.Error(), "no releases") {
+		t.Errorf("404 error = %v", err)
+	}
+
+	releaseServer(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"tag_name":""}`)
+	})
+	if _, err := fetchLatestRelease(); err == nil {
+		t.Error("a release with no tag name should be an error")
+	}
+
+	releaseServer(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `not json`)
+	})
+	if _, err := fetchLatestRelease(); err == nil {
+		t.Error("unparseable JSON should be an error")
+	}
+}
+
+func TestDownloadReleaseAsset(t *testing.T) {
+	const payload = "#!/bin/sh\necho taskr\n"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/empty" {
+			return
+		}
+		if r.URL.Path == "/missing" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		fmt.Fprint(w, payload)
+	}))
+	defer srv.Close()
+
+	dst := filepath.Join(t.TempDir(), "taskr")
+	if err := downloadReleaseAsset(releaseAsset{Name: "taskr", URL: srv.URL + "/taskr"}, dst); err != nil {
+		t.Fatalf("downloadReleaseAsset: %v", err)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil || string(got) != payload {
+		t.Fatalf("downloaded %q (%v), want the payload", got, err)
+	}
+	// The staged file is executed after being renamed into place, so it has to
+	// land executable.
+	info, err := os.Stat(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
+		t.Errorf("mode = %v, want the executable bits set", info.Mode().Perm())
+	}
+
+	if err := downloadReleaseAsset(releaseAsset{URL: srv.URL + "/missing"}, dst); err == nil {
+		t.Error("a 404 should not be reported as a successful download")
+	}
+	if err := downloadReleaseAsset(releaseAsset{URL: srv.URL + "/empty"}, dst); err == nil {
+		t.Error("an empty body should not be installed over the binary")
 	}
 }

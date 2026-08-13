@@ -54,7 +54,7 @@ mv taskr ~/.local/bin/   # or anywhere on your PATH
 
 Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page — `taskr` for Linux and `taskr.exe` for Windows (x64).
 
-On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. On Linux and Windows, self-update (Settings tab → "Update to latest release") requires the [GitHub CLI](https://cli.github.com/). macOS updates are managed by Homebrew.
+On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. On Linux and Windows, self-update (Settings tab → "Update to latest release") downloads the release asset straight from the GitHub API — no extra tooling required. macOS and other Homebrew installations are pointed at `brew upgrade taskr` instead, since the binary there is a managed file.
 
 ## Usage
 

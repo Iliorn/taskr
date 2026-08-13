@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -857,10 +859,16 @@ func selfUpdate() error {
 	defer os.RemoveAll(stageDir)
 	tmpFile := filepath.Join(stageDir, assetName)
 
-	cmd := exec.Command("gh", "release", "download", "--repo", "iliorn/taskr",
-		"--pattern", assetName, "-D", stageDir, "--clobber")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("download failed: %s", strings.TrimSpace(string(out)))
+	info, err := fetchLatestRelease()
+	if err != nil {
+		return err
+	}
+	asset, err := findReleaseAsset(info, assetName)
+	if err != nil {
+		return err
+	}
+	if err := downloadReleaseAsset(asset, tmpFile); err != nil {
+		return err
 	}
 
 	if runtime.GOOS == "windows" {
@@ -909,15 +917,142 @@ func copyFile(srcPath, dstPath string) error {
 	return err
 }
 
+// ── Release lookup ───────────────────────────────────────────────────────────
+//
+// Both the update check and the download talk to the GitHub REST API directly.
+// They used to shell out to the `gh` CLI, which made "Update to latest release"
+// fail for anyone who hadn't installed a second tool — an odd requirement for a
+// self-contained 20 MB binary. The repository is public, so the endpoint needs
+// no authentication and stdlib net/http is enough.
+
+// releaseAPIBase is the API root. A variable rather than a constant so tests can
+// point it at an httptest server; nothing else reassigns it.
+var releaseAPIBase = "https://api.github.com"
+
+const releaseRepo = "iliorn/taskr"
+
+// releaseAsset is one downloadable file attached to a release.
+type releaseAsset struct {
+	Name string `json:"name"`
+	URL  string `json:"browser_download_url"`
+}
+
+type releaseInfo struct {
+	TagName string         `json:"tag_name"`
+	Assets  []releaseAsset `json:"assets"`
+}
+
+// fetchLatestRelease reads the newest release's tag and asset list.
+func fetchLatestRelease() (releaseInfo, error) {
+	url := releaseAPIBase + "/repos/" + releaseRepo + "/releases/latest"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return releaseInfo{}, err
+	}
+	// The documented Accept header, and a User-Agent because the API rejects
+	// requests without one.
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "taskr/"+appVersion)
+
+	resp, err := (&http.Client{Timeout: releaseAPITimeout}).Do(req)
+	if err != nil {
+		return releaseInfo{}, fmt.Errorf("could not reach github.com: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return releaseInfo{}, releaseHTTPError(resp)
+	}
+	// Cap the read: a hostile or broken endpoint shouldn't be able to make the
+	// app allocate without bound.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxReleaseJSONBytes))
+	if err != nil {
+		return releaseInfo{}, fmt.Errorf("could not read the release info: %w", err)
+	}
+	var info releaseInfo
+	if err := json.Unmarshal(body, &info); err != nil {
+		return releaseInfo{}, fmt.Errorf("could not parse the release info: %w", err)
+	}
+	if info.TagName == "" {
+		return releaseInfo{}, fmt.Errorf("the latest release has no tag name")
+	}
+	return info, nil
+}
+
+// releaseHTTPError turns a non-200 into something a user can act on. Rate
+// limiting is the one an unauthenticated caller actually hits (60 requests an
+// hour per IP), so it gets its own wording.
+func releaseHTTPError(resp *http.Response) error {
+	switch {
+	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
+		return fmt.Errorf("GitHub rate limit reached — try again later")
+	case resp.StatusCode == http.StatusNotFound:
+		return fmt.Errorf("no releases found for %s", releaseRepo)
+	default:
+		return fmt.Errorf("github.com returned %s", resp.Status)
+	}
+}
+
 // latestRelease returns the tag name of the most recent GitHub release.
 func latestRelease() (string, error) {
-	cmd := exec.Command("gh", "release", "view", "--repo", "iliorn/taskr",
-		"--json", "tagName", "-q", ".tagName")
-	out, err := cmd.CombinedOutput()
+	info, err := fetchLatestRelease()
 	if err != nil {
-		return "", fmt.Errorf("%s", strings.TrimSpace(string(out)))
+		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	return strings.TrimSpace(info.TagName), nil
+}
+
+// findReleaseAsset picks the asset with the exact name the platform needs. The
+// names are load-bearing (see the release workflow), so this is an exact match
+// rather than a guess.
+func findReleaseAsset(info releaseInfo, name string) (releaseAsset, error) {
+	for _, a := range info.Assets {
+		if a.Name == name {
+			if a.URL == "" {
+				return releaseAsset{}, fmt.Errorf("release asset %q has no download URL", name)
+			}
+			return a, nil
+		}
+	}
+	return releaseAsset{}, fmt.Errorf("release %s has no %q asset", info.TagName, name)
+}
+
+// downloadReleaseAsset streams the asset to dst. It writes through a temp file
+// the caller owns, so a truncated download never lands on the binary.
+func downloadReleaseAsset(asset releaseAsset, dst string) error {
+	req, err := http.NewRequest(http.MethodGet, asset.URL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "taskr/"+appVersion)
+
+	resp, err := (&http.Client{Timeout: releaseDownloadTimeout}).Do(req)
+	if err != nil {
+		return fmt.Errorf("download failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed: github.com returned %s", resp.Status)
+	}
+
+	f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+	if err != nil {
+		return err
+	}
+	written, err := io.Copy(f, io.LimitReader(resp.Body, maxReleaseAssetBytes))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return fmt.Errorf("download failed: %w", err)
+	}
+	if written == 0 {
+		return fmt.Errorf("download failed: the asset was empty")
+	}
+	if written == maxReleaseAssetBytes {
+		return fmt.Errorf("download failed: the asset is larger than the %d MB cap",
+			maxReleaseAssetBytes/(1024*1024))
+	}
+	return nil
 }
 
 // ── Date parsing ─────────────────────────────────────────────────────────────

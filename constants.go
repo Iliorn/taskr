@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 // ── Layout & rendering constants ──────────────────────────────────────────────
 
 const (
@@ -53,6 +55,14 @@ const (
 
 	commentPrefixLen    = 22
 	detailLabelColWidth = 14
+
+	// Release lookup / self-update. The asset cap is generous next to a ~20 MB
+	// binary but bounded, so a wrong URL can't stream forever; the download
+	// timeout has to cover a slow connection pulling those megabytes.
+	releaseAPITimeout      = 15 * time.Second
+	releaseDownloadTimeout = 10 * time.Minute
+	maxReleaseJSONBytes    = 1 << 20  // 1 MB of release JSON is already absurd
+	maxReleaseAssetBytes   = 96 << 20 // 96 MB
 
 	maxDepSearchResults  = 5
 	maxTagSearchResults  = 5
