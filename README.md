@@ -12,12 +12,12 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 ## Features
 
 - **Tasks** — add, complete, delete, rename, set priority, size (S/M/L), due dates, start dates
-- **Sequencing engine** — a weighted score (deadline + priority + momentum + size + age) decides the next-best task automatically; cycle `s` to switch between Sequence / Due / Size sort. Tune the weights in Settings (Relaxed / Balanced / Intense for each dimension), and press `w` on any task to see the score broken into its causes, the margins to the rows either side, and the moments the ranking moves on its own
+- **Sequencing engine** — a weighted score (deadline + priority + momentum + size + age) decides the next-best task automatically; cycle `s` to switch between Sequence / Due / Size sort. The Score column reads as a percentage of the current field (100% = the highest-scoring pending task), so it says how close to the top something is instead of quoting an unbounded number. Tune the weights in Settings (Relaxed / Balanced / Intense for each dimension), and press `w` on any task to see the points behind the percentage, their causes, the margins to the rows either side, and the moments the ranking moves on its own
 - **Dependency-aware ordering** — a task that blocks others inherits their urgency, so the prerequisite for an urgent task surfaces right above it (critical-path behaviour). In the list, `↥` marks a blocker (something depends on it) and `↧` marks a blocked task (waiting on an unfinished dependency)
 - **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
 - **Projects** — group tasks, Gantt timeline view. `enter` drills into a project's tasks, where the task keys (`d` done, `t` track, `p` priority, `r` rename, `x` delete, `enter` details) all work; `a` starts a new task already in that project, `x` on the project row clears the grouping off its tasks
 - **Tags** — tag tasks, rename/merge/delete globally, and work the tag's tasks in place: `enter` drills into them with the same task keys as the Tasks tab, `a` adds a task already carrying the tag, `f` shows the tag's tasks on the Tasks tab as a filter
-- **Board** — kanban view of your pending tasks: one column per stage plus Done. Stage names are yours to define — edit them in Settings → "Board columns" (comma-separated), or in `"stages"` in `settings.json` (see [Data](#data) for where that lives); default Backlog / In progress / Review. Renaming a column takes its cards with it. `←/→` switch columns, `H`/`L` move the selected card between stages — into Done completes the task exactly like `d` would, out of Done reopens it (confirmed). Also `taskr edit <ref> --stage <name>` from the CLI
+- **Board** — kanban view of your pending tasks: one column per stage plus Done. Stage names are yours to define — edit them in Settings → "Board columns" (comma-separated), or in `"stages"` in `settings.json` (see [Data](#data) for where that lives); default Backlog / In progress / Review. Renaming a column takes its cards with it. `←/→` switch columns, `H`/`L` move the selected card between stages — into Done completes the task exactly like `d` would, out of Done reopens it (confirmed). `/` filters the cards with the same grammar the Tasks tab uses, so `#tag`, `@project` or plain text narrows every column at once. Also `taskr edit <ref> --stage <name>` from the CLI
 - **Stats** — productivity overview with an activity heatmap
 - **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
 - **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`), plus a live score breakdown so you can see why a task ranks where it does
@@ -115,7 +115,7 @@ taskr
 | `f` | Focus mode (today + overdue) |
 | `h` | Toggle history |
 | `s` | Cycle sort: Sequence → Due → Size |
-| `w` | Why this rank — the score's causes, the margins either side, what moves it next |
+| `w` | Why this rank — the points behind the percentage, their causes, the margins either side, what moves it next |
 | `/` | Search / filter |
 | `enter` | Open detail view |
 | `u` | Undo |
@@ -197,7 +197,7 @@ are English, so its input is too.
 taskr add "Buy milk" --size=s --due=tomorrow --p=high --tag=shopping
 taskr list                       # pending top-level tasks (table)
 taskr list --json --focus        # JSON, today + overdue only
-taskr top -n=5                   # top 5 by sequence score
+taskr top -n=5                   # top 5 by sequence score (percent of the current field)
 taskr show milk                  # full detail (incl. score breakdown + subtask IDs)
 taskr why milk                   # why it ranks there: each factor's cause, the margins to the
                                  # tasks either side, and when the ranking shifts on its own

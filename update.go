@@ -1341,10 +1341,12 @@ func (m model) startSearch() (tea.Model, tea.Cmd) {
 		m.tagTabCursor = 0
 		m.tagTabSearchInput.Focus()
 		return m, textinput.Blink
-	case tabTasks, tabProjects, tabStats:
-		// Stats shares the Tasks-list query: renderStatsList aggregates only
-		// the matching top-level tasks, so a #tag or @project search scopes
-		// every stat block on the page.
+	case tabTasks, tabProjects, tabStats, tabBoard:
+		// Stats and Board share the Tasks-list query. Both are projections of
+		// the same filtered lists — renderStatsList aggregates the matching
+		// top-level tasks, buildBoardColumns deals out cache.active/cache.done
+		// — so a #tag or @project search scopes the whole page for free, and
+		// the status line shows the same chip on every tab.
 		m.mode = modeSearch
 		m.searchInput.SetValue("")
 		m.searchInput.Focus()

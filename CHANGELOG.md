@@ -41,6 +41,20 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Added
 
+- **The score reads as a percentage of the current field.** The raw score is
+  unbounded upward — Age alone adds 0.2/day forever — so "24.4" in the Score
+  column asked to be calibrated against a scale nobody had published, and read
+  as an arbitrary number. Everywhere the score is *shown* (the Tasks column,
+  the detail pane, the Settings preview, `taskr top`, `taskr show`) it is now a
+  percentage, where 100% is the highest-scoring pending task right now. The
+  points survive where the arithmetic is being explained — the `w` overlay and
+  `taskr why` — and those state what 100% currently costs in points, so the
+  mark moving when you finish the top task is visible rather than mysterious.
+  `taskr top --json` keeps `score` and gains `percent`.
+- **`/` filters the Board.** The columns were already a projection of the same
+  filtered lists the Tasks tab shows, but there was no way to set the filter
+  from the Board. `#tag`, `@project` and free text now narrow every column at
+  once, with the same chip in the status line as everywhere else.
 - **`w` explains a task's rank**, and `taskr why <ref>` prints the same answer.
   The sequencing score decided the order and showed you one number for it, so a
   list that reordered itself was something to argue with rather than follow.

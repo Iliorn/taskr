@@ -58,6 +58,10 @@ func (m *model) refreshCaches() {
 	// Momentum reads recent activity; refresh the snapshot before anything
 	// downstream (selectActiveDone, rollups) computes scores from it.
 	applyActivityHeat(computeActivityHeat(m.frameTime, all))
+	// The percentage scale is relative to the current field, so its 100% mark
+	// is refreshed in the same step — and after the heat, since the scores it
+	// takes the maximum of read momentum from it.
+	applyScoreMax(maxSequenceScore(all))
 
 	for k := range m.cache.overdueSet {
 		delete(m.cache.overdueSet, k)

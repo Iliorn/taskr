@@ -163,6 +163,7 @@ var keymap = []binding{
 	{ctxBoard, "H/L", "boardmove", "move card between stages (into Done completes it)", secBoard, true, true},
 	{ctxBoard, "d", "done", "toggle done", secBoard, true, false},
 	{ctxBoard, "w", "why", "why this rank", secBoard, false, false},
+	{ctxBoard, "/", "search", "filter cards (#tag, @project, text)", secBoard, true, true},
 
 	{ctxStats, "enter", "statscycle", "cycle activity range", secStats, true, false},
 

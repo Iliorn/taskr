@@ -894,10 +894,15 @@ func cliTop(args []string) int {
 		rows = rows[:*n]
 	}
 	if *asJSON {
+		// The raw score stays the `score` field — machine consumers want the
+		// magnitude, and it is what the database stores. `percent` carries the
+		// scale the table and the TUI show, so a status-bar widget can render
+		// the same number the app does without knowing the field maximum.
 		type scoredOut struct {
 			ID       string   `json:"id"`
 			Title    string   `json:"title"`
 			Score    float64  `json:"score"`
+			Percent  int      `json:"percent"`
 			Priority string   `json:"priority"`
 			Due      string   `json:"due,omitempty"`
 			Tags     []string `json:"tags,omitempty"`
@@ -908,7 +913,9 @@ func cliTop(args []string) int {
 			if !rows[i].DueDate.IsZero() {
 				due = rows[i].DueDate.Format("2006-01-02")
 			}
-			out[i] = scoredOut{rows[i].ID, rows[i].Title, sequenceScore(&rows[i]), priorityLetter(rows[i].Priority), due, rows[i].Tags}
+			score := sequenceScore(&rows[i])
+			out[i] = scoredOut{rows[i].ID, rows[i].Title, score, sequencePercent(score),
+				priorityLetter(rows[i].Priority), due, rows[i].Tags}
 		}
 		return emitJSON(out)
 	}
@@ -934,15 +941,16 @@ func cliTop(args []string) int {
 				due = rows[i].DueDate.Format("02-01-06")
 			}
 			tags := truncate(tagStrings[i], tagW)
-			fmt.Printf("%-8s  %5.1f  %-3s  %-10s  %-*s  %s\n",
-				rows[i].ID[:8], sequenceScore(&rows[i]),
+			fmt.Printf("%-8s  %5s  %-3s  %-10s  %-*s  %s\n",
+				rows[i].ID[:8], formatSequencePercent(sequenceScore(&rows[i])),
 				priorityLetter(rows[i].Priority), due, tagW, tags,
 				truncate(rows[i].Title, 60))
 		}
 		return 0
 	}
 	for i := range rows {
-		fmt.Printf("%-8s %5.1f  %s\n", rows[i].ID[:8], sequenceScore(&rows[i]), truncate(rows[i].Title, 60))
+		fmt.Printf("%-8s %5s  %s\n", rows[i].ID[:8],
+			formatSequencePercent(sequenceScore(&rows[i])), truncate(rows[i].Title, 60))
 	}
 	return 0
 }
@@ -1113,8 +1121,11 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo) {
 		// Spelled-out component names instead of single letters — the previous
 		// `D/P/M/A` was a stat-readout cliff for anyone not already steeped in
 		// the sequencing engine's terminology.
-		fmt.Printf("Score:    %.1f  (Deadline %.1f · Priority %.1f · Momentum %.1f · Size %.1f · Age %.1f)\n",
-			sc.Total, sc.Urgency, sc.Importance, sc.Momentum, sc.Size, sc.Age)
+		// Percent of the current field, with the points that produced it —
+		// `taskr why` spells out where each of them came from.
+		fmt.Printf("Score:    %s  (%.1f pts: Deadline %.1f · Priority %.1f · Momentum %.1f · Size %.1f · Age %.1f)\n",
+			formatSequencePercent(sc.Total), sc.Total,
+			sc.Urgency, sc.Importance, sc.Momentum, sc.Size, sc.Age)
 	}
 	if len(subs) > 0 {
 		fmt.Printf("\nSubtasks (%d):\n", len(subs))

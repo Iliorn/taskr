@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"time"
 
 	"taskr/todo"
@@ -547,6 +548,78 @@ func sequenceComponentsFor(t *todo.Todo) sequenceComponents {
 // sequenceComponentsFor for the detail view.
 func sequenceScore(t *todo.Todo) float64 {
 	return sequenceComponentsAt(time.Now(), t, activeBiases, activeHeat).Total
+}
+
+// ── The percentage scale ─────────────────────────────────────────────────────
+//
+// The raw score is unbounded upward — Age alone adds 0.2/day forever — so a
+// bare "24.4" tells the user nothing about whether that is a lot. On screen the
+// score therefore reads as a percentage of the current field: 100% is the
+// highest-scoring pending task right now, so the number answers "how close to
+// the top is this" rather than asking to be calibrated against a scale nobody
+// published. The points survive where the arithmetic is being explained (the
+// w overlay, `taskr why`), which is the one place a raw magnitude is the point.
+//
+// Normalizing against the live field rather than a fixed theoretical maximum is
+// a deliberate trade: the scale uses its whole range, at the cost of 100%
+// moving when the top task is finished. The explain overlay states what 100%
+// currently equals, so the move is visible rather than mysterious.
+
+// activeScoreMax is the highest sequence score among pending tasks — the 100%
+// mark. A package-level global refreshed alongside activeHeat (refreshCaches in
+// the TUI, loadForCLI in the CLI), following the same pattern. Zero means
+// "no field yet", which reads as 0% everywhere rather than dividing by zero.
+var activeScoreMax float64
+
+func applyScoreMax(v float64) { activeScoreMax = v }
+
+// maxSequenceScore is the top of the current field. It reads each task's *own*
+// score, matching what the lists display — a parent lifted by a subtask ranks
+// on the rollup but still shows its own number, so normalizing against a rollup
+// maximum would make the percentages disagree with the scores they scale.
+func maxSequenceScore(todos []*todo.Todo) float64 {
+	return maxSequenceScoreWith(todos, sequenceScore)
+}
+
+// maxSequenceScoreWith is the parameterised form, so the explain view can
+// establish the same 100% mark against its own clock and biases instead of the
+// globals. One definition of "the field" keeps the overlay's percentage and the
+// list column's from disagreeing about the same task.
+func maxSequenceScoreWith(todos []*todo.Todo, score func(*todo.Todo) float64) float64 {
+	max := 0.0
+	for _, t := range todos {
+		if t.Deleted || t.Status != todo.Pending {
+			continue
+		}
+		if s := score(t); s > max {
+			max = s
+		}
+	}
+	return max
+}
+
+// percentOfField converts a score to its share of `max`, rounded to a whole
+// percent and clamped to 0..100. Callers with a hypothetical field (the
+// Settings preview ranks with knob values that are not live yet) pass their own
+// maximum so the preview's numbers are internally consistent.
+func percentOfField(score, max float64) int {
+	if max <= 0 || score <= 0 {
+		return 0
+	}
+	p := int(math.Round(100 * score / max))
+	if p > 100 {
+		return 100
+	}
+	return p
+}
+
+// sequencePercent is percentOfField against the live field.
+func sequencePercent(score float64) int { return percentOfField(score, activeScoreMax) }
+
+// formatSequencePercent is the on-screen form. Four columns wide at most
+// ("100%"), which is exactly what the one-decimal score it replaced occupied.
+func formatSequencePercent(score float64) string {
+	return strconv.Itoa(sequencePercent(score)) + "%"
 }
 
 // rankTopBySequenceWith is the pure, testable form of rankTopBySequence: it

@@ -118,15 +118,32 @@ func seqShiftRank(e seqExplain, s seqShift) string {
 	}
 }
 
-// seqHeadline is the one-line answer: where the task sits and on what score.
+// seqHeadline is the one-line answer: where the task sits, and the percentage
+// the lists show for it.
 func seqHeadline(e seqExplain) string {
 	if e.Done {
 		return tr("done — done tasks score 0 and leave the ranking")
 	}
 	if e.Pos == 0 {
-		return fmt.Sprintf(tr("score %.1f · not in the ranking (subtasks rank with their parent)"), e.Total)
+		return fmt.Sprintf(tr("%s · not in the ranking (subtasks rank with their parent)"),
+			formatPercentOf(e.Total, e.FieldMax))
 	}
-	return fmt.Sprintf(tr("#%d of %d by sequence · score %.1f"), e.Pos, e.Of, e.Total)
+	return fmt.Sprintf(tr("#%d of %d by sequence · %s"), e.Pos, e.Of, formatPercentOf(e.Total, e.FieldMax))
+}
+
+// seqScaleLine says what 100% currently costs. Normalizing against the live
+// field means the mark moves when the top task is finished; naming it turns
+// that from a number quietly changing under the user into a stated fact.
+func seqScaleLine(e seqExplain) string {
+	return fmt.Sprintf(tr("%s = %.1f of the %.1f points the top task scores right now"),
+		formatPercentOf(e.Total, e.FieldMax), e.Total, e.FieldMax)
+}
+
+// formatPercentOf renders a score as its share of an explicit field maximum —
+// the explanation carries its own, computed on the same clock and biases the
+// rest of it used.
+func formatPercentOf(score, max float64) string {
+	return fmt.Sprintf("%d%%", percentOfField(score, max))
 }
 
 // seqNeighbourLine states the margin as the thing the user can act on: how many
@@ -135,9 +152,9 @@ func seqNeighbourLine(n *seqNeighbour, above bool, width int) string {
 	if n == nil {
 		return ""
 	}
-	form := tr("%.1f clear of #%d %s")
+	form := tr("%.1f points clear of #%d %s")
 	if above {
-		form = tr("%.1f short of #%d %s")
+		form = tr("%.1f points short of #%d %s")
 	}
 	// Budget the title by what the rest of the line costs, so a long title
 	// truncates instead of pushing the line past the pane. Below the point
@@ -188,6 +205,9 @@ func (m model) explainBodyRows(e seqExplain, width int) []string {
 
 	add("  " + selectedStyle.Render(truncate(e.Title, width-2)))
 	add("  " + helpStyle.Render(truncate(seqHeadline(e), width-2)))
+	if !e.Done && e.FieldMax > 0 {
+		add("  " + dimStyle.Render(truncate(seqScaleLine(e), width-2)))
+	}
 	if e.Boosted {
 		add("  " + helpStyle.Render(truncate(fmt.Sprintf(
 			tr("ranked on %.1f — lifted by a subtask or by work waiting on it"), e.Ranked), width-2)))
@@ -319,6 +339,9 @@ func (m model) renderExplainFullscreen() string {
 func explainPlainLines(e seqExplain) []string {
 	var lines []string
 	lines = append(lines, e.Title, "  "+seqHeadline(e))
+	if !e.Done && e.FieldMax > 0 {
+		lines = append(lines, "  "+seqScaleLine(e))
+	}
 	if e.Boosted {
 		lines = append(lines, "  "+fmt.Sprintf(tr("ranked on %.1f — lifted by a subtask or by work waiting on it"), e.Ranked))
 	}

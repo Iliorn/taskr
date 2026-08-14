@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -961,8 +962,10 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	line := cursorStr + checkbox + foldIcon + titleCol
 	if cols.showLast {
 		// Score column is always score now — priority lives only in the
-		// detail view, where the user can still set it.
-		line += padRight(fmt.Sprintf("%.1f", sequenceScore(t)), scoreColW)
+		// detail view, where the user can still set it. It reads as a percent
+		// of the current field (sequence.go): "82%" says how close to the top
+		// this is, where a bare "24.4" only said "a number".
+		line += padRight(formatSequencePercent(sequenceScore(t)), scoreColW)
 	}
 	if cols.showDue {
 		line += padRight(dueVal, cols.dueW)
@@ -1519,10 +1522,19 @@ func (m model) renderSettingsTopPreview(b biases, heat activityHeat, now time.Ti
 		titleMax = 8
 	}
 
+	// The preview ranks with knob values that are not live yet, so its
+	// percentages are relative to its own field — the live 100% mark belongs
+	// to a different set of weights.
+	previewMax := 0.0
+	for i := range rows {
+		if s := sequenceComponentsAt(now, &rows[i], b, heat).Total; s > previewMax {
+			previewMax = s
+		}
+	}
 	for i, t := range rows {
 		score := sequenceComponentsAt(now, &t, b, heat).Total
 		rank := fmt.Sprintf("%2d", i+1)
-		scoreStr := fmt.Sprintf("%4.1f", score)
+		scoreStr := fmt.Sprintf("%4s", strconv.Itoa(percentOfField(score, previewMax))+"%")
 		title := truncate(t.Title, titleMax)
 		line := fmt.Sprintf("  %s  %s  %s", rank, scoreStr, title)
 		sb.WriteString(dimStyle.Render(line) + "\n")

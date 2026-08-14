@@ -99,10 +99,15 @@ type seqExplain struct {
 	Boosted bool    // Ranked > Total — a subtask or a blocked dependent lifted it
 	Pos     int     // 1-based rank among top-level pending tasks, 0 if unranked
 	Of      int
-	Factors []seqFactor
-	Above   *seqNeighbour
-	Below   *seqNeighbour
-	Shifts  []seqShift
+	// FieldMax is the highest score in the field at this moment — the 100%
+	// mark the displayed percentage is relative to. Carried on the explanation
+	// so the overlay can state what 100% currently costs in points, which is
+	// what keeps a moving scale from being a mysterious one.
+	FieldMax float64
+	Factors  []seqFactor
+	Above    *seqNeighbour
+	Below    *seqNeighbour
+	Shifts   []seqShift
 }
 
 // ── Ranking with its effective scores ─────────────────────────────────────────
@@ -312,10 +317,10 @@ func explainSequenceAt(now time.Time, t *todo.Todo, all []*todo.Todo, b biases, 
 	}
 	e.Factors = seqFactorsAt(now, t, b, heat)
 
-	rows, eff := seqRanking(all, func(x *todo.Todo) float64 {
-		return sequenceComponentsAt(now, x, b, heat).Total
-	})
+	score := func(x *todo.Todo) float64 { return sequenceComponentsAt(now, x, b, heat).Total }
+	rows, eff := seqRanking(all, score)
 	e.Of = len(rows)
+	e.FieldMax = maxSequenceScoreWith(all, score)
 	for i := range rows {
 		if rows[i].ID != t.ID {
 			continue
