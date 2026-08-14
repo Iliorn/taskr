@@ -93,6 +93,10 @@ func collectDiagnostics() []diagnostic {
 	}
 	add(diagnostic{Name: "platform", Value: runtime.GOOS + "/" + runtime.GOARCH})
 	add(diagnostic{Name: "go runtime", Value: runtime.Version()})
+	add(diagnoseLiveReload())
+	if p := tracePath(); p != "" {
+		add(diagnostic{Name: "latency trace", Value: p})
+	}
 
 	out = append(out, diagnoseStorage()...)
 	out = append(out, diagnoseSettings()...)
@@ -380,4 +384,19 @@ func orDefault(v, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+// diagnoseLiveReload reports whether the filesystem watcher will run. It is in
+// the doctor because it is the one switch a user is asked to flip when input
+// feels laggy, and "did the variable actually reach the program" is otherwise
+// invisible — an exported-in-the-wrong-shell mistake looks exactly like "the
+// watcher was not the problem".
+func diagnoseLiveReload() diagnostic {
+	if watcherDisabled() {
+		return diagnostic{
+			Name: "live reload", Value: "off (TASKR_NO_WATCH)",
+			Detail: "another shell's changes appear on the next reload, not immediately",
+		}
+	}
+	return diagnostic{Name: "live reload", Value: "on", Detail: "watching ~/.taskr for changes from other processes"}
 }

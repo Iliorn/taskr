@@ -605,6 +605,13 @@ func scheduleSave() tea.Cmd {
 	})
 }
 
+// watcherDisabled reports whether TASKR_NO_WATCH asks for live reload to stay
+// off. Shared with the doctor so what it prints is what startModelWatcher does.
+func watcherDisabled() bool {
+	v := strings.TrimSpace(os.Getenv("TASKR_NO_WATCH"))
+	return v != "" && v != "0" && v != "false"
+}
+
 // startModelWatcher spins up the filesystem watcher so CLI writes (and any
 // other process touching ~/.taskr/tasks.db) refresh the TUI without a restart.
 // If it fails to start (weird filesystem, permissions, OS limits), the TUI keeps
@@ -622,7 +629,7 @@ func startModelWatcher(m *model) {
 	// input feels laggy it is the first variable worth removing. Without it,
 	// the TUI simply won't notice a `taskr add` from another shell until it
 	// next reloads.
-	if v := strings.TrimSpace(os.Getenv("TASKR_NO_WATCH")); v != "" && v != "0" && v != "false" {
+	if watcherDisabled() {
 		return
 	}
 	home, err := os.UserHomeDir()
