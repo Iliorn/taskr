@@ -29,7 +29,7 @@ var syncTransport = &http.Transport{
 // PostSync pushes tasks to the server at serverURL and returns its response:
 // the merged authoritative set plus the server's clock reading.
 func PostSync(serverURL, token string, tasks []todo.Todo, timeout time.Duration) (Response, error) {
-	body, err := json.Marshal(Request{Tasks: tasks})
+	body, err := json.Marshal(Request{Tasks: tasks, Protocol: ProtocolVersion})
 	if err != nil {
 		return Response{}, err
 	}
@@ -48,10 +48,23 @@ func PostSync(serverURL, token string, tasks []todo.Todo, timeout time.Duration)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		// A version mismatch already carries a complete, actionable
+		// sentence from the server; wrapping it in "server returned 409
+		// Conflict" only buries the part the user has to act on.
+		if resp.StatusCode == http.StatusConflict {
+			return Response{}, fmt.Errorf("%s", strings.TrimSpace(string(msg)))
+		}
 		return Response{}, fmt.Errorf("server returned %s: %s", resp.Status, strings.TrimSpace(string(msg)))
 	}
 	var out Response
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return Response{}, err
+	}
+	// The server accepted our version, but it may still be newer than we
+	// are: it answers in its own wire, and decoding a v2 body as v1 is the
+	// silent misread this whole mechanism exists to prevent. Checking the
+	// response too closes the direction the request check cannot.
+	if err := negotiate(out.Protocol); err != nil {
 		return Response{}, err
 	}
 	return out, nil

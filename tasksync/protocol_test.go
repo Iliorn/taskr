@@ -3,6 +3,7 @@ package tasksync
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -385,5 +386,158 @@ func TestListenerStopsWhileReconnecting(t *testing.T) {
 	case <-done:
 	case <-time.After(3 * time.Second):
 		t.Error("Close did not stop a reconnecting listener")
+	}
+}
+
+// ── Wire version negotiation ────────────────────────────────────────────────
+
+func TestNegotiateAcceptsCurrentAndLegacy(t *testing.T) {
+	if err := negotiate(ProtocolVersion); err != nil {
+		t.Errorf("current version rejected: %v", err)
+	}
+	// Zero is a client from before the field existed. It speaks v1, and
+	// treating it as an error would break every deployed client at once.
+	if err := negotiate(0); err != nil {
+		t.Errorf("absent version must be accepted as v1: %v", err)
+	}
+}
+
+func TestNegotiateRejectsNewerPeer(t *testing.T) {
+	err := negotiate(ProtocolVersion + 1)
+	if err == nil {
+		t.Fatal("a newer peer must be refused, not decoded")
+	}
+	// The message has to name which side to upgrade, or the user is left
+	// with a mismatch and no next step.
+	if !strings.Contains(err.Error(), "upgrade this end") {
+		t.Errorf("error should say which side is behind, got %q", err)
+	}
+}
+
+func TestNegotiateRejectsUnsupportedOlderPeer(t *testing.T) {
+	if MinProtocolVersion <= 1 {
+		t.Skip("nothing below the floor to test while MinProtocolVersion is 1")
+	}
+	err := negotiate(MinProtocolVersion - 1)
+	if err == nil {
+		t.Fatal("a peer below the floor must be refused")
+	}
+}
+
+func TestServerRefusesNewerClientWire(t *testing.T) {
+	store := &fakeStore{}
+	hs := testServer(t, &Server{Token: "t", Store: store})
+
+	body, err := json.Marshal(Request{Protocol: ProtocolVersion + 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, hs.URL+"/v1/sync", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer t")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %s, want 409 Conflict", resp.Status)
+	}
+	// The merge must not have run: refusing after folding the payload in
+	// would defeat the point of checking at all.
+	if store.calls != 0 {
+		t.Errorf("store was merged into %d times despite the version refusal", store.calls)
+	}
+}
+
+func TestServerAcceptsVersionlessClient(t *testing.T) {
+	// The compatibility guarantee, pinned: a client that predates the "v"
+	// field must still sync.
+	hs := testServer(t, &Server{Token: "t", Store: &fakeStore{}})
+
+	body := []byte(`{"tasks":[]}`)
+	req, err := http.NewRequest(http.MethodPost, hs.URL+"/v1/sync", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer t")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %s, want 200 for a versionless client", resp.Status)
+	}
+}
+
+func TestPostSyncSendsAndReportsVersion(t *testing.T) {
+	var got Request
+	hs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(Response{Protocol: ProtocolVersion})
+	}))
+	defer hs.Close()
+
+	if _, err := PostSync(hs.URL, "t", nil, 5*time.Second); err != nil {
+		t.Fatalf("PostSync: %v", err)
+	}
+	if got.Protocol != ProtocolVersion {
+		t.Errorf("client sent v%d, want v%d", got.Protocol, ProtocolVersion)
+	}
+}
+
+func TestPostSyncRefusesNewerServerWire(t *testing.T) {
+	// The direction the server-side check cannot cover: the server accepted
+	// our request but answers in a wire we would misread.
+	hs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(Response{Protocol: ProtocolVersion + 1})
+	}))
+	defer hs.Close()
+
+	_, err := PostSync(hs.URL, "t", nil, 5*time.Second)
+	if err == nil {
+		t.Fatal("a newer server wire must be refused")
+	}
+	if !strings.Contains(err.Error(), "protocol mismatch") {
+		t.Errorf("error = %v, want a protocol mismatch", err)
+	}
+}
+
+func TestPostSyncSurfacesMismatchMessagePlainly(t *testing.T) {
+	// A 409 body is already a complete sentence; wrapping it in the status
+	// line buries the actionable half.
+	hs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "sync protocol mismatch: upgrade this end", http.StatusConflict)
+	}))
+	defer hs.Close()
+
+	_, err := PostSync(hs.URL, "t", nil, 5*time.Second)
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if strings.Contains(err.Error(), "409") {
+		t.Errorf("mismatch error should not be wrapped in the status: %v", err)
+	}
+	if !strings.Contains(err.Error(), "upgrade this end") {
+		t.Errorf("error lost the server's message: %v", err)
+	}
+}
+
+func TestHealthAdvertisesProtocolRange(t *testing.T) {
+	hs := testServer(t, &Server{Token: "t", Store: &fakeStore{}})
+	resp, err := http.Get(hs.URL + "/v1/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	want := fmt.Sprintf("%d-%d", MinProtocolVersion, ProtocolVersion)
+	if got := resp.Header.Get(ProtocolHeader); got != want {
+		t.Errorf("%s = %q, want %q", ProtocolHeader, got, want)
 	}
 }

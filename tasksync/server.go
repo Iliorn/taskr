@@ -31,10 +31,18 @@ type Store interface {
 // set in one round trip.
 type Request struct {
 	Tasks []todo.Todo `json:"tasks"`
+	// Protocol is the wire version the client was built against. Absent
+	// (zero) means a client from before versioning existed, which speaks
+	// v1 — see legacyProtocolVersion.
+	Protocol int `json:"v,omitempty"`
 }
 
 type Response struct {
 	Tasks []todo.Todo `json:"tasks"`
+	// Protocol is the wire version the server speaks, so a newer client can
+	// tell an older server apart from one that simply sent nothing. Zero
+	// from a server that predates the field.
+	Protocol int `json:"v,omitempty"`
 	// ServerTime lets the client detect a skewed local clock (see
 	// ClockSkewWarning): the LWW merge runs on wall-clock timestamps, so a
 	// device with a bad clock silently loses or wrongly wins conflicts, and
@@ -72,6 +80,11 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	// The supported range rides along as a header: the body is a liveness
+	// contract other code asserts on, and health is deliberately
+	// unauthenticated, so this is the one place an operator can read what a
+	// server speaks without holding the sync token.
+	w.Header().Set(ProtocolHeader, fmt.Sprintf("%d-%d", MinProtocolVersion, ProtocolVersion))
 	fmt.Fprintln(w, "ok")
 }
 
@@ -100,13 +113,27 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Version check before the merge, never after: the whole point is to
+	// refuse a payload we might misread rather than fold it into the
+	// authoritative set and discover the mismatch through corrupt data.
+	// 409 rather than 400 — the request is well-formed, the two ends just
+	// disagree about what it means.
+	if err := negotiate(req.Protocol); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
 	merged, err := s.Sync(req.Tasks)
 	if err != nil {
 		http.Error(w, "merge failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(Response{Tasks: merged, ServerTime: time.Now().UTC()}); err != nil {
+	w.Header().Set(ProtocolHeader, fmt.Sprintf("%d-%d", MinProtocolVersion, ProtocolVersion))
+	if err := json.NewEncoder(w).Encode(Response{
+		Tasks:      merged,
+		ServerTime: time.Now().UTC(),
+		Protocol:   ProtocolVersion,
+	}); err != nil {
 		log.Printf("taskr serve: encode response: %v", err)
 	}
 }
