@@ -585,7 +585,7 @@ func (m model) footerContentFor(w int) string {
 			return ansi.Truncate(timerLine, w, "") + "\n" + hints
 		}
 		return hints
-	case modeInput, modeEditComment, modeEditTag, modeEditTitle,
+	case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeEditDue,
 		modeAddLearning, modeEditLearning, modeAddSubtask, modeEditSubtask,
 		modeEditProjectInline, modeEditTimeEntry, modeAddTimeEntry,
 		modeEditSyncURL, modeEditSyncToken,

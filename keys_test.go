@@ -26,9 +26,9 @@ func withKeys(t *testing.T, overrides map[string]string) {
 func TestRebindingMovesAnAction(t *testing.T) {
 	task := todo.New("Alpha")
 	m := modelWithTasks(t, task)
-	withKeys(t, map[string]string{"done": "D"})
+	withKeys(t, map[string]string{"done": "E"})
 
-	m = sendKey(t, m, "D")
+	m = sendKey(t, m, "E")
 	if got := m.get(task.ID); got == nil || got.Status != todo.Done {
 		t.Fatalf("the rebound key did not complete the task: %v", got)
 	}
@@ -39,7 +39,7 @@ func TestRebindingMovesAnAction(t *testing.T) {
 func TestRebindingFreesTheOldKey(t *testing.T) {
 	task := todo.New("Alpha")
 	m := modelWithTasks(t, task)
-	withKeys(t, map[string]string{"done": "D"})
+	withKeys(t, map[string]string{"done": "E"})
 
 	m = sendKey(t, m, "d")
 	if got := m.get(task.ID); got == nil || got.Status != todo.Pending {
@@ -52,38 +52,38 @@ func TestRebindingFreesTheOldKey(t *testing.T) {
 func TestRebindingLeavesOtherKeysAlone(t *testing.T) {
 	task := todo.New("Alpha")
 	m := modelWithTasks(t, task)
-	withKeys(t, map[string]string{"done": "D"})
+	withKeys(t, map[string]string{"done": "E"})
 
 	m = sendKey(t, m, "a") // still opens quick-add
 	if m.mode != modeInput {
 		t.Fatalf("an unrelated key was swallowed: mode = %v", m.mode)
 	}
-	// Typing inside a modal must not be translated: with done→D, a literal "D"
+	// Typing inside a modal must not be translated: with done→E, a literal "E"
 	// belongs in the text.
-	m = script(t, m, "D-day plan")
-	if got := m.textInput.Value(); !strings.HasPrefix(got, "D") {
-		t.Errorf("input = %q, want the typed D to survive", got)
+	m = script(t, m, "Easter plan")
+	if got := m.textInput.Value(); !strings.HasPrefix(got, "E") {
+		t.Errorf("input = %q, want the typed E to survive", got)
 	}
 }
 
 // Every surface that shows a key has to show the one that works.
 func TestRebindingShowsUpEverywhere(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Alpha"))
-	withKeys(t, map[string]string{"done": "D"})
+	withKeys(t, map[string]string{"done": "E"})
 
 	hint := hintString(ctxTasksList, false)
-	if !strings.Contains(hint, "D toggle done") {
+	if !strings.Contains(hint, "E toggle done") {
 		t.Errorf("footer hint = %q, want the rebound key", hint)
 	}
 	help := strings.Join(m.helpBodyLines(), "\n")
-	if !strings.Contains(help, "D ") || strings.Contains(help, "\nd  ") {
+	if !strings.Contains(help, "E ") || strings.Contains(help, "\nd  ") {
 		t.Errorf("the help overlay still shows the default key")
 	}
 	var found bool
 	for _, c := range paletteCommands() {
 		if c.label == "toggle done" && c.tab == tabTasks {
 			found = true
-			if c.key != "D" {
+			if c.key != "E" {
 				t.Errorf("palette shows %q for a rebound action", c.key)
 			}
 		}
@@ -98,7 +98,7 @@ func TestRebindingShowsUpEverywhere(t *testing.T) {
 func TestPaletteRunsRebound(t *testing.T) {
 	task := todo.New("Alpha")
 	m := modelWithTasks(t, task)
-	withKeys(t, map[string]string{"done": "D"})
+	withKeys(t, map[string]string{"done": "E"})
 
 	for _, c := range paletteCommands() {
 		if c.label == "toggle done" && c.tab == tabTasks {
@@ -118,7 +118,7 @@ func TestSanitizeKeyOverrides(t *testing.T) {
 		want    map[string]string
 		problem string
 	}{
-		{"a plain rebind", map[string]string{"done": "D"}, map[string]string{"done": "D"}, ""},
+		{"a plain rebind", map[string]string{"done": "E"}, map[string]string{"done": "E"}, ""},
 		{"unknown action", map[string]string{"frobnicate": "z"}, nil, "not a rebindable action"},
 		{"empty key", map[string]string{"done": ""}, nil, "has no key"},
 		{"multi-key form", map[string]string{"done": "ctrl+shift+x"}, nil, "not a single key"},
@@ -182,14 +182,14 @@ func TestRebindingCanSwapTwoActions(t *testing.T) {
 func TestKeyOverridesPersist(t *testing.T) {
 	restoreSettingsFile(t)
 	m := modelWithTasks(t, todo.New("Alpha"))
-	withKeys(t, map[string]string{"done": "D"})
+	withKeys(t, map[string]string{"done": "E"})
 	m.persistSettings()
 
 	loaded, err := loadSettings()
 	if err != nil {
 		t.Fatalf("loadSettings: %v", err)
 	}
-	if loaded.Keys["done"] != "D" {
+	if loaded.Keys["done"] != "E" {
 		t.Errorf("saved keys = %v, want the rebind", loaded.Keys)
 	}
 }

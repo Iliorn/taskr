@@ -88,6 +88,7 @@ taskr
 | `a` | Add task |
 | `d` | Toggle done |
 | `t` | Start/stop time tracking |
+| `D` | Set / clear the due date (same prompt as the detail field) |
 | `r` | Rename |
 | `x` / `del` | Delete |
 | `n` | Edit notes in `$EDITOR` |

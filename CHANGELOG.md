@@ -23,6 +23,9 @@ belong in the commit log, not here — unless they change behaviour.
   tag's tasks on the Tasks tab as a filter. The Projects drill gained the same
   keys, and `x` on a project row — long advertised in the help — now clears the
   project off its tasks.
+- **`D` sets a due date straight from the task list** — the detail pane's
+  prompt and parser, on the row under the cursor. Rescheduling used to mean
+  opening the task, walking to the field and pressing enter.
 - **Board columns are editable in Settings** (comma-separated). Renaming a
   column carries its cards over.
 - **Searchable help**: `/` filters the shortcut overlay by key, description or
@@ -42,6 +45,11 @@ belong in the commit log, not here — unless they change behaviour.
 - **Self-update no longer needs the GitHub CLI.** It reads the release API over
   plain HTTP, so the update button works on a stock install. Rate-limit and
   "no releases" failures now say what happened.
+- **The Danish translation is complete.** About a third of the interface was
+  still English on a Danish install — the whole sync and server half of
+  Settings, the stats labels, the sort names, most of the help reference, and
+  the Sequencer pane, which never went through the translation layer at all. A
+  missing translation now fails the build instead of quietly rendering English.
 - **Roughly twice as fast at scale.** At 2000 tasks a cache refresh went from
   11.1 ms to 5.8 ms and a search keystroke from 7.5 ms to 3.4 ms, with about a
   third of the allocations gone.

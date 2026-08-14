@@ -279,6 +279,67 @@ func TestScriptRenameTaskViaR(t *testing.T) {
 	}
 }
 
+// D sets a due date from the list, using the detail pane's prompt and parser.
+func TestScriptSetDueDateFromList(t *testing.T) {
+	m := modelWithTasks(t, todo.New("Reschedule me"))
+	target := m.currentTodo()
+
+	m = sendKey(t, m, "D")
+	if m.mode != modeEditDue {
+		t.Fatalf("after 'D': mode = %v, want modeEditDue", m.mode)
+	}
+	m = script(t, m, "+3d", "enter")
+	if m.mode != modeNormal {
+		t.Errorf("mode = %v, want back to normal after enter", m.mode)
+	}
+	got := m.get(target.ID)
+	want := startOfDay(time.Now().AddDate(0, 0, 3))
+	if !startOfDay(got.DueDate).Equal(want) {
+		t.Errorf("due date = %v, want %v", got.DueDate, want)
+	}
+	if _, dirty := m.dirtyIDs[target.ID]; !dirty {
+		t.Error("rescheduled task not in dirtyIDs — the date would never persist")
+	}
+
+	// Undo puts the task back to having no due date at all.
+	m.performUndo()
+	if got := m.get(target.ID); !got.DueDate.IsZero() {
+		t.Errorf("after undo: due date = %v, want zero", got.DueDate)
+	}
+}
+
+// An empty prompt clears the date; an unparseable one keeps the task as it was
+// and leaves the user in the prompt to fix the typo.
+func TestScriptSetDueDateClearsAndRejects(t *testing.T) {
+	task := todo.New("Has a date")
+	task.DueDate = time.Now().AddDate(0, 0, 2)
+	m := modelWithTasks(t, task)
+
+	m = sendKey(t, m, "D")
+	m = script(t, m, "not a date", "enter")
+	if m.mode != modeEditDue {
+		t.Errorf("mode = %v, want to stay in the prompt after a bad date", m.mode)
+	}
+	if m.get(task.ID).DueDate.IsZero() {
+		t.Error("a rejected date cleared the existing one")
+	}
+	if m.err == "" {
+		t.Error("a rejected date said nothing")
+	}
+
+	// esc, then a second pass that submits an empty value.
+	m = sendKey(t, m, "esc")
+	m = sendKey(t, m, "D")
+	// The prompt pre-fills the current date, so clear it first.
+	for range "02-01-06" {
+		m = sendKey(t, m, "backspace")
+	}
+	m = sendKey(t, m, "enter")
+	if got := m.get(task.ID); !got.DueDate.IsZero() {
+		t.Errorf("due date = %v, want cleared", got.DueDate)
+	}
+}
+
 func TestScriptAddCommentOnDetailComments(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Task with comments"))
 	target := m.currentTodo()

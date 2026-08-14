@@ -305,6 +305,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m.updateEditTag(msg)
 	case modeEditTitle:
 		newModel, cmd = m.updateEditTitle(msg)
+	case modeEditDue:
+		newModel, cmd = m.updateEditDue(msg)
 	case modeEditProjectInline:
 		newModel, cmd = m.updateEditProjectInline(msg)
 	case modePalette:
@@ -850,6 +852,15 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+		case "D":
+			// Rescheduling is the most common single edit a task gets, and it
+			// used to mean opening the detail pane, walking to the due-date
+			// field and pressing enter. Same prompt, same parser, from the
+			// row the cursor is already on.
+			if (m.tab == tabTasks && !m.showHistory) || m.drilledIntoTasks() {
+				return m.startEditDueDate()
+			}
+
 		case "T":
 			// Manual time entry — log work that wasn't captured by the live
 			// timer. Available on the Tasks tab so the user can backfill
@@ -1041,6 +1052,25 @@ func (m model) quickAddSeed() (string, bool) {
 // startEditTaskTitle opens the rename editor for the task under the cursor —
 // shared by the Tasks tab and both drill-in lists, so a task is renamed the
 // same way wherever you meet it.
+// startEditDueDate opens the date prompt for the task under the cursor. The
+// prompt, the parser and the error message are the detail pane's — a due date
+// typed from the list has to behave exactly like one typed from the field.
+func (m model) startEditDueDate() (tea.Model, tea.Cmd) {
+	t := m.currentTodo()
+	if t == nil {
+		return m, nil
+	}
+	m.mode = modeEditDue
+	if t.DueDate.IsZero() {
+		m.textInput.SetValue("")
+	} else {
+		m.textInput.SetValue(t.DueDate.Format("02-01-06"))
+	}
+	m.textInput.Placeholder = tr("Due date (dd-mm-yy, 'today', 'next week', '+3d')...")
+	m.textInput.Focus()
+	return m, textinput.Blink
+}
+
 func (m model) startEditTaskTitle() (tea.Model, tea.Cmd) {
 	t := m.currentTodo()
 	if t == nil {

@@ -319,6 +319,51 @@ func (m model) updateEditLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateEditDue applies a due date typed from the task list. An empty value
+// clears the date, which is how the detail-pane field behaves too; an
+// unparseable one leaves the task alone and says so rather than silently
+// dropping the edit.
+func (m model) updateEditDue(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if key, ok := msg.(tea.KeyMsg); ok {
+		switch key.String() {
+		case "enter":
+			val := strings.TrimSpace(m.textInput.Value())
+			t := m.currentTodo()
+			if t == nil {
+				m.mode = modeNormal
+				return m, nil
+			}
+			if val == "" {
+				if !t.DueDate.IsZero() {
+					m.pushUndo("clear due date", t.ID)
+					t.DueDate = time.Time{}
+					t.ModifiedAt = todo.StampModified(t.ModifiedAt)
+					m.markModified(t.ID)
+				}
+				m.mode = modeNormal
+				return m, nil
+			}
+			d, err := parseDueDate(val)
+			if err != nil {
+				// Stay in the prompt: the typed text is still there to fix.
+				m.flashError(tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'"))
+				return m, clearErrAfter()
+			}
+			m.pushUndo("set due date", t.ID)
+			t.SetDueDate(d)
+			m.markModified(t.ID)
+			m.mode = modeNormal
+			return m, nil
+		case "esc":
+			m.mode = modeNormal
+			return m, nil
+		}
+	}
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
 func (m model) updateEditTitle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if key, ok := msg.(tea.KeyMsg); ok {

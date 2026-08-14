@@ -120,6 +120,7 @@ const (
 	modeEditTag
 	modeEditProjectInline
 	modeEditTitle
+	modeEditDue
 	modeEditLearning
 	modeAddLearning
 	modeAddSubtask

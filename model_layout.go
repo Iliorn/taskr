@@ -314,7 +314,7 @@ func (m model) detailContentHeight() int {
 
 func (m model) extraOverheadLines() int {
 	switch m.mode {
-	case modeInput, modeEditComment, modeEditTag, modeEditTitle,
+	case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeEditDue,
 		modeSearch, modeAddLearning, modeEditLearning, modeAddSubtask,
 		modeEditSubtask, modeEditProjectInline, modeEditTimeEntry,
 		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken,

@@ -732,6 +732,7 @@ var daTranslations = map[string]string{
 	"back":                                      "tilbage",
 	"cycle activity range":                      "skift aktivitetsperiode",
 	"change value / theme":                      "skift værdi / tema",
+	"set / clear due date":                      "sæt / ryd forfaldsdato",
 
 	// ── Help section titles ──
 	"Calendar": "Kalender",
