@@ -606,7 +606,11 @@ func parseQuickAdd(input string) parsedTask {
 	var titleWords []string
 
 	for _, word := range words {
-		lower := strings.ToLower(word)
+		// Lower once, then fold a localized field prefix back to its English
+		// form (frist: → due:) so the grammar below knows one spelling of each.
+		// `word` keeps its original case for the branches that carry a value
+		// through — tags, projects, and the title fallback.
+		lower := canonicalInputToken(strings.ToLower(word))
 		switch {
 		case strings.HasPrefix(word, "#"):
 			if tag := todo.NormalizeTag(word); tag != "" {
@@ -623,7 +627,7 @@ func parseQuickAdd(input string) parsedTask {
 				result.project = proj
 			}
 		case strings.HasPrefix(lower, "p:"):
-			switch strings.TrimPrefix(lower, "p:") {
+			switch canonicalInputWord(strings.TrimPrefix(lower, "p:")) {
 			case "high", "h":
 				result.priority, result.hasPriority = todo.PriorityHigh, true
 			case "medium", "med", "m":
@@ -635,7 +639,7 @@ func parseQuickAdd(input string) parsedTask {
 			}
 		case strings.HasPrefix(lower, "size:") || strings.HasPrefix(lower, "s:"):
 			spec := strings.TrimPrefix(strings.TrimPrefix(lower, "size:"), "s:")
-			switch spec {
+			switch canonicalInputWord(spec) {
 			case "s", "small":
 				result.size, result.hasSize = todo.SizeSmall, true
 			case "m", "med", "medium":
@@ -647,7 +651,10 @@ func parseQuickAdd(input string) parsedTask {
 			}
 		case strings.HasPrefix(lower, "r:") || strings.HasPrefix(lower, "recur:"):
 			spec := strings.TrimPrefix(strings.TrimPrefix(lower, "recur:"), "r:")
-			if canonical, ok := todo.ParseRecurrence(spec); ok && canonical != "" {
+			// The canonical rule stays English on disk; only the word typed
+			// here is localized, so ParseRecurrence keeps its locale-free
+			// vocabulary (it lives in the domain package).
+			if canonical, ok := todo.ParseRecurrence(canonicalInputWord(spec)); ok && canonical != "" {
 				result.recurrence = canonical
 			} else {
 				titleWords = append(titleWords, word)
@@ -655,7 +662,9 @@ func parseQuickAdd(input string) parsedTask {
 		case strings.HasPrefix(lower, "dep:"):
 			// Whitespace-delimited, so only id-prefix refs (or ^) fit here —
 			// title-substring refs have spaces and stay a CLI/edit affair.
-			if ref := word[len("dep:"):]; ref != "" {
+			// Read off `lower`: the prefix may have been a localized one, and
+			// the refs this accepts (a hex id prefix, or ^) are case-free.
+			if ref := lower[len("dep:"):]; ref != "" {
 				result.deps = append(result.deps, ref)
 			} else {
 				titleWords = append(titleWords, word)
@@ -1188,9 +1197,11 @@ func downloadVerifiedAsset(info releaseInfo, assetName, dst string) error {
 
 // ── Date parsing ─────────────────────────────────────────────────────────────
 
-// parseDueDate accepts dd-mm-yy, dd-mm-yyyy, and natural language shortcuts.
+// parseDueDate accepts dd-mm-yy, dd-mm-yyyy, and natural language shortcuts —
+// in English always, and in the active interface language too (lang_input.go),
+// so a Danish screen takes `imorgen` as readily as `tomorrow`.
 func parseDueDate(s string) (time.Time, error) {
-	lower := strings.ToLower(strings.TrimSpace(s))
+	lower := canonicalInputWord(strings.ToLower(strings.TrimSpace(s)))
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
@@ -1207,8 +1218,7 @@ func parseDueDate(s string) (time.Time, error) {
 		return today.AddDate(0, 1, 0), nil
 	}
 
-	if strings.HasPrefix(lower, "next ") {
-		dayName := strings.TrimPrefix(lower, "next ")
+	if dayName, ok := splitNextPrefix(lower); ok {
 		if weekday, ok := parseWeekday(dayName); ok {
 			return nextWeekday(today, weekday), nil
 		}
@@ -1239,10 +1249,15 @@ func parseDueDate(s string) (time.Time, error) {
 	if t, err := time.Parse("02-01-2006", s); err == nil {
 		return t, nil
 	}
-	return time.Time{}, fmt.Errorf("invalid date: use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+Nd/+Nw/+Nm'")
+	return time.Time{}, fmt.Errorf("invalid date: use dd-mm-yy, %q, %q, %q, %q, or '+Nd/+Nw/+Nm'",
+		inputWord("today"), inputWord("tomorrow"), inputWord("next week"), strings.ToLower(localizedWeekday(time.Monday)))
 }
 
+// parseWeekday takes the English day names and their three-letter forms, plus
+// the active language's names and abbreviations — the same tables the calendar
+// draws its headers from.
 func parseWeekday(s string) (time.Weekday, bool) {
+	s = canonicalInputWord(s)
 	days := map[string]time.Weekday{
 		"monday":    time.Monday,
 		"tuesday":   time.Tuesday,

@@ -24,7 +24,7 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 - **Search** — live filter across tasks, projects and tags; fuzzy title matching (notes are matched as a substring) plus field filters (`#tag @project p:high due:<fri overdue`); the Stats tab follows the active filter, so `#tag` scopes every stat to that tag
 - **Command palette** — `ctrl+k` finds any action by name (fuzzy, ranked) and shows the key that performs it, so nothing is gated behind remembering a letter; an action belonging to another tab switches there first
 - **Undo** — multi-level undo for all mutations
-- **Settings** — three sequencing-bias knobs, theme, language (English / Dansk / Deutsch), board columns, version, in-app self-update (tab 7)
+- **Settings** — three sequencing-bias knobs, theme, language (English / Dansk / Deutsch — the quick-add and search keywords speak it too), board columns, version, in-app self-update (tab 7)
 
 ## Installation
 
@@ -173,6 +173,21 @@ Supported tokens: `#tag`, `@project`, `p:high/medium/low`, `due:<date` / `due:>d
 ### Date formats
 
 `today` · `tomorrow` · `next week` · `monday` · `15-06-25` · `+3d` · `+2w` · `+1m`
+
+### Typing in your own language
+
+With the interface set to Dansk or Deutsch, the quick-add and search grammars
+accept that language's words too — `frist:imorgen p:høj størrelse:lille`,
+`fällig:freitag p:hoch überfällig` — and the help overlay and the input hints
+advertise those spellings rather than the English ones. The words come from the
+same translation table the interface renders from, so what is on screen is what
+parses.
+
+English keeps working everywhere, whatever the language is set to, and only
+input is localized: recurrence rules, tags and every other stored value stay in
+their canonical English form, so installs in different languages sync without
+translating anything. The CLI stays English on both sides — its help and output
+are English, so its input is too.
 
 ## CLI
 

@@ -44,14 +44,18 @@ var activeLang = langEN
 
 // applyLang sets the active language from a stored code, defaulting to English
 // for empty or unknown values.
+// It also rebuilds the parser's alias index (lang_input.go), so switching the
+// interface language switches the words the quick-add and search grammars
+// accept in the same step — the two cannot end up out of sync.
 func applyLang(code string) {
+	activeLang = langEN
 	for _, l := range availableLanguages {
 		if string(l) == code {
 			activeLang = l
-			return
+			break
 		}
 	}
-	activeLang = langEN
+	activeInputWords = buildInputIndex(activeLang)
 }
 
 // tr translates an English source string into the active language, falling back
@@ -238,10 +242,10 @@ var daTranslations = map[string]string{
 	"↑/↓ select · ←/→ change theme · enter activate":                                                                          "↑/↓ vælg · ←/→ skift · enter aktivér",
 
 	// Footer / timer
-	"#tag @project due:tomorrow p:high s:l r:weekly dep:^": "#mærke @projekt due:tomorrow p:high s:l r:weekly dep:^",
-	" · t to stop":         " · t for at stoppe",
-	"create new tag: ":     "opret nyt mærke: ",
-	"create new project: ": "opret nyt projekt: ",
+	"#tag @project %s p:%s s:l r:%s %s^": "#mærke @projekt %s p:%s s:l r:%s %s^",
+	" · t to stop":                       " · t for at stoppe",
+	"create new tag: ":                   "opret nyt mærke: ",
+	"create new project: ":               "opret nyt projekt: ",
 
 	// Help screen
 	"Keyboard shortcuts":                          "Tastaturgenveje",
@@ -389,6 +393,19 @@ var daTranslations = map[string]string{
 	"yearly":   "årligt",
 	"weekdays": "hverdage",
 
+	// ── Parser keywords (lang_input.go) ──
+	// These double as input: the word shown here is the word the quick-add and
+	// search grammars accept, alongside the English one. Changing a spelling
+	// changes what parses, so keep them to words a Danish user would type.
+	"yesterday":  "i går",
+	"next week":  "næste uge",
+	"next month": "næste måned",
+	"next":       "næste",
+	"due:":       "frist:",
+	"size:":      "størrelse:",
+	"recur:":     "gentag:",
+	"dep:":       "afh:",
+
 	// List headers / sort
 	"Task":              "Opgave",
 	"Completed tasks":   "Afsluttede opgaver",
@@ -527,7 +544,7 @@ var daTranslations = map[string]string{
 	"No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)":                               "Ingen editor fundet — sæt EDITOR permanent, f.eks: setx EDITOR notepad (genstart derefter taskr)",
 	"No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish": "Ingen editor fundet — sæt $EDITOR permanent, f.eks: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish",
 	"Editor failed — falling back to notepad":                                                                               "Editor fejlede — falder tilbage til notepad",
-	"Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'":                                     "Ugyldig dato - brug dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday' eller '+3d'",
+	"Invalid date - use dd-mm-yy, %q, %q, %q, %q, or '+3d'":                                                                 "Ugyldig dato - brug dd-mm-yy, %q, %q, %q, %q eller '+3d'",
 	"Dependency not linked":                         "Afhængighed ikke koblet",
 	"Remove project '%s' from ALL its tasks? (y/n)": "Fjern projektet '%s' fra ALLE dets opgaver? (j/n)",
 
@@ -542,11 +559,11 @@ var daTranslations = map[string]string{
 	"Delete %s entry for '%s'? (y/n)":           "Slet %s-post for '%s'? (y/n)",
 
 	// Input placeholders
-	"Search... (#tag @project p:high due:<fri)": "Søg... (#mærke @projekt p:high due:<fre)",
-	"Search for task to add as dependency...":   "Søg efter opgave at tilføje som afhængighed...",
-	"Search or create tag...":                   "Søg eller opret mærke...",
-	"Search or create project...":               "Søg eller opret projekt...",
-	"Filter tags...":                            "Filtrér mærker...",
+	"Search... (#tag @project p:%s %s<%s)":    "Søg... (#mærke @projekt p:%s %s<%s)",
+	"Search for task to add as dependency...": "Søg efter opgave at tilføje som afhængighed...",
+	"Search or create tag...":                 "Søg eller opret mærke...",
+	"Search or create project...":             "Søg eller opret projekt...",
+	"Filter tags...":                          "Filtrér mærker...",
 
 	// Inline edit/add placeholders (set when a text-entry mode opens)
 	"New task...": "Ny opgave...",
@@ -656,18 +673,18 @@ var daTranslations = map[string]string{
 
 	// ── Help: quick-add tokens (the token itself stays English — it is syntax) ──
 	"add a tag (existing tags are suggested; tab inserts)": "tilføj et mærke (eksisterende mærker foreslås; tab indsætter)",
-	"put it in a project":                                  "læg den i et projekt",
-	"set a due date (see Date input below)":                "sæt en forfaldsdato (se Datoinput nedenfor)",
-	"priority: high / medium / low (p:h, p:m, p:l)":        "prioritet: high / medium / low (p:h, p:m, p:l)",
-	"size: s / m / l (also size:large)":                    "størrelse: s / m / l (også size:large)",
-	"repeat: daily / weekdays / weekly / monthly / yearly": "gentagelse: daily / weekdays / weekly / monthly / yearly",
-	"block on the last added task (or dep:<id prefix>)":    "bloker på den senest tilføjede opgave (eller dep:<id-præfiks>)",
+	"put it in a project":                             "læg den i et projekt",
+	"set a due date (see Date input below)":           "sæt en forfaldsdato (se Datoinput nedenfor)",
+	"priority: %s / %s / %s (p:h, p:m, p:l)":          "prioritet: %s / %s / %s (p:h, p:m, p:l)",
+	"size: s / m / l (also %s)":                       "størrelse: s / m / l (også %s)",
+	"repeat: %s / %s / %s / %s / %s":                  "gentagelse: %s / %s / %s / %s / %s",
+	"block on the last added task (or %s<id prefix>)": "bloker på den senest tilføjede opgave (eller %s<id-præfiks>)",
 
 	// ── Help: search filters ──
 	"only tasks carrying the tag":                                 "kun opgaver med mærket",
 	"only tasks in the project":                                   "kun opgaver i projektet",
 	"only that priority":                                          "kun den prioritet",
-	"due before a date (also due:>, due:<=, due:>=, due:date)":    "forfalder før en dato (også due:>, due:<=, due:>=, due:date)",
+	"due before a date (also >, <=, >= and an exact date)":        "forfalder før en dato (også >, <=, >= og en præcis dato)",
 	"only overdue tasks":                                          "kun forfaldne opgaver",
 	"anything else fuzzy-matches the title, or the notes as text": "alt andet fuzzy-matcher titlen, eller noterne som tekst",
 
@@ -829,10 +846,10 @@ var deTranslations = map[string]string{
 	"↑/↓ select · ←/→ change theme · enter activate":                                                                          "↑/↓ wählen · ←/→ Farbschema · enter aktivieren",
 
 	// Footer / timer
-	"#tag @project due:tomorrow p:high s:l r:weekly dep:^": "#tag @projekt due:tomorrow p:high s:l r:weekly dep:^",
-	" · t to stop":         " · t zum Stoppen",
-	"create new tag: ":     "neues Schlagwort: ",
-	"create new project: ": "neues Projekt: ",
+	"#tag @project %s p:%s s:l r:%s %s^": "#Schlagwort @Projekt %s p:%s s:l r:%s %s^",
+	" · t to stop":                       " · t zum Stoppen",
+	"create new tag: ":                   "neues Schlagwort: ",
+	"create new project: ":               "neues Projekt: ",
 
 	// Help screen
 	"Keyboard shortcuts":                          "Tastenkürzel",
@@ -980,6 +997,19 @@ var deTranslations = map[string]string{
 	"yearly":   "jährlich",
 	"weekdays": "werktags",
 
+	// ── Parser keywords (lang_input.go) ──
+	// These double as input: the word shown here is the word the quick-add and
+	// search grammars accept, alongside the English one. Changing a spelling
+	// changes what parses, so keep them to words a German user would type.
+	"yesterday":  "gestern",
+	"next week":  "nächste Woche",
+	"next month": "nächster Monat",
+	"next":       "nächste",
+	"due:":       "fällig:",
+	"size:":      "größe:",
+	"recur:":     "wiederh:",
+	"dep:":       "abh:",
+
 	// List headers / sort
 	"Task":              "Aufgabe",
 	"Completed tasks":   "Erledigte Aufgaben",
@@ -1118,7 +1148,7 @@ var deTranslations = map[string]string{
 	"No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)":                               "Kein Editor gefunden — EDITOR dauerhaft setzen, z. B.: setx EDITOR notepad (dann taskr neu starten)",
 	"No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish": "Kein Editor gefunden — $EDITOR dauerhaft setzen, z. B.: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish",
 	"Editor failed — falling back to notepad":                                                                               "Editor fehlgeschlagen — nutze notepad",
-	"Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'":                                     "Ungültiges Datum - nutze dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday' oder '+3d'",
+	"Invalid date - use dd-mm-yy, %q, %q, %q, %q, or '+3d'":                                                                 "Ungültiges Datum - nutze dd-mm-yy, %q, %q, %q, %q oder '+3d'",
 	"Dependency not linked":                         "Abhängigkeit nicht verknüpft",
 	"Remove project '%s' from ALL its tasks? (y/n)": "Projekt '%s' von ALLEN seinen Aufgaben entfernen? (y/n)",
 
@@ -1133,11 +1163,11 @@ var deTranslations = map[string]string{
 	"Delete %s entry for '%s'? (y/n)":           "Eintrag %s für '%s' löschen? (y/n)",
 
 	// Input placeholders
-	"Search... (#tag @project p:high due:<fri)": "Suchen… (#tag @projekt p:high due:<fri)",
-	"Search for task to add as dependency...":   "Aufgabe als Abhängigkeit suchen…",
-	"Search or create tag...":                   "Schlagwort suchen oder anlegen…",
-	"Search or create project...":               "Projekt suchen oder anlegen…",
-	"Filter tags...":                            "Schlagwörter filtern…",
+	"Search... (#tag @project p:%s %s<%s)":    "Suchen… (#Schlagwort @Projekt p:%s %s<%s)",
+	"Search for task to add as dependency...": "Aufgabe als Abhängigkeit suchen…",
+	"Search or create tag...":                 "Schlagwort suchen oder anlegen…",
+	"Search or create project...":             "Projekt suchen oder anlegen…",
+	"Filter tags...":                          "Schlagwörter filtern…",
 
 	// Inline edit/add placeholders (set when a text-entry mode opens)
 	"New task...": "Neue Aufgabe…",
@@ -1247,18 +1277,18 @@ var deTranslations = map[string]string{
 
 	// ── Help: quick-add tokens (the token itself stays English — it is syntax) ──
 	"add a tag (existing tags are suggested; tab inserts)": "Schlagwort setzen (Vorschläge; tab fügt ein)",
-	"put it in a project":                                  "einem Projekt zuordnen",
-	"set a due date (see Date input below)":                "Fälligkeit setzen (siehe Datumseingabe)",
-	"priority: high / medium / low (p:h, p:m, p:l)":        "Priorität: hoch / mittel / niedrig (p:h, p:m, p:l)",
-	"size: s / m / l (also size:large)":                    "Größe: s / m / l (auch size:large)",
-	"repeat: daily / weekdays / weekly / monthly / yearly": "Wiederholung: daily / weekdays / weekly / monthly / yearly",
-	"block on the last added task (or dep:<id prefix>)":    "auf zuletzt angelegte Aufgabe warten (oder dep:<ID-Präfix>)",
+	"put it in a project":                             "einem Projekt zuordnen",
+	"set a due date (see Date input below)":           "Fälligkeit setzen (siehe Datumseingabe)",
+	"priority: %s / %s / %s (p:h, p:m, p:l)":          "Priorität: %s / %s / %s (p:h, p:m, p:l)",
+	"size: s / m / l (also %s)":                       "Größe: s / m / l (auch %s)",
+	"repeat: %s / %s / %s / %s / %s":                  "Wiederholung: %s / %s / %s / %s / %s",
+	"block on the last added task (or %s<id prefix>)": "auf zuletzt angelegte Aufgabe warten (oder %s<ID-Präfix>)",
 
 	// ── Help: search filters ──
 	"only tasks carrying the tag":                                 "nur Aufgaben mit dem Schlagwort",
 	"only tasks in the project":                                   "nur Aufgaben im Projekt",
 	"only that priority":                                          "nur diese Priorität",
-	"due before a date (also due:>, due:<=, due:>=, due:date)":    "fällig vor einem Datum (auch due:>, due:<=, due:>=, due:datum)",
+	"due before a date (also >, <=, >= and an exact date)":        "fällig vor einem Datum (auch >, <=, >= und ein genaues Datum)",
 	"only overdue tasks":                                          "nur überfällige Aufgaben",
 	"anything else fuzzy-matches the title, or the notes as text": "alles andere trifft den Titel unscharf oder die Notizen als Text",
 

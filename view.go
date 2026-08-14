@@ -613,7 +613,7 @@ func (m model) footerContentFor(w int) string {
 			}
 			if strings.TrimSpace(m.textInput.Value()) == "" {
 				return field + "\n" +
-					helpStyle.Render("    "+truncate(tr("#tag @project due:tomorrow p:high s:l r:weekly dep:^"), w))
+					helpStyle.Render("    "+truncate(quickAddHint(), w))
 			}
 			return field + "\n" + renderQuickAddPreview(m.textInput.Value(), w)
 		}
@@ -1262,21 +1262,29 @@ func (m model) helpBodyLines() []string {
 	// look something up. Keep in sync with parseQuickAdd (helpers.go) and
 	// compileSearch — TestHelpDocumentsEveryToken asserts every token the
 	// parsers accept appears here.
+	//
+	// Tokens are spelled in the active language (inputWord / inputToken,
+	// lang_input.go) because that is what the parser now accepts there —
+	// advertising `due:friday` on a Danish screen was the visible half of the
+	// mismatch. English keeps parsing everywhere, so nothing here revokes it.
 	sections = append(sections, helpSec{tr("Quick-add syntax"), [][2]string{
 		{"#tag", tr("add a tag (existing tags are suggested; tab inserts)")},
 		{"@project", tr("put it in a project")},
-		{"due:tomorrow", tr("set a due date (see Date input below)")},
-		{"p:high", tr("priority: high / medium / low (p:h, p:m, p:l)")},
-		{"s:l", tr("size: s / m / l (also size:large)")},
-		{"r:weekly", tr("repeat: daily / weekdays / weekly / monthly / yearly")},
-		{"dep:^", tr("block on the last added task (or dep:<id prefix>)")},
+		{inputWord("due:") + inputToken("tomorrow"), tr("set a due date (see Date input below)")},
+		{"p:" + inputWord("high"), fmt.Sprintf(tr("priority: %s / %s / %s (p:h, p:m, p:l)"),
+			inputWord("high"), inputWord("medium"), inputWord("low"))},
+		{"s:l", fmt.Sprintf(tr("size: s / m / l (also %s)"), inputWord("size:")+inputWord("large"))},
+		{"r:" + inputWord("weekly"), fmt.Sprintf(tr("repeat: %s / %s / %s / %s / %s"),
+			inputWord("daily"), inputWord("weekdays"), inputWord("weekly"),
+			inputWord("monthly"), inputWord("yearly"))},
+		{inputWord("dep:") + "^", fmt.Sprintf(tr("block on the last added task (or %s<id prefix>)"), inputWord("dep:"))},
 	}})
 	sections = append(sections, helpSec{tr("Search filters"), [][2]string{
 		{"#tag", tr("only tasks carrying the tag")},
 		{"@project", tr("only tasks in the project")},
-		{"p:high", tr("only that priority")},
-		{"due:<friday", tr("due before a date (also due:>, due:<=, due:>=, due:date)")},
-		{"overdue", tr("only overdue tasks")},
+		{"p:" + inputWord("high"), tr("only that priority")},
+		{inputWord("due:") + "<" + strings.ToLower(localizedWeekday(time.Friday)), tr("due before a date (also >, <=, >= and an exact date)")},
+		{inputWord("overdue"), tr("only overdue tasks")},
 		{"grcrs", tr("anything else fuzzy-matches the title, or the notes as text")},
 	}})
 
@@ -1297,11 +1305,11 @@ func (m model) helpBodyLines() []string {
 	// outside the registry and is appended last.
 	sections = append(sections, helpSec{tr("Date input"), [][2]string{
 		{"dd-mm-yy", tr("exact date (e.g. 15-06-25)")},
-		{"today", tr("today's date")},
-		{"tomorrow", tr("tomorrow")},
-		{"next week", tr("7 days from now")},
-		{"next month", tr("1 month from now")},
-		{"monday..sunday", tr("next occurrence of weekday")},
+		{inputWord("today"), tr("today's date")},
+		{inputWord("tomorrow"), tr("tomorrow")},
+		{inputWord("next week"), tr("7 days from now")},
+		{inputWord("next month"), tr("1 month from now")},
+		{strings.ToLower(localizedWeekday(time.Monday)) + ".." + strings.ToLower(localizedWeekday(time.Sunday)), tr("next occurrence of weekday")},
 		{"+3d / +2w / +1m", tr("relative days/weeks/months")},
 	}})
 

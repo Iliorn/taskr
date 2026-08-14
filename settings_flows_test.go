@@ -321,7 +321,7 @@ func TestCycleLangVisitsEveryLanguageAndWraps(t *testing.T) {
 	}
 	// Switching language must re-place the input placeholders, or the
 	// prompts stay in the previous language until a restart.
-	if m.searchInput.Placeholder != tr("Search... (#tag @project p:high due:<fri)") {
+	if m.searchInput.Placeholder != searchHint() {
 		t.Errorf("placeholder = %q, not refreshed for %q", m.searchInput.Placeholder, activeLang)
 	}
 }

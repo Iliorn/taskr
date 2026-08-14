@@ -83,7 +83,7 @@ func renderSearchPreview(query string, w int) string {
 	var titleWords []string
 
 	for _, tok := range strings.Fields(query) {
-		lower := strings.ToLower(tok)
+		lower := canonicalInputToken(strings.ToLower(tok))
 		switch {
 		case strings.HasPrefix(tok, "#") && len(tok) > 1:
 			filters = append(filters, tagStyle.Render(tok))
@@ -101,7 +101,7 @@ func renderSearchPreview(query string, w int) string {
 			} else {
 				titleWords = append(titleWords, tok)
 			}
-		case lower == "overdue":
+		case canonicalInputWord(lower) == "overdue":
 			filters = append(filters, overdueStyle.Render(tr("overdue")))
 		default:
 			titleWords = append(titleWords, tok)

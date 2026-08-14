@@ -44,7 +44,9 @@ func compileSearch(search string) func(todo.Todo) bool {
 	var titleWords []string
 
 	for _, tok := range strings.Fields(search) {
-		lower := strings.ToLower(tok)
+		// Same two-step as parseQuickAdd: lower once, then fold a localized
+		// field prefix back to English so the branches know one spelling.
+		lower := canonicalInputToken(strings.ToLower(tok))
 		switch {
 		case strings.HasPrefix(tok, "#") && len(tok) > 1:
 			q := strings.ToLower(tok[1:])
@@ -73,7 +75,7 @@ func compileSearch(search string) func(todo.Todo) bool {
 			} else {
 				titleWords = append(titleWords, tok)
 			}
-		case lower == "overdue":
+		case canonicalInputWord(lower) == "overdue":
 			preds = append(preds, func(t todo.Todo) bool { return t.IsOverdue() })
 		default:
 			titleWords = append(titleWords, tok)
@@ -132,7 +134,7 @@ func subsequenceFold(haystack, needle string) bool {
 // quick-add spellings. The bool is false for anything unrecognised so the caller
 // can fall back to treating the token as a literal title word.
 func parsePriorityFilter(s string) (todo.Priority, bool) {
-	switch s {
+	switch canonicalInputWord(s) {
 	case "high", "h":
 		return todo.PriorityHigh, true
 	case "medium", "med", "m":

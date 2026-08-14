@@ -52,6 +52,18 @@ belong in the commit log, not here — unless they change behaviour.
   moves with no edit from you: the deadline ramp stepping at midnight and
   momentum expiring 48h after the last signal, each with the score and the
   position it lands on.
+- **The parser now speaks the interface's language.** Danish and German
+  translated everything you *read* and nothing you *type*: a fully Danish
+  screen still wanted `due:friday p:high`, and the help advertised those
+  English tokens under Danish headings. With the language set, the quick-add
+  and search grammars accept that language's words as well — `frist:imorgen`,
+  `p:høj`, `størrelse:lille`, `forfalden`, `fällig:freitag`, `p:hoch`,
+  `überfällig` — including weekday names, taken from the same tables the
+  calendar prints. The spellings are read out of the translation table the
+  interface renders from, so the help, the input hints and the parser cannot
+  disagree. English keeps working in every language, and only input is
+  localized: stored data and the sync format stay English, so installs in
+  different languages sync unchanged. (The CLI stays English on both sides.)
 - **`TASKR_NO_WATCH=1`** turns off live reload. The filesystem watcher is the
   only thing taskr does continuously against the OS, so it is the first thing
   to remove when input feels laggy — at the cost of not noticing another

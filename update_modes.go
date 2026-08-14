@@ -91,7 +91,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.pushUndo("set start date", t.ID)
 							t.SetStartDate(d)
 						} else {
-							m.flashError(tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'"))
+							m.flashError(invalidDateMsg())
 							return m, clearErrAfter()
 						}
 					case fieldDueDate:
@@ -114,7 +114,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 							t.SetDueDate(d)
 						} else {
-							m.flashError(tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'"))
+							m.flashError(invalidDateMsg())
 							return m, clearErrAfter()
 						}
 					}
@@ -296,7 +296,7 @@ func (m model) updateEditDue(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d, err := parseDueDate(val)
 			if err != nil {
 				// Stay in the prompt: the typed text is still there to fix.
-				m.flashError(tr("Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'"))
+				m.flashError(invalidDateMsg())
 				return m, clearErrAfter()
 			}
 			m.pushUndo("set due date", t.ID)
