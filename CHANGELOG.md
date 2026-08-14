@@ -48,6 +48,10 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Fixed
 
+- **A stale "plain http" sync warning no longer sticks.** Moving the sync URL
+  from a public `http://` host to a Tailscale address or `https://` left the
+  earlier warning on screen, still claiming the token travelled unencrypted. A
+  security notice that outlives the condition it describes is worse than none.
 - **Config files are replaced atomically.** settings.json, sync.json,
   sync-state.json, serve-state.json, the undo stack and task notes were written
   by truncating the old file first, so a crash or a full disk mid-write left a
