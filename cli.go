@@ -2198,8 +2198,13 @@ func cliSubtask(args []string) int {
 
 // ── help ─────────────────────────────────────────────────────────────────────
 
+// cliHelp prints the command reference. It goes to stdout, not stderr:
+// dispatchCLI only reaches it for an explicit `taskr help` / `-h` / `--help`
+// (an unrecognised word never gets this far — isCLICommand sends it to the
+// TUI instead), and an explicitly requested document belongs on stdout so
+// `taskr help | grep sync` and `taskr help | less` work.
 func cliHelp() int {
-	fmt.Fprintln(os.Stderr, `taskr — keyboard-driven task manager
+	fmt.Fprintln(os.Stdout, `taskr — keyboard-driven task manager
 
 Usage:
   taskr                                launch the TUI (no args)

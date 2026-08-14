@@ -1037,3 +1037,108 @@ func TestStampModifiedZeroPrev(t *testing.T) {
 		t.Errorf("StampModified(zero) = %v, want a value between %v and %v", got, before, after)
 	}
 }
+
+// ── Setters and time entries that nothing else reached ──────────────────────
+
+func TestSetSizeStampsModified(t *testing.T) {
+	task := New("resize me")
+	before := task.ModifiedAt
+	task.SetSize(SizeLarge)
+	if task.Size != SizeLarge {
+		t.Errorf("Size = %v, want %v", task.Size, SizeLarge)
+	}
+	// Every setter has to move ModifiedAt or the change loses its own merge:
+	// the other device's older copy compares equal-or-newer and wins.
+	if !task.ModifiedAt.After(before) {
+		t.Errorf("ModifiedAt did not advance: %v -> %v", before, task.ModifiedAt)
+	}
+}
+
+func TestSetStageStampsModifiedAndAcceptsEmpty(t *testing.T) {
+	task := New("move me")
+	task.SetStage("Review")
+	if task.Stage != "Review" {
+		t.Errorf("Stage = %q, want Review", task.Stage)
+	}
+	before := task.ModifiedAt
+	// The empty string is documented as valid — "the first configured stage"
+	// — so a caller can reset a task without knowing the configured names.
+	task.SetStage("")
+	if task.Stage != "" {
+		t.Errorf("Stage = %q, want it cleared", task.Stage)
+	}
+	if !task.ModifiedAt.After(before) {
+		t.Error("clearing the stage must stamp ModifiedAt too")
+	}
+}
+
+func TestAddTimeEntryRecordsACompletedSpan(t *testing.T) {
+	task := New("log some work")
+	start := time.Date(2026, 8, 14, 9, 0, 0, 0, time.UTC)
+	stop := start.Add(90 * time.Minute)
+
+	id := task.AddTimeEntry(start, stop)
+	if id == "" {
+		t.Fatal("AddTimeEntry returned an empty ID")
+	}
+	if len(task.TimeEntries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(task.TimeEntries))
+	}
+	entry := task.TimeEntries[0]
+	if entry.ID != id {
+		t.Errorf("entry ID = %q, want %q", entry.ID, id)
+	}
+	// A backfilled entry is complete by definition; if it registered as
+	// running, the timer guard would treat it as an abandoned session.
+	if entry.IsRunning() {
+		t.Error("a backfilled entry must not count as running")
+	}
+	if got := task.TotalTimeSpent(); got != 90*time.Minute {
+		t.Errorf("TotalTimeSpent = %v, want 90m", got)
+	}
+}
+
+func TestAddTimeEntryGivesEachEntryItsOwnID(t *testing.T) {
+	task := New("two sessions")
+	start := time.Date(2026, 8, 14, 9, 0, 0, 0, time.UTC)
+	first := task.AddTimeEntry(start, start.Add(time.Hour))
+	second := task.AddTimeEntry(start.Add(2*time.Hour), start.Add(3*time.Hour))
+	// Entries are addressed by ID when edited or deleted, so a collision
+	// would silently act on the wrong span.
+	if first == second {
+		t.Fatalf("both entries share the ID %q", first)
+	}
+}
+
+func TestRunningEntryFindsTheOpenSpan(t *testing.T) {
+	task := New("track me")
+	if task.RunningEntry() != nil {
+		t.Fatal("a fresh task has no running entry")
+	}
+	// A completed entry must not be mistaken for the running one.
+	start := time.Date(2026, 8, 14, 9, 0, 0, 0, time.UTC)
+	task.AddTimeEntry(start, start.Add(time.Hour))
+	if task.RunningEntry() != nil {
+		t.Fatal("a completed entry is not the running entry")
+	}
+
+	task.StartTimer()
+	entry := task.RunningEntry()
+	if entry == nil {
+		t.Fatal("RunningEntry returned nil while the timer runs")
+	}
+	if !entry.IsRunning() {
+		t.Error("RunningEntry returned a stopped entry")
+	}
+	// The pointer has to alias the stored entry, not a copy — callers stamp
+	// the live entry through it (the timer heartbeat does exactly this).
+	entry.ModifiedAt = entry.ModifiedAt.Add(time.Second)
+	if task.TimeEntries[len(task.TimeEntries)-1].ModifiedAt != entry.ModifiedAt {
+		t.Error("RunningEntry returned a copy; writes through it are lost")
+	}
+
+	task.StopTimer()
+	if task.RunningEntry() != nil {
+		t.Error("RunningEntry still reports an open span after StopTimer")
+	}
+}
