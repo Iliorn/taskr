@@ -197,33 +197,61 @@ const momentumWindow = 48 * time.Hour
 // which is what a process that never computes heat — the sync server
 // persisting merged rows — correctly falls back to; every user-facing surface
 // recomputes it on load or cache refresh.
+//
+// A key's presence is the hot/cold answer scoring needs; the value it maps to
+// is the newest signal behind it, which is what says *when* that heat runs out.
+// Momentum is the one dimension that changes with no user action at all — it
+// expires momentumWindow after the last signal — so a list can reshuffle
+// overnight with nothing to point at. Recording the instant lets the explain
+// view name it in advance (see expire / heatExpiries).
 type activityHeat struct {
-	tasks    map[string]bool
-	projects map[string]bool
-	tags     map[string]bool
+	tasks    map[string]time.Time
+	projects map[string]time.Time
+	tags     map[string]time.Time
+}
+
+// hot reports whether a heat map carries a live signal for key. Presence is the
+// answer: both builders only record signals already inside the window, and
+// expire drops the ones that have aged out.
+func hot(m map[string]time.Time, key string) bool {
+	if key == "" {
+		return false
+	}
+	_, ok := m[key]
+	return ok
 }
 
 // computeActivityHeat scans the full task set (done tasks included — their
 // completions are the strongest signal) and marks the task, its project, and
-// its tags hot when any signal lands inside the window ending at `now`.
+// its tags hot when any signal lands inside the window ending at `now`, with
+// the newest such signal as the value.
 func computeActivityHeat(now time.Time, todos []*todo.Todo) activityHeat {
 	cutoff := now.Add(-momentumWindow)
-	recent := func(ts time.Time) bool { return !ts.IsZero() && ts.After(cutoff) }
-	return scanHeat(todos, func(t *todo.Todo) bool {
-		if recent(t.CompletedAt) {
-			return true
+	return scanHeat(todos, func(t *todo.Todo) time.Time {
+		var newest time.Time
+		bump := func(ts time.Time) {
+			if !ts.IsZero() && ts.After(cutoff) && ts.After(newest) {
+				newest = ts
+			}
 		}
+		bump(t.CompletedAt)
 		for _, c := range t.Comments {
-			if c.DeletedAt.IsZero() && (recent(c.CreatedAt) || recent(c.ModifiedAt)) {
-				return true
+			if c.DeletedAt.IsZero() {
+				bump(c.CreatedAt)
+				bump(c.ModifiedAt)
 			}
 		}
 		for _, e := range t.TimeEntries {
-			if e.IsRunning() || recent(e.StartedAt) || recent(e.StoppedAt) {
-				return true
+			if e.IsRunning() {
+				// A running timer cannot go cold while it runs, so its signal
+				// is always "now" — a full window out, refreshed every refresh.
+				bump(now)
+				continue
 			}
+			bump(e.StartedAt)
+			bump(e.StoppedAt)
 		}
-		return false
+		return newest
 	})
 }
 
@@ -238,16 +266,18 @@ func computeActivityHeat(now time.Time, todos []*todo.Todo) activityHeat {
 // signal slightly in the future, and dropping it there would be wrong.
 func computeActivityHeatAt(at time.Time, todos []*todo.Todo) activityHeat {
 	cutoff := at.Add(-momentumWindow)
-	inWindow := func(ts time.Time) bool {
-		return !ts.IsZero() && ts.After(cutoff) && ts.Before(at)
-	}
-	return scanHeat(todos, func(t *todo.Todo) bool {
-		if inWindow(t.CompletedAt) {
-			return true
+	return scanHeat(todos, func(t *todo.Todo) time.Time {
+		var newest time.Time
+		bump := func(ts time.Time) {
+			if !ts.IsZero() && ts.After(cutoff) && ts.Before(at) && ts.After(newest) {
+				newest = ts
+			}
 		}
+		bump(t.CompletedAt)
 		for _, c := range t.Comments {
-			if c.DeletedAt.IsZero() && (inWindow(c.CreatedAt) || inWindow(c.ModifiedAt)) {
-				return true
+			if c.DeletedAt.IsZero() {
+				bump(c.CreatedAt)
+				bump(c.ModifiedAt)
 			}
 		}
 		for _, e := range t.TimeEntries {
@@ -256,35 +286,99 @@ func computeActivityHeatAt(at time.Time, todos []*todo.Todo) activityHeat {
 			// (IsRunning is a *current* fact, meaningless for a past moment.)
 			if !e.StartedAt.IsZero() && e.StartedAt.Before(at) &&
 				(e.StoppedAt.IsZero() || e.StoppedAt.After(cutoff)) {
-				return true
+				// The signal counted until it stopped, or until `at` for an
+				// entry still open then.
+				ts := e.StoppedAt
+				if ts.IsZero() || ts.After(at) {
+					ts = at
+				}
+				if ts.After(newest) {
+					newest = ts
+				}
 			}
 		}
-		return false
+		return newest
 	})
 }
 
-// scanHeat builds an activityHeat by testing every live task against `hot`
-// and marking the task, its project, and its tags when it fires. The two
-// heat builders above share it; only their notion of "recent" differs.
-func scanHeat(todos []*todo.Todo, hot func(*todo.Todo) bool) activityHeat {
+// scanHeat builds an activityHeat by asking `latest` for each live task's newest
+// in-window signal and marking the task, its project, and its tags with it. A
+// zero time means cold and records nothing. The two heat builders above share
+// it; only their notion of "recent" differs.
+func scanHeat(todos []*todo.Todo, latest func(*todo.Todo) time.Time) activityHeat {
 	h := activityHeat{
-		tasks:    make(map[string]bool),
-		projects: make(map[string]bool),
-		tags:     make(map[string]bool),
+		tasks:    make(map[string]time.Time),
+		projects: make(map[string]time.Time),
+		tags:     make(map[string]time.Time),
+	}
+	mark := func(m map[string]time.Time, key string, ts time.Time) {
+		if key == "" {
+			return
+		}
+		if prev, ok := m[key]; !ok || ts.After(prev) {
+			m[key] = ts
+		}
 	}
 	for _, t := range todos {
-		if t.Deleted || !hot(t) {
+		if t.Deleted {
 			continue
 		}
-		h.tasks[t.ID] = true
-		if t.Project != "" {
-			h.projects[t.Project] = true
+		ts := latest(t)
+		if ts.IsZero() {
+			continue
 		}
+		mark(h.tasks, t.ID, ts)
+		mark(h.projects, t.Project, ts)
 		for _, tag := range t.Tags {
-			h.tags[tag] = true
+			mark(h.tags, tag, ts)
 		}
 	}
 	return h
+}
+
+// expire returns the snapshot as it will stand at `future`: every signal that
+// will have aged out of momentumWindow by then is dropped. Scoring a task
+// against an expired snapshot is how the explain view forecasts the moment
+// momentum stops holding a task up — the reshuffle nobody triggered.
+func (h activityHeat) expire(future time.Time) activityHeat {
+	cutoff := future.Add(-momentumWindow)
+	keep := func(m map[string]time.Time) map[string]time.Time {
+		out := make(map[string]time.Time, len(m))
+		for k, ts := range m {
+			if ts.After(cutoff) {
+				out[k] = ts
+			}
+		}
+		return out
+	}
+	return activityHeat{tasks: keep(h.tasks), projects: keep(h.projects), tags: keep(h.tags)}
+}
+
+// heatExpiries returns the distinct future instants at which a signal feeding
+// this task's momentum ages out — the candidate moments its Momentum term can
+// drop. Signals already expired (or with no bearing on this task) are skipped.
+func heatExpiries(t *todo.Todo, h activityHeat, now time.Time) []time.Time {
+	var out []time.Time
+	seen := map[time.Time]bool{}
+	add := func(m map[string]time.Time, key string) {
+		ts, ok := m[key]
+		if !ok {
+			return
+		}
+		at := ts.Add(momentumWindow)
+		if !at.After(now) || seen[at] {
+			return
+		}
+		seen[at] = true
+		out = append(out, at)
+	}
+	add(h.tasks, t.ID)
+	add(h.projects, t.Project)
+	for _, tag := range t.Tags {
+		add(h.tags, tag)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Before(out[j]) })
+	return out
 }
 
 // activeHeat is the package-level snapshot the live score functions read,
@@ -363,11 +457,11 @@ func importanceDim(p todo.Priority) float64 {
 // comes next" — the informal ordering that dependency edges encode explicitly,
 // available even when no edges were recorded.
 func momentumDim(t *todo.Todo, heat activityHeat) float64 {
-	if heat.tasks[t.ID] || (t.Project != "" && heat.projects[t.Project]) {
+	if hot(heat.tasks, t.ID) || hot(heat.projects, t.Project) {
 		return 10
 	}
 	for _, tag := range t.Tags {
-		if heat.tags[tag] {
+		if hot(heat.tags, tag) {
 			return 5
 		}
 	}

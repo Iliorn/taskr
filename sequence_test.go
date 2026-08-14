@@ -90,12 +90,23 @@ func TestImportanceDim(t *testing.T) {
 	}
 }
 
-func TestMomentumDim(t *testing.T) {
-	heat := activityHeat{
-		tasks:    map[string]bool{"self": true},
-		projects: map[string]bool{"hot-proj": true},
-		tags:     map[string]bool{"hot-tag": true},
+// hotHeat builds a heat snapshot whose every listed key carries a signal that
+// landed just now — the shape tests want when they only care about hot/cold.
+// The heat maps hold the signal instant (see activityHeat), so a literal of
+// bare keys needs a timestamp per entry.
+func hotHeat(at time.Time, tasks, projects, tags []string) activityHeat {
+	fill := func(keys []string) map[string]time.Time {
+		m := make(map[string]time.Time, len(keys))
+		for _, k := range keys {
+			m[k] = at
+		}
+		return m
 	}
+	return activityHeat{tasks: fill(tasks), projects: fill(projects), tags: fill(tags)}
+}
+
+func TestMomentumDim(t *testing.T) {
+	heat := hotHeat(fixedNow, []string{"self"}, []string{"hot-proj"}, []string{"hot-tag"})
 	mk := func(id, project string, tags ...string) *todo.Todo {
 		tt := todo.New("x")
 		tt.ID = id
@@ -182,7 +193,7 @@ func TestComputeActivityHeat(t *testing.T) {
 
 	for _, want := range []struct {
 		kind string
-		m    map[string]bool
+		m    map[string]time.Time
 		key  string
 		hot  bool
 	}{
@@ -196,9 +207,18 @@ func TestComputeActivityHeat(t *testing.T) {
 		{"project", h.projects, "epsilon", false},
 		{"tag", h.tags, "go", true},
 	} {
-		if got := want.m[want.key]; got != want.hot {
+		if got := hot(want.m, want.key); got != want.hot {
 			t.Errorf("%s %q hot = %v, want %v", want.kind, want.key, got, want.hot)
 		}
+	}
+
+	// The recorded instant is the signal's own, not the scan's: it is what the
+	// explain view's momentum forecast counts down from.
+	if got := h.tasks["fresh"]; !got.Equal(inWindow) {
+		t.Errorf("fresh signal stamped %v, want %v", got, inWindow)
+	}
+	if got := h.tasks["tracked"]; !got.Equal(now) {
+		t.Errorf("running timer stamped %v, want %v (a running timer never goes cold)", got, now)
 	}
 }
 
@@ -234,7 +254,7 @@ func TestBalancedBiasGivesUnweightedSum(t *testing.T) {
 	tt.Size = todo.SizeSmall        // size nudge 2
 	tt.Project = "hot"
 	tt.CreatedAt = fixedNow.Add(-1 * 24 * time.Hour)
-	heat := activityHeat{projects: map[string]bool{"hot": true}}
+	heat := hotHeat(fixedNow, nil, []string{"hot"}, nil)
 	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}, heat)
 	// no due, so urgency=0. importance 10 + momentum 10 + size 2 + age 0.1 = 22.1
 	if !approxEq(got.Total, 22.1) {
@@ -248,7 +268,7 @@ func TestIntenseBiasDoublesEachAxis(t *testing.T) {
 	tt.Size = todo.SizeSmall
 	tt.Project = "hot"
 	tt.DueDate = fixedNow.Add(48 * time.Hour) // 2 days out
-	heat := activityHeat{projects: map[string]bool{"hot": true}}
+	heat := hotHeat(fixedNow, nil, []string{"hot"}, nil)
 	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true}, heat)
 	// urgency dim = 10 - 16/7 ≈ 7.714; weighted ×2 ≈ 15.428
 	// importance dim = 10; weighted ×2 = 20
@@ -277,7 +297,7 @@ func TestRelaxedBiasHalvesEachAxis(t *testing.T) {
 // full axis (10 points, Balanced) above the cold one.
 func TestHotProjectOutranksColdPeer(t *testing.T) {
 	bal := biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}
-	heat := activityHeat{projects: map[string]bool{"active": true}}
+	heat := hotHeat(fixedNow, nil, []string{"active"}, nil)
 
 	inFlow := todo.New("next step in the active project")
 	inFlow.Project = "active"
@@ -452,15 +472,15 @@ func TestComputeActivityHeatAtBounds(t *testing.T) {
 
 	h := computeActivityHeatAt(at, todoPtrs([]todo.Todo{self, prior, future, spanning, stale}))
 
-	for id, hot := range map[string]bool{
+	for id, want := range map[string]bool{
 		"self":     false,
 		"prior":    true,
 		"future":   false,
 		"spanning": true,
 		"stale":    false,
 	} {
-		if h.tasks[id] != hot {
-			t.Errorf("task %q hot = %v, want %v", id, h.tasks[id], hot)
+		if got := hot(h.tasks, id); got != want {
+			t.Errorf("task %q hot = %v, want %v", id, got, want)
 		}
 	}
 }

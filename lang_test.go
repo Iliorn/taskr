@@ -106,6 +106,9 @@ func dynamicUIStrings() []string {
 		out = append(out, sz.String())
 	}
 	out = append(out, "daily", "weekly", "monthly", "yearly", "weekdays")
+	// The explain overlay labels its rows with the dimension names the scoring
+	// code holds, so they reach tr() through a slice like the personalities do.
+	out = append(out, seqDimNames[:]...)
 
 	seen := map[string]bool{}
 	uniq := out[:0]

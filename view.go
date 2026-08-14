@@ -250,6 +250,9 @@ func (m model) View() string {
 	if m.mode == modeHelp {
 		return m.renderHelpFullscreen()
 	}
+	if m.mode == modeExplain {
+		return m.renderExplainFullscreen()
+	}
 
 	out := getBuilder()
 	defer putBuilder(out)

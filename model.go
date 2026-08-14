@@ -128,6 +128,9 @@ const (
 	modeEditServerToken
 	modeEditStages
 	modePalette
+	// modeExplain is the "why this rank" overlay: a read-only screen over the
+	// current task, like modeHelp, that any key dismisses.
+	modeExplain
 )
 
 type tagSortMode int
@@ -326,13 +329,17 @@ type model struct {
 	// tagTaskMode is the Tags-tab mirror of projectTaskMode: the cursor has
 	// left the tag list and is walking the selected tag's tasks, where the
 	// row-level keys (d/t/p/r/x/enter) act on the task under it.
-	tagTaskMode        bool
-	showHistory        bool
-	focusFilter        bool
-	focusStack         []focusEntry
-	expandedTasks      map[string]bool
-	detailTaskID       string
-	detailStack        []string
+	tagTaskMode   bool
+	showHistory   bool
+	focusFilter   bool
+	focusStack    []focusEntry
+	expandedTasks map[string]bool
+	detailTaskID  string
+	detailStack   []string
+	// explainTaskID pins the task the "why this rank" overlay is describing.
+	// The overlay is opened over a list that re-sorts under it, so it holds an
+	// ID rather than trusting the cursor to still be on the same row.
+	explainTaskID      string
 	editingTagName     string
 	editingProjectName string
 	// pendingProjectName is the project the x confirm on the Projects tab is

@@ -36,6 +36,7 @@ var cliCommandSpecs = []cliCommandSpec{
 	{name: "search", summary: "title-substring search", flags: []string{"json", "limit", "pending"}},
 	{name: "top", summary: "show the top tasks by sequence score", flags: []string{"json", "n", "wide"}},
 	{name: "show", summary: "show one task in full", flags: []string{"json"}, refArg: true},
+	{name: "why", summary: "explain one task's sequence rank", flags: []string{"json"}, refArg: true},
 	{name: "edit", summary: "change fields on one task", refArg: true, flags: []string{
 		"add-dep", "add-tag", "append-note", "clear-due", "clear-note", "clear-project",
 		"clear-start", "due", "note", "p", "priority", "project", "remove-dep", "remove-tag",

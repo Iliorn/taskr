@@ -316,6 +316,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case modeHelp:
 		newModel, cmd = m.updateHelp(msg)
+	case modeExplain:
+		newModel, cmd = m.updateExplain(msg)
 	case modeConfirm:
 		newModel, cmd = m.updateConfirm(msg)
 	case modeConfirmUpdate:
@@ -682,6 +684,35 @@ func (m model) updateHelp(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateExplain drives the "why this rank" overlay. It shows a computed answer
+// and offers nothing to edit, so every key closes it — w and esc by name, the
+// rest so a stray key can't leave the user staring at a screen with no way out.
+func (m model) updateExplain(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(tea.KeyMsg); !ok {
+		return m, nil
+	}
+	m.mode = modeNormal
+	m.explainTaskID = ""
+	return m, nil
+}
+
+// openExplain pins the task under the cursor and raises the overlay. Nothing to
+// open when the cursor is on no task at all (an empty or fully filtered list).
+// The Board keeps its selection in its own columns rather than the list cursor,
+// so it answers with its own accessor.
+func (m *model) openExplain() bool {
+	t := m.currentTodo()
+	if t == nil && m.tab == tabBoard {
+		t = m.boardSelectedTask()
+	}
+	if t == nil {
+		return false
+	}
+	m.explainTaskID = t.ID
+	m.mode = modeExplain
+	return true
+}
+
 // ── List pane ─────────────────────────────────────────────────────────────────
 
 func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -896,6 +927,16 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textInput.Placeholder = tr("Time spent (45m, 1h30m) or HH:MM-HH:MM…")
 					m.textInput.Focus()
 					return m, textinput.Blink
+				}
+			}
+
+		case "w":
+			// Why this rank. Available wherever a task row is under the
+			// cursor, including the board and the drill-in lists — the
+			// question "why is this here" is asked of a row, not of a tab.
+			if m.tab == tabTasks || m.tab == tabBoard || m.drilledIntoTasks() {
+				if m.openExplain() {
+					return m, nil
 				}
 			}
 

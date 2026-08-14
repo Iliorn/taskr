@@ -59,6 +59,12 @@ var smallTermStates = []struct {
 	{"history", func(m *model) { m.showHistory = true }},
 	{"calendar timeline", func(m *model) { m.calendar.focusTimeline = true }},
 	{"help", func(m *model) { m.mode = modeHelp }},
+	{"why this rank", func(m *model) {
+		m.mode = modeExplain
+		if t := m.currentTodo(); t != nil {
+			m.explainTaskID = t.ID
+		}
+	}},
 	{"quick-add", func(m *model) {
 		m.mode = modeInput
 		m.textInput.SetValue("buy milk #ho")

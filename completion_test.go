@@ -77,7 +77,7 @@ func TestCompletionCoversEveryCommand(t *testing.T) {
 	// commands in their own right.
 	skip := map[string]bool{"ls": true, "rm": true, "-h": true, "--help": true, "--version": true}
 	routed := []string{
-		"add", "list", "ls", "done", "top", "show", "edit", "delete", "rm", "undelete",
+		"add", "list", "ls", "done", "top", "show", "why", "edit", "delete", "rm", "undelete",
 		"comment", "stats", "start", "stop", "log", "export", "import", "subtask",
 		"search", "tags", "projects", "serve", "sync", "undo", "doctor",
 		"completion", "man", "help",

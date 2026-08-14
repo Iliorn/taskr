@@ -29,7 +29,7 @@ import (
 func isCLICommand(arg string) bool {
 	switch arg {
 	case "add", "list", "ls", "done", "top",
-		"show", "edit", "delete", "rm", "undelete", "comment",
+		"show", "why", "edit", "delete", "rm", "undelete", "comment",
 		"stats", "start", "stop", "log", "export", "import", "subtask",
 		"search", "tags", "projects", "serve", "sync", "undo",
 		"doctor", "suggest", "completion", "man", "help", "-h", "--help", "--version",
@@ -78,6 +78,8 @@ func dispatchCLI(args []string) int {
 		return cliTop(rest)
 	case "show":
 		return cliShow(rest)
+	case "why":
+		return cliWhy(rest)
 	case "edit":
 		return cliEdit(rest)
 	case "delete", "rm":
@@ -866,15 +868,9 @@ func rankTopBySequence(todos []*todo.Todo) []todo.Todo {
 // and TUI paths). The rollup and sort logic — subtask inheritance, critical-path
 // dependency boost, fan-out bonus, cycle-safe DFS — is identical for both.
 func rankTopBySequenceBy(todos []*todo.Todo, score func(*todo.Todo) float64) []todo.Todo {
-	rows := make([]todo.Todo, 0, len(todos))
-	for _, t := range todos {
-		if t.ParentID == "" && t.Status == todo.Pending {
-			rows = append(rows, *t)
-		}
-	}
-	rollup := descendantScoreRollupWith(todos, score)
-	rollup = dependencyScoreRollupWith(todos, rollup, score)
-	sortTodosBySequenceWithRollupBy(rows, rollup, score)
+	// seqRanking (sequence_explain.go) is the same fold; it also hands back the
+	// effective score each row sorted by, which only the explain view needs.
+	rows, _ := seqRanking(todos, score)
 	return rows
 }
 
@@ -993,6 +989,88 @@ func cliShow(args []string) int {
 	sort.Slice(subs, func(i, j int) bool { return subs[i].CreatedAt.Before(subs[j].CreatedAt) })
 	printTaskDetail(t, subs, todos)
 	return 0
+}
+
+// cliWhy prints the same answer the TUI's w overlay gives: the score broken
+// into its causes, the margins to the tasks either side, and the moments the
+// ranking moves on its own. `taskr top` says what is next; this says why, which
+// is the difference between a ranking you follow and one you argue with.
+func cliWhy(args []string) int {
+	fs := flag.NewFlagSet("why", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	asJSON := fs.Bool("json", false, "emit the breakdown as JSON")
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
+	if err := fs.Parse(flagArgs); err != nil {
+		return 2
+	}
+	if len(positionals) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: taskr why <ref>")
+		return 2
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	ptrs := todoPtrs(todos)
+	t, err := findTaskByRef(ptrs, positionals[0])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	e := explainSequenceFor(t, ptrs)
+	if *asJSON {
+		return emitJSON(seqExplainJSONOf(e))
+	}
+	for _, line := range explainPlainLines(e) {
+		fmt.Println(line)
+	}
+	return 0
+}
+
+// seqExplainJSON is the wire shape of `taskr why --json`. The internal
+// seqExplain carries reason codes and a biasLevel, which mean nothing outside
+// the binary, so the JSON form resolves them to the same sentences the text
+// form prints.
+type seqFactorJSON struct {
+	Name     string  `json:"name"`
+	Raw      float64 `json:"raw"`
+	Weight   float64 `json:"weight"`
+	Weighted float64 `json:"weighted"`
+	Reason   string  `json:"reason"`
+}
+
+type seqShiftJSON struct {
+	At     time.Time `json:"at"`
+	Score  float64   `json:"score"`
+	Delta  float64   `json:"delta"`
+	Rank   int       `json:"rank"`
+	Reason string    `json:"reason"`
+}
+
+type seqExplainJSON struct {
+	Title   string          `json:"title"`
+	Rank    int             `json:"rank"`
+	Of      int             `json:"of"`
+	Score   float64         `json:"score"`
+	Ranked  float64         `json:"ranked_on"`
+	Boosted bool            `json:"boosted"`
+	Factors []seqFactorJSON `json:"factors"`
+	Shifts  []seqShiftJSON  `json:"shifts,omitempty"`
+}
+
+func seqExplainJSONOf(e seqExplain) seqExplainJSON {
+	out := seqExplainJSON{
+		Title: e.Title, Rank: e.Pos, Of: e.Of,
+		Score: e.Total, Ranked: e.Ranked, Boosted: e.Boosted,
+	}
+	for _, f := range e.Factors {
+		out.Factors = append(out.Factors, seqFactorJSON{f.Name, f.Raw, f.Weight, f.Weighted, trSeqReason(f)})
+	}
+	for _, s := range e.Shifts {
+		out.Shifts = append(out.Shifts, seqShiftJSON{s.At, s.Total, s.Delta, s.Pos, trShiftCause(s.Cause)})
+	}
+	return out
 }
 
 func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo) {
@@ -2216,6 +2294,9 @@ Tasks:
   taskr search "term" [flags]          title-substring search (includes done by default)
   taskr top [-n=N] [--json] [--wide]   show top-N by sequence score
   taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
+  taskr why <ref> [--json]             why it ranks where it does: each score factor with its cause,
+                                       the margins to the tasks either side, and when the ranking
+                                       moves on its own (deadline steps, momentum expiring)
   taskr edit <ref> [flags]             change fields on one task (incl. --note/--append-note/--clear-note,
                                        --stage to move it on the board — stage names live in settings.json)
   taskr done <ref>... [-m "why"]       mark one or more tasks done, stopping any running timer on them

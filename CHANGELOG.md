@@ -41,6 +41,17 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Added
 
+- **`w` explains a task's rank**, and `taskr why <ref>` prints the same answer.
+  The sequencing score decided the order and showed you one number for it, so a
+  list that reordered itself was something to argue with rather than follow.
+  The overlay breaks the score into its five factors with the multiplication
+  each bias applied *and the reason behind each reading* ("3 days overdue",
+  "project @House saw activity in the last 48h", "nothing here was touched in
+  the last 48h"), states the margin to the tasks directly above and below, and
+  — the part no breakdown could answer — forecasts the moments the ranking
+  moves with no edit from you: the deadline ramp stepping at midnight and
+  momentum expiring 48h after the last signal, each with the score and the
+  position it lands on.
 - **`TASKR_NO_WATCH=1`** turns off live reload. The filesystem watcher is the
   only thing taskr does continuously against the OS, so it is the first thing
   to remove when input feels laggy — at the cost of not noticing another

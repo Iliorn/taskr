@@ -104,6 +104,7 @@ var keymap = []binding{
 	{ctxTasksList, "x", "delete", "delete", secTasks, true, true},
 	{ctxTasksList, "n", "notes", "edit notes (opens $EDITOR)", secTasks, true, false},
 	{ctxTasksList, "f", "focus", "focus: today + overdue only", secTasks, true, false},
+	{ctxTasksList, "w", "why", "why this rank — the score, its causes, what moves it", secTasks, true, false},
 	{ctxTasksList, "s", "sort", "cycle sort order", secTasks, true, true},
 	{ctxTasksList, "h", "history", "toggle history", secTasks, true, false},
 	{ctxTasksList, "←/→", "foldsub", "expand/collapse subtasks", secTasks, true, false},
@@ -141,6 +142,7 @@ var keymap = []binding{
 	{ctxDrill, "p", "priority", "cycle priority low/med/high", secDrill, true, false},
 	{ctxDrill, "D", "setdue", "set / clear due date", secDrill, false, false},
 	{ctxDrill, "a", "add", "new task in it", secDrill, true, false},
+	{ctxDrill, "w", "why", "why this rank", secDrill, false, false},
 	{ctxDrill, "r", "edit", "rename task", secDrill, true, false},
 	{ctxDrill, "x", "delete", "delete task", secDrill, true, true},
 	{ctxDrill, "esc", "back", "back to the list", secDrill, true, false},
@@ -160,6 +162,7 @@ var keymap = []binding{
 	{ctxBoard, "←/→", "boardcolumn", "focus previous/next column", secBoard, true, true},
 	{ctxBoard, "H/L", "boardmove", "move card between stages (into Done completes it)", secBoard, true, true},
 	{ctxBoard, "d", "done", "toggle done", secBoard, true, false},
+	{ctxBoard, "w", "why", "why this rank", secBoard, false, false},
 
 	{ctxStats, "enter", "statscycle", "cycle activity range", secStats, true, false},
 

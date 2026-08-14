@@ -193,11 +193,7 @@ func TestSettingsTopPreviewRespectsWeights(t *testing.T) {
 	dueUrgent.DueDate = now.AddDate(0, 0, 1) // due tomorrow (7 days window → ~8.9 urgency)
 
 	todos := []todo.Todo{highPri, dueUrgent}
-	heat := activityHeat{
-		tasks:    make(map[string]bool),
-		projects: make(map[string]bool),
-		tags:     make(map[string]bool),
-	}
+	heat := hotHeat(now, nil, nil, nil)
 
 	// With Priority=Intense (2×) and Deadline=Relaxed (0.5×):
 	// highPri:  Priority(10) × 2.0 = 20 + small age

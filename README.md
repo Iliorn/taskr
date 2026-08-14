@@ -12,7 +12,7 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 ## Features
 
 - **Tasks** — add, complete, delete, rename, set priority, size (S/M/L), due dates, start dates
-- **Sequencing engine** — a weighted score (deadline + priority + size + age) decides the next-best task automatically; cycle `s` to switch between Sequence / Due / Size sort. Tune the weights in Settings (Relaxed / Balanced / Intense for each dimension)
+- **Sequencing engine** — a weighted score (deadline + priority + momentum + size + age) decides the next-best task automatically; cycle `s` to switch between Sequence / Due / Size sort. Tune the weights in Settings (Relaxed / Balanced / Intense for each dimension), and press `w` on any task to see the score broken into its causes, the margins to the rows either side, and the moments the ranking moves on its own
 - **Dependency-aware ordering** — a task that blocks others inherits their urgency, so the prerequisite for an urgent task surfaces right above it (critical-path behaviour). In the list, `↥` marks a blocker (something depends on it) and `↧` marks a blocked task (waiting on an unfinished dependency)
 - **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
 - **Projects** — group tasks, Gantt timeline view. `enter` drills into a project's tasks, where the task keys (`d` done, `t` track, `p` priority, `r` rename, `x` delete, `enter` details) all work; `a` starts a new task already in that project, `x` on the project row clears the grouping off its tasks
@@ -115,6 +115,7 @@ taskr
 | `f` | Focus mode (today + overdue) |
 | `h` | Toggle history |
 | `s` | Cycle sort: Sequence → Due → Size |
+| `w` | Why this rank — the score's causes, the margins either side, what moves it next |
 | `/` | Search / filter |
 | `enter` | Open detail view |
 | `u` | Undo |
@@ -183,6 +184,8 @@ taskr list                       # pending top-level tasks (table)
 taskr list --json --focus        # JSON, today + overdue only
 taskr top -n=5                   # top 5 by sequence score
 taskr show milk                  # full detail (incl. score breakdown + subtask IDs)
+taskr why milk                   # why it ranks there: each factor's cause, the margins to the
+                                 # tasks either side, and when the ranking shifts on its own
 taskr edit milk --p=high --add-tag=urgent --due=tomorrow
 taskr edit deploy --add-dep=sign-off   # depend on another task (refused if it would loop)
 taskr edit deploy --remove-dep=sign-off
