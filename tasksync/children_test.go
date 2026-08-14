@@ -8,109 +8,87 @@ import (
 	"taskr/todo"
 )
 
-// children_test.go covers the child collections — learnings especially, which
-// had almost no coverage despite being the one child type with no other way
-// back once lost: a learning exists only inside its task.
+// children_test.go covers the child collections — the comment fold and the
+// digest that decides whether a sync changed anything.
 
-func learning(id, text string, modified time.Time) todo.Learning {
-	return todo.Learning{ID: id, Text: text, CreatedAt: modified, ModifiedAt: modified}
+func comment(id, text string, modified time.Time) todo.Comment {
+	return todo.Comment{ID: id, Text: text, CreatedAt: modified, ModifiedAt: modified}
 }
 
-func TestMergeLearnings(t *testing.T) {
+func TestMergeComments(t *testing.T) {
 	base := time.Date(2026, 4, 1, 9, 0, 0, 0, time.UTC)
 	later := base.Add(time.Hour)
 
 	t.Run("union by id, both sides kept", func(t *testing.T) {
-		a := []todo.Learning{learning("1", "from the laptop", base)}
-		b := []todo.Learning{learning("2", "from the phone", base)}
-		got := mergeLearnings(a, b)
+		a := []todo.Comment{comment("1", "from the laptop", base)}
+		b := []todo.Comment{comment("2", "from the phone", base)}
+		got := mergeComments(a, b)
 		if len(got) != 2 {
-			t.Fatalf("merged %d learnings, want both", len(got))
+			t.Fatalf("merged %d comments, want both", len(got))
 		}
 	})
 
-	t.Run("the later edit of the same learning wins", func(t *testing.T) {
-		a := []todo.Learning{learning("1", "first draft", base)}
-		b := []todo.Learning{learning("1", "reworded", later)}
-		if got := mergeLearnings(a, b); got[0].Text != "reworded" {
-			t.Errorf("kept %q, want the later edit", got[0].Text)
+	t.Run("the later edit of the same comment wins", func(t *testing.T) {
+		a := []todo.Comment{comment("1", "first draft", base)}
+		b := []todo.Comment{comment("1", "reworded", later)}
+		if got := mergeComments(a, b); got[0].Text != "reworded" {
+			t.Errorf("a,b merged to %q, want the later edit", got[0].Text)
 		}
-		// Symmetric: argument order must not decide the winner.
-		if got := mergeLearnings(b, a); got[0].Text != "reworded" {
-			t.Errorf("kept %q with the arguments swapped", got[0].Text)
+		if got := mergeComments(b, a); got[0].Text != "reworded" {
+			t.Errorf("b,a merged to %q — the fold is not commutative", got[0].Text)
 		}
 	})
 
-	t.Run("a deletion is sticky and keeps its tombstone", func(t *testing.T) {
-		live := learning("1", "still here", later)
-		tomb := learning("1", "gone", base)
-		tomb.DeletedAt = base.Add(30 * time.Minute)
-
-		for _, got := range [][]todo.Learning{
-			mergeLearnings([]todo.Learning{live}, []todo.Learning{tomb}),
-			mergeLearnings([]todo.Learning{tomb}, []todo.Learning{live}),
+	t.Run("a tombstone beats a live version and keeps propagating", func(t *testing.T) {
+		live := comment("1", "still here", later)
+		tomb := comment("1", "gone", base)
+		tomb.DeletedAt = base
+		for _, got := range [][]todo.Comment{
+			mergeComments([]todo.Comment{live}, []todo.Comment{tomb}),
+			mergeComments([]todo.Comment{tomb}, []todo.Comment{live}),
 		} {
-			if len(got) != 1 {
-				t.Fatalf("merged to %d learnings, want the tombstone alone", len(got))
-			}
-			if got[0].DeletedAt.IsZero() {
-				t.Error("the tombstone lost its DeletedAt — the deletion would resurrect on the next sync")
+			if len(got) != 1 || got[0].DeletedAt.IsZero() {
+				t.Fatalf("merged to %d comments, want the tombstone alone", len(got))
 			}
 		}
 	})
 
-	t.Run("two tombstones resolve independently of order", func(t *testing.T) {
-		first := learning("1", "a", base)
-		first.DeletedAt = base
-		second := learning("1", "b", base)
-		second.DeletedAt = later
-
-		ab := mergeLearnings([]todo.Learning{first}, []todo.Learning{second})
-		ba := mergeLearnings([]todo.Learning{second}, []todo.Learning{first})
-		if !reflect.DeepEqual(ab, ba) {
-			t.Fatalf("order changed the result: %+v vs %+v — the two stores would ping-pong forever", ab, ba)
-		}
-		if !ab[0].DeletedAt.Equal(later) {
-			t.Errorf("kept DeletedAt %v, want the later deletion", ab[0].DeletedAt)
-		}
-	})
-
-	t.Run("equal timestamps resolve by hash, not by argument order", func(t *testing.T) {
-		a := []todo.Learning{learning("1", "version a", base)}
-		b := []todo.Learning{learning("1", "version b", base)}
-		if !reflect.DeepEqual(mergeLearnings(a, b), mergeLearnings(b, a)) {
+	t.Run("an exact tie resolves the same way from both sides", func(t *testing.T) {
+		a := []todo.Comment{comment("1", "version a", base)}
+		b := []todo.Comment{comment("1", "version b", base)}
+		if !reflect.DeepEqual(mergeComments(a, b), mergeComments(b, a)) {
 			t.Error("a tie resolved differently depending on argument order")
 		}
 	})
 
-	t.Run("nil inputs", func(t *testing.T) {
-		if got := mergeLearnings(nil, nil); len(got) != 0 {
-			t.Errorf("merging nothing produced %+v", got)
+	t.Run("nil sides", func(t *testing.T) {
+		if got := mergeComments(nil, nil); len(got) != 0 {
+			t.Errorf("merging two nils produced %d", len(got))
 		}
-		only := []todo.Learning{learning("1", "solo", base)}
-		if got := mergeLearnings(nil, only); len(got) != 1 {
-			t.Errorf("merging against nil dropped the learning")
+		only := []todo.Comment{comment("1", "solo", base)}
+		if got := mergeComments(nil, only); len(got) != 1 {
+			t.Errorf("merging against nil dropped the comment")
 		}
 	})
 }
 
-// A whole-task merge has to carry the learnings through, not just the scalars.
-func TestMergeCarriesLearningsAcrossDevices(t *testing.T) {
+// A whole-task merge has to carry the children through, not just the scalars.
+func TestMergeCarriesCommentsAcrossDevices(t *testing.T) {
 	base := time.Date(2026, 4, 1, 9, 0, 0, 0, time.UTC)
 	server := todo.New("write the postmortem")
 	server.ID = "a"
 	server.ModifiedAt = base
-	server.Learnings = []todo.Learning{learning("1", "check the disk first", base)}
+	server.Comments = []todo.Comment{comment("1", "check the disk first", base)}
 
 	client := server
-	client.Learnings = []todo.Learning{learning("2", "and the clock", base)}
+	client.Comments = []todo.Comment{comment("2", "and the clock", base)}
 
 	merged := Merge([]todo.Todo{server}, []todo.Todo{client})
 	if len(merged) != 1 {
 		t.Fatalf("merged to %d tasks", len(merged))
 	}
-	if len(merged[0].Learnings) != 2 {
-		t.Errorf("task kept %d learnings, want both devices'", len(merged[0].Learnings))
+	if len(merged[0].Comments) != 2 {
+		t.Errorf("task kept %d comments, want both devices'", len(merged[0].Comments))
 	}
 }
 
@@ -125,14 +103,12 @@ func TestStoreDigestIgnoresOrderAndZone(t *testing.T) {
 	task.Tags = []string{"work", "home"}
 	task.Dependencies = []string{"b", "c"}
 	task.Comments = []todo.Comment{{ID: "2", Text: "second", CreatedAt: base}, {ID: "1", Text: "first", CreatedAt: base}}
-	task.Learnings = []todo.Learning{{ID: "2", Text: "b", CreatedAt: base}, {ID: "1", Text: "a", CreatedAt: base}}
 	task.TimeEntries = []todo.TimeEntry{{ID: "2", StartedAt: base}, {ID: "1", StartedAt: base}}
 
 	shuffled := task
 	shuffled.Tags = []string{"home", "work"}
 	shuffled.Dependencies = []string{"c", "b"}
 	shuffled.Comments = []todo.Comment{task.Comments[1], task.Comments[0]}
-	shuffled.Learnings = []todo.Learning{task.Learnings[1], task.Learnings[0]}
 	shuffled.TimeEntries = []todo.TimeEntry{task.TimeEntries[1], task.TimeEntries[0]}
 
 	if StoreDigest([]todo.Todo{task}) != StoreDigest([]todo.Todo{shuffled}) {

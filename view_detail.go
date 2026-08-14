@@ -212,14 +212,12 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 		itemW = 4
 	}
 
-	// Subtasks, then dependencies (+ inbound Blocks), then learnings, one
-	// stacked flow. Separate builders keep the section boundaries obvious.
+	// Subtasks, then dependencies (+ inbound Blocks), one stacked flow.
+	// Separate builders keep the section boundaries obvious.
 	subB := getBuilder()
 	defer putBuilder(subB)
 	depB := getBuilder()
 	defer putBuilder(depB)
-	learnB := getBuilder()
-	defer putBuilder(learnB)
 
 	subtaskCur := "  "
 	if isDetailFocused && m.detail.field == fieldSubtasks && m.subtaskCount(t.ID) == 0 {
@@ -322,34 +320,9 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 		}
 	}
 
-	learningCur := "  "
-	if isDetailFocused && m.detail.field == fieldLearnings && len(t.Learnings) == 0 {
-		learningCur = "▶ "
-	}
-	learnB.WriteString(learningCur + detailLabelStyle.Render(tr("Learnings:")) + "\n")
-	if len(t.Learnings) == 0 {
-		learnB.WriteString("  " + detailValueStyle.Render(tr("No learnings yet. Press 'a' to add one.")) + "\n")
-	} else {
-		for i, l := range t.Learnings {
-			pfx := "  "
-			isLearningSelected := isDetailFocused && m.detail.field == fieldLearnings && i == m.detail.learningCursor
-			if isLearningSelected {
-				pfx = "▶ "
-			}
-			line := pfx + truncate(l.Text, availableW-4)
-			if isLearningSelected {
-				learnB.WriteString(learningSelectedStyle.Render(line) + "\n")
-			} else {
-				learnB.WriteString(learningStyle.Render(line) + "\n")
-			}
-		}
-	}
-
 	b.WriteString(subB.String())
 	b.WriteString("\n")
 	b.WriteString(depB.String())
-	b.WriteString("\n")
-	b.WriteString(learnB.String())
 
 	return b.String()
 }

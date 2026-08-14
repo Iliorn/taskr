@@ -252,8 +252,6 @@ func (m model) renderTagList() string {
 	return b.String()
 }
 
-// ── Learnings list ────────────────────────────────────────────────────────────
-
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 // statsScopedTodos returns the task set the Stats tab aggregates: everything

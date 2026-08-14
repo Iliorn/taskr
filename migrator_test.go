@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -168,5 +169,72 @@ func TestNormalizeStoredTagsMigration(t *testing.T) {
 	}
 	if !got[0].ModifiedAt.After(before) {
 		t.Errorf("migration ModifiedAt = %v, want after %v so sync propagates it", got[0].ModifiedAt, before)
+	}
+}
+
+// Migration 011 removed the learnings feature. It must not remove what the user
+// wrote: every live learning is appended to its task's notes before the table
+// goes, and tombstoned ones — deleted on purpose — are not resurrected.
+func TestLearningsFoldIntoNotesMigration(t *testing.T) {
+	h := openTestDB(t)
+	kept := todo.New("has notes already")
+	kept.Notes = "existing notes"
+	bare := todo.New("no notes")
+	untouched := todo.New("never had learnings")
+	untouched.Notes = "left alone"
+	saveTodos(t, h, []todo.Todo{kept, bare, untouched})
+
+	// Recreate the pre-011 table and seed it the way the old writer did.
+	if _, err := h.Exec(`CREATE TABLE task_learnings (
+		id TEXT PRIMARY KEY, task_id TEXT NOT NULL, text TEXT NOT NULL,
+		created_at TEXT NOT NULL, modified_at TEXT NOT NULL DEFAULT '',
+		deleted_at TEXT NOT NULL DEFAULT '')`); err != nil {
+		t.Fatalf("recreate task_learnings: %v", err)
+	}
+	seed := []struct{ id, task, text, created, deleted string }{
+		{"l1", kept.ID, "second lesson", "2026-02-01T10:00:00Z", ""},
+		{"l2", kept.ID, "first lesson", "2026-01-01T10:00:00Z", ""},
+		{"l3", kept.ID, "deleted on purpose", "2026-03-01T10:00:00Z", "2026-03-02T10:00:00Z"},
+		{"l4", bare.ID, "only lesson", "2026-01-05T10:00:00Z", ""},
+	}
+	for _, s := range seed {
+		if _, err := h.Exec(`INSERT INTO task_learnings (id, task_id, text, created_at, deleted_at) VALUES (?,?,?,?,?)`,
+			s.id, s.task, s.text, s.created, s.deleted); err != nil {
+			t.Fatalf("seed %s: %v", s.id, err)
+		}
+	}
+
+	body, err := migrationFS.ReadFile("migrations/011_learnings_into_notes.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	if _, err := h.Exec(string(body)); err != nil {
+		t.Fatalf("apply migration 011: %v", err)
+	}
+
+	notes := func(id string) string {
+		var s string
+		if err := h.QueryRow(`SELECT notes FROM todos WHERE id=?`, id).Scan(&s); err != nil {
+			t.Fatalf("read notes for %s: %v", id, err)
+		}
+		return s
+	}
+	// Existing notes are kept, learnings appended in created_at order.
+	want := "existing notes\n\n## Learnings\n- first lesson\n- second lesson"
+	if got := notes(kept.ID); got != want {
+		t.Errorf("notes =\n%q\nwant\n%q", got, want)
+	}
+	if got := notes(kept.ID); strings.Contains(got, "deleted on purpose") {
+		t.Error("a tombstoned learning came back")
+	}
+	// A task with no notes gets the heading without leading blank lines.
+	if got, want := notes(bare.ID), "## Learnings\n- only lesson"; got != want {
+		t.Errorf("empty-notes task =\n%q\nwant\n%q", got, want)
+	}
+	if got := notes(untouched.ID); got != "left alone" {
+		t.Errorf("a task with no learnings was rewritten: %q", got)
+	}
+	if _, err := h.Exec(`SELECT 1 FROM task_learnings`); err == nil {
+		t.Error("task_learnings survived the migration")
 	}
 }

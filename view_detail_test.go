@@ -108,7 +108,7 @@ func TestDetailPagesNoWrap(t *testing.T) {
 	parent.Project = "very-long-project-name-that-could-easily-overflow"
 	parent.Notes = "first note line that should be truncated when the value column is narrow\nsecond"
 	parent.Tags = []string{"alpha", "beta", "gamma-with-a-long-suffix"}
-	parent.AddLearning("a learning that is also quite long and should be safely truncated to the column width")
+	parent.AddComment("a comment that is also quite long and should be safely truncated to the column width")
 
 	sub := todo.New("a subtask title which is deliberately verbose so it must truncate")
 	sub.ParentID = parent.ID

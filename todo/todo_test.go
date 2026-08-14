@@ -318,59 +318,6 @@ func TestDeleteComment(t *testing.T) {
 	task.DeleteComment(-1)
 }
 
-// ── Learnings ─────────────────────────────────────────────────────────────────
-
-func TestAddLearning(t *testing.T) {
-	task := New("Learning test")
-	task.Tags = []string{"go", "testing"}
-
-	task.AddLearning("Tests are useful")
-
-	if len(task.Learnings) != 1 {
-		t.Fatalf("expected 1 learning, got %d", len(task.Learnings))
-	}
-	if task.Learnings[0].Text != "Tests are useful" {
-		t.Errorf("learning text = %q", task.Learnings[0].Text)
-	}
-	if task.Learnings[0].ID == "" {
-		t.Error("learning ID should not be empty")
-	}
-	// A learning no longer stores tags — they are derived from the parent task
-	// at display time (see learningView), so AddLearning records none.
-}
-
-func TestUpdateLearning(t *testing.T) {
-	task := New("Learning update")
-	task.AddLearning("Original")
-
-	task.UpdateLearning(0, "Updated")
-	if task.Learnings[0].Text != "Updated" {
-		t.Errorf("after update = %q", task.Learnings[0].Text)
-	}
-
-	// Out of bounds
-	task.UpdateLearning(99, "nope")
-	task.UpdateLearning(-1, "nope")
-}
-
-func TestDeleteLearning(t *testing.T) {
-	task := New("Learning delete")
-	task.AddLearning("First")
-	task.AddLearning("Second")
-
-	task.DeleteLearning(0)
-	if len(task.Learnings) != 1 {
-		t.Fatalf("expected 1 learning, got %d", len(task.Learnings))
-	}
-	if task.Learnings[0].Text != "Second" {
-		t.Errorf("remaining = %q, want %q", task.Learnings[0].Text, "Second")
-	}
-
-	// Out of bounds
-	task.DeleteLearning(99)
-	task.DeleteLearning(-1)
-}
-
 // ── IsOverdue ─────────────────────────────────────────────────────────────────
 
 func TestIsOverdue(t *testing.T) {

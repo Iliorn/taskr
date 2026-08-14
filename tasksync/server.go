@@ -239,10 +239,6 @@ func clampFutureEventTimes(tasks []todo.Todo, now time.Time) {
 			clamp(&t.Comments[j].ModifiedAt)
 			clamp(&t.Comments[j].DeletedAt)
 		}
-		for j := range t.Learnings {
-			clamp(&t.Learnings[j].ModifiedAt)
-			clamp(&t.Learnings[j].DeletedAt)
-		}
 		for j := range t.TimeEntries {
 			clamp(&t.TimeEntries[j].ModifiedAt)
 			clamp(&t.TimeEntries[j].DeletedAt)
@@ -298,16 +294,6 @@ func canonicalizeForDigest(t *todo.Todo) {
 			c[i].DeletedAt = c[i].DeletedAt.UTC()
 		}
 		t.Comments = c
-	}
-	if len(t.Learnings) > 0 {
-		l := append([]todo.Learning(nil), t.Learnings...)
-		sort.Slice(l, func(i, j int) bool { return l[i].ID < l[j].ID })
-		for i := range l {
-			l[i].CreatedAt = l[i].CreatedAt.UTC()
-			l[i].ModifiedAt = l[i].ModifiedAt.UTC()
-			l[i].DeletedAt = l[i].DeletedAt.UTC()
-		}
-		t.Learnings = l
 	}
 	if len(t.TimeEntries) > 0 {
 		e := append([]todo.TimeEntry(nil), t.TimeEntries...)

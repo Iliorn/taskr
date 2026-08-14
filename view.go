@@ -586,7 +586,7 @@ func (m model) footerContentFor(w int) string {
 		}
 		return hints
 	case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeEditDue,
-		modeAddLearning, modeEditLearning, modeAddSubtask, modeEditSubtask,
+		modeAddSubtask, modeEditSubtask,
 		modeEditProjectInline, modeEditTimeEntry, modeAddTimeEntry,
 		modeEditSyncURL, modeEditSyncToken,
 		modeEditServerListen, modeEditServerToken, modeEditStages:
@@ -614,10 +614,10 @@ func (m model) footerContentFor(w int) string {
 			// shows up twice.
 			return field + "\n" + helpStyle.Render("    "+truncate(tr("Comma-separated column names · Done is always the last column"), w))
 		}
-		// The single-line comment/learning inputs get a ctrl+e escape hatch to
-		// compose in $EDITOR; advertise it under the field.
+		// The single-line comment inputs get a ctrl+e escape hatch to compose
+		// in $EDITOR; advertise it under the field.
 		switch {
-		case m.mode == modeEditComment, m.mode == modeAddLearning, m.mode == modeEditLearning,
+		case m.mode == modeEditComment,
 			m.mode == modeInput && m.pane != paneList && m.detail.field == fieldComments:
 			return field + "\n" + helpStyle.Render("    "+tr("ctrl+e  edit in $EDITOR"))
 		}
@@ -894,7 +894,7 @@ func (m model) buildListContent(w, outerH int) string {
 	return withBorderTitle(panel, m.listPanelTitle(), w, false)
 }
 
-// buildSideBySide renders the side-by-side list tabs (Tasks/Learnings/Tags) as
+// buildSideBySide renders the side-by-side list tabs (Tasks/Tags) as
 // two columns: the list keeps full height on the left and the detail pane is an
 // always-on preview of the cursor item on the right. Mirrors buildCalendarContent's
 // approach — each
@@ -984,7 +984,7 @@ func (m model) buildProjectListContent(w, listH int) string {
 
 	// ── Drilled-in view: task list (left) + right column (right) ────────────
 	// When the user has pressed Enter to drill into a project, render the
-	// same list+detail side-by-side contract as the Tasks/Learnings/Tags tabs:
+	// same list+detail side-by-side contract as the Tasks/Tags tabs:
 	// left column = task rows (same renderer as the Tasks tab), right column =
 	// Gantt chart when browsing (pane == paneList) or the task detail when the
 	// user has pressed Enter on a task (pane == paneDetail).
@@ -1268,7 +1268,7 @@ func (m model) helpBodyLines() []string {
 		{"p:high", tr("only that priority")},
 		{"due:<friday", tr("due before a date (also due:>, due:<=, due:>=, due:date)")},
 		{"overdue", tr("only overdue tasks")},
-		{"grcrs", tr("anything else fuzzy-matches the title (→ \"Buy groceries\")")},
+		{"grcrs", tr("anything else fuzzy-matches the title, or the notes as text")},
 	}})
 
 	// Reference section: the annotation glyphs a task row can carry. Not key

@@ -15,7 +15,7 @@ import (
 
 // SQLite is the live storage backend. After migration 002, every field is
 // queryable from SQL — scalars live in dedicated columns on `todos`, and
-// nested data (tags, dependencies, comments, learnings, time entries) lives in
+// nested data (tags, dependencies, comments, time entries) lives in
 // child tables joined by task_id. The legacy `data` column survives this
 // migration for safety (a future migration can drop it) but is no longer the
 // source of truth: the adapter reads from the normalized tables exclusively.
@@ -154,7 +154,7 @@ func pruneOldTombstones(h *sql.DB, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	childTables := []string{"task_tags", "task_dependencies", "task_comments", "task_learnings", "task_time_entries"}
+	childTables := []string{"task_tags", "task_dependencies", "task_comments", "task_time_entries"}
 	oldChildren := make(map[string][]string, len(childTables))
 	for _, table := range childTables[2:] { // only the identified children carry deleted_at
 		ids, err := oldIDs(`SELECT id, deleted_at FROM ` + table + ` WHERE deleted_at != ''`)
@@ -163,7 +163,7 @@ func pruneOldTombstones(h *sql.DB, now time.Time) error {
 		}
 		oldChildren[table] = ids
 	}
-	if len(taskIDs) == 0 && len(oldChildren["task_comments"])+len(oldChildren["task_learnings"])+len(oldChildren["task_time_entries"]) == 0 {
+	if len(taskIDs) == 0 && len(oldChildren["task_comments"])+len(oldChildren["task_time_entries"]) == 0 {
 		return nil
 	}
 
@@ -336,7 +336,7 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 			return err
 		}
 		defer insDep.Close()
-		// Comments, learnings and time entries carry their own IDs plus a
+		// Comments and time entries carry their own IDs plus a
 		// deleted_at tombstone column, so they are upserted (not replace-all)
 		// and any child that vanished from the task is tombstoned rather than
 		// hard-deleted — see saveChildren. That is what lets a child deletion
@@ -348,13 +348,6 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 			return err
 		}
 		defer upComment.Close()
-		upLearning, err := tx.Prepare(`INSERT INTO task_learnings (id, task_id, text, created_at, modified_at, deleted_at)
-			VALUES (?, ?, ?, ?, ?, ?)
-			ON CONFLICT(id) DO UPDATE SET text=excluded.text, created_at=excluded.created_at, modified_at=excluded.modified_at, deleted_at=excluded.deleted_at`)
-		if err != nil {
-			return err
-		}
-		defer upLearning.Close()
 		upEntry, err := tx.Prepare(`INSERT INTO task_time_entries (id, task_id, started_at, stopped_at, last_seen, modified_at, deleted_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at, stopped_at=excluded.stopped_at, last_seen=excluded.last_seen, modified_at=excluded.modified_at, deleted_at=excluded.deleted_at`)
@@ -442,13 +435,6 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 				}); err != nil {
 				return err
 			}
-			if err := saveChildren(tx, t.ID, "task_learnings", t.Learnings,
-				func(l todo.Learning) string { return l.ID },
-				upLearning, func(l todo.Learning) []any {
-					return []any{l.ID, t.ID, l.Text, fmtTime(l.CreatedAt), fmtTime(l.ModifiedAt), fmtTime(l.DeletedAt)}
-				}); err != nil {
-				return err
-			}
 			if err := saveChildren(tx, t.ID, "task_time_entries", t.TimeEntries,
 				func(e todo.TimeEntry) string { return e.ID },
 				upEntry, func(e todo.TimeEntry) []any {
@@ -492,7 +478,7 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 	return nil
 }
 
-// saveChildren upserts a task's identified child records (comments, learnings
+// saveChildren upserts a task's identified child records (comments
 // or time entries) and tombstones any live DB child of that task that is no
 // longer present in the slice. Because a removal becomes a deleted_at tombstone
 // rather than a hard delete, a child deleted on one device propagates during
@@ -660,23 +646,6 @@ func loadTodosCore(h querier, includeDeleted bool) ([]todo.Todo, error) {
 			c.DeletedAt = parseTime(deletedAt)
 			if t := todos[taskID]; t != nil {
 				t.Comments = append(t.Comments, c)
-			}
-			return nil
-		}); err != nil {
-		return nil, err
-	}
-	if err := loadChildren(h, todos, "task_learnings", "id, task_id, text, created_at, modified_at, deleted_at", childWhere,
-		func(s *sql.Rows) error {
-			var l todo.Learning
-			var taskID, createdAt, modifiedAt, deletedAt string
-			if err := s.Scan(&l.ID, &taskID, &l.Text, &createdAt, &modifiedAt, &deletedAt); err != nil {
-				return err
-			}
-			l.CreatedAt = parseTime(createdAt)
-			l.ModifiedAt = parseTime(modifiedAt)
-			l.DeletedAt = parseTime(deletedAt)
-			if t := todos[taskID]; t != nil {
-				t.Learnings = append(t.Learnings, l)
 			}
 			return nil
 		}); err != nil {

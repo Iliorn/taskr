@@ -20,7 +20,7 @@ import (
 //     eventTime (modification time, or deletion time for a tombstone); an exact
 //     timestamp tie breaks on the higher content hash so the result is stable
 //     and independent of argument order.
-//   - Child collections (comments, learnings, time entries) merge independently
+//   - Child collections (comments, time entries) merge independently
 //     by their own UUIDs, so a child added or deleted on the side that loses the
 //     scalar race is not silently dropped. A child tombstone is sticky.
 //   - Tombstones (task and child) are retained, never pruned, so deletions keep
@@ -65,12 +65,11 @@ func laterWins(a, b todo.Todo) todo.Todo {
 }
 
 // mergeTask resolves two versions of the same task. Scalars, tags and deps come
-// from the last writer; child collections merge independently so a comment,
-// learning or time entry touched on the losing side survives.
+// from the last writer; child collections merge independently so a comment or
+// time entry touched on the losing side survives.
 func mergeTask(a, b todo.Todo) todo.Todo {
 	out := laterWins(a, b)
 	out.Comments = mergeComments(a.Comments, b.Comments)
-	out.Learnings = mergeLearnings(a.Learnings, b.Learnings)
 	out.TimeEntries = mergeTimeEntries(a.TimeEntries, b.TimeEntries)
 	return out
 }
@@ -145,14 +144,6 @@ func mergeComments(a, b []todo.Comment) []todo.Comment {
 		func(c todo.Comment) string { return c.ID },
 		func(c todo.Comment) time.Time { return c.DeletedAt },
 		func(c todo.Comment) time.Time { return c.ModifiedAt },
-	)
-}
-
-func mergeLearnings(a, b []todo.Learning) []todo.Learning {
-	return mergeChildren(a, b,
-		func(l todo.Learning) string { return l.ID },
-		func(l todo.Learning) time.Time { return l.DeletedAt },
-		func(l todo.Learning) time.Time { return l.ModifiedAt },
 	)
 }
 

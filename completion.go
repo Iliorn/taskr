@@ -51,7 +51,6 @@ var cliCommandSpecs = []cliCommandSpec{
 	{name: "log", summary: "log time against a task", refArg: true},
 	{name: "tags", summary: "pending tags with counts", flags: []string{"json"}},
 	{name: "projects", summary: "pending projects with counts", flags: []string{"json"}},
-	{name: "learnings", summary: "every learning across tasks", flags: []string{"json", "limit", "search", "sort"}},
 	{name: "stats", summary: "productivity summary", flags: []string{"format", "project", "search", "seq", "tag"}},
 	{name: "export", summary: "write a JSON snapshot to stdout", flags: []string{"include-done"}},
 	{name: "import", summary: "merge an export file into the store"},

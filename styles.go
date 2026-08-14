@@ -203,9 +203,6 @@ var (
 
 	pageIndicatorStyle lipgloss.Style
 
-	learningStyle         lipgloss.Style
-	learningSelectedStyle lipgloss.Style
-
 	statsHeaderStyle lipgloss.Style
 	statsAxisStyle   lipgloss.Style // brighter than dim — used for weekday/week labels under bars
 	timerStyle       lipgloss.Style
@@ -295,9 +292,6 @@ func applyTheme(t theme) {
 	doneCountStyle = lipgloss.NewStyle().Foreground(t.dim)
 
 	pageIndicatorStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
-
-	learningStyle = lipgloss.NewStyle().Foreground(t.yellow).Bold(true)
-	learningSelectedStyle = lipgloss.NewStyle().Foreground(t.yellowLt).Bold(true)
 
 	statsHeaderStyle = lipgloss.NewStyle().Foreground(t.blue).Bold(true)
 	// Axis labels (weekday names, "w42" week numbers) need to be legible at

@@ -1,5 +1,5 @@
 // Package todo is taskr's framework-free domain layer: the Todo type and its
-// mutations (toggle, tags, timers, subtasks, comments, learnings, time entries).
+// mutations (toggle, tags, timers, subtasks, comments, time entries).
 // It carries no Bubble Tea or rendering concerns.
 package todo
 
@@ -150,20 +150,6 @@ type Comment struct {
 	DeletedAt time.Time `json:"deleted_at,omitempty"`
 }
 
-// ── Learning ──────────────────────────────────────────────────────────────────
-
-// Learning is a takeaway saved on a task. It has no tags of its own — a
-// learning's tags are derived from its parent task's current tags at display
-// time (see learningView), so they always reflect the task rather than a frozen
-// snapshot.
-type Learning struct {
-	ID         string    `json:"id"`
-	Text       string    `json:"text"`
-	CreatedAt  time.Time `json:"created_at"`
-	ModifiedAt time.Time `json:"modified_at,omitempty"` // sync merge recency; see Comment.ModifiedAt
-	DeletedAt  time.Time `json:"deleted_at,omitempty"`  // sync tombstone; see Comment.DeletedAt
-}
-
 // ── TimeEntry ─────────────────────────────────────────────────────────────────
 
 type TimeEntry struct {
@@ -206,7 +192,6 @@ type Todo struct {
 	Tags         []string    `json:"tags,omitempty"`
 	Dependencies []string    `json:"dependencies,omitempty"`
 	Comments     []Comment   `json:"comments,omitempty"`
-	Learnings    []Learning  `json:"learnings,omitempty"`
 	TimeEntries  []TimeEntry `json:"time_entries,omitempty"`
 	Notes        string      `json:"notes,omitempty"`
 	ParentID     string      `json:"parent_id,omitempty"`
@@ -445,34 +430,6 @@ func (t *Todo) UpdateComment(index int, text string) {
 func (t *Todo) DeleteComment(index int) {
 	if index >= 0 && index < len(t.Comments) {
 		t.Comments = append(t.Comments[:index], t.Comments[index+1:]...)
-		t.ModifiedAt = StampModified(t.ModifiedAt)
-	}
-}
-
-func (t *Todo) AddLearning(text string) {
-	wall := time.Now()
-	stamp := StampModified(t.ModifiedAt)
-	l := Learning{
-		ID:         uuid.New().String(),
-		Text:       text,
-		CreatedAt:  wall, // domain timestamp: when the learning was recorded
-		ModifiedAt: stamp,
-	}
-	t.Learnings = append(t.Learnings, l)
-	t.ModifiedAt = stamp
-}
-
-func (t *Todo) UpdateLearning(index int, text string) {
-	if index >= 0 && index < len(t.Learnings) {
-		t.Learnings[index].Text = text
-		t.Learnings[index].ModifiedAt = StampModified(t.Learnings[index].ModifiedAt)
-		t.ModifiedAt = StampModified(t.ModifiedAt)
-	}
-}
-
-func (t *Todo) DeleteLearning(index int) {
-	if index >= 0 && index < len(t.Learnings) {
-		t.Learnings = append(t.Learnings[:index], t.Learnings[index+1:]...)
 		t.ModifiedAt = StampModified(t.ModifiedAt)
 	}
 }

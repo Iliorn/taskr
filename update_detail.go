@@ -182,7 +182,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 // detailSectionJump moves the detail cursor to the next/previous section
 // head — the pageless replacement for the old [1/3] page flip.
 func (m *model) detailSectionJump(dir int) {
-	sections := []detailField{fieldStartDate, fieldTags, fieldSubtasks, fieldDependencies, fieldLearnings, fieldTimeEntries, fieldComments}
+	sections := []detailField{fieldStartDate, fieldTags, fieldSubtasks, fieldDependencies, fieldTimeEntries, fieldComments}
 	cur := 0
 	for i, s := range sections {
 		if m.detail.field >= s {
@@ -201,7 +201,6 @@ func (m *model) detailSectionJump(dir int) {
 	m.detail.tagCursor = 0
 	m.detail.subtaskCursor = 0
 	m.detail.depCursor = 0
-	m.detail.learningCursor = 0
 	m.detail.timeEntryCursor = 0
 	m.detail.commentCursor = 0
 	m.invalidateDetailCache()
@@ -209,7 +208,7 @@ func (m *model) detailSectionJump(dir int) {
 
 // detailCursorUp/Down walk one continuous field chain over the whole detail
 // column: dates → priority/size/project/notes → tags → subtasks →
-// dependencies → learnings → comments, wrapping at the ends.
+// dependencies → time entries → comments, wrapping at the ends.
 func (m *model) detailCursorUp() {
 	m.invalidateDetailCache()
 	t := m.currentTodo()
@@ -258,25 +257,15 @@ func (m *model) detailCursorUp() {
 				m.detail.subtaskCursor = m.subtaskCount(t.ID) - 1
 			}
 		}
-	case fieldLearnings:
-		if m.detail.learningCursor > 0 {
-			m.detail.learningCursor--
+	case fieldTimeEntries:
+		if m.detail.timeEntryCursor > 0 {
+			m.detail.timeEntryCursor--
 		} else {
 			m.detail.field = fieldDependencies
 			if t != nil {
 				if n := m.detailDepTotal(t); n > 0 {
 					m.detail.depCursor = n - 1
 				}
-			}
-		}
-	case fieldTimeEntries:
-		if m.detail.timeEntryCursor > 0 {
-			m.detail.timeEntryCursor--
-		} else {
-			m.detail.field = fieldLearnings
-			m.detail.learningCursor = 0
-			if t != nil && len(t.Learnings) > 0 {
-				m.detail.learningCursor = len(t.Learnings) - 1
 			}
 		}
 	case fieldComments:
@@ -329,13 +318,6 @@ func (m *model) detailCursorDown() {
 		if t != nil && m.detail.depCursor < m.detailDepTotal(t)-1 {
 			m.detail.depCursor++
 		} else {
-			m.detail.field = fieldLearnings
-			m.detail.learningCursor = 0
-		}
-	case fieldLearnings:
-		if t != nil && m.detail.learningCursor < len(t.Learnings)-1 {
-			m.detail.learningCursor++
-		} else {
 			m.detail.field = fieldTimeEntries
 			m.detail.timeEntryCursor = 0
 		}
@@ -376,12 +358,6 @@ func (m model) detailAdd() (tea.Model, tea.Cmd) {
 		return m.openTagSearch()
 	case fieldProject:
 		return m.openProjectSearch()
-	case fieldLearnings:
-		m.mode = modeAddLearning
-		m.textInput.SetValue("")
-		m.textInput.Placeholder = tr("Add learning...")
-		m.textInput.Focus()
-		return m, textinput.Blink
 	case fieldSubtasks:
 		m.mode = modeAddSubtask
 		m.textInput.SetValue("")
@@ -451,13 +427,6 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 			m.confirmOnYes = (*model).confirmDeleteDep
 			m.pendingDep = m.detail.depCursor
 			m.confirmMsg = tr("Remove this dependency? (y/n)")
-		}
-	case fieldLearnings:
-		if len(t.Learnings) > 0 && m.detail.learningCursor < len(t.Learnings) {
-			m.mode = modeConfirm
-			m.confirmOnYes = (*model).confirmDeleteLearning
-			m.pendingLearning = m.detail.learningCursor
-			m.confirmMsg = fmt.Sprintf(tr("Delete learning '%s'? (y/n)"), truncate(t.Learnings[m.detail.learningCursor].Text, 40))
 		}
 	case fieldSubtasks:
 		if m.subtaskCount(t.ID) > 0 && m.detail.subtaskCursor < m.subtaskCount(t.ID) {
@@ -624,14 +593,6 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case fieldLearnings:
-		if len(t.Learnings) > 0 && m.detail.learningCursor < len(t.Learnings) {
-			m.mode = modeEditLearning
-			m.textInput.SetValue(t.Learnings[m.detail.learningCursor].Text)
-			m.textInput.Placeholder = tr("Edit learning...")
-			m.textInput.Focus()
-			return m, textinput.Blink
-		}
 	case fieldSubtasks:
 		// Enter is handled by updateDetail so it can open the selected
 		// subtask's full detail pane. Renaming is deliberately bound to 'r'.

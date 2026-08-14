@@ -112,7 +112,7 @@ var keymap = []binding{
 	// ── Tasks detail pane ────────────────────────────────────────────────
 	{ctxTasksDetail, "←/→", "detailsection", "jump section", secDetail, true, false},
 	{ctxTasksDetail, "enter", "editfield", "edit field / open subtask", secDetail, true, false},
-	{ctxTasksDetail, "a", "add", "add tag / dep / comment / learning / subtask", secDetail, true, false},
+	{ctxTasksDetail, "a", "add", "add tag / dep / comment / subtask", secDetail, true, false},
 	{ctxTasksDetail, "#", "quicktag", "quick add tag", secDetail, true, false},
 	{ctxTasksDetail, "@", "quickproject", "quick add / change project", secDetail, true, false},
 	{ctxTasksDetail, "d", "done", "toggle subtask done", secDetail, true, false},
@@ -144,8 +144,6 @@ var keymap = []binding{
 	{ctxDrill, "r", "edit", "rename task", secDrill, true, false},
 	{ctxDrill, "x", "delete", "delete task", secDrill, true, true},
 	{ctxDrill, "esc", "back", "back to the list", secDrill, true, false},
-
-	// ── Learnings ────────────────────────────────────────────────────────
 
 	// ── Calendar ─────────────────────────────────────────────────────────
 	{ctxCalendar, "←/→ ↑/↓", "calnav", "move by day / week", secCalendar, true, false},

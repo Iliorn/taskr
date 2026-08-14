@@ -702,8 +702,6 @@ func TestDetailCursorChainTagsUpToNotes(t *testing.T) {
 
 func TestDetailCursorChainAtRelations(t *testing.T) {
 	task := todo.New("wrap p1")
-	task.AddLearning("first lesson")
-	task.AddLearning("second lesson")
 	m := modelWithTasks(t, task)
 	m.cursor = 0
 	m.pane = paneDetail
@@ -717,12 +715,12 @@ func TestDetailCursorChainAtRelations(t *testing.T) {
 			m.detail.field, m.detail.tagCursor)
 	}
 
-	// Down from the last learning continues into the time-entries section
-	// (which sits between learnings and comments in the cursor chain).
-	m.detail = detailState{field: fieldLearnings, learningCursor: 1}
+	// Down from the last dependency row continues into the time-entries
+	// section, which follows the relations block in the cursor chain.
+	m.detail = detailState{field: fieldDependencies, depCursor: 0}
 	m.detailCursorDown()
 	if m.detail.field != fieldTimeEntries || m.detail.timeEntryCursor != 0 {
-		t.Errorf("down at last learning: field=%v cursor=%d, want fieldTimeEntries / 0",
+		t.Errorf("down at last dependency: field=%v cursor=%d, want fieldTimeEntries / 0",
 			m.detail.field, m.detail.timeEntryCursor)
 	}
 }
@@ -738,7 +736,7 @@ func TestDetailCursorChainAtComments(t *testing.T) {
 	m.detail = detailState{field: fieldComments, commentCursor: 0}
 
 	// Up from the first comment continues the chain into the time-entries
-	// section (which sits between learnings and comments in the cursor chain).
+	// section, which sits just above comments in the cursor chain.
 	m.detailCursorUp()
 	if m.detail.field != fieldTimeEntries {
 		t.Errorf("up at first comment: field = %v, want fieldTimeEntries", m.detail.field)

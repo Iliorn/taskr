@@ -8,6 +8,22 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Removed
+
+- **Learnings.** A second free-text list beside notes and comments, with its own
+  table, its own sync fold and its own CLI command, but never a tab of its own.
+  Migration 011 appends every learning to its task's notes under a
+  `## Learnings` heading and drops the table, so nothing you wrote is lost —
+  and `taskr search` now matches notes, which is where the recall
+  `taskr learnings` used to provide now comes from. `taskr learnings` prints
+  where the text went instead of silently opening the TUI.
+
+### Changed
+
+- **Search matches notes**, not just the title. Titles stay fuzzy; notes are
+  matched as a plain substring, since a subsequence match over a whole note
+  would hit almost anything.
+
 ### Added
 
 - **`taskr doctor` now diagnoses the installation**: version, platform, data

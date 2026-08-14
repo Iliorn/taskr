@@ -232,7 +232,12 @@ func filterTopLevel(todos []todo.Todo, opts listFilterOpts) []todo.Todo {
 		if projQ != "" && strings.ToLower(t.Project) != projQ {
 			continue
 		}
-		if searchQ != "" && !strings.Contains(strings.ToLower(t.Title), searchQ) {
+		// Title or notes. The CLI matches both as plain substrings (the TUI's
+		// compileSearch adds fuzzy title matching and the token grammar on
+		// top); notes have to be reachable here because migration 011 folded
+		// the old per-task learnings into them.
+		if searchQ != "" && !strings.Contains(strings.ToLower(t.Title), searchQ) &&
+			!strings.Contains(strings.ToLower(t.Notes), searchQ) {
 			continue
 		}
 		if opts.onlyReady && blockedSet[t.ID] {

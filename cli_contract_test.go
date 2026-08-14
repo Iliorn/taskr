@@ -47,7 +47,7 @@ func TestReadOnlyCommandsDoNotTriggerSync(t *testing.T) {
 	// trip every time someone ran a diagnostic.
 	for _, cmd := range []string{
 		"doctor", "list", "ls", "show", "top", "search", "tags", "projects",
-		"learnings", "stats", "export", "completion", "man", "help", "serve",
+		"stats", "export", "completion", "man", "help", "serve",
 	} {
 		if cliMutates(cmd) {
 			t.Errorf("%q is read-only but is marked as mutating — it would auto-sync on every run", cmd)

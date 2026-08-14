@@ -23,14 +23,6 @@ func ids(ts []todo.Todo) []string {
 	return r
 }
 
-func learnIDs(ls []learningView) []string {
-	r := make([]string, len(ls))
-	for i, l := range ls {
-		r[i] = l.ID
-	}
-	return r
-}
-
 func TestSelectActiveDoneFilterAndSort(t *testing.T) {
 	now := time.Now()
 	a := mkTodo("a", "alpha", todo.Pending)
@@ -380,48 +372,6 @@ func TestSelectProjects(t *testing.T) {
 	}
 }
 
-func TestSelectLearnings(t *testing.T) {
-	now := time.Now()
-	// Tags now come from the PARENT task, not the learning. Two tasks with
-	// different tags exercise the derivation and the #tag search.
-	a := mkTodo("a", "task A", todo.Pending)
-	a.Tags = []string{"go"}
-	a.Learnings = []todo.Learning{{ID: "l1", Text: "learned go maps", CreatedAt: now.Add(-2 * time.Hour)}}
-	b := mkTodo("b", "task B", todo.Pending)
-	b.Tags = []string{"go", "test"}
-	b.Learnings = []todo.Learning{{ID: "l2", Text: "learned testing", CreatedAt: now.Add(-1 * time.Hour)}}
-	todos := []todo.Todo{a, b}
-
-	if got := learnIDs(selectLearnings(todoPtrs(todos), "", learningSortDate)); len(got) != 2 || got[0] != "l2" {
-		t.Fatalf("date sort = %v, want [l2 l1] (newest first)", got)
-	}
-
-	// Tags are derived from each learning's parent task.
-	for _, l := range selectLearnings(todoPtrs(todos), "", learningSortDate) {
-		switch l.ID {
-		case "l1":
-			if len(l.Tags) != 1 || l.Tags[0] != "go" {
-				t.Errorf("l1 tags = %v, want [go] (from parent A)", l.Tags)
-			}
-		case "l2":
-			if len(l.Tags) != 2 {
-				t.Errorf("l2 tags = %v, want [go test] (from parent B)", l.Tags)
-			}
-		}
-	}
-
-	if got := learnIDs(selectLearnings(todoPtrs(todos), "maps", learningSortDate)); len(got) != 1 || got[0] != "l1" {
-		t.Fatalf("text search = %v, want [l1]", got)
-	}
-	// #test matches only l2, whose parent (B) carries the 'test' tag.
-	if got := learnIDs(selectLearnings(todoPtrs(todos), "#test", learningSortDate)); len(got) != 1 || got[0] != "l2" {
-		t.Fatalf("tag search = %v, want [l2]", got)
-	}
-	if got := selectLearnings(todoPtrs(todos), "", learningSortAlpha); got[0].Text != "learned go maps" {
-		t.Fatalf("alpha sort first = %q, want 'learned go maps'", got[0].Text)
-	}
-}
-
 func TestSubtaskDerivation(t *testing.T) {
 	now := time.Now()
 	parent := mkTodo("p", "parent", todo.Pending)
@@ -667,5 +617,37 @@ func TestCompileSearchFields(t *testing.T) {
 		if got := match(taxes); got != c.b {
 			t.Errorf("%s: compileSearch(%q)(taxes) = %v, want %v", c.desc, c.q, got, c.b)
 		}
+	}
+}
+
+// Notes are searched as a substring. Learnings used to be their own child
+// collection with their own recall command; migration 011 folded them into
+// notes, so notes have to be findable or that recall is simply gone.
+func TestSearchMatchesNotes(t *testing.T) {
+	a := todo.New("Fix the boiler")
+	a.Notes = "## Learnings\n- bleed the radiators first"
+	b := todo.New("Unrelated task")
+
+	todos := []todo.Todo{a, b}
+	match := func(q string) []string {
+		var out []string
+		pred := compileSearch(q)
+		for _, x := range todos {
+			if pred(x) {
+				out = append(out, x.Title)
+			}
+		}
+		return out
+	}
+	if got := match("radiators"); len(got) != 1 || got[0] != "Fix the boiler" {
+		t.Errorf("searching notes matched %v, want just the task carrying the note", got)
+	}
+	// The title stays fuzzy; notes deliberately do not, or a long note would
+	// match almost any query.
+	if got := match("bldthrd"); len(got) != 0 {
+		t.Errorf("notes matched a subsequence query (%v) — substring only", got)
+	}
+	if got := match("Fxthblr"); len(got) != 1 {
+		t.Errorf("title fuzzy matching regressed: %v", got)
 	}
 }

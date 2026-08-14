@@ -79,7 +79,7 @@ func TestCompletionCoversEveryCommand(t *testing.T) {
 	routed := []string{
 		"add", "list", "ls", "done", "top", "show", "edit", "delete", "rm", "undelete",
 		"comment", "stats", "start", "stop", "log", "export", "import", "subtask",
-		"search", "tags", "projects", "learnings", "serve", "sync", "undo", "doctor",
+		"search", "tags", "projects", "serve", "sync", "undo", "doctor",
 		"completion", "man", "help",
 	}
 	for _, name := range routed {

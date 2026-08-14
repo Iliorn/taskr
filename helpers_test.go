@@ -942,7 +942,6 @@ func TestCopyTodos(t *testing.T) {
 			Tags:         []string{"work", "urgent"},
 			Dependencies: []string{"dep-1", "dep-2"},
 			Comments:     []todo.Comment{{ID: "c1", Text: "hello"}},
-			Learnings:    []todo.Learning{{ID: "l1", Text: "learned"}},
 		},
 	}
 
@@ -964,7 +963,6 @@ func TestCopyTodos(t *testing.T) {
 	original[0].Tags[0] = "changed"
 	original[0].Dependencies[0] = "changed-dep"
 	original[0].Comments[0].Text = "changed-comment"
-	original[0].Learnings[0].Text = "changed-learning"
 
 	if cp[0].Title != "Original" {
 		t.Error("copy title was affected by original mutation")
@@ -977,9 +975,6 @@ func TestCopyTodos(t *testing.T) {
 	}
 	if cp[0].Comments[0].Text != "hello" {
 		t.Error("copy comments were affected by original mutation")
-	}
-	if cp[0].Learnings[0].Text != "learned" {
-		t.Error("copy learnings text was affected by original mutation")
 	}
 }
 

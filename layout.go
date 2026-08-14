@@ -5,7 +5,7 @@ import "sync"
 // ── Layout calculation ────────────────────────────────────────────────────────
 
 // nameColWidth is the width of the leading "name" column shared by the list
-// tabs (task title, project name, tag, learning text). Keeping it a single
+// tabs (task title, project name, tag). Keeping it a single
 // proportional-with-clamp rule makes the gap before the next column consistent
 // across tabs and makes them all reflow the same way as the terminal resizes.
 func nameColWidth(termWidth int) int {
@@ -86,7 +86,6 @@ type detailRenderCache struct {
 	field         detailField
 	tagCursor     int
 	depCursor     int
-	learnCursor   int
 	subtaskCursor int
 	commentCursor int
 	termW         int
@@ -111,7 +110,6 @@ func (m *model) getCachedDetailContent() string {
 		rc.field == m.detail.field &&
 		rc.tagCursor == m.detail.tagCursor &&
 		rc.depCursor == m.detail.depCursor &&
-		rc.learnCursor == m.detail.learningCursor &&
 		rc.subtaskCursor == m.detail.subtaskCursor &&
 		rc.commentCursor == m.detail.commentCursor &&
 		rc.termW == m.termWidth &&
@@ -124,7 +122,6 @@ func (m *model) getCachedDetailContent() string {
 	rc.field = m.detail.field
 	rc.tagCursor = m.detail.tagCursor
 	rc.depCursor = m.detail.depCursor
-	rc.learnCursor = m.detail.learningCursor
 	rc.subtaskCursor = m.detail.subtaskCursor
 	rc.commentCursor = m.detail.commentCursor
 	rc.termW = m.termWidth

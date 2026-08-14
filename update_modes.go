@@ -268,57 +268,6 @@ func (m model) updateEditSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) updateAddLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "enter":
-			if val := strings.TrimSpace(m.textInput.Value()); val != "" {
-				if t := m.currentTodo(); t != nil {
-					m.pushUndo("add learning", t.ID)
-					t.AddLearning(val)
-					m.detail.learningCursor = len(t.Learnings) - 1
-					m.markModified(t.ID)
-				}
-			}
-			m.mode = modeNormal
-			return m, nil
-		case "esc":
-			m.mode = modeNormal
-			return m, nil
-		case "ctrl+e":
-			return m, m.openEditorForInput()
-		}
-	}
-	m.textInput, cmd = m.textInput.Update(msg)
-	return m, cmd
-}
-
-func (m model) updateEditLearning(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
-		case "enter":
-			if newText := strings.TrimSpace(m.textInput.Value()); newText != "" {
-				if t := m.currentTodo(); t != nil && m.detail.learningCursor < len(t.Learnings) {
-					m.pushUndo("edit learning", t.ID)
-					t.UpdateLearning(m.detail.learningCursor, newText)
-					m.markModified(t.ID)
-				}
-			}
-			m.mode = modeNormal
-			return m, nil
-		case "esc":
-			m.mode = modeNormal
-			return m, nil
-		case "ctrl+e":
-			return m, m.openEditorForInput()
-		}
-	}
-	m.textInput, cmd = m.textInput.Update(msg)
-	return m, cmd
-}
-
 // updateEditDue applies a due date typed from the task list. An empty value
 // clears the date, which is how the detail-pane field behaves too; an
 // unparseable one leaves the task alone and says so rather than silently
@@ -1051,18 +1000,6 @@ func (m *model) confirmDeleteProject() tea.Cmd {
 	if t := m.currentTodo(); t != nil {
 		m.pushUndo("remove project", t.ID)
 		t.SetProject("")
-		m.markModified(t.ID)
-	}
-	return nil
-}
-
-func (m *model) confirmDeleteLearning() tea.Cmd {
-	if t := m.currentTodo(); t != nil && m.detail.learningCursor < len(t.Learnings) {
-		m.pushUndo("delete learning", t.ID)
-		t.DeleteLearning(m.detail.learningCursor)
-		if m.detail.learningCursor >= len(t.Learnings) && m.detail.learningCursor > 0 {
-			m.detail.learningCursor--
-		}
 		m.markModified(t.ID)
 	}
 	return nil

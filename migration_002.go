@@ -90,6 +90,20 @@ func backfillNormalizedTables(tx *sql.Tx) error {
 		if err := json.Unmarshal([]byte(r.data), &t); err != nil {
 			return fmt.Errorf("parse blob for %s: %w", r.id, err)
 		}
+		// Learnings left the domain type in migration 011, but a blob written
+		// before then still carries them, and 011 folds whatever lands in
+		// task_learnings into the task's notes — so decoding them separately
+		// keeps an ancient backup lossless through the whole chain.
+		var legacy struct {
+			Learnings []struct {
+				ID        string    `json:"id"`
+				Text      string    `json:"text"`
+				CreatedAt time.Time `json:"created_at"`
+			} `json:"learnings"`
+		}
+		if err := json.Unmarshal([]byte(r.data), &legacy); err != nil {
+			return fmt.Errorf("parse blob learnings for %s: %w", r.id, err)
+		}
 		for _, tg := range t.Tags {
 			if _, err := insertTag.Exec(r.id, tg); err != nil {
 				return err
@@ -105,7 +119,7 @@ func backfillNormalizedTables(tx *sql.Tx) error {
 				return err
 			}
 		}
-		for _, l := range t.Learnings {
+		for _, l := range legacy.Learnings {
 			if _, err := insertLearning.Exec(l.ID, r.id, l.Text, fmtTime(l.CreatedAt)); err != nil {
 				return err
 			}

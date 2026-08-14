@@ -92,7 +92,6 @@ const (
 	fieldNotes
 	fieldTags
 	fieldDependencies
-	fieldLearnings
 	fieldSubtasks
 	fieldTimeEntries
 	fieldComments
@@ -121,8 +120,6 @@ const (
 	modeEditProjectInline
 	modeEditTitle
 	modeEditDue
-	modeEditLearning
-	modeAddLearning
 	modeAddSubtask
 	modeEditSubtask
 	modeAddTimeEntry
@@ -169,13 +166,6 @@ const (
 	taskSortSequence taskSortMode = iota
 	taskSortDueDate
 	taskSortSize
-)
-
-type learningSortMode int
-
-const (
-	learningSortDate learningSortMode = iota
-	learningSortAlpha
 )
 
 type historySortMode int
@@ -238,7 +228,6 @@ type detailState struct {
 	commentCursor   int
 	depCursor       int
 	tagCursor       int
-	learningCursor  int
 	subtaskCursor   int
 	timeEntryCursor int
 }
@@ -312,7 +301,6 @@ type model struct {
 	pendingComment       int
 	pendingDep           int
 	pendingTag           int
-	pendingLearning      int
 	pendingSubtask       int
 	pendingCloseParentID string
 	pendingReopenID      string
@@ -367,7 +355,7 @@ type model struct {
 	editorTaskID  string
 	editorCmd     string
 	// editorToInput routes the next editor round-trip back into the active text
-	// input (the ctrl+e escape hatch from a comment/learning draft) instead of
+	// input (the ctrl+e escape hatch from a comment draft) instead of
 	// committing to a task's notes.
 	editorToInput bool
 
@@ -709,9 +697,6 @@ func copyTodo(t todo.Todo) todo.Todo {
 	if len(t.Comments) > 0 {
 		cp.Comments = append([]todo.Comment{}, t.Comments...)
 	}
-	if len(t.Learnings) > 0 {
-		cp.Learnings = append([]todo.Learning{}, t.Learnings...)
-	}
 	if len(t.TimeEntries) > 0 {
 		cp.TimeEntries = append([]todo.TimeEntry{}, t.TimeEntries...)
 	}
@@ -825,7 +810,7 @@ func (m *model) followTask(taskID string) {
 // for a just-completed recurring task. Returns (zero, false) if the source
 // isn't recurring or the rule is unparseable. The new instance inherits
 // identity-ish fields (title, priority, size, project, notes, tags, recurrence
-// rule) but starts clean on history (no time entries, comments, learnings,
+// rule) but starts clean on history (no time entries, comments,
 // dependencies, subtasks).
 //
 // The next DueDate is computed by rolling forward from the previous DueDate (or
@@ -906,7 +891,7 @@ func (m *model) spawnNextRecurrence(src *todo.Todo) string {
 
 // cloneSubtreeReset clones every descendant of srcParentID, reparented under
 // newParentID, with each clone reset to Pending and history wiped
-// (CompletedAt, TimeEntries, Comments, Learnings cleared). DueDate and
+// (CompletedAt, TimeEntries, Comments cleared). DueDate and
 // StartDate are shifted by `delta` so the subtree's internal scheduling is
 // preserved relative to the new parent. Shared traversal in taskops.go.
 func (m *model) cloneSubtreeReset(srcParentID, newParentID string, delta time.Duration) {
@@ -1004,8 +989,6 @@ func (m model) currentTodo() *todo.Todo {
 	}
 	return nil
 }
-
-// ── Learnings helpers ─────────────────────────────────────────────────────────
 
 // ── Subtask helpers ───────────────────────────────────────────────────────────
 

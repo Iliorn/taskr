@@ -345,7 +345,7 @@ func TestScriptAddCommentOnDetailComments(t *testing.T) {
 	target := m.currentTodo()
 
 	// Detail pane → jump sections to comments (tags → subtasks → deps →
-	// learnings → comments).
+	// time entries → comments).
 	m = script(t, m, "enter", "right", "right", "right", "right", "right")
 	if m.pane != paneDetail || m.detail.field != fieldComments {
 		t.Fatalf("pane=%v field=%v, want detail fieldComments", m.pane, m.detail.field)
@@ -627,8 +627,8 @@ func navToTimeEntries(t *testing.T, m model) model {
 	// enter → detail pane; right×3 → fieldTimeEntries
 	// sections order: startDate(0) → tags(1) → subtasks(2) → timeEntries(3 rights)
 	// The section jump algorithm picks cur by last-matching iota, so the path
-	// from fieldSubtasks(10) skips fieldDependencies(8) and fieldLearnings(9)
-	// (lower iota values) and lands directly on fieldTimeEntries(11).
+	// from fieldSubtasks skips fieldDependencies (a lower iota value) and
+	// lands directly on fieldTimeEntries.
 	return script(t, m, "enter", "right", "right", "right")
 }
 

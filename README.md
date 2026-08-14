@@ -18,11 +18,10 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 - **Projects** — group tasks, Gantt timeline view. `enter` drills into a project's tasks, where the task keys (`d` done, `t` track, `p` priority, `r` rename, `x` delete, `enter` details) all work; `a` starts a new task already in that project, `x` on the project row clears the grouping off its tasks
 - **Tags** — tag tasks, rename/merge/delete globally, and work the tag's tasks in place: `enter` drills into them with the same task keys as the Tasks tab, `a` adds a task already carrying the tag, `f` shows the tag's tasks on the Tasks tab as a filter
 - **Board** — kanban view of your pending tasks: one column per stage plus Done. Stage names are yours to define — edit them in Settings → "Board columns" (comma-separated), or in `"stages"` in `~/.taskr/settings.json`; default Backlog / In progress / Review. Renaming a column takes its cards with it. `←/→` switch columns, `H`/`L` move the selected card between stages — into Done completes the task exactly like `d` would, out of Done reopens it (confirmed). Also `taskr edit <ref> --stage <name>` from the CLI
-- **Learnings** — attach takeaways to tasks in the detail view; recall them across tasks with `taskr learnings` (text or `#tag` filter, `--json`)
 - **Stats** — productivity overview with an activity heatmap
 - **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
 - **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`), plus a live score breakdown so you can see why a task ranks where it does
-- **Search** — live filter across tasks, projects and tags; fuzzy title matching plus field filters (`#tag @project p:high due:<fri overdue`); the Stats tab follows the active filter, so `#tag` scopes every stat to that tag
+- **Search** — live filter across tasks, projects and tags; fuzzy title matching (notes are matched as a substring) plus field filters (`#tag @project p:high due:<fri overdue`); the Stats tab follows the active filter, so `#tag` scopes every stat to that tag
 - **Command palette** — `ctrl+k` finds any action by name (fuzzy, ranked) and shows the key that performs it, so nothing is gated behind remembering a letter; an action belonging to another tab switches there first
 - **Undo** — multi-level undo for all mutations
 - **Settings** — three sequencing-bias knobs, theme, language (English / Dansk / Deutsch), board columns, version, in-app self-update (tab 7)
@@ -168,7 +167,7 @@ The `/` filter tokenises on whitespace and ANDs the tokens together, reusing the
 grcrs                           # fuzzy title match → "Buy groceries"
 ```
 
-Supported tokens: `#tag`, `@project`, `p:high/medium/low`, `due:<date` / `due:>date` / `due:date` (`<=`/`>=` too), and the bare keyword `overdue`. Anything left over fuzzy-matches the title (a subsequence, so `dply` finds "Deploy release" — every letter must appear in order, which is why `grcrs` finds "Buy groceries" and `grcry` does not).
+Supported tokens: `#tag`, `@project`, `p:high/medium/low`, `due:<date` / `due:>date` / `due:date` (`<=`/`>=` too), and the bare keyword `overdue`. Anything left over fuzzy-matches the title (a subsequence, so `dply` finds "Deploy release" — every letter must appear in order, which is why `grcrs` finds "Buy groceries" and `grcry` does not) or matches the notes as a plain substring — fuzzy matching over a whole note would hit almost anything.
 
 ### Date formats
 
@@ -196,8 +195,6 @@ taskr stop                       # stop the running tracker (no ref needed)
 taskr comment milk "blocked on review"
 taskr comment milk --edit=1 "still blocked, asked Sam"
 taskr comment milk --delete=2
-taskr learnings                  # every learning across tasks, newest first
-taskr learnings "#golang"        # filter by source-task tag (or any text substring)
 taskr stats                      # one-line summary
 taskr stats --tag=work           # same, scoped to tasks carrying a tag (also --project / --search)
 taskr stats --seq                # sequence miss analysis: which score dimension buried the
@@ -272,7 +269,6 @@ Each task in `tasks` is a `todo.Todo` object with these key fields:
 | `tags` | string array (omitempty) | |
 | `dependencies` | string array (omitempty) | IDs of tasks this one is blocked by |
 | `comments` | array (omitempty) | each has `id`, `text`, `created_at` |
-| `learnings` | array (omitempty) | each has `id`, `text`, `created_at` |
 | `deleted` / `deleted_at` | bool / RFC 3339 | soft-delete tombstones for sync |
 | `parent_id` | string (omitempty) | set on subtasks |
 
@@ -334,7 +330,7 @@ local instance into server mode.
 ### How merge works
 
 Sync is UUID-keyed with last-writer-wins on scalars (by `ModifiedAt`), union of
-child collections (comments/learnings/time-entries) by UUID, and soft-delete
+child collections (comments/time-entries) by UUID, and soft-delete
 tombstones so a deletion propagates instead of the row reappearing. Edit-vs-delete
 conflicts surface as a brief toast, and the losing version is appended to
 `~/.taskr/sync.log` for recovery. Clock-based LWW assumes roughly synced clocks

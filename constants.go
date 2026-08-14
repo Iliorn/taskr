@@ -9,7 +9,7 @@ const (
 	detailMaxHeightPct     = 55
 	overlayWidthPct        = 60
 
-	// Shared "name" column (task title, project name, tag, learning text) so the
+	// Shared "name" column (task title, project name, tag) so the
 	// gap before the next column follows one rule on every list tab and all four
 	// reflow identically on resize.
 	nameColWidthPct = 30
@@ -26,7 +26,7 @@ const (
 	minTagBarWidth     = 10
 	minInnerWidth      = 20
 
-	// List-tab side-by-side layout (Tasks/Learnings/Tags): at or above
+	// List-tab side-by-side layout (Tasks/Tags): at or above
 	// sideBySideMinWidth the list keeps full height on the left and the detail
 	// pane becomes an always-on preview column on the right; below it each tab
 	// falls back to its stacked layout. The detail column takes sideDetailColPct

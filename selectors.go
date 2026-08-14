@@ -29,7 +29,8 @@ func todoMatchesSearch(t todo.Todo, search string) bool {
 // substring), `p:high|med|low`, `due:<date` / `due:>date` / `due:date`
 // (comparison, "<"/">"/"<="/">=" or exact day), and the bare keyword `overdue`.
 // Any leftover bare words are joined and fuzzy-matched against the title
-// (subsequence, so "grcrs" finds "Buy groceries"). The two click-driven sentinels
+// (subsequence, so "grcrs" finds "Buy groceries") or matched as a substring of
+// the notes. The two click-driven sentinels
 // — empty (match all) and untaggedKey (no tags) — keep their exact-string meaning.
 func compileSearch(search string) func(todo.Todo) bool {
 	switch search {
@@ -82,7 +83,15 @@ func compileSearch(search string) func(todo.Todo) bool {
 	if len(titleWords) > 0 {
 		titleQuery := strings.ToLower(strings.Join(titleWords, " "))
 		preds = append(preds, func(t todo.Todo) bool {
-			return subsequenceFold(t.Title, titleQuery)
+			if subsequenceFold(t.Title, titleQuery) {
+				return true
+			}
+			// Notes are matched as a plain substring, not a subsequence: a
+			// note is long enough that a fuzzy match over it would hit
+			// almost anything. This is what keeps written-down detail
+			// findable — migration 011 folded the old per-task learnings
+			// into notes, and recall was the point of having them.
+			return strings.Contains(strings.ToLower(t.Notes), titleQuery)
 		})
 	}
 
@@ -444,57 +453,4 @@ func selectProjects(todos []*todo.Todo, search string) []string {
 		projects = filtered
 	}
 	return projects
-}
-
-// learningView pairs a learning with its parent task's current tags. The tags
-// are derived here (not stored on todo.Learning), so they always reflect the
-// task. Fields of the embedded Learning (ID, Text, CreatedAt) promote, so the
-// view is a drop-in for the old []todo.Learning at call sites.
-type learningView struct {
-	todo.Learning
-	Tags []string
-}
-
-// selectLearnings gathers every task's learnings (tagged with the parent's
-// tags), filters by the search query (a leading '#' searches those tags), and
-// sorts by mode.
-func selectLearnings(todos []*todo.Todo, search string, sortMode learningSortMode) []learningView {
-	var result []learningView
-	for i := range todos {
-		for _, l := range todos[i].Learnings {
-			result = append(result, learningView{Learning: l, Tags: todos[i].Tags})
-		}
-	}
-
-	if search != "" {
-		filtered := result[:0]
-		q := strings.ToLower(search)
-		isTagSearch := strings.HasPrefix(q, "#")
-		tagQuery := strings.TrimPrefix(q, "#")
-		for _, l := range result {
-			if isTagSearch {
-				for _, tag := range l.Tags {
-					if strings.Contains(strings.ToLower(tag), tagQuery) {
-						filtered = append(filtered, l)
-						break
-					}
-				}
-			} else if strings.Contains(strings.ToLower(l.Text), q) {
-				filtered = append(filtered, l)
-			}
-		}
-		result = filtered
-	}
-
-	switch sortMode {
-	case learningSortAlpha:
-		sort.SliceStable(result, func(i, j int) bool {
-			return strings.ToLower(result[i].Text) < strings.ToLower(result[j].Text)
-		})
-	default:
-		sort.SliceStable(result, func(i, j int) bool {
-			return result[i].CreatedAt.After(result[j].CreatedAt)
-		})
-	}
-	return result
 }

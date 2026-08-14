@@ -231,7 +231,7 @@ func reapplyDroppedEdit(logPath, ref string) int {
 	// that call StampModified internally, just like `taskr edit` does, so the
 	// monotonic clock-skew clamp is guaranteed. We apply each field
 	// unconditionally from the log entry (the user asked to restore exactly
-	// that state). Child collections (comments, learnings, time entries) and
+	// that state). Child collections (comments, time entries) and
 	// tags/deps merge independently in the sync engine — we only touch the
 	// scalar fields that DroppedLocalEdits compares in scalarHash.
 	logged := loggedTask

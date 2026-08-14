@@ -102,14 +102,14 @@ func runUndoProperty(t *testing.T, seed int64) {
 			return script(t, m, "enter", "right", "a",
 				fmt.Sprintf("subtask %d", serial), "enter")
 		}},
-		{"add learning", func(m model) model {
-			// Detail page 1, field cycling reaches learnings via repeated
+		{"add comment", func(m model) model {
+			// Detail page 1, field cycling reaches comments via repeated
 			// down; detailAdd routes on the focused field. Navigate there
 			// blind — if the field isn't reachable the op degrades to a
 			// no-op and the undo-guard skips it.
 			serial++
 			return script(t, m, "enter", "down", "down", "down", "a",
-				fmt.Sprintf("learning %d", serial), "enter")
+				fmt.Sprintf("comment %d", serial), "enter")
 		}},
 		{"move cursor", func(m model) model {
 			return sendKey(t, m, "down") // not undoable; digest must not move either

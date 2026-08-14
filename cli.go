@@ -31,8 +31,11 @@ func isCLICommand(arg string) bool {
 	case "add", "list", "ls", "done", "top",
 		"show", "edit", "delete", "rm", "undelete", "comment",
 		"stats", "start", "stop", "log", "export", "import", "subtask",
-		"search", "tags", "projects", "learnings", "serve", "sync", "undo",
-		"doctor", "suggest", "completion", "man", "help", "-h", "--help", "--version":
+		"search", "tags", "projects", "serve", "sync", "undo",
+		"doctor", "suggest", "completion", "man", "help", "-h", "--help", "--version",
+		// Retired, but still routed so muscle memory gets an explanation
+		// instead of the TUI opening on top of the typed command.
+		"learnings":
 		return true
 	}
 	return false
@@ -105,12 +108,14 @@ func dispatchCLI(args []string) int {
 		return cliTags(rest)
 	case "projects":
 		return cliProjects(rest)
-	case "learnings":
-		return cliLearnings(rest)
 	case "serve":
 		return cliServe(rest)
 	case "sync":
 		return cliSync(rest)
+	case "learnings":
+		fmt.Fprintln(os.Stderr, "taskr learnings: removed — learnings were folded into each task's notes.")
+		fmt.Fprintln(os.Stderr, "Search them with: taskr search \"Learnings\"  (notes are searched too), or open the task and press n.")
+		return 2
 	case "completion":
 		return cliCompletion(rest)
 	case "man":
@@ -1067,12 +1072,6 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo) {
 		}
 		for _, d := range inbound {
 			fmt.Printf("  %.8s      ↥ %s\n", d.ID, d.Title)
-		}
-	}
-	if len(t.Learnings) > 0 {
-		fmt.Printf("\nLearnings (%d):\n", len(t.Learnings))
-		for _, l := range t.Learnings {
-			fmt.Printf("  - %s\n", l.Text)
 		}
 	}
 	if len(t.Comments) > 0 {
@@ -2235,9 +2234,6 @@ Shell integration:
 Discovery:
   taskr tags [--json]                  pending tags with counts
   taskr projects [--json]              pending projects with counts
-  taskr learnings ["term"] [--json]    every learning across all tasks, newest first ("term" or
-                                       --search filters by text, #tag by tag; --sort=alpha; learnings
-                                       are added/edited on their task's detail pane)
   taskr suggest [--list]               suggest dependency links from note refs + related titles (interactive)
 
 Tracking:
@@ -2503,99 +2499,4 @@ func noteFlagText(v string, r io.Reader) (string, error) {
 		return "", err
 	}
 	return strings.TrimRight(string(b), "\n"), nil
-}
-
-// ── learnings ─────────────────────────────────────────────────────────────────
-
-// cliLearnings lists every learning across all tasks — the cross-task recall
-// the old Learnings tab provided, now scriptable. Learnings themselves are
-// still created and edited on their task (detail pane → Learnings), so this
-// command is read-only by design.
-func cliLearnings(args []string) int {
-	fs := flag.NewFlagSet("learnings", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	asJSON := fs.Bool("json", false, "emit JSON instead of a table")
-	search := fs.String("search", "", "filter by text substring, or #tag to filter by the source task's tags")
-	sortFlag := fs.String("sort", "date", "sort: date (newest first) | alpha")
-	limit := fs.Int("limit", 0, "cap rows (0 = no cap)")
-	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, `usage: taskr learnings ["term"] [--json] [--sort=date|alpha] [--limit=N]`)
-		fs.PrintDefaults()
-	}
-	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
-	if err := fs.Parse(flagArgs); err != nil {
-		return 2
-	}
-	// A bare positional is sugar for --search, mirroring `taskr search`.
-	if len(positionals) > 0 && *search == "" {
-		*search = strings.Join(positionals, " ")
-	}
-	sortMode := learningSortDate
-	if strings.EqualFold(*sortFlag, "alpha") {
-		sortMode = learningSortAlpha
-	}
-	_, todos, err := loadForCLI()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "load: %v\n", err)
-		return 1
-	}
-	rows := selectLearnings(todoPtrs(todos), *search, sortMode)
-	if *limit > 0 && len(rows) > *limit {
-		rows = rows[:*limit]
-	}
-
-	// Learning ID → source task, for the Source column / JSON fields.
-	source := make(map[string]*todo.Todo)
-	for i := range todos {
-		for _, l := range todos[i].Learnings {
-			source[l.ID] = &todos[i]
-		}
-	}
-
-	if *asJSON {
-		type learningOut struct {
-			ID              string    `json:"id"`
-			Text            string    `json:"text"`
-			CreatedAt       time.Time `json:"created_at"`
-			Tags            []string  `json:"tags,omitempty"`
-			SourceTaskID    string    `json:"source_task_id,omitempty"`
-			SourceTaskTitle string    `json:"source_task_title,omitempty"`
-			SourceDone      bool      `json:"source_done,omitempty"`
-		}
-		out := make([]learningOut, 0, len(rows))
-		for _, l := range rows {
-			o := learningOut{ID: l.ID, Text: l.Text, CreatedAt: l.CreatedAt, Tags: l.Tags}
-			if src := source[l.ID]; src != nil {
-				o.SourceTaskID = src.ID
-				o.SourceTaskTitle = src.Title
-				o.SourceDone = src.Status == todo.Done
-			}
-			out = append(out, o)
-		}
-		return emitJSON(out)
-	}
-
-	if len(rows) == 0 {
-		if *search != "" {
-			fmt.Println("(no learnings match)")
-		} else {
-			fmt.Println("(no learnings yet — add them on a task's detail pane)")
-		}
-		return 0
-	}
-	for _, l := range rows {
-		line := fmt.Sprintf("%s  %s", l.CreatedAt.Format("2006-01-02"), l.Text)
-		if src := source[l.ID]; src != nil {
-			marker := ""
-			if src.Status == todo.Done {
-				marker = " ✓"
-			}
-			line += fmt.Sprintf("  (%s%s)", truncate(src.Title, 40), marker)
-		}
-		if len(l.Tags) > 0 {
-			line += "  #" + strings.Join(l.Tags, " #")
-		}
-		fmt.Println(line)
-	}
-	return 0
 }

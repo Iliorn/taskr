@@ -332,10 +332,6 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m.updateEditServerListen(msg)
 	case modeEditServerToken:
 		newModel, cmd = m.updateEditServerToken(msg)
-	case modeEditLearning:
-		newModel, cmd = m.updateEditLearning(msg)
-	case modeAddLearning:
-		newModel, cmd = m.updateAddLearning(msg)
 	case modeAddSubtask:
 		newModel, cmd = m.updateAddSubtask(msg)
 	case modeEditSubtask:
@@ -410,7 +406,7 @@ func (m *model) openEditorForNotes() tea.Cmd {
 }
 
 // openEditorForInput backs the ctrl+e escape hatch from the single-line
-// comment/learning inputs: it seeds $EDITOR with the current draft and, on
+// comment inputs: it seeds $EDITOR with the current draft and, on
 // return, reloads the edited text into the input (handleEditorFinished), leaving
 // the existing Enter path to commit it. That reuse is why it doesn't duplicate
 // any of the add/edit commit logic.
@@ -464,7 +460,7 @@ func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) 
 		return m, clearErrAfter()
 	}
 
-	// ctrl+e escape hatch: the content is a comment/learning draft, not notes —
+	// ctrl+e escape hatch: the content is a comment draft, not notes —
 	// reload it into the active input (collapsing the editor's newlines, since
 	// these are single-line fields) and let Enter commit it as usual.
 	if m.editorToInput {

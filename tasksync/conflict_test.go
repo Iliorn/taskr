@@ -135,7 +135,6 @@ func TestScalarHashCoversTheConflictFields(t *testing.T) {
 	unchanged := map[string]func(*todo.Todo){
 		"tags":         func(x *todo.Todo) { x.AddTag("later") },
 		"comments":     func(x *todo.Todo) { x.AddComment("hi") },
-		"learnings":    func(x *todo.Todo) { x.AddLearning("noted") },
 		"dependencies": func(x *todo.Todo) { x.AddDependency("b") },
 		"modifiedAt":   func(x *todo.Todo) { x.ModifiedAt = time.Now().Add(time.Hour) },
 	}

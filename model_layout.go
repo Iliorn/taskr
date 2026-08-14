@@ -41,8 +41,6 @@ func (m model) estimateDetailCursorLine() int {
 		return relStart + 1 + m.detail.subtaskCursor
 	case fieldDependencies:
 		return relStart + 1 + subRows + 2 + m.detail.depCursor
-	case fieldLearnings:
-		return relStart + 1 + subRows + 2 + m.detailDepRows(t) + 2 + m.detail.learningCursor
 	}
 
 	// Comments section: blank after the relations block, label first.
@@ -69,7 +67,7 @@ func (m *model) clampListOffset(listLen int) {
 
 // clampListOffsetFor scrolls m.listOffset so the given cursor row stays within
 // the visible window. The Tasks/Projects lists track m.cursor; the Tags and
-// Learnings lists keep their own cursor, so they pass it in here.
+// Lists that keep their own cursor pass it in here.
 func (m *model) clampListOffsetFor(cursor, listLen int) {
 	m.clampListOffsetVisible(cursor, listLen, m.listVisible())
 }
@@ -102,9 +100,9 @@ func (m *model) clampListOffsetVisible(cursor, listLen, visible int) {
 
 // sideBySide reports whether the current tab renders list and detail as two
 // columns (list full-height left, always-on detail preview right). The list
-// tabs with a selected-item detail — Tasks, Learnings, Tags — share the shape;
+// tabs with a selected-item detail — Tasks, Tags — share the shape;
 // below the width threshold each falls back to its stacked layout
-// (enter-to-open for Tasks/Learnings, always-on below the list for Tags).
+// (enter-to-open for Tasks, always-on below the list for Tags).
 func (m model) sideBySide() bool {
 	return (m.tab == tabTasks || m.tab == tabTags) &&
 		m.termWidth >= sideBySideMinWidth
@@ -261,7 +259,7 @@ func (m model) detailMainHeight(t *todo.Todo) int {
 }
 
 // detailRelationsHeight is the rendered height of the subtasks/dependencies/
-// learnings section, starting at its first label row.
+// relations section, starting at its first label row.
 func (m model) detailRelationsHeight(t *todo.Todo) int {
 	rows := func(n int) int {
 		if n == 0 {
@@ -270,7 +268,7 @@ func (m model) detailRelationsHeight(t *todo.Todo) int {
 		return n
 	}
 	subH := 1 + rows(m.subtaskCount(t.ID))
-	return subH + 1 + 1 + m.detailDepRows(t) + 1 + 1 + rows(len(t.Learnings))
+	return subH + 1 + 1 + m.detailDepRows(t)
 }
 
 // detailDepRows is the number of rows under the Dependencies label: outbound
@@ -315,7 +313,7 @@ func (m model) detailContentHeight() int {
 func (m model) extraOverheadLines() int {
 	switch m.mode {
 	case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeEditDue,
-		modeSearch, modeAddLearning, modeEditLearning, modeAddSubtask,
+		modeSearch, modeAddSubtask,
 		modeEditSubtask, modeEditProjectInline, modeEditTimeEntry,
 		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken,
 		modeEditServerListen, modeEditServerToken, modeEditStages:
