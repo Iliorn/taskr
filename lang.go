@@ -271,7 +271,7 @@ var daTranslations = map[string]string{
 	"focus: today + overdue only": "fokus: kun i dag + forfaldne",
 	"toggle history":              "skift historik",
 	"cycle sort order":            "skift sorteringsrækkefølge",
-	"expand/collapse subtasks":    "fold deludtryk ud/ind",
+	"expand/collapse subtasks":    "fold delopgaver ud/ind",
 	"search":                      "søg",
 	"Detail view":                 "Detaljevisning",
 	"jump section":                "hop til sektion",
@@ -501,7 +501,7 @@ var daTranslations = map[string]string{
 	"Comma-separated column names · Done is always the last column": "Kolonnenavne adskilt af komma · Færdig er altid sidste kolonne",
 	"Version":              "Version",
 	"Check for updates":    "Søg efter opdateringer",
-	"press enter to check": "tryk enter for at søge",
+	"press enter to check": "tryk enter",
 	"Settings":             "Indstillinger",
 
 	// Update / status / errors
@@ -557,4 +557,190 @@ var daTranslations = map[string]string{
 	"Edit comment...":                         "Rediger kommentar...",
 	"Start date (dd-mm-yy, 'today', 'next week', '+3d')...": "Startdato (dd-mm-yy, 'today', 'next week', '+3d')...",
 	"Due date (dd-mm-yy, 'today', 'next week', '+3d')...":   "Forfaldsdato (dd-mm-yy, 'today', 'next week', '+3d')...",
+
+	// ── Sync + server (Settings rows, status line, toasts) ──
+	"Sync":                            "Synkronisering",
+	"Sync server":                     "Synk.server",
+	"Sync token":                      "Synk.token",
+	"Sync now":                        "Synkronisér nu",
+	"Server":                          "Server",
+	"Listen":                          "Lytteadresse",
+	"Server token":                    "Servertoken",
+	"press enter to sync":             "tryk enter",
+	"needs server":                    "kræver server",
+	"needs token":                     "kræver token",
+	"external":                        "ekstern",
+	"set":                             "sat",
+	"On":                              "Til",
+	"Off":                             "Fra",
+	"Syncing…":                        "Synkroniserer…",
+	"Server stopped":                  "Server stoppet",
+	"Server: ":                        "Server: ",
+	"Serving on ":                     "Betjener på ",
+	"✕ sync":                          "✕ synk.",
+	"Set a server token first":        "Sæt en servertoken først",
+	"Set sync server + token first":   "Sæt synk.server + token først",
+	"Last sync failed: ":              "Seneste synk. mislykkedes: ",
+	"Last sync: sent %d, received %d": "Seneste synk.: sendt %d, modtaget %d",
+	"Sync failing — devices may be diverging (see Settings)":           "Synk. mislykkes — enhederne kan være ved at glide fra hinanden (se Indstillinger)",
+	"Sync: %d conflict(s) resolved — see ~/.taskr/sync.log":            "Synk.: %d konflikt(er) løst — se ~/.taskr/sync.log",
+	"Sync server URL, e.g. http://100.x.y.z:8765":                      "URL til synk.server, fx http://100.x.y.z:8765",
+	"Sync token (clear the field to remove it)":                        "Synk.token (ryd feltet for at fjerne den)",
+	"Server token clients must present (clear the field to remove it)": "Servertoken som klienter skal vise (ryd feltet for at fjerne den)",
+	"Bind address, e.g. 100.x.y.z:8765 or 127.0.0.1:8765":              "Bind-adresse, fx 100.x.y.z:8765 eller 127.0.0.1:8765",
+	"Plain http to a public host — token travels unencrypted":          "Almindelig http til en offentlig vært — token sendes ukrypteret",
+
+	// ── Sequencer / Settings rows ──
+	"Deadline pressure":         "Deadlinepres",
+	"Priority focus":            "Prioritetsfokus",
+	"Momentum bias":             "Momentumvægt",
+	"Aging increases score":     "Alder øger scoren",
+	"Auto-close parent":         "Luk forælder automatisk",
+	"Auto-close subtasks":       "Luk delopgaver automatisk",
+	"Top 5 with these weights:": "Top 5 med disse vægte:",
+	"Score resync failed: %v":   "Genberegning af score mislykkedes: %v",
+
+	// ── List header / panel titles ──
+	"Active tasks":        "Aktive opgaver",
+	"Detail":              "Detalje",
+	"Tag":                 "Mærke",
+	"  No task selected.": "  Ingen opgave valgt.",
+
+	// ── Sort labels (drawn in the panel border, keep them short) ──
+	"alpha":     "alfa",
+	"completed": "afsluttet",
+	"due":       "forfald",
+	"size":      "størrelse",
+	"count":     "antal",
+	"progress":  "fremdrift",
+	"recent":    "nyeste",
+
+	// ── Quick-add preview ──
+	"(no title yet)": "(ingen titel endnu)",
+	"due ":           "forfald ",
+	"overdue":        "forfalden",
+	"title~":         "titel~",
+
+	// ── Calendar entries ──
+	"✓ done at ": "✓ færdig kl. ",
+	"⧗ due":      "⧗ forfalder",
+	"⧗ overdue":  "⧗ forfalden",
+
+	// ── Task detail ──
+	"  +%s subtasks = %s": "  +%s delopgaver = %s",
+	"now":                 "nu",
+
+	// ── Stats ──
+	"  Cycle time by size":      "  Gennemløbstid efter størrelse",
+	"  Projected backlog clear": "  Forventet tømning af backlog",
+	"  Projected clear":         "  Forventet tømt",
+	"%d pending, no pace":       "%d udestående, intet tempo",
+	"Small":                     "Lille",
+	"Medium":                    "Mellem",
+	"Large":                     "Stor",
+
+	// ── Confirm prompts and toasts ──
+	"Close '%s' with %d open subtask(s)? (y/n)":       "Luk '%s' med %d åbne delopgave(r)? (y/n)",
+	"Move '%s' to active? (y/n)":                      "Flyt '%s' til aktiv? (y/n)",
+	"Delete '%s' and %d subtask(s)? (y/n)":            "Slet '%s' og %d delopgave(r)? (y/n)",
+	"Delete %s entry? (y/n)":                          "Slet %s-post? (y/n)",
+	"Merge #%s into…":                                 "Flet #%s ind i…",
+	"Edit subtask title...":                           "Rediger delopgavetitel...",
+	"Time spent (45m, 1h30m) or HH:MM-HH:MM…":         "Brugt tid (45m, 1t30m) eller TT:MM-TT:MM…",
+	"Stop the timer before deleting a running entry":  "Stop tidtagningen, før du sletter en kørende post",
+	"Stop the timer before editing a running entry":   "Stop tidtagningen, før du redigerer en kørende post",
+	"Dependency '%s' is done":                         "Afhængigheden '%s' er færdig",
+	"Dependency '%s' is hidden by the current filter": "Afhængigheden '%s' er skjult af det aktuelle filter",
+	"Dependency no longer exists":                     "Afhængigheden findes ikke længere",
+
+	// ── Help: quick-add tokens (the token itself stays English — it is syntax) ──
+	"add a tag (existing tags are suggested; tab inserts)": "tilføj et mærke (eksisterende mærker foreslås; tab indsætter)",
+	"put it in a project":                                  "læg den i et projekt",
+	"set a due date (see Date input below)":                "sæt en forfaldsdato (se Datoinput nedenfor)",
+	"priority: high / medium / low (p:h, p:m, p:l)":        "prioritet: high / medium / low (p:h, p:m, p:l)",
+	"size: s / m / l (also size:large)":                    "størrelse: s / m / l (også size:large)",
+	"repeat: daily / weekdays / weekly / monthly / yearly": "gentagelse: daily / weekdays / weekly / monthly / yearly",
+	"block on the last added task (or dep:<id prefix>)":    "bloker på den senest tilføjede opgave (eller dep:<id-præfiks>)",
+
+	// ── Help: search filters ──
+	"only tasks carrying the tag":                                 "kun opgaver med mærket",
+	"only tasks in the project":                                   "kun opgaver i projektet",
+	"only that priority":                                          "kun den prioritet",
+	"due before a date (also due:>, due:<=, due:>=, due:date)":    "forfalder før en dato (også due:>, due:<=, due:>=, due:date)",
+	"only overdue tasks":                                          "kun forfaldne opgaver",
+	"anything else fuzzy-matches the title (→ \"Buy groceries\")": "alt andet fuzzy-matcher titlen (→ \"Buy groceries\")",
+
+	// ── Help: row symbols and scroll hints ──
+	"Row symbols":           "Rækkesymboler",
+	"high priority":         "høj prioritet",
+	"timer running":         "tidtagning kører",
+	"recurring task":        "gentagende opgave",
+	"subtasks done / total": "delopgaver færdige / i alt",
+	"blocked — waiting on an unfinished dependency":             "blokeret — venter på en uafsluttet afhængighed",
+	"blocked — waiting on an unfinished dependency (ST column)": "blokeret — venter på en uafsluttet afhængighed (ST-kolonnen)",
+	"others depend on this — finishing it unblocks them":        "andre afhænger af denne — at afslutte den frigør dem",
+	"↑ scroll up":   "↑ rul op",
+	"↓ scroll down": "↓ rul ned",
+	"↑/↓ scroll":    "↑/↓ rul",
+	"⚡FOCUS":        "⚡FOKUS",
+
+	// ── Unchanged in Danish, listed so the completeness check stays honest ──
+	"Score":      "Score",
+	"Score:":     "Score:",
+	"score":      "score",
+	"ID:":        "ID:",
+	"Sequence: ": "Sekvens: ",
+	" ◉":         " ◉",
+	"%.1f  (D %s · P %s · M %s · S %s · A %s)": "%.1f  (D %s · P %s · M %s · S %s · A %s)",
+
+	// ── Sequencer personalities (names and taglines, sequence.go) ──
+	"Drill Sergeant":    "Sergent",
+	"Zen Garden":        "Zenhave",
+	"Copilot":           "Andenpilot",
+	"Custom":            "Tilpasset",
+	"Deadline Hawk":     "Deadlinehøg",
+	"Deadline Cruise":   "Afslappet deadline",
+	"Importance First":  "Vigtighed først",
+	"Importance Casual": "Vigtighed i baggrunden",
+	"Flow State":        "Flowtilstand",
+	"Fresh Eyes":        "Friske øjne",
+	"High-Reactive: expect frequent shuffling as deadlines approach.":            "Meget reaktiv: forvent hyppig omrokering, når deadlines nærmer sig.",
+	"Stable: tasks stay mostly in the order they were created.":                  "Stabil: opgaver bliver stort set i den rækkefølge, de blev oprettet.",
+	"Balanced: equally weighs priorities, deadlines, and recent activity.":       "Balanceret: vægter prioriteter, deadlines og nylig aktivitet lige.",
+	"Mixed biases — score reflects your tuned weights.":                          "Blandede vægte — scoren afspejler dine egne indstillinger.",
+	"Tasks closest to their due date dominate the ranking.":                      "Opgaver tættest på deres forfaldsdato dominerer rangeringen.",
+	"Due dates barely move the ranking.":                                         "Forfaldsdatoer rykker næsten ikke ved rangeringen.",
+	"High priorities outweigh everything else.":                                  "Høje prioriteter vejer tungere end alt andet.",
+	"Priority is treated as a hint, not a driver.":                               "Prioritet behandles som et hint, ikke en drivkraft.",
+	"Projects with recent activity dominate — ride the streak.":                  "Projekter med nylig aktivitet dominerer — hold stimen i gang.",
+	"Recent activity barely moves the ranking; cold projects get equal footing.": "Nylig aktivitet rykker næsten ikke ved rangeringen; kolde projekter stilles lige.",
+
+	// ── Bias levels (shown in the ‹ … › pickers) ──
+	"relaxed":  "afslappet",
+	"balanced": "balanceret",
+	"intense":  "intens",
+
+	// ── Keymap descriptions the footer and help overlay render ──
+	"jump to ends / page through list":          "spring til start/slut · bladr i listen",
+	"toggle this help":                          "slå denne hjælp til/fra",
+	"add task (#tag due:date p:high @proj s:M)": "tilføj opgave (#mærke due:date p:high @projekt s:M)",
+	"add manual time entry":                     "tilføj manuel tidsregistrering",
+	"start/stop subtask timer":                  "start/stop tidtagning på delopgave",
+	"back to list":                              "tilbage til listen",
+	"merge tags (Tags tab)":                     "flet mærker (fanen Mærker)",
+	"select entry":                              "vælg post",
+	"back":                                      "tilbage",
+	"cycle activity range":                      "skift aktivitetsperiode",
+	"change value / theme":                      "skift værdi / tema",
+
+	// ── Help section titles ──
+	"Calendar": "Kalender",
+	"Stats":    "Statistik",
+
+	// ── Short labels (the terse footer hint on a narrow window) ──
+	"add":   "tilføj",
+	"done":  "færdig",
+	"track": "tid",
+	"del":   "slet",
+	"sort":  "sortér",
 }

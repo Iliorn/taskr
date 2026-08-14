@@ -1355,7 +1355,10 @@ func (m model) renderSettingsSections(sequencerW int) (string, string) {
 	// Personality summary: what the current bias mix "feels like", so tweaking a
 	// single bias gives immediate feedback that the sequence has shifted. It
 	// belongs next to the biases that produce it in the Sequencer pane.
+	// personality() lives in the scoring code and stays locale-free, like the
+	// todo package; the words become Danish here at the view layer.
 	name, descr := personality(activeBiases)
+	name, descr = tr(name), tr(descr)
 
 	if sequencerW < 8 {
 		sequencerW = 8
@@ -1532,9 +1535,11 @@ func (m model) renderSettingsTopPreview(b biases, heat activityHeat, now time.Ti
 // biasPickerValue formats a bias for the Settings picker the same way the
 // theme/language pickers do: title-cased value between thin chevrons.
 func biasPickerValue(b biasLevel) string {
-	s := b.String()
+	s := tr(b.String())
 	if s == "" {
 		return "‹ - ›"
 	}
-	return "‹ " + strings.ToUpper(s[:1]) + s[1:] + " ›"
+	// CapitalizeTitle rather than slicing the first byte: a translated word can
+	// start with a multi-byte rune, and s[:1] would cut it in half.
+	return "‹ " + todo.CapitalizeTitle(s) + " ›"
 }
