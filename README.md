@@ -280,6 +280,16 @@ no-op. Both the versioned envelope and a legacy bare JSON array are accepted.
 
 ### When something feels slow
 
+First, try `TASKR_NO_WATCH=1 taskr`. The filesystem watcher is the only thing
+taskr does continuously against the operating system — a watch on `~/.taskr`
+that wakes on every write, including the app's own — and it is the first
+variable worth removing. If that fixes it, the cost is in the watch (a synced
+or network home directory, an antivirus scanning the database on every write);
+the trade-off is that the TUI stops noticing `taskr add` from another shell
+until it next reloads.
+
+If it doesn't, measure:
+
 `TASKR_TRACE=1 taskr` writes one line per frame to `~/.taskr/trace.log`
 (`TASKR_TRACE=/path/to/file` picks another location). Each line carries the
 wall clock, the gap since the previous frame, how long `Update` and `View`

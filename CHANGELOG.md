@@ -20,12 +20,19 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Added
 
+- **`TASKR_NO_WATCH=1`** turns off live reload. The filesystem watcher is the
+  only thing taskr does continuously against the OS, so it is the first thing
+  to remove when input feels laggy — at the cost of not noticing another
+  shell's `taskr add` until the next reload.
 - **`TASKR_TRACE=1`** writes a per-frame latency log to `~/.taskr/trace.log`:
   wall clock, gap since the last frame, `Update` and `View` times, GC cycles,
   and the message, plus a percentile summary on quit. Off unless asked for.
 
 ### Fixed
 
+- **The first frame is rendered before the program starts.** Building every
+  derived cache and filling the string-builder pool used to happen on the first
+  keystroke of a session.
 - **The renderer now paints at 120 FPS instead of 60.** Bubble Tea repaints on
   a ticker, so the frame rate is also the worst case between pressing a key and
   seeing it: ~17 ms became ~8 ms. Frames are line-diffed, so the extra ticks

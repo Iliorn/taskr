@@ -99,3 +99,27 @@ func TestTraceDoesNotBlockWhenFull(t *testing.T) {
 		t.Fatal("traceFrame blocked on a full channel")
 	}
 }
+
+// TASKR_NO_WATCH is the escape hatch for "input feels laggy": it must actually
+// leave the watcher unstarted, since the point is to remove the app's only
+// continuous OS interaction from the picture.
+func TestNoWatchEnvDisablesTheWatcher(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	for _, v := range []string{"1", "true", "yes"} {
+		t.Setenv("TASKR_NO_WATCH", v)
+		var m model
+		startModelWatcher(&m)
+		if m.watcher != nil {
+			t.Errorf("TASKR_NO_WATCH=%q still started a watcher", v)
+		}
+	}
+	for _, v := range []string{"", "0", "false"} {
+		t.Setenv("TASKR_NO_WATCH", v)
+		var m model
+		startModelWatcher(&m)
+		if m.watcher == nil {
+			t.Errorf("TASKR_NO_WATCH=%q disabled live reload, want it on", v)
+		}
+		m.closeWatcher()
+	}
+}

@@ -40,6 +40,10 @@ func main() {
 	// Live reload of out-of-process writes. Started here, not in initialModel:
 	// it holds a file descriptor, and only a running program wants one.
 	startModelWatcher(&m)
+	// Render one frame before handing over. The first View of a session is the
+	// expensive one — it builds every derived cache and fills the string-builder
+	// pool — and paying for it here means the user's first keystroke doesn't.
+	_ = m.View()
 	// The renderer paints on a ticker, so the frame rate is also the worst-case
 	// delay between a keystroke and seeing it. Bubble Tea's default is 60 FPS
 	// (up to ~17ms of waiting); 120 is its maximum and halves that. The frames

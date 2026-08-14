@@ -616,6 +616,15 @@ func scheduleSave() tea.Cmd {
 // end of the suite — which is exactly how many the macOS runner ran out of
 // (a process there may hold 256 open files).
 func startModelWatcher(m *model) {
+	// TASKR_NO_WATCH turns live reload off. The watcher is the one thing taskr
+	// does continuously against the operating system — an inotify/kqueue watch
+	// on ~/.taskr, woken by every WAL write the app itself makes — so when
+	// input feels laggy it is the first variable worth removing. Without it,
+	// the TUI simply won't notice a `taskr add` from another shell until it
+	// next reloads.
+	if v := strings.TrimSpace(os.Getenv("TASKR_NO_WATCH")); v != "" && v != "0" && v != "false" {
+		return
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return
