@@ -10,6 +10,10 @@ import (
 // appVersion is the current build version. Override at build time with:
 //
 //	go build -ldflags "-X main.appVersion=v1.8.0" -o taskr .
+//
+// When no version is injected, init() in version.go replaces this default
+// with whatever the Go toolchain recorded — the module version for a
+// `go install module@version`, or the git revision for a local build.
 var appVersion = "dev"
 
 func main() {

@@ -120,9 +120,20 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateStatus = tr("Check failed")
 			return m, clearErrAfter()
 		}
-		if msg.latest == "" || msg.latest == appVersion {
+		if msg.latest == "" || sameRelease(appVersion, msg.latest) {
 			m.updateStatus = tr("Up to date (") + appVersion + ")"
 			return m, nil
+		}
+		// A binary built from a local checkout is not a release, so the
+		// tag comparison above says "newer" against every release ever
+		// published. Report the release without opening the confirm
+		// prompt: silently overwriting a build the user just made
+		// themselves is the surprising outcome, and they can still reach
+		// the release through their normal install path.
+		if !isReleaseVersion(appVersion) {
+			m.updateStatus = tr("Latest release: ") + msg.latest + tr(" — this is a local build (") + appVersion + ")"
+			m.flashInfo(m.updateStatus)
+			return m, clearErrAfter()
 		}
 		if runningFromHomebrew() {
 			m.updateStatus = tr("Update available: ") + msg.latest + tr(" — run `brew upgrade taskr`")

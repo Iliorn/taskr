@@ -511,6 +511,8 @@ var daTranslations = map[string]string{
 	"Updated — restart to apply":                      "Opdateret — genstart for at anvende",
 	"Check failed":                                    "Søgning mislykkedes",
 	"Up to date (":                                    "Opdateret (",
+	"Latest release: ":                                "Seneste udgivelse: ",
+	" — this is a local build (":                      " — dette er en lokal bygning (",
 	"Update available: ":                              "Opdatering tilgængelig: ",
 	" — run `brew upgrade taskr`":                     " — kør `brew upgrade taskr`",
 	" — install with `brew install iliorn/tap/taskr`": " — installér med `brew install iliorn/tap/taskr`",
