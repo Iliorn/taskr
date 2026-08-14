@@ -25,7 +25,7 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 - **Search** — live filter across tasks, projects and tags; fuzzy title matching plus field filters (`#tag @project p:high due:<fri overdue`); the Stats tab follows the active filter, so `#tag` scopes every stat to that tag
 - **Command palette** — `ctrl+k` finds any action by name (fuzzy, ranked) and shows the key that performs it, so nothing is gated behind remembering a letter; an action belonging to another tab switches there first
 - **Undo** — multi-level undo for all mutations
-- **Settings** — three sequencing-bias knobs, theme, language, board columns, version, in-app self-update (tab 7)
+- **Settings** — three sequencing-bias knobs, theme, language (English / Dansk / Deutsch), board columns, version, in-app self-update (tab 7)
 
 ## Installation
 

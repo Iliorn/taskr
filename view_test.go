@@ -61,12 +61,16 @@ func TestQuickAddShowsSyntaxHint(t *testing.T) {
 	}
 }
 
-// TestNarrowNoWrapDanish guards against translations that overflow a bordered
-// panel the English source fit. Danish words are generally longer, so for every
-// tab/width it asserts the widest Danish line is no wider than the English
-// baseline (or the terminal). Comparing against English keeps pre-existing
-// layout limits on the densest tabs from counting as translation regressions.
-func TestNarrowNoWrapDanish(t *testing.T) {
+// TestNarrowNoWrapTranslated guards against translations that overflow a
+// bordered panel the English source fit. Translated words are generally longer
+// — German compounds especially — so for every tab/width it asserts the widest
+// translated line is no wider than the English baseline (or the terminal).
+// Comparing against English keeps pre-existing layout limits on the densest
+// tabs from counting as translation regressions.
+//
+// It sweeps every language in availableLanguages rather than naming one, so a
+// language added later inherits the guard instead of shipping unchecked.
+func TestNarrowNoWrapTranslated(t *testing.T) {
 	// Reflowing single-list tabs are checked across every width. The calendar and
 	// projects tabs use fixed two-panel layouts with their own minimum widths (and
 	// pre-existing narrow-width handling), so they're only swept where they fit.
@@ -97,9 +101,9 @@ func TestNarrowNoWrapDanish(t *testing.T) {
 		return widest
 	}
 
-	check := func(width int, tb tab) {
+	check := func(lang language, width int, tb tab) {
 		baseline := maxLineWidth(width, tb, langEN)
-		got := maxLineWidth(width, tb, langDA)
+		got := maxLineWidth(width, tb, lang)
 		applyLang(string(langEN))
 
 		limit := baseline
@@ -107,19 +111,24 @@ func TestNarrowNoWrapDanish(t *testing.T) {
 			limit = width
 		}
 		if got > limit {
-			t.Errorf("da tab=%d width=%d: widest line %d cells exceeds limit %d (en baseline %d)",
-				tb, width, got, limit, baseline)
+			t.Errorf("%s tab=%d width=%d: widest line %d cells exceeds limit %d (en baseline %d)",
+				lang, tb, width, got, limit, baseline)
 		}
 	}
 
-	for _, width := range []int{40, 50, 60, 70, 80, 120} {
-		for _, tb := range listTabs {
-			check(width, tb)
+	for _, lang := range availableLanguages {
+		if lang == langEN {
+			continue // English is the baseline being compared against
 		}
-	}
-	for _, width := range []int{70, 80, 120} {
-		for _, tb := range panelTabs {
-			check(width, tb)
+		for _, width := range []int{40, 50, 60, 70, 80, 120} {
+			for _, tb := range listTabs {
+				check(lang, width, tb)
+			}
+		}
+		for _, width := range []int{70, 80, 120} {
+			for _, tb := range panelTabs {
+				check(lang, width, tb)
+			}
 		}
 	}
 }
@@ -701,7 +710,7 @@ func TestSelectedTabNeverTruncated(t *testing.T) {
 // would overflow).
 //
 // The Calendar tab uses a fixed two-panel layout with its own minimum width
-// (same as TestNarrowNoWrapDanish) so it is excluded from the no-wrap sweep.
+// (same as TestNarrowNoWrapTranslated) so it is excluded from the no-wrap sweep.
 // Two different selected tabs exercise different full-label lengths.
 func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 	applyLang(string(langEN))

@@ -34,7 +34,7 @@ func renderStandaloneDetailPanel(m model) string {
 // every language. See the insertPos clamp in renderGantt.
 //
 // The Gantt is a fixed two-panel chart with its own minimum width, so (like the
-// Projects tab in TestNarrowNoWrapDanish) the no-wrap contract is only asserted
+// Projects tab in TestNarrowNoWrapTranslated) the no-wrap contract is only asserted
 // at widths where it is designed to fit; the no-panic guarantee holds at every
 // width down to the smallest terminals.
 func TestRenderGanttNarrowNoPanic(t *testing.T) {

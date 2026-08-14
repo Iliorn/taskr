@@ -21,15 +21,18 @@ type language string
 const (
 	langEN language = "en"
 	langDA language = "da"
+	langDE language = "de"
 )
 
 // availableLanguages is the cycle order used by the settings toggle.
-var availableLanguages = []language{langEN, langDA}
+var availableLanguages = []language{langEN, langDA, langDE}
 
 func (l language) displayName() string {
 	switch l {
 	case langDA:
 		return "Dansk"
+	case langDE:
+		return "Deutsch"
 	default:
 		return "English"
 	}
@@ -75,31 +78,39 @@ func tr(s string) string {
 var monthNames = map[language][12]string{
 	langDA: {"Januar", "Februar", "Marts", "April", "Maj", "Juni",
 		"Juli", "August", "September", "Oktober", "November", "December"},
+	langDE: {"Januar", "Februar", "März", "April", "Mai", "Juni",
+		"Juli", "August", "September", "Oktober", "November", "Dezember"},
 }
 
 var monthAbbrevs = map[language][12]string{
 	langDA: {"Jan", "Feb", "Mar", "Apr", "Maj", "Jun",
 		"Jul", "Aug", "Sep", "Okt", "Nov", "Dec"},
+	langDE: {"Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
+		"Jul", "Aug", "Sep", "Okt", "Nov", "Dez"},
 }
 
 // Weekday tables are indexed by time.Weekday (Sunday = 0).
 var weekdayNames = map[language][7]string{
 	langDA: {"Søndag", "Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag", "Lørdag"},
+	langDE: {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"},
 }
 
 var weekdayAbbrevs = map[language][7]string{
 	langDA: {"Søn", "Man", "Tir", "Ons", "Tor", "Fre", "Lør"},
+	langDE: {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"},
 }
 
 var weekdayInitials = map[language][7]rune{
 	langEN: {'S', 'M', 'T', 'W', 'T', 'F', 'S'},
 	langDA: {'S', 'M', 'T', 'O', 'T', 'F', 'L'},
+	langDE: {'S', 'M', 'D', 'M', 'D', 'F', 'S'},
 }
 
 // Monday-first two-letter column header for the month grid.
 var weekdayHeader = map[language]string{
 	langEN: "Mo Tu We Th Fr Sa Su",
 	langDA: "Ma Ti On To Fr Lø Sø",
+	langDE: "Mo Di Mi Do Fr Sa So",
 }
 
 // localizedMonthYear renders the calendar title ("January 2006" equivalent).
@@ -184,6 +195,7 @@ func trRecurrence(rule string) string {
 
 var translations = map[language]map[string]string{
 	langDA: daTranslations,
+	langDE: deTranslations,
 }
 
 var daTranslations = map[string]string{
@@ -746,4 +758,565 @@ var daTranslations = map[string]string{
 	"track": "tid",
 	"del":   "slet",
 	"sort":  "sortér",
+}
+var deTranslations = map[string]string{
+	// Header / chrome
+	"? shortcuts":                               "? Tastenkürzel",
+	"? shortcuts · ctrl+k commands":             "? Kürzel · ctrl+k Befehle",
+	"Type a command…":                           "Befehl eingeben…",
+	"No command matches that.":                  "Kein Befehl passt dazu.",
+	"command palette — find any action by name": "Befehlspalette — jede Aktion per Name finden",
+	"Go to Tasks":                               "Zu Aufgaben",
+	"Go to Calendar":                            "Zum Kalender",
+	"Go to Projects":                            "Zu Projekten",
+	"Go to Tags":                                "Zu Schlagwörtern",
+	"Go to Board":                               "Zum Board",
+	"Go to Stats":                               "Zur Statistik",
+	"Go to Settings":                            "Zu Einstellungen",
+	"⚡ FOCUS: today + overdue only (f to toggle)": "⚡ FOKUS: nur heute + überfällig (f schaltet um)",
+	"(untagged)": "(ohne Schlagwort)",
+
+	// Tab labels (number prefix kept; only the word is translated)
+	"1 Tasks":    "1 Aufgaben",
+	"2 Calendar": "2 Kalender",
+	"3 Projects": "3 Projekte",
+	"4 Tags":     "4 Schlagwörter",
+	"5 Board":    "5 Board",
+	"6 Stats":    "6 Statistik",
+	"7 Settings": "7 Einstell.",
+
+	// Key hints (footer)
+	"←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back":                                               "←/→ Seiten · enter bearb. · a neu · d fertig · x weg · n Notiz · esc zurück",
+	"←/→ pages · enter edit · a add · x remove · esc back":                                                                    "←/→ Seiten · enter bearb. · a neu · x weg · esc zurück",
+	"a add · d done · t track · x del · s sort · / search · ? more":                                                           "a neu · d fertig · t Zeit · x weg · s Sort. · / Suche · ? mehr",
+	"enter detail · a add · d done · t track · p prio · r rename · x del · n notes · f focus · s sort · h history · / search": "enter Detail · a neu · d fertig · t Zeit · p Prio · r umben. · x weg · n Notiz · f Fokus · s Sort. · h Verlauf · / Suche",
+	"j/k nav · r rename · x delete · / filter":                                                                                "j/k Nav · r umben. · x löschen · / Filter",
+	"j/k nav · r rename · m merge · x delete · s sort · / filter":                                                             "j/k Nav · r umben. · m verein. · x löschen · s Sort. · / Filter",
+	"j/k nav · r edit · x delete · s sort · / search":                                                                         "j/k Nav · r bearb. · x löschen · s Sort. · / Suche",
+	"enter · cycle activity range":                                                                                            "enter · Zeitraum wechseln",
+	"j/k select entry · r edit times · x delete · esc back":                                                                   "j/k Eintrag · r Zeiten · x löschen · esc zurück",
+	"←/→ day · ↑/↓ week · [ ] month · t today · enter entries":                                                                "←/→ Tag · ↑/↓ Woche · [ ] Monat · t heute · enter Einträge",
+	"↑/↓ select · ←/→ change theme · enter activate":                                                                          "↑/↓ wählen · ←/→ Farbschema · enter aktivieren",
+
+	// Footer / timer
+	"#tag @project due:tomorrow p:high s:l r:weekly dep:^": "#tag @projekt due:tomorrow p:high s:l r:weekly dep:^",
+	" · t to stop":         " · t zum Stoppen",
+	"create new tag: ":     "neues Schlagwort: ",
+	"create new project: ": "neues Projekt: ",
+
+	// Help screen
+	"Keyboard shortcuts":                          "Tastenkürzel",
+	"Press ? or esc to close":                     "? oder esc zum Schließen",
+	"/ filter  ·  ? or esc to close":              "/ Filter  ·  ? oder esc schließt",
+	"type to filter  ·  enter keep  ·  esc clear": "tippen filtert  ·  enter übernimmt  ·  esc löscht",
+	"/ filter  ·  esc clear  ·  ? to close":       "/ Filter  ·  esc löscht  ·  ? schließt",
+	"No shortcut matches that.":                   "Kein Kürzel passt dazu.",
+	"Quick-add syntax":                            "Schnellerfassung",
+	"Search filters":                              "Suchfilter",
+	"Navigation":                                  "Navigation",
+	"navigate list":                               "Liste navigieren",
+	"open details":                                "Details öffnen",
+	"go back":                                     "zurück",
+	"switch tabs (forward / back / direct)":       "Reiter wechseln (vor / zurück / direkt)",
+	"Board":                                       "Board",
+	"focus previous/next column":                  "vorherige/nächste Spalte",
+	"move card between stages (into Done completes it)": "Karte verschieben (nach Fertig schließt sie ab)",
+	"empty":       "leer",
+	"more":        "mehr",
+	"close help":  "Hilfe schließen",
+	"Tasks":       "Aufgaben",
+	"Workflow":    "Arbeitsablauf",
+	"Summary":     "Übersicht",
+	"Preferences": "Einstellungen",
+	"Sequencer":   "Sequenzer",
+	"Overview":    "Überblick",
+	"History":     "Verlauf",
+	"Timeline":    "Zeitleiste",
+	"Activity":    "Aktivität",
+	"add task (quick-add: #tag due:date p:high @proj s:M)": "Aufgabe anlegen (#tag due:datum p:high @proj s:M)",
+	"rename task":                 "Aufgabe umbenennen",
+	"toggle done":                 "fertig umschalten",
+	"start/stop time tracking":    "Zeiterfassung starten/stoppen",
+	"cycle priority low/med/high": "Priorität niedrig/mittel/hoch",
+	"delete":                      "löschen",
+	"edit notes (opens $EDITOR)":  "Notizen bearbeiten (öffnet $EDITOR)",
+	"ctrl+e  edit in $EDITOR":     "ctrl+e  in $EDITOR bearbeiten",
+	"focus: today + overdue only": "Fokus: nur heute + überfällig",
+	"toggle history":              "Verlauf umschalten",
+	"cycle sort order":            "Sortierung wechseln",
+	"expand/collapse subtasks":    "Teilaufgaben auf/zu",
+	"search":                      "suchen",
+	"Detail view":                 "Detailansicht",
+	"jump section":                "Abschnitt wechseln",
+	"edit field / open subtask":   "Feld bearbeiten / Teilaufgabe",
+	"add tag / dep / comment / learning / subtask": "Schlagwort / Abhäng. / Kommentar / Erkenntnis / Teilaufgabe",
+	"quick add tag":                         "Schlagwort schnell hinzufügen",
+	"quick add / change project":            "Projekt schnell setzen/ändern",
+	"toggle subtask done":                   "Teilaufgabe fertig",
+	"rename subtask / edit time entry":      "Teilaufgabe umbenennen / Zeit bearbeiten",
+	"remove field / delete subtask":         "Feld leeren / Teilaufgabe löschen",
+	"Tags & Projects":                       "Schlagwörter & Projekte",
+	"Inside a tag / project":                "In einem Schlagwort / Projekt",
+	"open the tasks in it":                  "enthaltene Aufgaben öffnen",
+	"new task in it":                        "neue Aufgabe darin",
+	"show its tasks on the Tasks tab":       "seine Aufgaben im Reiter Aufgaben",
+	"delete task":                           "Aufgabe löschen",
+	"back to the list":                      "zurück zur Liste",
+	"rename globally":                       "global umbenennen",
+	"delete globally":                       "global löschen",
+	"filter":                                "filtern",
+	"Learnings":                             "Erkenntnisse",
+	"edit learning":                         "Erkenntnis bearbeiten",
+	"delete learning":                       "Erkenntnis löschen",
+	"sort date/alpha":                       "Sortierung Datum/A-Z",
+	"Calendar (tab 2)":                      "Kalender (Reiter 2)",
+	"move by day / week":                    "Tag / Woche wechseln",
+	"previous / next month":                 "voriger / nächster Monat",
+	"jump to today":                         "zu heute springen",
+	"focus the day's entries":               "Einträge des Tages",
+	"edit entry times (09:12-10:00 or 45m)": "Zeiten bearbeiten (09:12-10:00 oder 45m)",
+	"delete selected entry":                 "gewählten Eintrag löschen",
+	"Stats (tab 6)":                         "Statistik (Reiter 6)",
+	"switch to stats view":                  "zur Statistikansicht",
+	"Settings (tab 7)":                      "Einstellungen (Reiter 7)",
+	"select setting":                        "Einstellung wählen",
+	"change theme":                          "Farbschema ändern",
+	"activate / edit the selected setting":  "gewählte Einstellung aktivieren/bearbeiten",
+	"confirm update when one is offered":    "Aktualisierung bestätigen",
+	"App":                                   "App",
+	"undo last change":                      "letzte Änderung rückgängig",
+	"quit":                                  "beenden",
+	"Date input":                            "Datumseingabe",
+	"exact date (e.g. 15-06-25)":            "genaues Datum (z. B. 15-06-25)",
+	"today's date":                          "heutiges Datum",
+	"tomorrow":                              "morgen",
+	"7 days from now":                       "in 7 Tagen",
+	"1 month from now":                      "in 1 Monat",
+	"next occurrence of weekday":            "nächster dieser Wochentage",
+	"relative days/weeks/months":            "relative Tage/Wochen/Monate",
+
+	// Stats detail
+	"Last 30 days":                  "Letzte 30 Tage",
+	"Last 26 weeks":                 "Letzte 26 Wochen",
+	"Last 7 days":                   "Letzte 7 Tage",
+	"%d done":                       "%d erledigt",
+	"No completions in this range.": "Keine Abschlüsse in diesem Zeitraum.",
+	": 1 block = 1 completed task":  ": 1 Block = 1 erledigte Aufgabe",
+
+	// Stats list — sections & labels
+	"  Workload":            "  Auslastung",
+	"Overdue":               "Überfällig",
+	"Due today":             "Heute fällig",
+	"Due this week":         "Diese Woche",
+	"Active total":          "Aktiv gesamt",
+	"Seq hit (top-5)":       "Seq-Treffer (Top 5)",
+	"Created":               "Erstellt",
+	"Completed":             "Erledigt",
+	"  Net backlog":         "  Netto-Rückstand",
+	"+%d ▲ growing":         "+%d ▲ wächst",
+	"%d ▼ shrinking":        "%d ▼ schrumpft",
+	"±0 → steady":           "±0 → stabil",
+	"%d done vs %d  %s":     "%d erledigt vs. %d  %s",
+	"Flow (last 7 days)":    "Fluss (7 Tage)",
+	"vs last week":          "vs. Vorwoche",
+	"Flow (last 30 days)":   "Fluss (30 Tage)",
+	"vs prior 30d":          "vs. vorige 30 T",
+	"  Throughput":          "  Durchsatz",
+	"  Time to done (30d)":  "  Dauer bis fertig (30 T)",
+	"median ":               "Median ",
+	"none yet":              "noch keine",
+	"  Median active age":   "  Medianalter aktiv",
+	"  Oldest active":       "  Älteste aktive",
+	"  Active by priority":  "  Aktiv nach Priorität",
+	"↑ High":                "↑ Hoch",
+	"→ Medium":              "→ Mittel",
+	"↓ Low":                 "↓ Niedrig",
+	"  Completion velocity": "  Abschlusstempo",
+	"Today":                 "Heute",
+	"today":                 "heute",
+	"This week":             "Diese Woche",
+	"This month":            "Dieser Monat",
+	"  Avg (7d)":            "  Ø (7 T)",
+	"%.1f tasks/day":        "%.1f Aufgaben/Tag",
+
+	// Priority, size, and recurrence words
+	"high":     "hoch",
+	"medium":   "mittel",
+	"low":      "niedrig",
+	"small":    "klein",
+	"large":    "groß",
+	"daily":    "täglich",
+	"weekly":   "wöchentlich",
+	"monthly":  "monatlich",
+	"yearly":   "jährlich",
+	"weekdays": "werktags",
+
+	// List headers / sort
+	"Task":              "Aufgabe",
+	"Completed tasks":   "Erledigte Aufgaben",
+	">Completed tasks<": ">Erledigte Aufgaben<",
+	">Completed<":       ">Erledigt<",
+	"Start":             "Start",
+	"Due":               "Fällig",
+	"Priority":          "Priorität",
+	">Due<":             ">Fällig<",
+	">Start<":           ">Start<",
+	">Priority<":        ">Priorität<",
+	"Tags":              "Schlagwörter",
+	"sort:":             "Sort.:",
+
+	// Tag list / detail
+	"  No tags match your filter.":                                 "  Keine Schlagwörter passen zum Filter.",
+	"  No tags yet. Add tags to tasks in the detail view.":         "  Noch keine Schlagwörter. In der Detailansicht hinzufügen.",
+	"  Tags group related tasks; this tab shows progress per tag.": "  Schlagwörter bündeln Aufgaben; hier der Fortschritt je Schlagwort.",
+	"  Tag":                       "  Schlagwort",
+	"Progress":                    "Fortschritt",
+	"Age":                         "Alter",
+	"Time":                        "Zeit",
+	"  No tag selected.":          "  Kein Schlagwort gewählt.",
+	"  (untagged)":                "  (ohne Schlagwort)",
+	"%d task":                     "%d Aufgabe",
+	"%d tasks":                    "%d Aufgaben",
+	" · enter: open · f: filter)": " · enter: öffnen · f: filtern)",
+	" · enter: open · f: filter · r: rename)":             " · enter: öffnen · f: filtern · r: umbenennen)",
+	" · d: done · t: track · enter: details · esc: back)": " · d: fertig · t: Zeit · enter: Details · esc: zurück)",
+	"  %d active · %d done · %d overdue":                  "  %d aktiv · %d fertig · %d überfällig",
+	"  often with: ":                                      "  oft mit: ",
+	"  No tasks carry this tag.":                          "  Keine Aufgabe trägt dieses Schlagwort.",
+	"  … and %d more":                                     "  … und %d weitere",
+	"  due: ":                                             "  fällig: ",
+
+	// Learnings list / detail
+	"  No learnings match your search.":                                "  Keine Erkenntnisse passen zur Suche.",
+	"  No learnings yet. Add learnings from a task's detail view.":     "  Noch keine Erkenntnisse. In der Detailansicht hinzufügen.",
+	"  A learning is a takeaway you save on a task to keep for later.": "  Eine Erkenntnis ist eine Notiz, die du an einer Aufgabe aufhebst.",
+	"Learning":                "Erkenntnis",
+	"Date":                    "Datum",
+	"  No learning selected.": "  Keine Erkenntnis gewählt.",
+	"Source task:  ":          "Aufgabe:      ",
+	"[done]":                  "[fertig]",
+	"[task removed]":          "[Aufgabe entfernt]",
+	"Date:         ":          "Datum:        ",
+	"Tags:         ":          "Schlagw.:     ",
+	"none":                    "keine",
+
+	// Task list empty states
+	"  No tasks match your search.":          "  Keine Aufgaben passen zur Suche.",
+	"  No tasks due today or overdue. Nice!": "  Nichts heute fällig oder überfällig. Stark!",
+	"  No tasks yet. Press 'a' to add one.":  "  Noch keine Aufgaben. 'a' legt eine an.",
+	"  Try:  ":                               "  Beispiel:  ",
+	// Free text (title/tag/project) is localized; the quick-add keywords
+	// due:/friday/p:high stay English because the parser only accepts English.
+	"Buy milk #shopping due:friday p:high @home": "Milch kaufen #einkauf due:friday p:high @zuhause",
+	"  Press ? for all keyboard shortcuts.":      "  ? zeigt alle Tastenkürzel.",
+	"  No completed tasks match your search.":    "  Keine erledigten Aufgaben passen zur Suche.",
+	"  No completed tasks yet.":                  "  Noch keine erledigten Aufgaben.",
+
+	// Projects
+	"  No projects match your search.":                          "  Keine Projekte passen zur Suche.",
+	"  No projects yet. Add a project to a task first.":         "  Noch keine Projekte. Erst einer Aufgabe eines zuweisen.",
+	"  A project groups its tasks into a timeline on this tab.": "  Ein Projekt bündelt seine Aufgaben hier zu einer Zeitleiste.",
+	"Project":                     "Projekt",
+	"Active":                      "Aktiv",
+	"Done":                        "Fertig",
+	"  Timeline":                  "  Zeitleiste",
+	"today:":                      "heute:",
+	"  No tasks in this project.": "  Keine Aufgaben in diesem Projekt.",
+	"%d active":                   "%d aktiv",
+	"%d overdue":                  "%d überfällig",
+
+	// Detail pages
+	"not set":                            "nicht gesetzt",
+	" ⚠ overdue":                         " ⚠ überfällig",
+	"Start date":                         "Startdatum",
+	"Due date":                           "Fälligkeit",
+	"Recurrence":                         "Wiederholung",
+	"Size":                               "Größe",
+	"Notes":                              "Notizen",
+	"none (press enter or 'n' to edit)":  "keine (enter oder 'n' bearbeitet)",
+	"Created:":                           "Erstellt:",
+	"Modified:":                          "Geändert:",
+	"%s (%d entries)":                    "%s (%d Einträge)",
+	" ◉ tracking":                        " ◉ läuft",
+	"Time spent:":                        "Aufgewendet:",
+	"Completed on:":                      "Erledigt am:",
+	"Tags:":                              "Schlagwörter:",
+	"No tags. Press 'a' to add one.":     "Keine Schlagwörter. 'a' fügt eines hinzu.",
+	"Subtasks:":                          "Teilaufgaben:",
+	"No subtasks. Press 'a' to add one.": "Keine Teilaufgaben. 'a' fügt eine hinzu.",
+	"%s[?] unknown subtask":              "%s[?] unbekannte Teilaufgabe",
+	"Dependencies:":                      "Abhängigkeiten:",
+	"Inbound dependency — remove it from the other task": "Eingehende Abhängigkeit — an der anderen Aufgabe entfernen",
+	"No dependencies. Press 'a' to add one.":             "Keine Abhängigkeiten. 'a' fügt eine hinzu.",
+	"%s[?] unknown task":                                 "%s[?] unbekannte Aufgabe",
+	"Learnings:":                                         "Erkenntnisse:",
+	"No learnings yet. Press 'a' to add one.":            "Noch keine Erkenntnisse. 'a' fügt eine hinzu.",
+	"Comments:":                              "Kommentare:",
+	"No comments yet. Press 'a' to add one.": "Noch keine Kommentare. 'a' fügt einen hinzu.",
+	"Time entries:":                          "Zeiteinträge:",
+	"No time entries. Press 'T' to add one.": "Keine Zeiteinträge. 'T' fügt einen hinzu.",
+
+	// Calendar
+	"month ":                     "Monat ",
+	"day ":                       "Tag ",
+	"%d entries · %s":            "%d Einträge · %s",
+	"1 entry · ":                 "1 Eintrag · ",
+	"  No activity on this day.": "  Keine Aktivität an diesem Tag.",
+	"  Press t on a task (tab 1) to start tracking.": "  t auf einer Aufgabe (Reiter 1) startet die Erfassung.",
+	" now ": " jetzt ",
+
+	// Settings
+	"Theme":                          "Farbschema",
+	"Language":                       "Sprache",
+	"tab insert · ↑/↓ pick":          "tab einfügen · ↑/↓ wählen",
+	"Board columns":                  "Board-Spalten",
+	"Board columns, comma-separated": "Board-Spalten, kommagetrennt",
+	"Comma-separated column names · Done is always the last column": "Spaltennamen kommagetrennt · Fertig ist immer die letzte Spalte",
+	"Version":              "Version",
+	"Check for updates":    "Nach Updates suchen",
+	"press enter to check": "enter prüft",
+	"Settings":             "Einstellungen",
+
+	// Update / status / errors
+	"Update failed":                                   "Update fehlgeschlagen",
+	"Updated! Restart taskr to apply.":                "Aktualisiert! taskr neu starten.",
+	"Error saving settings: %v":                       "Fehler beim Speichern der Einstellungen: %v",
+	"Updated — restart to apply":                      "Aktualisiert — Neustart nötig",
+	"Check failed":                                    "Prüfung fehlgeschlagen",
+	"Up to date (":                                    "Aktuell (",
+	"Latest release: ":                                "Neueste Version: ",
+	" — this is a local build (":                      " — dies ist ein lokaler Build (",
+	"Update available: ":                              "Update verfügbar: ",
+	" — run `brew upgrade taskr`":                     " — `brew upgrade taskr` ausführen",
+	" — install with `brew install iliorn/tap/taskr`": " — mit `brew install iliorn/tap/taskr` installieren",
+	" is available — update now? (y/n)":               " ist verfügbar — jetzt aktualisieren? (y/n)",
+	"Checking…":                                       "Prüfe…",
+	"Updating…":                                       "Aktualisiere…",
+	"Nothing to undo":                                 "Nichts rückgängig zu machen",
+	"Undid: %s":                                       "Rückgängig: %s",
+	"No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)":                               "Kein Editor gefunden — EDITOR dauerhaft setzen, z. B.: setx EDITOR notepad (dann taskr neu starten)",
+	"No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish": "Kein Editor gefunden — $EDITOR dauerhaft setzen, z. B.: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish",
+	"Editor failed — falling back to notepad":                                                                               "Editor fehlgeschlagen — nutze notepad",
+	"Invalid date - use dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday', or '+3d'":                                     "Ungültiges Datum - nutze dd-mm-yy, 'today', 'tomorrow', 'next week', 'monday' oder '+3d'",
+	"Dependency not linked":                         "Abhängigkeit nicht verknüpft",
+	"Remove project '%s' from ALL its tasks? (y/n)": "Projekt '%s' von ALLEN seinen Aufgaben entfernen? (y/n)",
+
+	// Confirm prompts
+	"Delete '%s'? (y/n)":                        "'%s' löschen? (y/n)",
+	"Delete learning '%s'? (y/n)":               "Erkenntnis '%s' löschen? (y/n)",
+	"Delete tag '#%s' from ALL tasks? (y/n)":    "Schlagwort '#%s' von ALLEN Aufgaben löschen? (y/n)",
+	"Delete this comment? (y/n)":                "Diesen Kommentar löschen? (y/n)",
+	"Remove project '%s' from this task? (y/n)": "Projekt '%s' von dieser Aufgabe entfernen? (y/n)",
+	"Remove tag '#%s' from this task? (y/n)":    "Schlagwort '#%s' von dieser Aufgabe entfernen? (y/n)",
+	"Remove this dependency? (y/n)":             "Diese Abhängigkeit entfernen? (y/n)",
+	"Delete subtask '%s'? (y/n)":                "Teilaufgabe '%s' löschen? (y/n)",
+	"Delete %s entry for '%s'? (y/n)":           "Eintrag %s für '%s' löschen? (y/n)",
+
+	// Input placeholders
+	"Search... (#tag @project p:high due:<fri)":    "Suchen… (#tag @projekt p:high due:<fri)",
+	"Search for task to add as dependency...":      "Aufgabe als Abhängigkeit suchen…",
+	"Search or create tag...":                      "Schlagwort suchen oder anlegen…",
+	"Search or create project...":                  "Projekt suchen oder anlegen…",
+	"Filter tags...":                               "Schlagwörter filtern…",
+	"Search learnings... (use # to filter by tag)": "Erkenntnisse suchen… (# filtert nach Schlagwort)",
+
+	// Inline edit/add placeholders (set when a text-entry mode opens)
+	"New task...": "Neue Aufgabe…",
+	"HH:MM-HH:MM or duration (45m, 1h30m)...": "HH:MM-HH:MM oder Dauer (45m, 1h30m)…",
+	"Edit tag name...":                        "Schlagwortnamen bearbeiten…",
+	"Edit task title...":                      "Aufgabentitel bearbeiten…",
+	"Edit learning...":                        "Erkenntnis bearbeiten…",
+	"Add comment...":                          "Kommentar hinzufügen…",
+	"Add learning...":                         "Erkenntnis hinzufügen…",
+	"Add subtask...":                          "Teilaufgabe hinzufügen…",
+	"Edit comment...":                         "Kommentar bearbeiten…",
+	"Start date (dd-mm-yy, 'today', 'next week', '+3d')...": "Startdatum (dd-mm-yy, 'today', 'next week', '+3d')…",
+	"Due date (dd-mm-yy, 'today', 'next week', '+3d')...":   "Fälligkeit (dd-mm-yy, 'today', 'next week', '+3d')…",
+
+	// ── Sync + server (Settings rows, status line, toasts) ──
+	"Sync":                            "Sync",
+	"Sync server":                     "Sync-Server",
+	"Sync token":                      "Sync-Token",
+	"Sync now":                        "Jetzt syncen",
+	"Server":                          "Server",
+	"Listen":                          "Adresse",
+	"Server token":                    "Server-Token",
+	"press enter to sync":             "enter synct",
+	"needs server":                    "Server fehlt",
+	"needs token":                     "Token fehlt",
+	"external":                        "extern",
+	"set":                             "gesetzt",
+	"On":                              "An",
+	"Off":                             "Aus",
+	"Syncing…":                        "Synce…",
+	"Server stopped":                  "Server gestoppt",
+	"Server: ":                        "Server: ",
+	"Serving on ":                     "Läuft auf ",
+	"✕ sync":                          "✕ Sync",
+	"Set a server token first":        "Erst ein Server-Token setzen",
+	"Set sync server + token first":   "Erst Sync-Server + Token setzen",
+	"Last sync failed: ":              "Letzter Sync fehlgeschlagen: ",
+	"Last sync: sent %d, received %d": "Letzter Sync: %d gesendet, %d empfangen",
+	"Sync failing — devices may be diverging (see Settings)":           "Sync schlägt fehl — Geräte laufen evtl. auseinander (siehe Einstellungen)",
+	"Sync: %d conflict(s) resolved — see ~/.taskr/sync.log":            "Sync: %d Konflikt(e) gelöst — siehe ~/.taskr/sync.log",
+	"Sync server URL, e.g. http://100.x.y.z:8765":                      "Sync-Server-URL, z. B. http://100.x.y.z:8765",
+	"Sync token (clear the field to remove it)":                        "Sync-Token (Feld leeren zum Entfernen)",
+	"Server token clients must present (clear the field to remove it)": "Token, das Clients vorzeigen müssen (Feld leeren zum Entfernen)",
+	"Bind address, e.g. 100.x.y.z:8765 or 127.0.0.1:8765":              "Bind-Adresse, z. B. 100.x.y.z:8765 oder 127.0.0.1:8765",
+	"Plain http to a public host — token travels unencrypted":          "Klartext-HTTP zu öffentlichem Host — Token wird unverschlüsselt übertragen",
+
+	// ── Sequencer / Settings rows ──
+	"Deadline pressure":         "Fristendruck",
+	"Priority focus":            "Prioritätsfokus",
+	"Momentum bias":             "Momentum-Gewicht",
+	"Aging increases score":     "Alter erhöht Punktzahl",
+	"Auto-close parent":         "Eltern autom. schließen",
+	"Auto-close subtasks":       "Teilaufg. autom. schließen",
+	"Top 5 with these weights:": "Top 5 mit diesen Gewichten:",
+	"Score resync failed: %v":   "Punkte-Neuberechnung fehlgeschlagen: %v",
+
+	// ── List header / panel titles ──
+	"Active tasks":        "Aktive Aufgaben",
+	"Detail":              "Detail",
+	"Tag":                 "Schlagwort",
+	"  No task selected.": "  Keine Aufgabe gewählt.",
+
+	// ── Sort labels (drawn in the panel border, keep them short) ──
+	"alpha":     "A-Z",
+	"completed": "erledigt",
+	"due":       "fällig",
+	"size":      "Größe",
+	"count":     "Anzahl",
+	"progress":  "Fortschritt",
+	"recent":    "neueste",
+
+	// ── Quick-add preview ──
+	"(no title yet)": "(noch ohne Titel)",
+	"due ":           "fällig ",
+	"overdue":        "überfällig",
+	"title~":         "Titel~",
+
+	// ── Calendar entries ──
+	"✓ done at ": "✓ fertig am ",
+	"⧗ due":      "⧗ fällig",
+	"⧗ overdue":  "⧗ überfällig",
+
+	// ── Task detail ──
+	"  +%s subtasks = %s": "  +%s Teilaufgaben = %s",
+	"now":                 "jetzt",
+
+	// ── Stats ──
+	"  Cycle time by size":      "  Durchlaufzeit nach Größe",
+	"  Projected backlog clear": "  Rückstand voraussichtl. frei",
+	"  Projected clear":         "  Voraussichtl. frei",
+	"%d pending, no pace":       "%d offen, kein Tempo",
+	"Small":                     "Klein",
+	"Medium":                    "Mittel",
+	"Large":                     "Groß",
+
+	// ── Confirm prompts and toasts ──
+	"Close '%s' with %d open subtask(s)? (y/n)":       "'%s' mit %d offenen Teilaufgabe(n) schließen? (y/n)",
+	"Move '%s' to active? (y/n)":                      "'%s' wieder aktivieren? (y/n)",
+	"Delete '%s' and %d subtask(s)? (y/n)":            "'%s' und %d Teilaufgabe(n) löschen? (y/n)",
+	"Delete %s entry? (y/n)":                          "Eintrag %s löschen? (y/n)",
+	"Merge #%s into…":                                 "#%s vereinen mit…",
+	"Edit subtask title...":                           "Titel der Teilaufgabe bearbeiten…",
+	"Time spent (45m, 1h30m) or HH:MM-HH:MM…":         "Aufgewendet (45m, 1h30m) oder HH:MM-HH:MM…",
+	"Stop the timer before deleting a running entry":  "Erst die Uhr stoppen, dann den laufenden Eintrag löschen",
+	"Stop the timer before editing a running entry":   "Erst die Uhr stoppen, dann den laufenden Eintrag bearbeiten",
+	"Dependency '%s' is done":                         "Abhängigkeit '%s' ist erledigt",
+	"Dependency '%s' is hidden by the current filter": "Abhängigkeit '%s' ist vom aktuellen Filter verdeckt",
+	"Dependency no longer exists":                     "Abhängigkeit existiert nicht mehr",
+
+	// ── Help: quick-add tokens (the token itself stays English — it is syntax) ──
+	"add a tag (existing tags are suggested; tab inserts)": "Schlagwort setzen (Vorschläge; tab fügt ein)",
+	"put it in a project":                                  "einem Projekt zuordnen",
+	"set a due date (see Date input below)":                "Fälligkeit setzen (siehe Datumseingabe)",
+	"priority: high / medium / low (p:h, p:m, p:l)":        "Priorität: hoch / mittel / niedrig (p:h, p:m, p:l)",
+	"size: s / m / l (also size:large)":                    "Größe: s / m / l (auch size:large)",
+	"repeat: daily / weekdays / weekly / monthly / yearly": "Wiederholung: daily / weekdays / weekly / monthly / yearly",
+	"block on the last added task (or dep:<id prefix>)":    "auf zuletzt angelegte Aufgabe warten (oder dep:<ID-Präfix>)",
+
+	// ── Help: search filters ──
+	"only tasks carrying the tag":                                 "nur Aufgaben mit dem Schlagwort",
+	"only tasks in the project":                                   "nur Aufgaben im Projekt",
+	"only that priority":                                          "nur diese Priorität",
+	"due before a date (also due:>, due:<=, due:>=, due:date)":    "fällig vor einem Datum (auch due:>, due:<=, due:>=, due:datum)",
+	"only overdue tasks":                                          "nur überfällige Aufgaben",
+	"anything else fuzzy-matches the title (→ \"Buy groceries\")": "alles andere trifft den Titel unscharf (→ \"Buy groceries\")",
+
+	// ── Help: row symbols and scroll hints ──
+	"Row symbols":           "Zeilensymbole",
+	"high priority":         "hohe Priorität",
+	"timer running":         "Uhr läuft",
+	"recurring task":        "wiederkehrende Aufgabe",
+	"subtasks done / total": "Teilaufgaben fertig / gesamt",
+	"blocked — waiting on an unfinished dependency":             "blockiert — wartet auf offene Abhängigkeit",
+	"blocked — waiting on an unfinished dependency (ST column)": "blockiert — wartet auf offene Abhängigkeit (Spalte ST)",
+	"others depend on this — finishing it unblocks them":        "andere hängen daran — Abschluss gibt sie frei",
+	"↑ scroll up":   "↑ nach oben",
+	"↓ scroll down": "↓ nach unten",
+	"↑/↓ scroll":    "↑/↓ scrollen",
+	"⚡FOCUS":        "⚡FOKUS",
+
+	// ── Unchanged in Danish, listed so the completeness check stays honest ──
+	"Score":      "Punkte",
+	"Score:":     "Punkte:",
+	"score":      "Punkte",
+	"ID:":        "ID:",
+	"Sequence: ": "Sequenz: ",
+	" ◉":         " ◉",
+	"%.1f  (D %s · P %s · M %s · S %s · A %s)": "%.1f  (F %s · P %s · M %s · G %s · A %s)",
+
+	// ── Sequencer personalities (names and taglines, sequence.go) ──
+	"Drill Sergeant":    "Ausbilder",
+	"Zen Garden":        "Zengarten",
+	"Copilot":           "Kopilot",
+	"Custom":            "Eigen",
+	"Deadline Hawk":     "Fristenfalke",
+	"Deadline Cruise":   "Fristen gelassen",
+	"Importance First":  "Wichtigkeit zuerst",
+	"Importance Casual": "Wichtigkeit locker",
+	"Flow State":        "Flow",
+	"Fresh Eyes":        "Frischer Blick",
+	"High-Reactive: expect frequent shuffling as deadlines approach.":            "Sehr reaktiv: die Reihenfolge ändert sich häufig, je näher Fristen rücken.",
+	"Stable: tasks stay mostly in the order they were created.":                  "Stabil: Aufgaben bleiben meist in ihrer Erstellungsreihenfolge.",
+	"Balanced: equally weighs priorities, deadlines, and recent activity.":       "Ausgewogen: wichtet Priorität, Fristen und Aktivität gleich.",
+	"Mixed biases — score reflects your tuned weights.":                          "Gemischt — die Punktzahl folgt deinen eigenen Gewichten.",
+	"Tasks closest to their due date dominate the ranking.":                      "Aufgaben kurz vor der Frist bestimmen die Reihenfolge.",
+	"Due dates barely move the ranking.":                                         "Fälligkeiten bewegen die Reihenfolge kaum.",
+	"High priorities outweigh everything else.":                                  "Hohe Priorität schlägt alles andere.",
+	"Priority is treated as a hint, not a driver.":                               "Priorität gilt als Hinweis, nicht als Treiber.",
+	"Projects with recent activity dominate — ride the streak.":                  "Projekte mit frischer Aktivität dominieren — bleib in der Serie.",
+	"Recent activity barely moves the ranking; cold projects get equal footing.": "Frische Aktivität zählt kaum; ruhende Projekte sind gleichgestellt.",
+
+	// ── Bias levels (shown in the ‹ … › pickers) ──
+	"relaxed":  "gelassen",
+	"balanced": "ausgewogen",
+	"intense":  "intensiv",
+
+	// ── Keymap descriptions the footer and help overlay render ──
+	"jump to ends / page through list":          "an den Rand / seitenweise blättern",
+	"toggle this help":                          "diese Hilfe umschalten",
+	"add task (#tag due:date p:high @proj s:M)": "Aufgabe anlegen (#tag due:datum p:high @proj s:M)",
+	"add manual time entry":                     "Zeiteintrag von Hand",
+	"start/stop subtask timer":                  "Uhr der Teilaufgabe starten/stoppen",
+	"back to list":                              "zurück zur Liste",
+	"merge tags (Tags tab)":                     "Schlagwörter vereinen (Reiter Schlagwörter)",
+	"select entry":                              "Eintrag wählen",
+	"back":                                      "zurück",
+	"cycle activity range":                      "Zeitraum wechseln",
+	"change value / theme":                      "Wert / Farbschema ändern",
+	"set / clear due date":                      "Fälligkeit setzen / löschen",
+
+	// ── Help section titles ──
+	"Calendar": "Kalender",
+	"Stats":    "Statistik",
+
+	// ── Short labels (the terse footer hint on a narrow window) ──
+	"add":   "neu",
+	"done":  "fertig",
+	"track": "Zeit",
+	"del":   "weg",
+	"sort":  "Sort.",
 }
