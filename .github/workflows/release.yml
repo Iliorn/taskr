@@ -44,10 +44,20 @@ jobs:
       - name: Checksums
         run: sha256sum taskr taskr-linux-arm64 taskr.exe > SHA256SUMS
 
+      # A Scoop manifest and a PKGBUILD both pin a version and a checksum, so
+      # a copy kept by hand in the tree is stale the moment the next tag is
+      # pushed - and stale in the checksum, which is the part users trust.
+      # Generating them here from the binaries just built makes both correct
+      # by construction. The Scoop manifest ships as a release asset so
+      # `scoop install .../releases/latest/download/taskr.json` always points
+      # at the newest release without anything to bump.
+      - name: Package manifests
+        run: packaging/generate-packages.sh "${{ github.ref_name }}" .
+
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
           V: ${{ github.ref_name }}
         run: |
           gh release create "$V" --title "$V" --generate-notes \
-            taskr taskr-linux-arm64 taskr.exe SHA256SUMS
+            taskr taskr-linux-arm64 taskr.exe SHA256SUMS taskr.json PKGBUILD
