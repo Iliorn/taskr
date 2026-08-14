@@ -181,7 +181,7 @@ func writeServeState(now time.Time) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(serveStatePath(), b, 0600)
+	return writeFileAtomic(serveStatePath(), b, 0600)
 }
 
 // readServeState returns the recorded state; ok is false when no client has

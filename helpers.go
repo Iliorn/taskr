@@ -511,7 +511,7 @@ func notesFilePath(taskID string) string {
 }
 
 func writeNotesFile(taskID, content string) error {
-	return os.WriteFile(notesFilePath(taskID), []byte(content), 0644)
+	return writeFileAtomic(notesFilePath(taskID), []byte(content), 0644)
 }
 
 func readNotesFile(taskID string) (string, error) {

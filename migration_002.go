@@ -155,7 +155,7 @@ func writePreNormalizeBackup(tx *sql.Tx) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(path, body, 0644); err != nil {
+	if err := writeFileAtomic(path, body, 0644); err != nil {
 		return "", err
 	}
 	return path, nil

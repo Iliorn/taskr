@@ -101,7 +101,7 @@ func saveSyncConfig(c syncConfig) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(syncConfigPath(), b, 0600)
+	return writeFileAtomic(syncConfigPath(), b, 0600)
 }
 
 // syncState is the outcome of the last successful sync, persisted so `taskr sync
@@ -135,7 +135,7 @@ func writeSyncState(sum syncSummary) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(syncStatePath(), b, 0600)
+	return writeFileAtomic(syncStatePath(), b, 0600)
 }
 
 // readSyncState returns the last recorded sync outcome. ok is false (with a nil

@@ -20,7 +20,7 @@ func lastAddedPath() string {
 }
 
 func saveLastAddedID(id string) {
-	_ = os.WriteFile(lastAddedPath(), []byte(id+"\n"), 0o644)
+	_ = writeFileAtomic(lastAddedPath(), []byte(id+"\n"), 0o644)
 }
 
 func loadLastAddedID() string {

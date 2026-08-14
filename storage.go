@@ -137,7 +137,7 @@ func saveSettings(s appSettings) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(settingsPath(), data, 0644)
+	return writeFileAtomic(settingsPath(), data, 0644)
 }
 
 func ensureStorageDir() error {

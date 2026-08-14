@@ -133,5 +133,5 @@ func savePersistedUndoEntries(stack []undoEntry) error {
 		return err
 	}
 	// 0600 like settings/sync state — the file holds full task content.
-	return os.WriteFile(path, data, 0600)
+	return writeFileAtomic(path, data, 0600)
 }
