@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"time"
 
 	"taskr/todo"
@@ -375,4 +376,50 @@ func (s *Store) restoreFromUndo(entry undoEntry) {
 	for i := range entry.full {
 		s.add(entry.full[i])
 	}
+}
+
+// taskSetFingerprint hashes the identity+version of a task set: every ID with
+// its ModifiedAt and deletion stamp. Two sets with the same fingerprint are the
+// same set of task versions, whatever order they arrive in. It is deliberately
+// not a content hash — ModifiedAt is bumped by every mutation (StampModified),
+// so a version change always moves the fingerprint.
+func taskSetFingerprint(seq func(yield func(id string, modified, deleted time.Time))) uint64 {
+	// FNV-1a, folded commutatively (XOR of per-task hashes) so iteration order
+	// — a map on one side, a slice on the other — cannot change the result.
+	var acc uint64
+	seq(func(id string, modified, deleted time.Time) {
+		h := uint64(14695981039346656037)
+		mix := func(b []byte) {
+			for _, c := range b {
+				h ^= uint64(c)
+				h *= 1099511628211
+			}
+		}
+		mix([]byte(id))
+		var buf [16]byte
+		binary.LittleEndian.PutUint64(buf[0:8], uint64(modified.UnixNano()))
+		binary.LittleEndian.PutUint64(buf[8:16], uint64(deleted.UnixNano()))
+		mix(buf[:])
+		acc ^= h
+	})
+	return acc
+}
+
+// sameAsLoaded reports whether a freshly loaded task set holds exactly the task
+// versions the Store already has.
+func (s *Store) sameAsLoaded(loaded []todo.Todo) bool {
+	if len(loaded) != len(s.tasks) {
+		return false
+	}
+	mine := taskSetFingerprint(func(yield func(string, time.Time, time.Time)) {
+		for _, t := range s.tasks {
+			yield(t.ID, t.ModifiedAt, t.DeletedAt)
+		}
+	})
+	theirs := taskSetFingerprint(func(yield func(string, time.Time, time.Time)) {
+		for i := range loaded {
+			yield(loaded[i].ID, loaded[i].ModifiedAt, loaded[i].DeletedAt)
+		}
+	})
+	return mine == theirs
 }

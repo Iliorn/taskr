@@ -621,6 +621,11 @@ func startModelWatcher(m *model) {
 		return
 	}
 	state := newWatcherState()
+	// Startup already wrote to the database — initialModel resyncs the score
+	// column — and WAL flushes that write to disk after we start watching. Seed
+	// the self-write window so our own startup write doesn't come straight back
+	// as an external change and make the first keystroke pay for a reload.
+	state.recordSelfSave()
 	if stop, werr := startWatcher(state, filepath.Join(home, ".taskr")); werr == nil {
 		m.watcher = state
 		m.watcherStop = stop

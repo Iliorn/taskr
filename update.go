@@ -21,6 +21,10 @@ import (
 // mode and a watcher reload was deferred while they were typing, schedule
 // the reload now so the deferred external change isn't silently lost.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if traceCh != nil {
+		t0 := time.Now()
+		defer func() { lastUpdate, lastUpdateKind = time.Since(t0), msgKind(msg) }()
+	}
 	next, cmd := m.dispatch(msg)
 	n, ok := next.(model)
 	if !ok {
@@ -253,6 +257,18 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// pending tombstones the snapshot predates). Those local changes are
 		// newer than anything on disk — overlay them on the loaded set and
 		// carry the change set across so the scheduled save still flushes it.
+		// A reload the user cannot see is the common case, not the exception:
+		// the watcher fires on our own WAL writes, on a sync that merged
+		// nothing, on a checkpoint. Rebuilding the whole Store for those costs
+		// ~15ms at a couple of thousand tasks — on the Update goroutine, so it
+		// lands as a stutter on whatever key is pressed next. Compare a cheap
+		// fingerprint first and skip the swap when the snapshot says what we
+		// already have. Pending local changes make the snapshot stale by
+		// definition, so the guard only applies when there are none.
+		if len(m.dirtyIDs) == 0 && len(m.tombstones) == 0 && m.sameAsLoaded(msg.todos) {
+			return m, nil
+		}
+
 		taskID := m.currentTaskID()
 		undo := m.undoStack
 		dirtyIDs := m.dirtyIDs

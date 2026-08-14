@@ -18,6 +18,21 @@ belong in the commit log, not here — unless they change behaviour.
   `taskr learnings` used to provide now comes from. `taskr learnings` prints
   where the text went instead of silently opening the TUI.
 
+### Added
+
+- **`TASKR_TRACE=1`** writes a per-frame latency log to `~/.taskr/trace.log`:
+  wall clock, gap since the last frame, `Update` and `View` times, GC cycles,
+  and the message. Off unless asked for.
+
+### Fixed
+
+- **A stutter on the first keystroke, and again after a pause.** A filesystem
+  event on our own database write made the app reload and rebuild its whole
+  task set — about 15 ms at 2000 tasks, on the event loop, landing on whatever
+  key you pressed next. A reload that carries no new task versions is now
+  recognised and skipped (~1 ms), and the startup write no longer comes back as
+  an external change at all.
+
 ### Changed
 
 - **Search matches notes**, not just the title. Titles stay fuzzy; notes are

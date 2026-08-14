@@ -240,6 +240,12 @@ func projectTasksTitle(project string) string {
 // ── Top-level View ────────────────────────────────────────────────────────────
 
 func (m model) View() string {
+	// One trace line per frame, pairing this render with the Update that
+	// produced it (see trace.go). Nil channel = tracing off = one branch.
+	if traceCh != nil {
+		t0 := time.Now()
+		defer func() { traceFrame(lastUpdateKind, lastUpdate, time.Since(t0)) }()
+	}
 	m.ensureCache()
 	if m.mode == modeHelp {
 		return m.renderHelpFullscreen()

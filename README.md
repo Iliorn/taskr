@@ -278,6 +278,26 @@ device sync. Import **never replaces** the store — it folds the imported tasks
 so running `export | import` is always safe and importing the same file twice is a
 no-op. Both the versioned envelope and a legacy bare JSON array are accepted.
 
+### When something feels slow
+
+`TASKR_TRACE=1 taskr` writes one line per frame to `~/.taskr/trace.log`
+(`TASKR_TRACE=/path/to/file` picks another location). Each line carries the
+wall clock, the gap since the previous frame, how long `Update` and `View`
+took, the GC cycle count, and which message caused it:
+
+```
+# time                     gap_ms  update_ms  view_ms  gc  msg
+12:53:42.841      1.0      0.066    0.915   8  key down
+12:53:42.863     15.9      0.641    1.632   9  main.reloadedMsg
+```
+
+That separates the three things a delay can be: our own compute (`update_ms`
+or `view_ms` is large), a garbage collection (the frame is slow *and* `gc`
+moved), or everything outside the app — terminal, ssh, the input reader — in
+which case the frame is fast and the time sits in `gap_ms`. Tracing is off
+unless the variable is set, and a full buffer drops entries rather than
+slowing the loop.
+
 ## Data
 
 Tasks are stored in `~/.taskr/tasks.db` (SQLite, WAL mode). On first launch any legacy `~/.taskr/tasks.json` is imported into the new database and then left in place as a backup.

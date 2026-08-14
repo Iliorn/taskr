@@ -31,6 +31,11 @@ func main() {
 		os.Exit(code)
 	}
 
+	// Opt-in latency trace (TASKR_TRACE=1). Started before the model so the
+	// startup load is in the log too.
+	stopTrace := startTrace()
+	defer stopTrace()
+
 	m := initialModel(newSQLiteRepo())
 	// Live reload of out-of-process writes. Started here, not in initialModel:
 	// it holds a file descriptor, and only a running program wants one.
