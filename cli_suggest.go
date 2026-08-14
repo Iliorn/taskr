@@ -12,7 +12,7 @@ import (
 	"taskr/todo"
 )
 
-// taskr doctor mines the dependency structure the user already wrote down
+// taskr suggest mines the dependency structure the user already wrote down
 // implicitly and offers to make it explicit, one y/n at a time. Two sources:
 //
 //   - note refs: a task whose notes mention another pending task's id prefix
@@ -35,11 +35,11 @@ type depSuggestion struct {
 	evidence string
 }
 
-const doctorMaxSuggestions = 20
+const suggestMaxSuggestions = 20
 
-// doctorStopwords are title tokens too generic to signal relatedness even at
+// suggestStopwords are title tokens too generic to signal relatedness even at
 // four+ characters.
-var doctorStopwords = map[string]bool{
+var suggestStopwords = map[string]bool{
 	"with": true, "from": true, "into": true, "that": true, "this": true,
 	"then": true, "when": true, "make": true, "task": true, "tasks": true,
 	"after": true, "before": true, "update": true, "check": true, "the": true,
@@ -50,12 +50,12 @@ var doctorStopwords = map[string]bool{
 // first segment matches on its own because '-' is a word boundary.
 var noteRefPattern = regexp.MustCompile(`\b[0-9a-f]{8}\b`)
 
-func cliDoctor(args []string) int {
-	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+func cliSuggest(args []string) int {
+	fs := flag.NewFlagSet("suggest", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	listOnly := fs.Bool("list", false, "print the suggestions without prompting to link them")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: taskr doctor [--list]   suggest dependency links from note refs and related titles")
+		fmt.Fprintln(os.Stderr, "usage: taskr suggest [--list]   suggest dependency links from note refs and related titles")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -136,7 +136,7 @@ prompts:
 
 // collectDepSuggestions is the pure scan: note-ref matches first (highest
 // precision), then same-project title overlaps, deduped on the unordered
-// pair, capped at doctorMaxSuggestions.
+// pair, capped at suggestMaxSuggestions.
 func collectDepSuggestions(todos []todo.Todo) []depSuggestion {
 	var pending []*todo.Todo
 	for i := range todos {
@@ -170,11 +170,11 @@ func collectDepSuggestions(todos []todo.Todo) []depSuggestion {
 	var out []depSuggestion
 	add := func(s depSuggestion) bool {
 		if seen[pairKey(s.a, s.b)] {
-			return len(out) < doctorMaxSuggestions
+			return len(out) < suggestMaxSuggestions
 		}
 		seen[pairKey(s.a, s.b)] = true
 		out = append(out, s)
-		return len(out) < doctorMaxSuggestions
+		return len(out) < suggestMaxSuggestions
 	}
 
 	// Pass 1: id prefixes mentioned in notes.
@@ -270,7 +270,7 @@ func sharedTitleTokens(t1, t2 string) []string {
 		for _, w := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
 			return !('a' <= r && r <= 'z' || '0' <= r && r <= '9')
 		}) {
-			if len(w) >= 4 && !doctorStopwords[w] {
+			if len(w) >= 4 && !suggestStopwords[w] {
 				set[w] = true
 			}
 		}

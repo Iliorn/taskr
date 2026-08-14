@@ -106,3 +106,47 @@ func TestRealBuildInfoResolves(t *testing.T) {
 		t.Fatal("init() left appVersion empty")
 	}
 }
+
+func TestResolveVersionRejectsPseudoVersion(t *testing.T) {
+	// Go 1.24+ synthesises a pseudo-version from the commit when building
+	// from a checkout, so Main.Version is populated with something that
+	// looks like a release but is not one. Taking it at face value marked
+	// every local build as released and re-enabled self-update for it.
+	got := resolveVersion("dev", buildInfo("v1.31.1-0.20260814055711-7c41718316f8", map[string]string{
+		"vcs.revision": "7c41718316f8aaaabbbb",
+	}))
+	if got != "dev+7c41718" {
+		t.Fatalf("pseudo-version should degrade to the revision form, got %q", got)
+	}
+	if isReleaseVersion(got) {
+		t.Errorf("%q must not count as a release", got)
+	}
+}
+
+func TestResolveVersionRejectsDirtyPseudoVersion(t *testing.T) {
+	got := resolveVersion("dev", buildInfo("v1.31.1-0.20260814055711-7c41718316f8+dirty", map[string]string{
+		"vcs.revision": "7c41718316f8aaaabbbb",
+		"vcs.modified": "true",
+	}))
+	if got != "dev+7c41718-dirty" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestIsPseudoVersion(t *testing.T) {
+	for _, v := range []string{
+		"v0.0.0-20260814055711-7c41718316f8",
+		"v1.31.1-0.20260814055711-7c41718316f8",
+		"v1.31.1-0.20260814055711-7c41718316f8+dirty",
+	} {
+		if !isPseudoVersion(v) {
+			t.Errorf("%q should be recognised as a pseudo-version", v)
+		}
+	}
+	// Real releases, including prereleases, must not be mistaken for one.
+	for _, v := range []string{"v1.31.0", "v2.0.0-rc1", "v1.0.0-beta.2", ""} {
+		if isPseudoVersion(v) {
+			t.Errorf("%q is a real version, not a pseudo-version", v)
+		}
+	}
+}

@@ -8,6 +8,41 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Added
+
+- **`taskr doctor` now diagnoses the installation**: version, platform, data
+  directory, database size and SQLite integrity, schema version, settings and
+  keybinding problems, sync configuration and last sync, and the resolved
+  editor. It is the output to paste into a bug report, it never prints a sync
+  token, `--json` makes it machine-readable, and it exits non-zero when
+  something is actually broken.
+- **A version on the sync wire.** Client and server now agree on a protocol
+  version and refuse a payload they might misread, with a message naming which
+  side to upgrade. Clients from before this change keep working unchanged.
+- **Fuzz tests** for the quick-add, search, due-date and time-entry parsers,
+  with a bounded CI job that keeps mutating.
+
+### Changed
+
+- **`taskr doctor` was renamed to `taskr suggest`** for its old job — proposing
+  dependency links from note refs and related titles. Every other tool means
+  "diagnose my installation" by `doctor`, and the shell completions already
+  described it that way. If you scripted `taskr doctor --list`, it is now
+  `taskr suggest --list`.
+- **A build without an injected version now reports a real one.**
+  `go install github.com/Iliorn/taskr@latest` used to call itself `dev`
+  forever, which also made the update check announce a new release on every
+  single run. It now reports the module version, and a local build reports
+  `dev+<commit>`.
+
+### Fixed
+
+- **Config files are replaced atomically.** settings.json, sync.json,
+  sync-state.json, serve-state.json, the undo stack and task notes were written
+  by truncating the old file first, so a crash or a full disk mid-write left a
+  truncated file behind. A failed write now leaves the previous contents
+  intact.
+
 ## [1.31.0] - 2026-08-13
 
 ### Added

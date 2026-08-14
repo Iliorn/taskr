@@ -32,7 +32,7 @@ func isCLICommand(arg string) bool {
 		"show", "edit", "delete", "rm", "undelete", "comment",
 		"stats", "start", "stop", "log", "export", "import", "subtask",
 		"search", "tags", "projects", "learnings", "serve", "sync", "undo",
-		"doctor", "completion", "man", "help", "-h", "--help", "--version":
+		"doctor", "suggest", "completion", "man", "help", "-h", "--help", "--version":
 		return true
 	}
 	return false
@@ -56,7 +56,7 @@ func runCLI(args []string) int {
 // trigger an auto-sync afterward).
 func cliMutates(cmd string) bool {
 	switch cmd {
-	case "add", "done", "edit", "delete", "rm", "undelete", "comment", "start", "stop", "log", "subtask", "undo", "doctor", "import":
+	case "add", "done", "edit", "delete", "rm", "undelete", "comment", "start", "stop", "log", "subtask", "undo", "suggest", "import":
 		return true
 	}
 	return false
@@ -117,6 +117,8 @@ func dispatchCLI(args []string) int {
 		return cliMan(rest)
 	case "doctor":
 		return cliDoctor(rest)
+	case "suggest":
+		return cliSuggest(rest)
 	case "--version":
 		fmt.Println(appVersion)
 		return 0
@@ -2231,7 +2233,7 @@ Discovery:
   taskr learnings ["term"] [--json]    every learning across all tasks, newest first ("term" or
                                        --search filters by text, #tag by tag; --sort=alpha; learnings
                                        are added/edited on their task's detail pane)
-  taskr doctor [--list]                suggest dependency links from note refs + related titles (interactive)
+  taskr suggest [--list]               suggest dependency links from note refs + related titles (interactive)
 
 Tracking:
   taskr start <ref>                    start the time tracker, stopping any other task's timer first
@@ -2244,6 +2246,11 @@ Comments:
   taskr comment <ref> -                read comment text from stdin (for long/heredoc input)
   taskr comment <ref> --edit=N "text"  edit comment N (1-based)
   taskr comment <ref> --delete=N       delete comment N
+
+Diagnostics:
+  taskr doctor [--json]                report this installation's health — version, data directory,
+                                       database integrity, schema version, settings, sync and editor
+                                       (paste the output into a bug report; exits non-zero on a problem)
 
 Reporting / backup:
   taskr stats [--format=text|json|waybar]   one-line health summary (default text)

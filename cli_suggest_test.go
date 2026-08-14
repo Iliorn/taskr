@@ -8,7 +8,7 @@ import (
 	"taskr/todo"
 )
 
-func doctorTask(id, title, project, notes string, created time.Time) todo.Todo {
+func suggestTask(id, title, project, notes string, created time.Time) todo.Todo {
 	t := todo.New(title)
 	t.ID = id
 	t.Project = project
@@ -19,10 +19,10 @@ func doctorTask(id, title, project, notes string, created time.Time) todo.Todo {
 
 func TestCollectDepSuggestionsNoteRefs(t *testing.T) {
 	base := time.Now().Add(-time.Hour)
-	blocker := doctorTask("aaaa1111-0000-0000-0000-000000000000", "Header status line", "",
+	blocker := suggestTask("aaaa1111-0000-0000-0000-000000000000", "Header status line", "",
 		"Absorbs the toast task bbbb2222 and the glyph work.", base)
-	dependent := doctorTask("bbbb2222-0000-0000-0000-000000000000", "Toast kinds", "", "", base)
-	unrelated := doctorTask("cccc3333-0000-0000-0000-000000000000", "Water plants", "", "", base)
+	dependent := suggestTask("bbbb2222-0000-0000-0000-000000000000", "Toast kinds", "", "", base)
+	unrelated := suggestTask("cccc3333-0000-0000-0000-000000000000", "Water plants", "", "", base)
 
 	got := collectDepSuggestions([]todo.Todo{blocker, dependent, unrelated})
 	if len(got) != 1 {
@@ -40,10 +40,10 @@ func TestCollectDepSuggestionsNoteRefs(t *testing.T) {
 
 func TestCollectDepSuggestionsSkipsLinkedAndKin(t *testing.T) {
 	base := time.Now().Add(-time.Hour)
-	blocker := doctorTask("aaaa1111-0000-0000-0000-000000000000", "Base", "", "see bbbb2222 and dddd4444", base)
-	linked := doctorTask("bbbb2222-0000-0000-0000-000000000000", "Already linked", "", "", base)
+	blocker := suggestTask("aaaa1111-0000-0000-0000-000000000000", "Base", "", "see bbbb2222 and dddd4444", base)
+	linked := suggestTask("bbbb2222-0000-0000-0000-000000000000", "Already linked", "", "", base)
 	linked.Dependencies = []string{blocker.ID}
-	child := doctorTask("dddd4444-0000-0000-0000-000000000000", "Subtask", "", "", base)
+	child := suggestTask("dddd4444-0000-0000-0000-000000000000", "Subtask", "", "", base)
 	child.ParentID = blocker.ID
 
 	if got := collectDepSuggestions([]todo.Todo{blocker, linked, child}); len(got) != 0 {
@@ -53,11 +53,11 @@ func TestCollectDepSuggestionsSkipsLinkedAndKin(t *testing.T) {
 
 func TestCollectDepSuggestionsTitleOverlap(t *testing.T) {
 	base := time.Now().Add(-2 * time.Hour)
-	earlier := doctorTask("aaaa1111-0000-0000-0000-000000000000",
+	earlier := suggestTask("aaaa1111-0000-0000-0000-000000000000",
 		"Write TTRPG ruleset chapter", "ttrpg", "", base)
-	later := doctorTask("bbbb2222-0000-0000-0000-000000000000",
+	later := suggestTask("bbbb2222-0000-0000-0000-000000000000",
 		"Send TTRPG ruleset chapter to reviewers", "ttrpg", "", base.Add(time.Minute))
-	otherProj := doctorTask("cccc3333-0000-0000-0000-000000000000",
+	otherProj := suggestTask("cccc3333-0000-0000-0000-000000000000",
 		"TTRPG ruleset printing", "print-shop", "", base)
 
 	got := collectDepSuggestions([]todo.Todo{later, earlier, otherProj})
@@ -73,11 +73,11 @@ func TestCollectDepSuggestionsTitleOverlap(t *testing.T) {
 
 func TestCollectDepSuggestionsIgnoresDoneAndWeakOverlap(t *testing.T) {
 	base := time.Now().Add(-time.Hour)
-	done := doctorTask("aaaa1111-0000-0000-0000-000000000000", "Ship the release", "app", "", base)
+	done := suggestTask("aaaa1111-0000-0000-0000-000000000000", "Ship the release", "app", "", base)
 	done.Status = todo.Done
-	mentionsDone := doctorTask("bbbb2222-0000-0000-0000-000000000000", "Cleanup", "", "after aaaa1111 shipped", base)
-	oneShared := doctorTask("cccc3333-0000-0000-0000-000000000000", "Release notes draft", "app", "", base)
-	oneSharedPeer := doctorTask("dddd4444-0000-0000-0000-000000000000", "Release party", "app", "", base.Add(time.Minute))
+	mentionsDone := suggestTask("bbbb2222-0000-0000-0000-000000000000", "Cleanup", "", "after aaaa1111 shipped", base)
+	oneShared := suggestTask("cccc3333-0000-0000-0000-000000000000", "Release notes draft", "app", "", base)
+	oneSharedPeer := suggestTask("dddd4444-0000-0000-0000-000000000000", "Release party", "app", "", base.Add(time.Minute))
 
 	if got := collectDepSuggestions([]todo.Todo{done, mentionsDone, oneShared, oneSharedPeer}); len(got) != 0 {
 		t.Fatalf("suggestions = %+v, want none (done target, single shared token)", got)

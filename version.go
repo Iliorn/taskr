@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"runtime/debug"
 	"strings"
 )
@@ -62,9 +63,15 @@ func resolveVersion(ldflags string, info *debug.BuildInfo) string {
 	if info == nil {
 		return devVersion
 	}
-	// A module-proxy install records a real semver here. A build from a
-	// local directory records "(devel)", which carries no information.
-	if v := strings.TrimSpace(info.Main.Version); v != "" && v != "(devel)" {
+	// A module-proxy install records a real semver here. Two other things
+	// can land in the same field and neither is a release: an older
+	// toolchain writes "(devel)", and Go 1.24+ synthesises a pseudo-version
+	// like v1.31.1-0.20260814055711-7c41718316f8+dirty when building from a
+	// checkout. Taking that at face value marked every local build as a
+	// released version, which is exactly the confusion this file exists to
+	// remove — so both fall through to the revision branch below and come
+	// out in the one dev+<sha> shape.
+	if v := strings.TrimSpace(info.Main.Version); v != "" && v != "(devel)" && !isPseudoVersion(v) {
 		return v
 	}
 	var revision string
@@ -88,6 +95,17 @@ func resolveVersion(ldflags string, info *debug.BuildInfo) string {
 		v += "-dirty"
 	}
 	return v
+}
+
+// pseudoVersionSuffix matches the tail the module system appends when it
+// derives a version from a commit rather than a tag: a 14-digit UTC
+// timestamp and a 12-character revision, optionally marked "+dirty".
+// The separator before the timestamp is "-" for a commit with no earlier tag
+// (v0.0.0-<ts>-<rev>) and "." for one derived from a tag (v1.31.1-0.<ts>-<rev>).
+var pseudoVersionSuffix = regexp.MustCompile(`[-.][0-9]{14}-[0-9a-f]{12}(\+dirty)?$`)
+
+func isPseudoVersion(v string) bool {
+	return pseudoVersionSuffix.MatchString(v)
 }
 
 // isReleaseVersion reports whether the running binary identifies itself as a
