@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/metrics"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -81,7 +82,12 @@ func startTrace() (stop func()) {
 	go func() {
 		defer close(done)
 		w := bufio.NewWriter(f)
+		// Keep the durations so the session can end with numbers rather than a
+		// log to scroll: a percentile summary is what tells you whether the
+		// app was ever slow, and the per-frame lines are there to explain why.
+		var updates, views, gaps []time.Duration
 		defer func() {
+			writeTraceSummary(w, updates, views, gaps)
 			w.Flush()
 			f.Close()
 		}()
@@ -101,6 +107,11 @@ func startTrace() (stop func()) {
 					gap = float64(e.at.Sub(prev)) / float64(time.Millisecond)
 				}
 				prev = e.at
+				updates = append(updates, e.update)
+				views = append(views, e.view)
+				if gap > 0 {
+					gaps = append(gaps, time.Duration(gap*float64(time.Millisecond)))
+				}
 				fmt.Fprintf(w, "%s %8.1f %10.3f %8.3f %3d  %s\n",
 					e.at.Format("15:04:05.000"), gap,
 					float64(e.update)/float64(time.Millisecond),
@@ -160,4 +171,38 @@ func msgKind(msg tea.Msg) string {
 	default:
 		return fmt.Sprintf("%T", msg)
 	}
+}
+
+// writeTraceSummary closes a session with the distribution, so a report can be
+// five lines instead of a log. p95 rather than the mean: a stutter is a tail.
+func writeTraceSummary(w *bufio.Writer, updates, views, gaps []time.Duration) {
+	if len(updates) == 0 {
+		fmt.Fprintf(w, "# no frames recorded\n")
+		return
+	}
+	fmt.Fprintf(w, "# summary over %d frames (ms)\n", len(updates))
+	for _, row := range []struct {
+		name string
+		d    []time.Duration
+	}{{"update", updates}, {"view", views}, {"gap", gaps}} {
+		p50, p95, max := percentiles(row.d)
+		fmt.Fprintf(w, "#   %-7s p50 %7.3f   p95 %7.3f   max %7.3f\n",
+			row.name, ms(p50), ms(p95), ms(max))
+	}
+	fmt.Fprintf(w, "# if update and view are small and the delay is real, it is not the app's compute\n")
+}
+
+func ms(d time.Duration) float64 { return float64(d) / float64(time.Millisecond) }
+
+func percentiles(d []time.Duration) (p50, p95, max time.Duration) {
+	if len(d) == 0 {
+		return 0, 0, 0
+	}
+	sorted := append([]time.Duration(nil), d...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	at := func(q float64) time.Duration {
+		i := int(q * float64(len(sorted)-1))
+		return sorted[i]
+	}
+	return at(0.50), at(0.95), sorted[len(sorted)-1]
 }

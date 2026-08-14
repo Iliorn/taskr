@@ -40,7 +40,12 @@ func main() {
 	// Live reload of out-of-process writes. Started here, not in initialModel:
 	// it holds a file descriptor, and only a running program wants one.
 	startModelWatcher(&m)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	// The renderer paints on a ticker, so the frame rate is also the worst-case
+	// delay between a keystroke and seeing it. Bubble Tea's default is 60 FPS
+	// (up to ~17ms of waiting); 120 is its maximum and halves that. The frames
+	// themselves are line-diffed and small, so the extra ticks cost nothing
+	// when nothing changed.
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithFPS(120))
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

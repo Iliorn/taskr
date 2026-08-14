@@ -22,10 +22,14 @@ belong in the commit log, not here — unless they change behaviour.
 
 - **`TASKR_TRACE=1`** writes a per-frame latency log to `~/.taskr/trace.log`:
   wall clock, gap since the last frame, `Update` and `View` times, GC cycles,
-  and the message. Off unless asked for.
+  and the message, plus a percentile summary on quit. Off unless asked for.
 
 ### Fixed
 
+- **The renderer now paints at 120 FPS instead of 60.** Bubble Tea repaints on
+  a ticker, so the frame rate is also the worst case between pressing a key and
+  seeing it: ~17 ms became ~8 ms. Frames are line-diffed, so the extra ticks
+  cost nothing when nothing changed.
 - **A stutter on the first keystroke, and again after a pause.** A filesystem
   event on our own database write made the app reload and rebuild its whole
   task set — about 15 ms at 2000 tasks, on the event loop, landing on whatever

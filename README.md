@@ -291,6 +291,14 @@ took, the GC cycle count, and which message caused it:
 12:53:42.863     15.9      0.641    1.632   9  main.reloadedMsg
 ```
 
+Quitting writes a summary, which is usually the whole report:
+
+```
+# summary over 412 frames (ms)
+#   update  p50   0.090   p95   0.140   max   1.900
+#   view    p50   0.900   p95   1.300   max   4.100
+```
+
 That separates the three things a delay can be: our own compute (`update_ms`
 or `view_ms` is large), a garbage collection (the frame is slow *and* `gc`
 moved), or everything outside the app — terminal, ssh, the input reader — in

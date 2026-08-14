@@ -63,7 +63,8 @@ func TestTraceWritesFrames(t *testing.T) {
 		t.Fatalf("read trace: %v", err)
 	}
 	body := string(data)
-	for _, want := range []string{"key down", "reloadedMsg", "2.000", "15.000", "gap_ms"} {
+	for _, want := range []string{"key down", "reloadedMsg", "2.000", "15.000", "gap_ms",
+		"summary over 2 frames", "update  p50", "p95", "max"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("trace missing %q:\n%s", want, body)
 		}
