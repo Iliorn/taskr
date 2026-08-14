@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -23,8 +22,7 @@ import (
 // adapter instead of the row silently reappearing.
 
 func dbPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskr", "tasks.db")
+	return pathFor(pathData, "tasks.db")
 }
 
 var (

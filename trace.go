@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime/metrics"
 	"sort"
 	"strings"
@@ -54,11 +53,10 @@ func tracePath() string {
 	case "", "0", "false", "off":
 		return ""
 	case "1", "true", "on":
-		home, err := os.UserHomeDir()
-		if err != nil {
+		if _, err := ensureDir(pathState); err != nil {
 			return ""
 		}
-		return filepath.Join(home, ".taskr", "trace.log")
+		return pathFor(pathState, "trace.log")
 	}
 	return v
 }

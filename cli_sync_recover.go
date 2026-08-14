@@ -303,7 +303,7 @@ func reapplyDroppedEdit(logPath, ref string) int {
 // appendRecoveryMarker appends a "recovered" marker line to the log at path
 // so subsequent --recover listings skip this entry.
 func appendRecoveryMarker(path string, original syncLogEntry) error {
-	if err := ensureStorageDir(); err != nil {
+	if _, err := ensureDir(pathState); err != nil {
 		return err
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)

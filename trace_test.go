@@ -34,7 +34,7 @@ func TestTracePathForms(t *testing.T) {
 	}
 	for _, on := range []string{"1", "true", "on"} {
 		t.Setenv("TASKR_TRACE", on)
-		if got, want := tracePath(), filepath.Join(home, ".taskr", "trace.log"); got != want {
+		if got, want := tracePath(), filepath.Join(home, ".local", "state", "taskr", "trace.log"); got != want {
 			t.Errorf("TASKR_TRACE=%q → %q, want %q", on, got, want)
 		}
 	}

@@ -110,6 +110,23 @@ func diagnoseStorage() []diagnostic {
 	var out []diagnostic
 	dir := taskrDir()
 	out = append(out, diagnostic{Name: "data directory", Value: dir})
+	if usingLegacyLayout() {
+		out = append(out, diagnostic{
+			Name: "layout", Value: "legacy (~/" + legacyDirName + ")",
+			Detail: "kept because the directory exists; move it to switch to the XDG paths, or set TASKR_HOME",
+		})
+	} else if home := taskrHomeOverride(); home != "" {
+		out = append(out, diagnostic{Name: "layout", Value: "single directory (TASKR_HOME)"})
+	} else {
+		for _, k := range []struct {
+			name string
+			kind pathKind
+		}{{"config directory", pathConfig}, {"state directory", pathState}} {
+			if d, err := appDir(k.kind); err == nil {
+				out = append(out, diagnostic{Name: k.name, Value: d})
+			}
+		}
+	}
 
 	if info, err := os.Stat(dir); err != nil {
 		out = append(out, diagnostic{
@@ -399,5 +416,5 @@ func diagnoseLiveReload() diagnostic {
 			Detail: "another shell's changes appear on the next reload, not immediately",
 		}
 	}
-	return diagnostic{Name: "live reload", Value: "on", Detail: "watching ~/.taskr for changes from other processes"}
+	return diagnostic{Name: "live reload", Value: "on", Detail: "watching the data directory for changes from other processes"}
 }

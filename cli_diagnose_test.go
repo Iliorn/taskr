@@ -73,6 +73,7 @@ func TestDiagnosticsFlagsCorruptSettings(t *testing.T) {
 	if err := ensureStorageDir(); err != nil {
 		t.Fatal(err)
 	}
+	mustMkdirFor(t, settingsPath())
 	if err := os.WriteFile(settingsPath(), []byte("not json{{{"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +167,7 @@ func TestCliDoctorExitCodes(t *testing.T) {
 	if err := ensureStorageDir(); err != nil {
 		t.Fatal(err)
 	}
+	mustMkdirFor(t, settingsPath())
 	if err := os.WriteFile(settingsPath(), []byte("{{{"), 0644); err != nil {
 		t.Fatal(err)
 	}

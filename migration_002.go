@@ -140,11 +140,10 @@ func backfillNormalizedTables(tx *sql.Tx) error {
 // alongside the DB so a user can recover if a future migration drops the data
 // column. Returns the path written, or "" if no backup was needed/possible.
 func writePreNormalizeBackup(tx *sql.Tx) (string, error) {
-	home, err := os.UserHomeDir()
+	dir, err := appDir(pathData)
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".taskr")
 	if _, err := os.Stat(dir); err != nil {
 		return "", err
 	}

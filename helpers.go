@@ -505,10 +505,16 @@ func lookUpEditorCmd() string {
 // task's notes file. Task IDs are UUIDs, so it can never collide with one.
 const editorDraftKey = "__taskr_input_draft__"
 
+// notesFilePath is the scratch file $EDITOR is handed. It is cache, not data:
+// the notes themselves live in the database, and this copy exists only for the
+// seconds an editor is open.
 func notesFilePath(taskID string) string {
-	home, _ := os.UserHomeDir()
-	dir := filepath.Join(home, ".taskr", "notes")
-	_ = os.MkdirAll(dir, 0755)
+	dir, err := ensureDir(pathCache)
+	if err != nil {
+		return ""
+	}
+	dir = filepath.Join(dir, "notes")
+	_ = os.MkdirAll(dir, 0o755)
 	return filepath.Join(dir, taskID+".md")
 }
 

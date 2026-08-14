@@ -17,7 +17,7 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 - **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
 - **Projects** — group tasks, Gantt timeline view. `enter` drills into a project's tasks, where the task keys (`d` done, `t` track, `p` priority, `r` rename, `x` delete, `enter` details) all work; `a` starts a new task already in that project, `x` on the project row clears the grouping off its tasks
 - **Tags** — tag tasks, rename/merge/delete globally, and work the tag's tasks in place: `enter` drills into them with the same task keys as the Tasks tab, `a` adds a task already carrying the tag, `f` shows the tag's tasks on the Tasks tab as a filter
-- **Board** — kanban view of your pending tasks: one column per stage plus Done. Stage names are yours to define — edit them in Settings → "Board columns" (comma-separated), or in `"stages"` in `~/.taskr/settings.json`; default Backlog / In progress / Review. Renaming a column takes its cards with it. `←/→` switch columns, `H`/`L` move the selected card between stages — into Done completes the task exactly like `d` would, out of Done reopens it (confirmed). Also `taskr edit <ref> --stage <name>` from the CLI
+- **Board** — kanban view of your pending tasks: one column per stage plus Done. Stage names are yours to define — edit them in Settings → "Board columns" (comma-separated), or in `"stages"` in `settings.json` (see [Data](#data) for where that lives); default Backlog / In progress / Review. Renaming a column takes its cards with it. `←/→` switch columns, `H`/`L` move the selected card between stages — into Done completes the task exactly like `d` would, out of Done reopens it (confirmed). Also `taskr edit <ref> --stage <name>` from the CLI
 - **Stats** — productivity overview with an activity heatmap
 - **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
 - **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`), plus a live score breakdown so you can see why a task ranks where it does
@@ -128,7 +128,7 @@ On the Tags and Projects tabs, `enter` walks in one level at a time — row → 
 ### Custom keybindings
 
 Every binding carries an action id, so rebinding one is a line in
-`~/.taskr/settings.json`:
+`settings.json` — `~/.config/taskr/settings.json` on a new Linux install, `~/.taskr/settings.json` on an older one (`taskr doctor` prints the path):
 
 ```json
 {
@@ -238,9 +238,9 @@ title "milk" matches 2 tasks:
     2ffe832a  Buy more milk
 ```
 
-Flags can appear before or after the reference. `taskr top --json` and `taskr show --json` are the recommended hooks for scripts and other tools. The CLI reads the same `~/.taskr/settings.json` as the TUI, so ranking matches your current bias personality.
+Flags can appear before or after the reference. `taskr top --json` and `taskr show --json` are the recommended hooks for scripts and other tools. The CLI reads the same `settings.json` as the TUI, so ranking matches your current bias personality.
 
-The TUI and CLI share the SQLite store. Concurrent reads are safe; writes serialize via SQLite's busy-timeout. A running TUI watches `~/.taskr` and live-reloads when the CLI (or a sync from another device) mutates the database, so scripted changes show up without restarting — a reload is briefly deferred while you're mid-edit so it can't clobber in-flight input.
+The TUI and CLI share the SQLite store. Concurrent reads are safe; writes serialize via SQLite's busy-timeout. A running TUI watches the data directory and live-reloads when the CLI (or a sync from another device) mutates the database, so scripted changes show up without restarting — a reload is briefly deferred while you're mid-edit so it can't clobber in-flight input.
 
 ## Export / import
 
@@ -292,7 +292,7 @@ Because resize events only arrive on the polling path, the Windows build asks
 the console for its size four times a second instead.
 
 If input still feels laggy, try `TASKR_NO_WATCH=1 taskr`. The filesystem watcher is the only thing
-taskr does continuously against the operating system — a watch on `~/.taskr`
+taskr does continuously against the operating system — a watch on the data directory
 that wakes on every write, including the app's own — and it is the first
 variable worth removing. If that fixes it, the cost is in the watch (a synced
 or network home directory, an antivirus scanning the database on every write);
@@ -301,7 +301,7 @@ until it next reloads.
 
 If it doesn't, measure:
 
-`TASKR_TRACE=1 taskr` writes one line per frame to `~/.taskr/trace.log`
+`TASKR_TRACE=1 taskr` writes one line per frame to `trace.log` in the state directory
 (`TASKR_TRACE=/path/to/file` picks another location). Each line carries the
 wall clock, the gap since the previous frame, how long `Update` and `View`
 took, the GC cycle count, and which message caused it:
@@ -329,7 +329,30 @@ slowing the loop.
 
 ## Data
 
-Tasks are stored in `~/.taskr/tasks.db` (SQLite, WAL mode). On first launch any legacy `~/.taskr/tasks.json` is imported into the new database and then left in place as a backup.
+Tasks live in a SQLite database (WAL mode). Where it and the rest of taskr's
+files go depends on what it finds, in this order:
+
+1. **`TASKR_HOME`**, if set — everything in that one directory. For people who
+   would rather have a single path to back up than a tidy split.
+2. **`~/.taskr/`**, if that directory already exists — every version before
+   v1.32 put everything there, and it keeps working exactly as it did. Nothing
+   moves, nothing is migrated. Move the directory yourself if you want the
+   layout below.
+3. Otherwise the **platform convention**:
+
+| | Linux / BSD | macOS | Windows |
+|---|---|---|---|
+| Config — `settings.json`, `sync.json` | `$XDG_CONFIG_HOME`, default `~/.config/taskr` | `~/Library/Application Support/taskr` | `%APPDATA%\taskr` |
+| Data — `tasks.db` | `$XDG_DATA_HOME`, default `~/.local/share/taskr` | `~/Library/Application Support/taskr` | `%LOCALAPPDATA%\taskr` |
+| State — undo history, sync state, logs | `$XDG_STATE_HOME`, default `~/.local/state/taskr` | `~/Library/Application Support/taskr` | `%LOCALAPPDATA%\taskr` |
+| Cache — the `$EDITOR` scratch file | `$XDG_CACHE_HOME`, default `~/.cache/taskr` | `~/Library/Caches/taskr` | `%LOCALAPPDATA%\taskr` |
+
+An explicitly exported `XDG_*` variable wins on every platform, including macOS
+and Windows — if you set it, you meant it. `taskr doctor` prints the directories
+it resolved, which is the quickest way to see which of the three rules applied.
+
+On first launch a legacy `tasks.json` next to the database is imported and then
+left in place as a backup.
 
 ## Sync
 
@@ -350,7 +373,7 @@ taskr serve --listen 100.x.y.z:8765 --token "$(openssl rand -hex 32)"
 A token is **mandatory** — taskr refuses to run unauthenticated. `--listen`
 defaults to `127.0.0.1:8765`; bind to a Tailscale/LAN address (or put it behind a
 reverse proxy for TLS) to reach it from other devices. The server persists to its
-own `~/.taskr/tasks.db` and exposes:
+own `tasks.db` and exposes:
 
 - `POST /v1/sync` — full-snapshot sync (Bearer token)
 - `GET  /v1/health` — liveness check
@@ -365,7 +388,7 @@ To keep it running, wrap it in a `systemd --user` unit with the token in an
 taskr sync --url http://100.x.y.z:8765 --token "<token>" --save
 ```
 
-`--save` writes the URL + token to `~/.taskr/sync.json` so future syncs need no
+`--save` writes the URL + token to `sync.json` in the config directory so future syncs need no
 flags; `TASKR_SYNC_URL` / `TASKR_SYNC_TOKEN` work too. Once configured, the TUI
 auto-syncs (on launch/exit, on a periodic tick, and live via SSE), and CLI
 mutations sync best-effort in the background. Set `"auto_sync": false` in
@@ -382,7 +405,7 @@ Sync is UUID-keyed with last-writer-wins on scalars (by `ModifiedAt`), union of
 child collections (comments/time-entries) by UUID, and soft-delete
 tombstones so a deletion propagates instead of the row reappearing. Edit-vs-delete
 conflicts surface as a brief toast, and the losing version is appended to
-`~/.taskr/sync.log` for recovery. Clock-based LWW assumes roughly synced clocks
+`sync.log` in the state directory for recovery. Clock-based LWW assumes roughly synced clocks
 (NTP); only tasks sync, not `settings.json`.
 
 ## Contributing

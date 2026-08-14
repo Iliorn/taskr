@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -625,14 +624,14 @@ func watcherDisabled() bool {
 func startModelWatcher(m *model) {
 	// TASKR_NO_WATCH turns live reload off. The watcher is the one thing taskr
 	// does continuously against the operating system — an inotify/kqueue watch
-	// on ~/.taskr, woken by every WAL write the app itself makes — so when
+	// on the data directory, woken by every WAL write the app itself makes — so when
 	// input feels laggy it is the first variable worth removing. Without it,
 	// the TUI simply won't notice a `taskr add` from another shell until it
 	// next reloads.
 	if watcherDisabled() {
 		return
 	}
-	home, err := os.UserHomeDir()
+	dir, err := appDir(pathData)
 	if err != nil {
 		return
 	}
@@ -642,7 +641,7 @@ func startModelWatcher(m *model) {
 	// the self-write window so our own startup write doesn't come straight back
 	// as an external change and make the first keystroke pay for a reload.
 	state.recordSelfSave()
-	if stop, werr := startWatcher(state, filepath.Join(home, ".taskr")); werr == nil {
+	if stop, werr := startWatcher(state, dir); werr == nil {
 		m.watcher = state
 		m.watcherStop = stop
 	}

@@ -4,23 +4,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"taskr/todo"
 )
 
+// getStoragePath is the legacy JSON file, kept only as the first-run import
+// source. It sits with the database: it *was* the database.
 func getStoragePath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskr", "tasks.json")
+	return pathFor(pathData, "tasks.json")
 }
 
-// taskrDir is the storage directory (~/.taskr) holding tasks.db, settings, and
-// sync state.
+// taskrDir is the directory holding tasks.db — what the filesystem watcher
+// watches and what the doctor reports as the data directory.
 func taskrDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskr")
+	dir, _ := appDir(pathData)
+	return dir
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
@@ -104,8 +104,7 @@ func biasesFromSettings(s appSettings) biases {
 }
 
 func settingsPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskr", "settings.json")
+	return pathFor(pathConfig, "settings.json")
 }
 
 // loadSettings reads ~/.taskr/settings.json and applies any schema migration.
@@ -137,13 +136,16 @@ func saveSettings(s appSettings) error {
 	if err != nil {
 		return err
 	}
+	if _, err := ensureDir(pathConfig); err != nil {
+		return err
+	}
 	return writeFileAtomic(settingsPath(), data, 0644)
 }
 
+// ensureStorageDir creates the data directory (the database's home).
 func ensureStorageDir() error {
-	path := getStoragePath()
-	dir := filepath.Dir(path)
-	return os.MkdirAll(dir, 0755)
+	_, err := ensureDir(pathData)
+	return err
 }
 
 // currentTaskFileVersion is the schema version stamped into newly written task

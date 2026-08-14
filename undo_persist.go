@@ -39,8 +39,7 @@ type persistedUndoEntry struct {
 }
 
 func undoPersistPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskr", undoPersistFile)
+	return pathFor(pathState, undoPersistFile)
 }
 
 func isPersistedDelete(desc string) bool {

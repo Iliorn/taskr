@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"taskr/tasksync"
@@ -65,8 +64,7 @@ func maybeAutoSyncCLI() {
 }
 
 func syncConfigPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskr", "sync.json")
+	return pathFor(pathConfig, "sync.json")
 }
 
 // loadSyncConfigFile reads ~/.taskr/sync.json alone, no env overlay. This is
@@ -94,7 +92,7 @@ func loadSyncConfig() syncConfig {
 }
 
 func saveSyncConfig(c syncConfig) error {
-	if err := ensureStorageDir(); err != nil {
+	if _, err := ensureDir(pathConfig); err != nil {
 		return err
 	}
 	b, err := json.MarshalIndent(c, "", "  ")
@@ -115,14 +113,13 @@ type syncState struct {
 }
 
 func syncStatePath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskr", "sync-state.json")
+	return pathFor(pathState, "sync-state.json")
 }
 
 // writeSyncState records the outcome of a successful sync. Best-effort — callers
 // ignore its error, since failing to note status must never fail the sync.
 func writeSyncState(sum syncSummary) error {
-	if err := ensureStorageDir(); err != nil {
+	if _, err := ensureDir(pathState); err != nil {
 		return err
 	}
 	st := syncState{
@@ -387,8 +384,7 @@ func countLive(ts []todo.Todo) int {
 }
 
 func syncLogPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskr", "sync.log")
+	return pathFor(pathState, "sync.log")
 }
 
 // syncLogMaxBytes caps ~/.taskr/sync.log growth: past this size the file is
@@ -403,7 +399,7 @@ func logDroppedEdits(dropped []todo.Todo) error {
 	if len(dropped) == 0 {
 		return nil
 	}
-	if err := ensureStorageDir(); err != nil {
+	if _, err := ensureDir(pathState); err != nil {
 		return err
 	}
 	if fi, err := os.Stat(syncLogPath()); err == nil && fi.Size() > syncLogMaxBytes {

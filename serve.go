@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -169,12 +168,11 @@ type serveState struct {
 }
 
 func serveStatePath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskr", "serve-state.json")
+	return pathFor(pathState, "serve-state.json")
 }
 
 func writeServeState(now time.Time) error {
-	if err := ensureStorageDir(); err != nil {
+	if _, err := ensureDir(pathState); err != nil {
 		return err
 	}
 	b, err := json.MarshalIndent(serveState{LastClientSync: now.UTC()}, "", "  ")

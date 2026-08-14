@@ -17,6 +17,18 @@ belong in the commit log, not here — unless they change behaviour.
   `SHA256SUMS`, no entry for this platform, a mismatch — installs nothing and
   says why. This is an integrity check, not a signature.
 
+### Changed
+
+- **Files follow platform conventions instead of one dot-directory.** A new
+  install puts config in `$XDG_CONFIG_HOME/taskr`, the database in
+  `$XDG_DATA_HOME/taskr`, undo/sync state and logs in `$XDG_STATE_HOME/taskr`
+  and the editor scratch file in `$XDG_CACHE_HOME/taskr` — `%APPDATA%` /
+  `%LOCALAPPDATA%` on Windows, `~/Library/Application Support` on macOS, and an
+  explicitly exported `XDG_*` variable wins everywhere. **An existing
+  `~/.taskr` keeps being used exactly as before**: nothing moves, nothing is
+  migrated. `TASKR_HOME` puts everything back in one directory, and
+  `taskr doctor` prints what it resolved.
+
 ### Removed
 
 - **Learnings.** A second free-text list beside notes and comments, with its own

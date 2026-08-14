@@ -31,6 +31,15 @@ func TestMain(m *testing.M) {
 	testHome = tmp
 	os.Setenv("HOME", tmp)
 	os.Setenv("USERPROFILE", tmp) // os.UserHomeDir on Windows
+	// Paths now resolve through XDG (paths.go), and an XDG_* variable exported
+	// in the developer's shell is absolute — it would send the whole suite to
+	// the real ~/.local/share while HOME pointed somewhere harmless. Redirect
+	// them into the temp home rather than unsetting them, so the XDG branch is
+	// what the tests actually exercise.
+	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"} {
+		os.Unsetenv(v)
+	}
+	os.Unsetenv("TASKR_HOME")
 	code := m.Run()
 	os.RemoveAll(tmp)
 	os.Exit(code)
@@ -46,6 +55,12 @@ func setTestHome(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("HOME", dir)
 	t.Setenv("USERPROFILE", dir)
+	// Same reason TestMain clears these: an absolute XDG_* or TASKR_HOME would
+	// override the home this function just redirected, and the test would write
+	// outside its own directory.
+	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "TASKR_HOME"} {
+		t.Setenv(v, "")
+	}
 }
 
 // The redirect is load-bearing: if it silently stops working on some platform,
@@ -63,7 +78,14 @@ func TestStorageStaysInsideTheTestHome(t *testing.T) {
 		t.Fatalf("os.UserHomeDir() = %q, want the temp home %q — on %s it reads a variable TestMain does not set",
 			home, testHome, runtime.GOOS)
 	}
-	for _, path := range []string{taskrDir(), dbPath(), getStoragePath(), settingsPath()} {
+	// Every path the app can write, not just the database: config, state and
+	// cache resolve through different roots now, and each is a way out of the
+	// temp home if the redirect misses one.
+	for _, path := range []string{
+		taskrDir(), dbPath(), getStoragePath(), settingsPath(),
+		syncConfigPath(), syncStatePath(), syncLogPath(), serveStatePath(),
+		undoPersistPath(), lastAddedPath(), notesFilePath("some-task-id"),
+	} {
 		if !strings.HasPrefix(path, testHome+string(filepath.Separator)) {
 			t.Errorf("%q is outside the test home %q", path, testHome)
 		}
@@ -93,5 +115,15 @@ func TestNoBareHomeRedirectsInTests(t *testing.T) {
 			t.Errorf(`%s redirects HOME directly — use setTestHome(t, dir), which also sets `+
 				`USERPROFILE so the redirect works on Windows`, e.Name())
 		}
+	}
+}
+
+// mustMkdirFor creates the directory a path lives in. Tests that write one of
+// taskr's files directly need it now that config, data and state resolve to
+// three different directories, only one of which the app creates eagerly.
+func mustMkdirFor(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir for %s: %v", path, err)
 	}
 }

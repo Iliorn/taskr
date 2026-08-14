@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -15,11 +14,13 @@ import (
 // both ends — a missing file just means "nothing to chain to yet".
 
 func lastAddedPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".taskr", "last-added")
+	return pathFor(pathState, "last-added")
 }
 
 func saveLastAddedID(id string) {
+	if _, err := ensureDir(pathState); err != nil {
+		return
+	}
 	_ = writeFileAtomic(lastAddedPath(), []byte(id+"\n"), 0o644)
 }
 
