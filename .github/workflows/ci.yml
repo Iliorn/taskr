@@ -58,6 +58,28 @@ jobs:
           GOOS=darwin  GOARCH=arm64 go build -o /dev/null .
           GOOS=darwin  GOARCH=amd64 go build -o /dev/null .
 
+  # The parsers take free-form user text (quick-add, search, dates, time
+  # entries) and hand back structs the rest of the app trusts. The seed
+  # corpus already runs as ordinary unit tests in the `test` job; this job
+  # spends a bounded amount of time actually mutating, so the fuzz targets
+  # keep finding things instead of quietly rotting into seed-only tests.
+  # Failures write the crasher to testdata/fuzz/ — commit it with the fix.
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Fuzz the parsers
+        run: |
+          for target in FuzzParseQuickAdd FuzzParseDueDate FuzzCompileSearch \
+                        FuzzParseEntryEdit FuzzParseManualEntry FuzzParseClockOn; do
+            echo "::group::$target"
+            go test -run="$target" -fuzz="$target" -fuzztime=30s .
+            echo "::endgroup::"
+          done
+
   lint:
     runs-on: ubuntu-latest
     steps:
