@@ -93,7 +93,7 @@ Download the latest release from the [Releases](https://github.com/iliorn/taskr/
 
 Verify a download with `sha256sum --check --ignore-missing SHA256SUMS`.
 
-On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. On Linux and Windows, self-update (Settings tab → "Update to latest release") downloads the release asset straight from the GitHub API — no extra tooling required. macOS and other Homebrew installations are pointed at `brew upgrade taskr` instead, since the binary there is a managed file.
+On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. On Linux and Windows, self-update (Settings tab → "Update to latest release") downloads the release asset straight from the GitHub API — no extra tooling required — and verifies its SHA-256 against the `SHA256SUMS` published with the release before installing it. It fails closed: a release without that file, without an entry for your platform's binary, or a download that hashes to something else installs nothing. (That is an integrity check, not a signature — it catches a truncated download or a proxy rewriting the response, not someone who can edit the release itself.) macOS and other Homebrew installations are pointed at `brew upgrade taskr` instead, since the binary there is a managed file.
 
 ## Usage
 

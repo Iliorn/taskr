@@ -8,6 +8,15 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Security
+
+- **Self-update now verifies what it downloads.** Every release publishes a
+  `SHA256SUMS` file; until now the update button ignored it and installed the
+  binary unchecked. The download is hashed as it is written and compared
+  against the published checksum, and anything that cannot be verified — no
+  `SHA256SUMS`, no entry for this platform, a mismatch — installs nothing and
+  says why. This is an integrity check, not a signature.
+
 ### Removed
 
 - **Learnings.** A second free-text list beside notes and comments, with its own

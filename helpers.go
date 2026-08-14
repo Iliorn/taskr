@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -907,11 +909,7 @@ func selfUpdate() error {
 	if err != nil {
 		return err
 	}
-	asset, err := findReleaseAsset(info, assetName)
-	if err != nil {
-		return err
-	}
-	if err := downloadReleaseAsset(asset, tmpFile); err != nil {
+	if err := downloadVerifiedAsset(info, assetName, tmpFile); err != nil {
 		return err
 	}
 
@@ -1062,39 +1060,122 @@ func findReleaseAsset(info releaseInfo, name string) (releaseAsset, error) {
 
 // downloadReleaseAsset streams the asset to dst. It writes through a temp file
 // the caller owns, so a truncated download never lands on the binary.
-func downloadReleaseAsset(asset releaseAsset, dst string) error {
+// downloadReleaseAsset writes an asset to dst and returns the SHA-256 of the
+// bytes it actually wrote, hashed as they stream past so the check can never
+// read a different file than the one that was installed.
+func downloadReleaseAsset(asset releaseAsset, dst string) (digest string, err error) {
 	req, err := http.NewRequest(http.MethodGet, asset.URL, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("User-Agent", "taskr/"+appVersion)
 
 	resp, err := (&http.Client{Timeout: releaseDownloadTimeout}).Do(req)
 	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
+		return "", fmt.Errorf("download failed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed: github.com returned %s", resp.Status)
+		return "", fmt.Errorf("download failed: github.com returned %s", resp.Status)
 	}
 
 	f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
 	if err != nil {
-		return err
+		return "", err
 	}
-	written, err := io.Copy(f, io.LimitReader(resp.Body, maxReleaseAssetBytes))
+	sum := sha256.New()
+	written, err := io.Copy(io.MultiWriter(f, sum), io.LimitReader(resp.Body, maxReleaseAssetBytes))
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
-		return fmt.Errorf("download failed: %w", err)
+		return "", fmt.Errorf("download failed: %w", err)
 	}
 	if written == 0 {
-		return fmt.Errorf("download failed: the asset was empty")
+		return "", fmt.Errorf("download failed: the asset was empty")
 	}
 	if written == maxReleaseAssetBytes {
-		return fmt.Errorf("download failed: the asset is larger than the %d MB cap",
+		return "", fmt.Errorf("download failed: the asset is larger than the %d MB cap",
 			maxReleaseAssetBytes/(1024*1024))
+	}
+	return hex.EncodeToString(sum.Sum(nil)), nil
+}
+
+// ── Update integrity ─────────────────────────────────────────────────────────
+//
+// Every release carries a SHA256SUMS asset listing the checksum of each binary.
+// The update path refuses to install anything it has not checked against it.
+// This is an integrity check, not a signature: it proves the bytes that landed
+// on disk are the bytes the release lists, which covers a truncated download, a
+// proxy rewriting the response and a mirror serving something stale. It does
+// not defend against someone who can edit the release itself — that needs a
+// signature and a key to check it against, which is a separate decision about
+// key distribution.
+
+const sha256SumsAsset = "SHA256SUMS"
+
+// checksumFor pulls one asset's expected digest out of a sha256sum(1) listing:
+// lines of "<hex>  <name>", where GNU coreutils marks binary mode with a "*"
+// before the name.
+func checksumFor(sums []byte, assetName string) (string, error) {
+	for _, line := range strings.Split(string(sums), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		name := strings.TrimPrefix(fields[1], "*")
+		if name != assetName {
+			continue
+		}
+		digest := strings.ToLower(fields[0])
+		if len(digest) != sha256.Size*2 {
+			return "", fmt.Errorf("%s lists a malformed checksum for %s", sha256SumsAsset, assetName)
+		}
+		if _, err := hex.DecodeString(digest); err != nil {
+			return "", fmt.Errorf("%s lists a malformed checksum for %s", sha256SumsAsset, assetName)
+		}
+		return digest, nil
+	}
+	return "", fmt.Errorf("%s does not list %s", sha256SumsAsset, assetName)
+}
+
+// downloadVerifiedAsset downloads assetName into dst and installs nothing
+// unless its checksum matches the release's SHA256SUMS. It fails closed: a
+// release without that asset, or without an entry for this platform's binary,
+// is not something to install blind.
+func downloadVerifiedAsset(info releaseInfo, assetName, dst string) error {
+	sumsAsset, err := findReleaseAsset(info, sha256SumsAsset)
+	if err != nil {
+		return fmt.Errorf("release %s publishes no %s, so the download cannot be verified — "+
+			"install it manually from https://github.com/%s/releases", info.TagName, sha256SumsAsset, releaseRepo)
+	}
+	sumsPath := dst + "." + sha256SumsAsset
+	if _, err := downloadReleaseAsset(sumsAsset, sumsPath); err != nil {
+		return fmt.Errorf("could not fetch %s: %w", sha256SumsAsset, err)
+	}
+	sums, err := os.ReadFile(sumsPath)
+	if err != nil {
+		return fmt.Errorf("could not read %s: %w", sha256SumsAsset, err)
+	}
+	want, err := checksumFor(sums, assetName)
+	if err != nil {
+		return err
+	}
+
+	asset, err := findReleaseAsset(info, assetName)
+	if err != nil {
+		return err
+	}
+	got, err := downloadReleaseAsset(asset, dst)
+	if err != nil {
+		return err
+	}
+	if !strings.EqualFold(got, want) {
+		// Remove the staged file rather than leave a binary that failed its
+		// check sitting on disk for something else to pick up.
+		_ = os.Remove(dst)
+		return fmt.Errorf("checksum mismatch for %s: the release lists %s but the download hashed to %s — refusing to install",
+			assetName, want[:16]+"…", got[:16]+"…")
 	}
 	return nil
 }

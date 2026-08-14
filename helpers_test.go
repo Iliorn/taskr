@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"strings"
 	"testing"
 	"time"
@@ -1131,8 +1132,14 @@ func TestDownloadReleaseAsset(t *testing.T) {
 	defer srv.Close()
 
 	dst := filepath.Join(t.TempDir(), "taskr")
-	if err := downloadReleaseAsset(releaseAsset{Name: "taskr", URL: srv.URL + "/taskr"}, dst); err != nil {
+	digest, err := downloadReleaseAsset(releaseAsset{Name: "taskr", URL: srv.URL + "/taskr"}, dst)
+	if err != nil {
 		t.Fatalf("downloadReleaseAsset: %v", err)
+	}
+	// The digest is what the integrity check compares, so it has to be of the
+	// bytes that landed on disk.
+	if want := fmt.Sprintf("%x", sha256.Sum256([]byte(payload))); digest != want {
+		t.Errorf("digest = %s, want %s", digest, want)
 	}
 	got, err := os.ReadFile(dst)
 	if err != nil || string(got) != payload {
@@ -1148,10 +1155,10 @@ func TestDownloadReleaseAsset(t *testing.T) {
 		t.Errorf("mode = %v, want the executable bits set", info.Mode().Perm())
 	}
 
-	if err := downloadReleaseAsset(releaseAsset{URL: srv.URL + "/missing"}, dst); err == nil {
+	if _, err := downloadReleaseAsset(releaseAsset{URL: srv.URL + "/missing"}, dst); err == nil {
 		t.Error("a 404 should not be reported as a successful download")
 	}
-	if err := downloadReleaseAsset(releaseAsset{URL: srv.URL + "/empty"}, dst); err == nil {
+	if _, err := downloadReleaseAsset(releaseAsset{URL: srv.URL + "/empty"}, dst); err == nil {
 		t.Error("an empty body should not be installed over the binary")
 	}
 }
@@ -1180,4 +1187,107 @@ func TestResolveEditorCmdHonoursAChangedEditor(t *testing.T) {
 	if got := resolveEditorCmd(); got == self {
 		t.Error("a stale cache answered with the previous $EDITOR after it changed")
 	}
+}
+
+// ── Update integrity ─────────────────────────────────────────────────────────
+
+func TestChecksumForParsesSha256sumOutput(t *testing.T) {
+	sums := []byte(
+		"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  taskr\n" +
+			"a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00 *taskr.exe\n" +
+			"\n" +
+			"not a checksum line\n")
+
+	got, err := checksumFor(sums, "taskr")
+	if err != nil || got != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
+		t.Errorf("taskr → %q, %v", got, err)
+	}
+	// GNU coreutils marks binary mode with a leading '*' on the name.
+	if got, err := checksumFor(sums, "taskr.exe"); err != nil || got == "" {
+		t.Errorf("binary-mode entry not found: %q, %v", got, err)
+	}
+	if _, err := checksumFor(sums, "taskr-linux-arm64"); err == nil {
+		t.Error("an asset with no entry must be an error, not an empty checksum")
+	}
+	// A truncated or non-hex digest is corruption, not a match to compare.
+	for _, bad := range []string{"abc123  taskr\n", "zzzz0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  taskr\n"} {
+		if _, err := checksumFor([]byte(bad), "taskr"); err == nil {
+			t.Errorf("malformed line %q was accepted", bad)
+		}
+	}
+}
+
+// The update path must refuse anything it cannot check: a release with no
+// SHA256SUMS, an asset missing from it, or bytes that hash to something else.
+func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
+	const payload = "#!/bin/sh\necho taskr\n"
+	good := fmt.Sprintf("%x", sha256.Sum256([]byte(payload)))
+
+	var sumsBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/taskr":
+			fmt.Fprint(w, payload)
+		case "/sums":
+			fmt.Fprint(w, sumsBody)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	release := func(withSums bool) releaseInfo {
+		info := releaseInfo{TagName: "v9.9.9", Assets: []releaseAsset{
+			{Name: "taskr", URL: srv.URL + "/taskr"},
+		}}
+		if withSums {
+			info.Assets = append(info.Assets, releaseAsset{Name: sha256SumsAsset, URL: srv.URL + "/sums"})
+		}
+		return info
+	}
+
+	t.Run("matching checksum installs", func(t *testing.T) {
+		sumsBody = good + "  taskr\n"
+		dst := filepath.Join(t.TempDir(), "taskr")
+		if err := downloadVerifiedAsset(release(true), "taskr", dst); err != nil {
+			t.Fatalf("a matching checksum should verify: %v", err)
+		}
+		if b, err := os.ReadFile(dst); err != nil || string(b) != payload {
+			t.Errorf("staged file = %q (%v), want the payload", b, err)
+		}
+	})
+
+	t.Run("mismatched checksum refuses and removes the file", func(t *testing.T) {
+		sumsBody = strings.Repeat("a", 64) + "  taskr\n"
+		dst := filepath.Join(t.TempDir(), "taskr")
+		err := downloadVerifiedAsset(release(true), "taskr", dst)
+		if err == nil {
+			t.Fatal("a mismatched checksum was installed")
+		}
+		if !strings.Contains(err.Error(), "checksum mismatch") {
+			t.Errorf("error = %v, want it to name the mismatch", err)
+		}
+		if _, statErr := os.Stat(dst); statErr == nil {
+			t.Error("the rejected binary was left on disk")
+		}
+	})
+
+	t.Run("a release without SHA256SUMS is refused", func(t *testing.T) {
+		dst := filepath.Join(t.TempDir(), "taskr")
+		err := downloadVerifiedAsset(release(false), "taskr", dst)
+		if err == nil {
+			t.Fatal("an unverifiable release was installed")
+		}
+		if !strings.Contains(err.Error(), sha256SumsAsset) {
+			t.Errorf("error = %v, want it to say what is missing", err)
+		}
+	})
+
+	t.Run("SHA256SUMS without this asset is refused", func(t *testing.T) {
+		sumsBody = good + "  some-other-binary\n"
+		dst := filepath.Join(t.TempDir(), "taskr")
+		if err := downloadVerifiedAsset(release(true), "taskr", dst); err == nil {
+			t.Fatal("an asset with no published checksum was installed")
+		}
+	})
 }
