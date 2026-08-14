@@ -30,6 +30,14 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Fixed
 
+- **Windows input latency.** A keystroke after a pause waited up to 16 ms to be
+  noticed: Bubble Tea reads the Windows console by polling it with a 16 ms
+  sleep between attempts, and a burst of keys spins the loop instead of
+  sleeping — the first key felt late, the rest did not. taskr now opens
+  `CONIN$` as its own file, which selects a blocking read of the console's
+  escape-sequence stream and returns the moment a key arrives.
+  `TASKR_WIN_CONSOLE_INPUT=1` restores the old reader; the Windows build polls
+  the console size four times a second, since resize events only came with it.
 - **The first frame is rendered before the program starts.** Building every
   derived cache and filling the string-builder pool used to happen on the first
   keystroke of a session.

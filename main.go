@@ -49,7 +49,12 @@ func main() {
 	// (up to ~17ms of waiting); 120 is its maximum and halves that. The frames
 	// themselves are line-diffed and small, so the extra ticks cost nothing
 	// when nothing changed.
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithFPS(120))
+	opts := append([]tea.ProgramOption{tea.WithAltScreen(), tea.WithFPS(120)}, inputProgramOptions()...)
+	p := tea.NewProgram(m, opts...)
+	// Windows reads the console through its own file, which costs the resize
+	// events the console-event reader would have delivered; see input.go.
+	stopResize := startResizePoller(p)
+	defer stopResize()
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

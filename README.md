@@ -280,7 +280,18 @@ no-op. Both the versioned envelope and a legacy bare JSON array are accepted.
 
 ### When something feels slow
 
-First, try `TASKR_NO_WATCH=1 taskr`. The filesystem watcher is the only thing
+**On Windows**, a keystroke arriving after a pause used to wait up to 16 ms
+before taskr heard about it: Bubble Tea reads the console by polling it in a
+loop with a 16 ms sleep between attempts, and during a burst the loop spins
+instead of sleeping — so the first key felt late and the rest did not. taskr
+now opens `CONIN$` as its own file, which selects Bubble Tea's other input
+path: a blocking read of the console's escape-sequence stream that returns the
+moment a key arrives. `TASKR_WIN_CONSOLE_INPUT=1` goes back to the polling
+reader if the escape-sequence path ever misbehaves on a particular console.
+Because resize events only arrive on the polling path, the Windows build asks
+the console for its size four times a second instead.
+
+If input still feels laggy, try `TASKR_NO_WATCH=1 taskr`. The filesystem watcher is the only thing
 taskr does continuously against the operating system — a watch on `~/.taskr`
 that wakes on every write, including the app's own — and it is the first
 variable worth removing. If that fixes it, the cost is in the watch (a synced

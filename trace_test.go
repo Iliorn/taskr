@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -121,5 +122,33 @@ func TestNoWatchEnvDisablesTheWatcher(t *testing.T) {
 			t.Errorf("TASKR_NO_WATCH=%q disabled live reload, want it on", v)
 		}
 		m.closeWatcher()
+	}
+}
+
+// The doctor names the input path because on Windows there are two, and which
+// one is in use is the difference between a keystroke waiting on a 16ms poll
+// and one that doesn't. Off Windows there is only the one.
+func TestInputPathIsNamedAndSwitchable(t *testing.T) {
+	t.Setenv("TASKR_WIN_CONSOLE_INPUT", "")
+	if consoleInputForced() {
+		t.Error("the console-input override defaulted to on")
+	}
+	if inputPathName() == "" {
+		t.Error("the doctor would print an empty input path")
+	}
+	for _, v := range []string{"1", "true", "yes"} {
+		t.Setenv("TASKR_WIN_CONSOLE_INPUT", v)
+		if !consoleInputForced() {
+			t.Errorf("TASKR_WIN_CONSOLE_INPUT=%q did not take", v)
+		}
+	}
+	for _, v := range []string{"", "0", "false"} {
+		t.Setenv("TASKR_WIN_CONSOLE_INPUT", v)
+		if consoleInputForced() {
+			t.Errorf("TASKR_WIN_CONSOLE_INPUT=%q should mean off", v)
+		}
+	}
+	if runtime.GOOS != "windows" && len(inputProgramOptions()) != 0 {
+		t.Error("a non-Windows build should not change the input path")
 	}
 }

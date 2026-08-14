@@ -93,6 +93,7 @@ func collectDiagnostics() []diagnostic {
 	}
 	add(diagnostic{Name: "platform", Value: runtime.GOOS + "/" + runtime.GOARCH})
 	add(diagnostic{Name: "go runtime", Value: runtime.Version()})
+	add(diagnostic{Name: "keyboard input", Value: inputPathName()})
 	add(diagnoseLiveReload())
 	if p := tracePath(); p != "" {
 		add(diagnostic{Name: "latency trace", Value: p})
