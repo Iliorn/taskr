@@ -101,11 +101,26 @@ down compensates for it.
 
 `taskr serve --new-token` mints one from the system CSPRNG (32 bytes,
 URL-safe), stores it, and prints it. In Settings, `ctrl+g` on the server-token
-row does the same. taskr warns — in `taskr doctor`, in Settings, and at
-`taskr serve` startup — when the configured token is short or looks like a
-word, but it never refuses to run on that basis: a working deployment keeps
-working, and you are better placed than a length check to judge a token behind
-a listener only your tailnet can reach.
+row does the same.
+
+Whether a weak token is **refused** or merely **flagged** depends on whose
+choice it is:
+
+- **Settings → Server token is refused.** This is the token for the endpoint on
+  this machine — taskr's to choose — and `ctrl+g` is one keystroke away, so a
+  weak value is rejected with the text left in the field to fix.
+- **Settings → Sync token is accepted as typed.** That one has to equal
+  whatever the *server* already uses. Refusing a short one would not make
+  anything safer; it would make a server that uses one unreachable.
+- **`taskr serve --token` / `TASKR_SYNC_TOKEN` warn but run.** A deployment's
+  token may come from a secret manager, a reverse proxy, or a unit file written
+  a year ago. Breaking a running service to make a point about entropy is the
+  wrong trade, and the warning is on stderr where an operator will see it.
+- **`taskr doctor` reports it** for both tokens, naming the property and never
+  the token.
+
+The rule behind all four: taskr refuses only where it can offer the alternative
+in the same breath.
 
 There is no rate limiting on failed authentication. With a generated token that
 is irrelevant; with a short one it is not, which is the other reason the

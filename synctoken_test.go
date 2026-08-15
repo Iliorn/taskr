@@ -108,3 +108,83 @@ func TestUpdateRefusesARedirectOffGitHub(t *testing.T) {
 		t.Errorf("error should name the host it refused, got %v", err)
 	}
 }
+
+// ── Where a weak token is refused, and where it must not be ───────────────────
+
+// The server token is the one taskr wholly owns, and ctrl+g is one keystroke
+// away, so a weak value is refused outright rather than warned about.
+func TestServerTokenEditorRefusesWeakTokens(t *testing.T) {
+	m := settingsModel(t)
+	m = openSetting(t, m, settingServerToken)
+	if m.mode != modeEditServerToken {
+		t.Fatalf("mode = %v, want modeEditServerToken", m.mode)
+	}
+
+	m = script(t, m, "hunter2", "enter")
+	if m.syncCfg.ServerToken != "" {
+		t.Errorf("a weak server token was stored: %q", m.syncCfg.ServerToken)
+	}
+	if m.mode != modeEditServerToken {
+		t.Errorf("mode = %v after a refusal, want to stay in the editor", m.mode)
+	}
+	// The typed text has to survive, or the refusal costs the user their input.
+	if got := m.textInput.Value(); got != "hunter2" {
+		t.Errorf("input = %q after a refusal, want the typed text kept", got)
+	}
+	if m.err == "" {
+		t.Error("a refusal said nothing about why")
+	}
+}
+
+// ctrl+g fills the field with something the editor will accept, so the refusal
+// above always has a way out that is one keystroke long.
+func TestServerTokenEditorGeneratesAnAcceptableToken(t *testing.T) {
+	m := settingsModel(t)
+	m = openSetting(t, m, settingServerToken)
+	m = sendKey(t, m, "ctrl+g")
+
+	generated := m.textInput.Value()
+	if weakSyncToken(generated) != "" {
+		t.Fatalf("ctrl+g produced a token the editor would refuse: %q", generated)
+	}
+	m = sendKey(t, m, "enter")
+	if m.syncCfg.ServerToken != generated {
+		t.Errorf("ServerToken = %q, want the generated %q", m.syncCfg.ServerToken, generated)
+	}
+	if m.mode != modeNormal {
+		t.Errorf("mode = %v, want the editor closed after a good token", m.mode)
+	}
+}
+
+// Clearing must keep working: blank is a deliberate removal, not a weak token.
+func TestServerTokenEditorStillClears(t *testing.T) {
+	m := settingsModel(t)
+	m.syncCfg.ServerToken = "kR7-server-side-secret-9fQ2xL"
+	m = openSetting(t, m, settingServerToken)
+	m.textInput.SetValue("")
+	m = sendKey(t, m, "enter")
+	if m.syncCfg.ServerToken != "" {
+		t.Errorf("ServerToken = %q, want cleared", m.syncCfg.ServerToken)
+	}
+	if m.mode != modeNormal {
+		t.Errorf("mode = %v, want the editor closed", m.mode)
+	}
+}
+
+// The client token is the other end's choice, not taskr's. Refusing a weak one
+// here would not make anything safer — it would make a server that already uses
+// a short token unreachable, which is a worse outcome than the risk.
+func TestClientTokenEditorAcceptsWhateverTheServerUses(t *testing.T) {
+	m := settingsModel(t)
+	m = openSetting(t, m, settingSyncToken)
+	if m.mode != modeEditSyncToken {
+		t.Fatalf("mode = %v, want modeEditSyncToken", m.mode)
+	}
+	m = script(t, m, "hunter2", "enter")
+	if m.syncCfg.Token != "hunter2" {
+		t.Errorf("Token = %q — the client must be able to match a weak server", m.syncCfg.Token)
+	}
+	if m.mode != modeNormal {
+		t.Errorf("mode = %v, want the editor closed", m.mode)
+	}
+}

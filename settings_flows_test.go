@@ -196,14 +196,18 @@ func TestScriptEditServerListenAndToken(t *testing.T) {
 	if m.textInput.EchoMode != textinput.EchoPassword {
 		t.Error("the server-token editor is not masked")
 	}
-	m = script(t, m, "server-side-secret", "enter")
-	if m.syncCfg.ServerToken != "server-side-secret" {
+	// A real token: the server-token editor refuses weak ones outright (see
+	// TestServerTokenEditorRefusesWeakTokens), so a toy value here would be
+	// testing the rejection path by accident.
+	const serverToken = "kR7-server-side-secret-9fQ2xL"
+	m = script(t, m, serverToken, "enter")
+	if m.syncCfg.ServerToken != serverToken {
 		t.Errorf("ServerToken = %q", m.syncCfg.ServerToken)
 	}
 	if m.textInput.EchoMode != textinput.EchoNormal {
 		t.Error("the shared input stayed masked after the server-token editor")
 	}
-	if got := loadSyncConfigFile(); got.ServerListen != "127.0.0.1:9999" || got.ServerToken != "server-side-secret" {
+	if got := loadSyncConfigFile(); got.ServerListen != "127.0.0.1:9999" || got.ServerToken != serverToken {
 		t.Errorf("server config did not persist: %+v", got)
 	}
 }

@@ -48,8 +48,13 @@ belong in the commit log, not here — unless they change behaviour.
   `sync.json`, never logged — was downstream of a secret you invented at a
   prompt, which made a short one the likeliest realistic compromise of a sync
   setup. `taskr doctor`, Settings and `taskr serve` now warn when the
-  configured token is short or looks like a word. They warn rather than refuse:
-  a working deployment keeps working.
+  configured token is short or looks like a word. The Settings **server**-token
+  row goes further and refuses one outright, since that token is taskr's own
+  choice and `ctrl+g` is one keystroke away; the client token, `taskr serve` and
+  `TASKR_SYNC_TOKEN` only warn, because the first has to match whatever the
+  other end already uses and the last two may come from a secret manager or a
+  unit file written a year ago. taskr refuses only where it can offer the
+  alternative in the same breath.
 - **The updater only follows GitHub.** The download URL arrives inside the
   release API's JSON, so it is data rather than a constant; it is now confined
   to `github.com` and `githubusercontent.com` over TLS, checked on the initial

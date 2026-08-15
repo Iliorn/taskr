@@ -103,7 +103,22 @@ func (m model) updateEditServerToken(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter":
 			// Pre-filled editor: blank is a deliberate clear of the server token.
-			m.syncCfg.ServerToken = strings.TrimSpace(m.textInput.Value())
+			value := strings.TrimSpace(m.textInput.Value())
+			// This is the one token taskr wholly owns — the endpoint on this
+			// machine — and a strong one is one keystroke away, so a weak value
+			// is refused rather than warned about. Stay in the prompt with the
+			// text intact, the way the date editor does, instead of discarding
+			// what was typed. Blank is not "weak", so clearing still works.
+			//
+			// The client token next door (syncsettings.go) deliberately does
+			// NOT do this: it has to equal whatever the *other* end already
+			// uses, and refusing it there would make a server with a short
+			// token unreachable rather than making it any safer.
+			if weakSyncToken(value) != "" {
+				m.flashError(tr("Too weak for a server token — press ctrl+g to generate a strong one"))
+				return m, clearErrAfter()
+			}
+			m.syncCfg.ServerToken = value
 			m.saveSyncCfg()
 			m.mode = modeNormal
 			m.textInput.EchoMode = textinput.EchoNormal // un-mask for the next mode
