@@ -8,6 +8,15 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Changed
+
+- **Release notes come from the CHANGELOG.** A release page listed commit
+  subjects, which describe the work to whoever wrote it rather than to whoever
+  is deciding whether to upgrade — while the entries below, written for exactly
+  that reader, stayed in the repository where nobody looking at a release would
+  find them. The release body is now this tag's section. A tag with no section
+  falls back to generated notes rather than publishing an empty one.
+
 ## [1.31.0] - 2026-08-15
 
 ### Added

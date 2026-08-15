@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -127,5 +128,47 @@ func TestReadmeGoVersionMatchesGoMod(t *testing.T) {
 	}
 	if got := string(badge[1]); got != want {
 		t.Errorf("README badge says Go %s, go.mod says %s", got, want)
+	}
+}
+
+// The release workflow builds the release body from the CHANGELOG section that
+// matches the tag (packaging/release-notes.sh). That coupling is invisible from
+// the Go side and silent when it breaks: restructure the headings and the
+// extractor finds nothing, the workflow falls back to generated notes, and the
+// release ships with commit subjects nobody notices are wrong. This runs the
+// real script against the real file.
+func TestReleaseNotesExtractionMatchesTheChangelog(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("no bash available (Windows runner); the script only runs in CI on ubuntu")
+	}
+	data, err := os.ReadFile("CHANGELOG.md")
+	if err != nil {
+		t.Fatalf("read CHANGELOG.md: %v", err)
+	}
+	// The newest released version — the heading the next tag will most likely
+	// be cut against.
+	m := regexp.MustCompile(`(?m)^## \[([0-9]+\.[0-9]+\.[0-9]+)\]`).FindSubmatch(data)
+	if m == nil {
+		t.Fatal("CHANGELOG.md has no released-version heading; release-notes.sh has nothing to find")
+	}
+	version := string(m[1])
+
+	out, err := exec.Command(bash, "packaging/release-notes.sh", "v"+version, "CHANGELOG.md").Output()
+	if err != nil {
+		t.Fatalf("release-notes.sh found no section for v%s — the release body would silently "+
+			"fall back to commit subjects: %v", version, err)
+	}
+	notes := string(out)
+	if len(strings.TrimSpace(notes)) < 50 {
+		t.Errorf("extracted notes for v%s are suspiciously short:\n%s", version, notes)
+	}
+	// The heading is dropped (the release is titled with the version already)
+	// and the section must not run into the one below it.
+	if strings.Contains(notes, "## [") {
+		t.Errorf("extracted notes leak a release heading:\n%s", notes)
+	}
+	if !strings.Contains(notes, "blob/v"+version+"/CHANGELOG.md") {
+		t.Errorf("extracted notes are missing the full-changelog link:\n%s", notes)
 	}
 }
