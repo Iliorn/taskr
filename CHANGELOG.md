@@ -8,36 +8,7 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
-### Security
-
-- **Self-update now verifies what it downloads.** Every release publishes a
-  `SHA256SUMS` file; until now the update button ignored it and installed the
-  binary unchecked. The download is hashed as it is written and compared
-  against the published checksum, and anything that cannot be verified — no
-  `SHA256SUMS`, no entry for this platform, a mismatch — installs nothing and
-  says why. This is an integrity check, not a signature.
-
-### Changed
-
-- **Files follow platform conventions instead of one dot-directory.** A new
-  install puts config in `$XDG_CONFIG_HOME/taskr`, the database in
-  `$XDG_DATA_HOME/taskr`, undo/sync state and logs in `$XDG_STATE_HOME/taskr`
-  and the editor scratch file in `$XDG_CACHE_HOME/taskr` — `%APPDATA%` /
-  `%LOCALAPPDATA%` on Windows, `~/Library/Application Support` on macOS, and an
-  explicitly exported `XDG_*` variable wins everywhere. **An existing
-  `~/.taskr` keeps being used exactly as before**: nothing moves, nothing is
-  migrated. `TASKR_HOME` puts everything back in one directory, and
-  `taskr doctor` prints what it resolved.
-
-### Removed
-
-- **Learnings.** A second free-text list beside notes and comments, with its own
-  table, its own sync fold and its own CLI command, but never a tab of its own.
-  Migration 011 appends every learning to its task's notes under a
-  `## Learnings` heading and drops the table, so nothing you wrote is lost —
-  and `taskr search` now matches notes, which is where the recall
-  `taskr learnings` used to provide now comes from. `taskr learnings` prints
-  where the text went instead of silently opening the TUI.
+## [1.31.0] - 2026-08-15
 
 ### Added
 
@@ -116,38 +87,6 @@ belong in the commit log, not here — unless they change behaviour.
   wall clock, gap since the last frame, `Update` and `View` times, GC cycles,
   and the message, plus a percentile summary on quit. Off unless asked for.
 
-### Fixed
-
-- **Windows input latency.** A keystroke after a pause waited up to 16 ms to be
-  noticed: Bubble Tea reads the Windows console by polling it with a 16 ms
-  sleep between attempts, and a burst of keys spins the loop instead of
-  sleeping — the first key felt late, the rest did not. taskr now opens
-  `CONIN$` as its own file, which selects a blocking read of the console's
-  escape-sequence stream and returns the moment a key arrives.
-  `TASKR_WIN_CONSOLE_INPUT=1` restores the old reader; the Windows build polls
-  the console size four times a second, since resize events only came with it.
-- **The first frame is rendered before the program starts.** Building every
-  derived cache and filling the string-builder pool used to happen on the first
-  keystroke of a session.
-- **The renderer now paints at 120 FPS instead of 60.** Bubble Tea repaints on
-  a ticker, so the frame rate is also the worst case between pressing a key and
-  seeing it: ~17 ms became ~8 ms. Frames are line-diffed, so the extra ticks
-  cost nothing when nothing changed.
-- **A stutter on the first keystroke, and again after a pause.** A filesystem
-  event on our own database write made the app reload and rebuild its whole
-  task set — about 15 ms at 2000 tasks, on the event loop, landing on whatever
-  key you pressed next. A reload that carries no new task versions is now
-  recognised and skipped (~1 ms), and the startup write no longer comes back as
-  an external change at all.
-
-### Changed
-
-- **Search matches notes**, not just the title. Titles stay fuzzy; notes are
-  matched as a plain substring, since a subsequence match over a whole note
-  would hit almost anything.
-
-### Added
-
 - **`taskr doctor` now diagnoses the installation**: version, platform, data
   directory, database size and SQLite integrity, schema version, settings and
   keybinding problems, sync configuration and last sync, and the resolved
@@ -170,35 +109,6 @@ belong in the commit log, not here — unless they change behaviour.
 - **A security policy** (`SECURITY.md`) with a private reporting channel, and
   an explicit scope — the sync server, the sync client, self-update and token
   handling are in; plain HTTP without a tunnel is documented behaviour.
-
-### Changed
-
-- **`taskr doctor` was renamed to `taskr suggest`** for its old job — proposing
-  dependency links from note refs and related titles. Every other tool means
-  "diagnose my installation" by `doctor`, and the shell completions already
-  described it that way. If you scripted `taskr doctor --list`, it is now
-  `taskr suggest --list`.
-- **A build without an injected version now reports a real one.**
-  `go install github.com/Iliorn/taskr@latest` used to call itself `dev`
-  forever, which also made the update check announce a new release on every
-  single run. It now reports the module version, and a local build reports
-  `dev+<commit>`.
-
-### Fixed
-
-- **A stale "plain http" sync warning no longer sticks.** Moving the sync URL
-  from a public `http://` host to a Tailscale address or `https://` left the
-  earlier warning on screen, still claiming the token travelled unencrypted. A
-  security notice that outlives the condition it describes is worse than none.
-- **Config files are replaced atomically.** settings.json, sync.json,
-  sync-state.json, serve-state.json, the undo stack and task notes were written
-  by truncating the old file first, so a crash or a full disk mid-write left a
-  truncated file behind. A failed write now leaves the previous contents
-  intact.
-
-## [1.31.0] - 2026-08-13
-
-### Added
 
 - **Command palette** (`ctrl+k`): find any action by name, with the key that
   performs it and the tab it runs on. An action from another tab switches there
@@ -230,6 +140,31 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Changed
 
+- **Files follow platform conventions instead of one dot-directory.** A new
+  install puts config in `$XDG_CONFIG_HOME/taskr`, the database in
+  `$XDG_DATA_HOME/taskr`, undo/sync state and logs in `$XDG_STATE_HOME/taskr`
+  and the editor scratch file in `$XDG_CACHE_HOME/taskr` — `%APPDATA%` /
+  `%LOCALAPPDATA%` on Windows, `~/Library/Application Support` on macOS, and an
+  explicitly exported `XDG_*` variable wins everywhere. **An existing
+  `~/.taskr` keeps being used exactly as before**: nothing moves, nothing is
+  migrated. `TASKR_HOME` puts everything back in one directory, and
+  `taskr doctor` prints what it resolved.
+
+- **Search matches notes**, not just the title. Titles stay fuzzy; notes are
+  matched as a plain substring, since a subsequence match over a whole note
+  would hit almost anything.
+
+- **`taskr doctor` was renamed to `taskr suggest`** for its old job — proposing
+  dependency links from note refs and related titles. Every other tool means
+  "diagnose my installation" by `doctor`, and the shell completions already
+  described it that way. If you scripted `taskr doctor --list`, it is now
+  `taskr suggest --list`.
+- **A build without an injected version now reports a real one.**
+  `go install github.com/Iliorn/taskr@latest` used to call itself `dev`
+  forever, which also made the update check announce a new release on every
+  single run. It now reports the module version, and a local build reports
+  `dev+<commit>`.
+
 - **Self-update no longer needs the GitHub CLI.** It reads the release API over
   plain HTTP, so the update button works on a stock install. Rate-limit and
   "no releases" failures now say what happened.
@@ -242,7 +177,49 @@ belong in the commit log, not here — unless they change behaviour.
   11.1 ms to 5.8 ms and a search keystroke from 7.5 ms to 3.4 ms, with about a
   third of the allocations gone.
 
+### Removed
+
+- **Learnings.** A second free-text list beside notes and comments, with its own
+  table, its own sync fold and its own CLI command, but never a tab of its own.
+  Migration 011 appends every learning to its task's notes under a
+  `## Learnings` heading and drops the table, so nothing you wrote is lost —
+  and `taskr search` now matches notes, which is where the recall
+  `taskr learnings` used to provide now comes from. `taskr learnings` prints
+  where the text went instead of silently opening the TUI.
+
 ### Fixed
+
+- **Windows input latency.** A keystroke after a pause waited up to 16 ms to be
+  noticed: Bubble Tea reads the Windows console by polling it with a 16 ms
+  sleep between attempts, and a burst of keys spins the loop instead of
+  sleeping — the first key felt late, the rest did not. taskr now opens
+  `CONIN$` as its own file, which selects a blocking read of the console's
+  escape-sequence stream and returns the moment a key arrives.
+  `TASKR_WIN_CONSOLE_INPUT=1` restores the old reader; the Windows build polls
+  the console size four times a second, since resize events only came with it.
+- **The first frame is rendered before the program starts.** Building every
+  derived cache and filling the string-builder pool used to happen on the first
+  keystroke of a session.
+- **The renderer now paints at 120 FPS instead of 60.** Bubble Tea repaints on
+  a ticker, so the frame rate is also the worst case between pressing a key and
+  seeing it: ~17 ms became ~8 ms. Frames are line-diffed, so the extra ticks
+  cost nothing when nothing changed.
+- **A stutter on the first keystroke, and again after a pause.** A filesystem
+  event on our own database write made the app reload and rebuild its whole
+  task set — about 15 ms at 2000 tasks, on the event loop, landing on whatever
+  key you pressed next. A reload that carries no new task versions is now
+  recognised and skipped (~1 ms), and the startup write no longer comes back as
+  an external change at all.
+
+- **A stale "plain http" sync warning no longer sticks.** Moving the sync URL
+  from a public `http://` host to a Tailscale address or `https://` left the
+  earlier warning on screen, still claiming the token travelled unencrypted. A
+  security notice that outlives the condition it describes is worse than none.
+- **Config files are replaced atomically.** settings.json, sync.json,
+  sync-state.json, serve-state.json, the undo stack and task notes were written
+  by truncating the old file first, so a crash or a full disk mid-write left a
+  truncated file behind. A failed write now leaves the previous contents
+  intact.
 
 - **Crash on small terminals.** Width budgets went negative and the render
   panicked; every shared width helper clamps now. The Calendar and the
@@ -265,3 +242,12 @@ belong in the commit log, not here — unless they change behaviour.
 - **The editor was resolved from scratch every time it was launched**, statting
   every entry on `PATH` (times every `PATHEXT` extension on Windows) before
   opening the file.
+
+### Security
+
+- **Self-update now verifies what it downloads.** Every release publishes a
+  `SHA256SUMS` file; until now the update button ignored it and installed the
+  binary unchecked. The download is hashed as it is written and compared
+  against the published checksum, and anything that cannot be verified — no
+  `SHA256SUMS`, no entry for this platform, a mismatch — installs nothing and
+  says why. This is an integrity check, not a signature.
