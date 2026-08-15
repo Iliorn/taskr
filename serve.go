@@ -78,12 +78,24 @@ func cliServe(args []string) int {
 		"address to bind (e.g. a Tailscale IP like 100.x.y.z:8765, or 127.0.0.1:8765 behind a reverse proxy)")
 	token := fs.String("token", os.Getenv("TASKR_SYNC_TOKEN"),
 		"shared bearer token clients must present (or set TASKR_SYNC_TOKEN)")
+	newToken := fs.Bool("new-token", false,
+		"mint a strong token, store it as this machine's server token, print it, and exit")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if *newToken {
+		return cliNewServerToken()
+	}
 	if *token == "" {
 		fmt.Fprintln(os.Stderr, "taskr serve: a token is required (--token or TASKR_SYNC_TOKEN); refusing to run unauthenticated")
+		fmt.Fprintln(os.Stderr, "taskr serve: `taskr serve --new-token` mints one and stores it")
 		return 2
+	}
+	// A warning, not a refusal: a working deployment must keep working, and
+	// the person who put a short token behind a Tailscale-only listener is
+	// better placed to judge it than a length check is.
+	if why := weakSyncToken(*token); why != "" {
+		fmt.Fprintf(os.Stderr, "taskr serve: warning: the token is %s\n", why)
 	}
 	if err := openStore(); err != nil {
 		fmt.Fprintf(os.Stderr, "taskr serve: open store: %v\n", err)
@@ -118,6 +130,34 @@ func cliServe(args []string) int {
 		return 1
 	}
 	checkpointStore()
+	return 0
+}
+
+// cliNewServerToken mints a server token, stores it, and prints it. Rotating
+// is the point of a separate flag rather than a prompt: the new token is only
+// useful once every client has it, and that is a step the user has to take
+// deliberately.
+func cliNewServerToken() int {
+	token, err := newSyncToken()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "taskr serve: %v\n", err)
+		return 1
+	}
+	cfg := loadSyncConfigFile()
+	had := cfg.ServerToken != ""
+	cfg.ServerToken = token
+	if err := saveSyncConfig(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "taskr serve: could not store the token: %v\n", err)
+		return 1
+	}
+	// The token itself goes to stdout so it can be piped into a secret store;
+	// everything else is commentary and goes to stderr.
+	fmt.Println(token)
+	fmt.Fprintf(os.Stderr, "taskr serve: stored as this machine's server token in %s\n", syncConfigPath())
+	if had {
+		fmt.Fprintln(os.Stderr, "taskr serve: this replaced the previous token — every client needs the new one before it can sync again")
+	}
+	fmt.Fprintln(os.Stderr, "taskr serve: for the headless server, pass it as --token or TASKR_SYNC_TOKEN")
 	return 0
 }
 

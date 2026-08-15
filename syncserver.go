@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -88,6 +89,18 @@ func (m model) updateEditServerToken(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
+		case "ctrl+g":
+			// Mint one into the field rather than straight into the config, so
+			// the usual enter/esc still means commit/cancel. Blank keeps its
+			// meaning as a deliberate clear; overloading it to mean "generate"
+			// would make clearing the token impossible.
+			if token, err := newSyncToken(); err == nil {
+				m.textInput.SetValue(token)
+				m.textInput.CursorEnd()
+			} else {
+				m.flashError(fmt.Sprintf(tr("Could not generate a token: %v"), err))
+			}
+			return m, nil
 		case "enter":
 			// Pre-filled editor: blank is a deliberate clear of the server token.
 			m.syncCfg.ServerToken = strings.TrimSpace(m.textInput.Value())

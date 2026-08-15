@@ -53,6 +53,64 @@ that is not true:
 - **Denial of service against your own server** by a client holding a valid
   token.
 
+## The update path
+
+On Linux and Windows, Settings → "Update to latest release" downloads a binary
+from GitHub and replaces the running one. What that does and does not
+guarantee, precisely, because the difference is easy to overstate in either
+direction:
+
+**What is checked.** The release metadata is read over HTTPS from
+`api.github.com` with the standard certificate validation of Go's `net/http`.
+The asset URL that comes back is confined to `github.com` and
+`githubusercontent.com` over TLS, on the initial request *and* on every
+redirect. The download is staged in a private temporary directory — not a
+predictable path another local user could write to — hashed as it is written,
+and compared against the `SHA256SUMS` published with that release. It fails
+closed: no sums file, no entry for this platform, or a mismatch means nothing
+is installed and the staged file is removed. The install itself is an atomic
+rename. Nothing updates silently; it is a button behind a confirmation.
+
+**What is not checked: who published it.** `SHA256SUMS` lives in the same
+release as the binary, so anyone able to publish a release can publish matching
+checksums. The checksum proves your download was not corrupted or swapped in
+transit. It does not prove the release itself is honest. A compromised
+repository, a stolen token, or a malicious change to the release workflow would
+produce a consistent, verifiable, malicious release. Signing that binds a
+release to the workflow identity that built it — Sigstore/artifact attestation —
+would close this, and is not implemented yet.
+
+If that trade is not one you want to make, do not use the in-app updater:
+
+- `go install github.com/Iliorn/taskr@latest` verifies against
+  `sum.golang.org`, an append-only transparency log. A recorded hash cannot be
+  changed afterwards, including by the maintainer. This is the strongest
+  guarantee taskr offers.
+- Homebrew, the AUR package and Scoop each add their own distribution checks,
+  and taskr refuses to overwrite a Homebrew-managed install.
+- Release builds are reproducible (`-trimpath`, `CGO_ENABLED=0`, the Go version
+  pinned in `go.mod`), so you can rebuild a tag and compare hashes yourself.
+
+## Choosing a sync token
+
+The sync server authenticates with a single shared bearer token, compared in
+constant time and stored in `~/.taskr/sync.json` with mode `0600`. Every one of
+those precautions is downstream of a secret you chose: a guessable token is the
+likeliest realistic compromise of a sync setup, and no amount of care further
+down compensates for it.
+
+`taskr serve --new-token` mints one from the system CSPRNG (32 bytes,
+URL-safe), stores it, and prints it. In Settings, `ctrl+g` on the server-token
+row does the same. taskr warns — in `taskr doctor`, in Settings, and at
+`taskr serve` startup — when the configured token is short or looks like a
+word, but it never refuses to run on that basis: a working deployment keeps
+working, and you are better placed than a length check to judge a token behind
+a listener only your tailnet can reach.
+
+There is no rate limiting on failed authentication. With a generated token that
+is irrelevant; with a short one it is not, which is the other reason the
+warning exists.
+
 ## Handling of secrets
 
 The only secret taskr stores is the sync bearer token, in `~/.taskr/sync.json`

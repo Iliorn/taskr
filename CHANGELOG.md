@@ -41,6 +41,26 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Added
 
+- **taskr mints sync tokens, and says when yours is guessable.**
+  `taskr serve --new-token` generates one from the system CSPRNG, stores it and
+  prints it; `ctrl+g` on the Settings server-token row does the same. Every
+  other protection around the token — constant-time comparison, `0600` on
+  `sync.json`, never logged — was downstream of a secret you invented at a
+  prompt, which made a short one the likeliest realistic compromise of a sync
+  setup. `taskr doctor`, Settings and `taskr serve` now warn when the
+  configured token is short or looks like a word. They warn rather than refuse:
+  a working deployment keeps working.
+- **The updater only follows GitHub.** The download URL arrives inside the
+  release API's JSON, so it is data rather than a constant; it is now confined
+  to `github.com` and `githubusercontent.com` over TLS, checked on the initial
+  request and on every redirect — a pre-flight check alone would have been
+  walked past by a 302.
+- **Release builds are reproducible** (`-trimpath`, `CGO_ENABLED=0`, the Go
+  version pinned in `go.mod`), so a tag can be rebuilt and compared against
+  `SHA256SUMS` by anyone. `SECURITY.md` now states plainly what that checksum
+  proves — that your download matches what the workflow published — and what it
+  does not: that the publisher was honest. Signing that binds a release to the
+  workflow identity would close that gap and is not implemented yet.
 - **`j`/`k` move the cursor**, everywhere `↑`/`↓` do: the task lists, the detail
   pane, the drill-ins, the board, the calendar, settings, and scrolling the help
   overlay. They are aliases resolved at dispatch rather than per-switch cases,

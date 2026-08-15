@@ -285,6 +285,10 @@ func diagnoseSync() []diagnostic {
 		} else if strings.HasPrefix(strings.ToLower(cfg.URL), "http://") && !isLoopbackURL(cfg.URL) {
 			status = statusWarn
 			detail = "plain http to a non-loopback host — the token travels unencrypted"
+		} else if why := weakSyncToken(cfg.Token); why != "" {
+			// A property of the token, never the token: this output is meant
+			// to be pasteable into a bug report.
+			status, detail = statusWarn, "weak token: "+why
 		}
 		out = append(out, diagnostic{Name: "sync client", Value: cfg.URL, Status: status, Detail: detail})
 		out = append(out, diagnostic{
@@ -296,6 +300,8 @@ func diagnoseSync() []diagnostic {
 		status, detail := statusOK, "token set"
 		if cfg.ServerToken == "" {
 			status, detail = statusWarn, "no server token set — the endpoint will refuse to start"
+		} else if why := weakSyncToken(cfg.ServerToken); why != "" {
+			status, detail = statusWarn, "weak token: "+why
 		}
 		out = append(out, diagnostic{Name: "sync server", Value: cfg.ServerListen, Status: status, Detail: detail})
 	}

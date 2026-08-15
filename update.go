@@ -1763,7 +1763,7 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		m.mode = modeEditServerToken
 		m.textInput.SetValue(m.syncCfg.ServerToken)
 		m.textInput.EchoMode = textinput.EchoPassword // see settingSyncToken
-		m.textInput.Placeholder = tr("Server token clients must present (clear the field to remove it)")
+		m.textInput.Placeholder = tr("Server token clients must present (ctrl+g generates one · blank removes it)")
 		m.textInput.Focus()
 		return m, textinput.Blink
 	case settingCheckUpdate:

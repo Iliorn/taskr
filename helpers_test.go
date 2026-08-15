@@ -1119,7 +1119,11 @@ func TestFetchLatestReleaseErrors(t *testing.T) {
 
 func TestDownloadReleaseAsset(t *testing.T) {
 	const payload = "#!/bin/sh\necho taskr\n"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// releaseServer, not a bare httptest server: asset downloads are pinned to
+	// GitHub hosts (checkAssetURL), and the stand-in is trusted only because it
+	// is the same origin releaseAPIBase points at — which is how the real flow
+	// works too.
+	srv := releaseServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/empty" {
 			return
 		}
@@ -1128,8 +1132,7 @@ func TestDownloadReleaseAsset(t *testing.T) {
 			return
 		}
 		fmt.Fprint(w, payload)
-	}))
-	defer srv.Close()
+	})
 
 	dst := filepath.Join(t.TempDir(), "taskr")
 	digest, err := downloadReleaseAsset(releaseAsset{Name: "taskr", URL: srv.URL + "/taskr"}, dst)
@@ -1224,7 +1227,7 @@ func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
 	good := fmt.Sprintf("%x", sha256.Sum256([]byte(payload)))
 
 	var sumsBody string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := releaseServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/taskr":
 			fmt.Fprint(w, payload)
@@ -1233,8 +1236,7 @@ func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
-	}))
-	defer srv.Close()
+	})
 
 	release := func(withSums bool) releaseInfo {
 		info := releaseInfo{TagName: "v9.9.9", Assets: []releaseAsset{

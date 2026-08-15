@@ -57,7 +57,7 @@ var cliCommandSpecs = []cliCommandSpec{
 	{name: "import", summary: "merge an export file into the store"},
 	{name: "sync", summary: "sync with the configured server", flags: []string{
 		"accept-stale", "quiet", "recover", "save", "status", "token", "url"}},
-	{name: "serve", summary: "run the sync server", flags: []string{"listen", "token"}},
+	{name: "serve", summary: "run the sync server", flags: []string{"listen", "new-token", "token"}},
 	{name: "doctor", summary: "report this installation's health", flags: []string{"json"}},
 	{name: "suggest", summary: "suggest dependency links between tasks", flags: []string{"list"}},
 	{name: "completion", summary: "print a shell completion script"},

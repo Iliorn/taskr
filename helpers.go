@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1079,13 +1080,28 @@ func findReleaseAsset(info releaseInfo, name string) (releaseAsset, error) {
 // bytes it actually wrote, hashed as they stream past so the check can never
 // read a different file than the one that was installed.
 func downloadReleaseAsset(asset releaseAsset, dst string) (digest string, err error) {
+	// The download URL arrives inside the API response rather than being built
+	// here, so it is checked before it is followed — and again on every
+	// redirect, which is the hop a pre-flight check alone would miss.
+	if err := checkAssetURL(asset.URL); err != nil {
+		return "", err
+	}
 	req, err := http.NewRequest(http.MethodGet, asset.URL, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("User-Agent", "taskr/"+appVersion)
 
-	resp, err := (&http.Client{Timeout: releaseDownloadTimeout}).Do(req)
+	client := &http.Client{
+		Timeout: releaseDownloadTimeout,
+		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			return checkAssetURL(r.URL.String())
+		},
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("download failed: %w", err)
 	}
@@ -1114,6 +1130,42 @@ func downloadReleaseAsset(asset releaseAsset, dst string) (digest string, err er
 			maxReleaseAssetBytes/(1024*1024))
 	}
 	return hex.EncodeToString(sum.Sum(nil)), nil
+}
+
+// checkAssetURL refuses a release asset that does not come from GitHub over
+// TLS. It is defence in depth rather than the main line: the asset list is read
+// over HTTPS from api.github.com, so redirecting a download elsewhere already
+// requires forging that response. But the URL is attacker-shaped data — it
+// arrives in a JSON body — and following it unchecked is the kind of thing that
+// only needs one bad day at the other end.
+//
+// The check is on the registrable domain, not an exact host list. GitHub has
+// moved release assets between hostnames before (objects. → release-assets.),
+// and an exact list would turn that into a broken update path for every
+// already-installed binary — a self-inflicted outage worse than the risk.
+func checkAssetURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("refusing to download from an unparseable URL %q: %w", raw, err)
+	}
+	// A test server stands in for GitHub, on http and a loopback port. Deferring
+	// to whatever releaseAPIBase was pointed at covers it without a second code
+	// path, and outside tests that variable is the real API over TLS — which no
+	// asset URL's host matches, so real downloads still go through both checks
+	// below.
+	if base, berr := url.Parse(releaseAPIBase); berr == nil && base.Host != "" && base.Host == u.Host {
+		return nil
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("refusing to download a release asset over %q — https only", u.Scheme)
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, domain := range []string{"github.com", "githubusercontent.com"} {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return nil
+		}
+	}
+	return fmt.Errorf("refusing to download a release asset from %q — only github.com and githubusercontent.com are trusted", u.Host)
 }
 
 // ── Update integrity ─────────────────────────────────────────────────────────

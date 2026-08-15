@@ -129,12 +129,36 @@ func TestDiagnosticsWarnsAboutPlainHTTPToARemoteHost(t *testing.T) {
 	}
 
 	// Loopback over plain http is the normal local-hub setup and must not
-	// nag: the token never leaves the machine.
-	if err := saveSyncConfig(syncConfig{URL: "http://127.0.0.1:8080", Token: "t"}); err != nil {
+	// nag: the token never leaves the machine. The token has to be a real one,
+	// or the weak-token check below fires instead and the case proves nothing.
+	strong, err := newSyncToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := saveSyncConfig(syncConfig{URL: "http://127.0.0.1:8080", Token: strong}); err != nil {
 		t.Fatal(err)
 	}
 	if got := findDiagnostic(t, collectDiagnostics(), "sync client"); got.Status != statusOK {
 		t.Errorf("loopback http should be fine, got %+v", got)
+	}
+}
+
+// A guessable token is the likeliest real compromise of a sync setup, so the
+// doctor has to say so — without ever printing the token itself.
+func TestDiagnosticsWarnsAboutAWeakToken(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	if err := ensureStorageDir(); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveSyncConfig(syncConfig{URL: "http://127.0.0.1:8080", Token: "hunter2"}); err != nil {
+		t.Fatal(err)
+	}
+	got := findDiagnostic(t, collectDiagnostics(), "sync client")
+	if got.Status != statusWarn {
+		t.Errorf("a short token should warn, got %+v", got)
+	}
+	if strings.Contains(got.Detail+got.Value, "hunter2") {
+		t.Errorf("the diagnostic leaked the token: %+v", got)
 	}
 }
 

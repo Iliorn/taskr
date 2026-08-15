@@ -1311,6 +1311,12 @@ func (m model) renderSettingsSections(sequencerW int) (string, string) {
 	serverTokenVal := tr("not set")
 	if m.syncCfg.ServerToken != "" {
 		serverTokenVal = "•••• " + tr("set")
+		// Flagged where it can be fixed: the row that edits it. The reason
+		// itself lives in `taskr doctor`; here there is only room to say that
+		// it is worth replacing and which key does that.
+		if weakSyncToken(m.syncCfg.ServerToken) != "" {
+			serverTokenVal = "•••• " + tr("weak token — ctrl+g on this row generates a strong one")
+		}
 	}
 	values := map[int]string{
 		settingBiasDeadline:      biasPickerValue(activeBiases.Deadline),

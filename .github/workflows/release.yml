@@ -33,12 +33,20 @@ jobs:
         # ~30% off each release binary with no functional change. Local
         # `go build .` (used during development) does NOT pass these flags
         # so `dlv` and rich panic stack traces stay available there.
+        #
+        # `-trimpath` removes the builder's filesystem paths from the binary,
+        # which is what makes the build reproducible: anyone with the tag and
+        # the Go version from go.mod can rebuild and compare hashes against
+        # SHA256SUMS. That check is worth more than the checksums alone —
+        # those only prove the download matches what this workflow published,
+        # not that what it published matches this source.
         env:
           LDFLAGS: -s -w -X main.appVersion=${{ github.ref_name }}
+          CGO_ENABLED: 0
         run: |
-          GOOS=linux   GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr .
-          GOOS=linux   GOARCH=arm64 go build -ldflags "$LDFLAGS" -o taskr-linux-arm64 .
-          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o taskr.exe .
+          GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o taskr .
+          GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o taskr-linux-arm64 .
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o taskr.exe .
 
       # Lets anyone verify a download, and gives packagers something to pin.
       - name: Checksums

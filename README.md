@@ -59,6 +59,26 @@ Builds from source on any platform Go supports, including architectures the
 release page doesn't carry. The version then reports as `dev`, since the release
 workflow is what bakes a tag in.
 
+This is also the install with the strongest integrity guarantee. Go verifies
+every module against `sum.golang.org`, a public append-only transparency log —
+a hash that has been recorded there cannot be changed afterwards, not even by
+me. The release binaries carry a `SHA256SUMS` file, which is a weaker promise:
+it proves your download matches what the release workflow published, not that
+the publisher was honest. See [SECURITY.md](SECURITY.md#the-update-path) for
+what each check does and does not cover.
+
+**Verifying a release binary:**
+
+```sh
+curl -LO https://github.com/Iliorn/taskr/releases/latest/download/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+Release builds pass `-trimpath` with `CGO_ENABLED=0` and the Go version pinned
+in `go.mod`, so they are reproducible: check out the tag, run the same
+`go build` the [release workflow](.github/workflows/release.yml) does, and the
+hashes should match.
+
 **Arch Linux (AUR):**
 
 ```sh
