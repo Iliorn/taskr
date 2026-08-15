@@ -160,6 +160,27 @@ var keyCtxAll = []keyCtx{
 //
 // Only meaningful in normal mode — modals own their keys (y/n on a confirm, the
 // text a user types) and are left alone by the caller.
+// navAlias translates vim's j/k into the arrow keys the handlers case on.
+//
+// They are aliases rather than registry bindings on purpose. The navigate
+// action sits on the ↑/↓ *pair*, which has no single key to swap, so it cannot
+// go through the override mechanism above — and translating at the door means
+// every context that already answers an arrow (list, detail, board, calendar,
+// settings, the drill-ins) gets j/k for free instead of each switch growing a
+// second case to forget.
+//
+// A user override wins: resolveKeyOverride runs first and has already rewritten
+// a j or k it claimed, so what reaches here is a key nothing else wanted.
+func navAlias(pressed string) string {
+	switch pressed {
+	case "j":
+		return "down"
+	case "k":
+		return "up"
+	}
+	return pressed
+}
+
 func resolveKeyOverride(ctx keyCtx, pressed string) (string, bool) {
 	if len(activeKeys) == 0 {
 		return pressed, true

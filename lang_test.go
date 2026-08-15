@@ -109,6 +109,11 @@ func dynamicUIStrings() []string {
 	// The explain overlay labels its rows with the dimension names the scoring
 	// code holds, so they reach tr() through a slice like the personalities do.
 	out = append(out, seqDimNames[:]...)
+	// Parser keywords reach tr() through inputWord(), indexed off this slice —
+	// a source scan sees the helper, not the words. Their translations are what
+	// the grammars accept, so a new keyword without one is a keyword nobody can
+	// type in that language (lang_input.go).
+	out = append(out, inputKeywords...)
 
 	seen := map[string]bool{}
 	uniq := out[:0]

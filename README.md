@@ -119,6 +119,7 @@ taskr
 | `/` | Search / filter |
 | `enter` | Open detail view |
 | `u` | Undo |
+| `↑`/`↓` or `j`/`k` | Move the cursor (every list, the detail pane, the board, the calendar, settings) |
 | `tab` / `shift+tab` | Next / previous tab |
 | `1–7` | Jump straight to a tab (7 = Settings) |
 | `ctrl+k` | Command palette — find any action by name |

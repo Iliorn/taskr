@@ -229,17 +229,6 @@ var daTranslations = map[string]string{
 	"7 Settings": "7 Indstillinger",
 
 	// Key hints (footer)
-	"←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back":                                               "←/→ sider · enter rediger · a tilføj · d skift · x fjern · n noter · esc tilbage",
-	"←/→ pages · enter edit · a add · x remove · esc back":                                                                    "←/→ sider · enter rediger · a tilføj · x fjern · esc tilbage",
-	"a add · d done · t track · x del · s sort · / search · ? more":                                                           "a tilføj · d færdig · t tid · x slet · s sortér · / søg · ? mere",
-	"enter detail · a add · d done · t track · p prio · r rename · x del · n notes · f focus · s sort · h history · / search": "enter detalje · a tilføj · d færdig · t tid · p prio · r omdøb · x slet · n noter · f fokus · s sortér · h historik · / søg",
-	"j/k nav · r rename · x delete · / filter":                                                                                "j/k navigér · r omdøb · x slet · / filtrér",
-	"j/k nav · r rename · m merge · x delete · s sort · / filter":                                                             "j/k navigér · r omdøb · m flet · x slet · s sortér · / filtrér",
-	"j/k nav · r edit · x delete · s sort · / search":                                                                         "j/k navigér · r rediger · x slet · s sortér · / søg",
-	"enter · cycle activity range":                                                                                            "enter · skift aktivitetsperiode",
-	"j/k select entry · r edit times · x delete · esc back":                                                                   "j/k vælg post · r rediger tider · x slet · esc tilbage",
-	"←/→ day · ↑/↓ week · [ ] month · t today · enter entries":                                                                "←/→ dag · ↑/↓ uge · [ ] måned · t i dag · enter poster",
-	"↑/↓ select · ←/→ change theme · enter activate":                                                                          "↑/↓ vælg · ←/→ skift · enter aktivér",
 
 	// Footer / timer
 	"#tag @project %s p:%s s:l r:%s %s^": "#mærke @projekt %s p:%s s:l r:%s %s^",
@@ -835,17 +824,6 @@ var deTranslations = map[string]string{
 	"7 Settings": "7 Einstell.",
 
 	// Key hints (footer)
-	"←/→ pages · enter edit · a add · d toggle · x remove · n notes · esc back":                                               "←/→ Seiten · enter bearb. · a neu · d fertig · x weg · n Notiz · esc zurück",
-	"←/→ pages · enter edit · a add · x remove · esc back":                                                                    "←/→ Seiten · enter bearb. · a neu · x weg · esc zurück",
-	"a add · d done · t track · x del · s sort · / search · ? more":                                                           "a neu · d fertig · t Zeit · x weg · s Sort. · / Suche · ? mehr",
-	"enter detail · a add · d done · t track · p prio · r rename · x del · n notes · f focus · s sort · h history · / search": "enter Detail · a neu · d fertig · t Zeit · p Prio · r umben. · x weg · n Notiz · f Fokus · s Sort. · h Verlauf · / Suche",
-	"j/k nav · r rename · x delete · / filter":                                                                                "j/k Nav · r umben. · x löschen · / Filter",
-	"j/k nav · r rename · m merge · x delete · s sort · / filter":                                                             "j/k Nav · r umben. · m verein. · x löschen · s Sort. · / Filter",
-	"j/k nav · r edit · x delete · s sort · / search":                                                                         "j/k Nav · r bearb. · x löschen · s Sort. · / Suche",
-	"enter · cycle activity range":                                                                                            "enter · Zeitraum wechseln",
-	"j/k select entry · r edit times · x delete · esc back":                                                                   "j/k Eintrag · r Zeiten · x löschen · esc zurück",
-	"←/→ day · ↑/↓ week · [ ] month · t today · enter entries":                                                                "←/→ Tag · ↑/↓ Woche · [ ] Monat · t heute · enter Einträge",
-	"↑/↓ select · ←/→ change theme · enter activate":                                                                          "↑/↓ wählen · ←/→ Farbschema · enter aktivieren",
 
 	// Footer / timer
 	"#tag @project %s p:%s s:l r:%s %s^": "#Schlagwort @Projekt %s p:%s s:l r:%s %s^",

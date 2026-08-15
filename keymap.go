@@ -83,7 +83,7 @@ var keymap = []binding{
 	// something: the Stats tab has no list cursor, and the jump/page keys only
 	// drive the linear list tabs (listNavTarget), so neither is claimed
 	// everywhere. A binding the help shows must be a binding dispatch honours.
-	{ctxAll &^ ctxStats, "↑/↓", "navigate", "navigate list", secNavigation, false, false},
+	{ctxAll &^ ctxStats, "↑/↓ · j/k", "navigate", "navigate list", secNavigation, false, false},
 	{ctxTasksList | ctxProjects | ctxTags | ctxDrill, "home/end · pgup/pgdn", "listpage", "jump to ends / page through list", secNavigation, false, false},
 	// enter has no global meaning — each context defines its own (open details,
 	// edit field, activate, cycle) — so it is registered per context, not here.
@@ -152,7 +152,7 @@ var keymap = []binding{
 	{ctxCalendar, "[ / ]", "calmonth", "previous / next month", secCalendar, true, false},
 	{ctxCalendar, "t", "today", "jump to today", secCalendar, true, false},
 	{ctxCalendar, "enter", "calfocus", "focus the day's entries", secCalendar, true, false},
-	{ctxCalendarTimeline, "↑/↓", "navigate", "select entry", secCalendar, true, false},
+	{ctxCalendarTimeline, "↑/↓ · j/k", "navigate", "select entry", secCalendar, true, false},
 	{ctxCalendarTimeline, "r", "edit", "edit entry times (09:12-10:00 or 45m)", secCalendar, true, false},
 	{ctxCalendarTimeline, "x", "delete", "delete selected entry", secCalendar, true, false},
 	{ctxCalendarTimeline, "esc", "back", "back", secCalendar, true, false},
@@ -168,7 +168,7 @@ var keymap = []binding{
 	{ctxStats, "enter", "statscycle", "cycle activity range", secStats, true, false},
 
 	// ── Settings ─────────────────────────────────────────────────────────
-	{ctxSettings, "↑/↓", "navigate", "select setting", secSettings, true, false},
+	{ctxSettings, "↑/↓ · j/k", "navigate", "select setting", secSettings, true, false},
 	{ctxSettings, "←/→", "setchange", "change value / theme", secSettings, true, false},
 	{ctxSettings, "enter", "setapply", "activate / edit the selected setting", secSettings, true, false},
 	{ctxSettings, "y / n", "confirmupdate", "confirm update when one is offered", secSettings, false, false},

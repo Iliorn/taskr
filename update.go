@@ -74,6 +74,9 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !deliver {
 			return m, nil
 		}
+		// j/k after the override pass, so a rebind onto either of them wins
+		// over the vim alias rather than being shadowed by it.
+		resolved = navAlias(resolved)
 		if resolved != key.String() {
 			msg = keyMsgFor(resolved)
 		}
@@ -672,9 +675,13 @@ func (m model) updateHelp(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.mode = modeNormal
 		m.helpScroll = 0
-	case "up":
+	case "up", "k":
+		// The overlay runs outside modeNormal, so dispatch's alias never
+		// reaches it — and scrolling a wall of text is where a vim user reaches
+		// for j/k hardest. Safe here because the filter above owns the
+		// printable keys while it is open.
 		m.helpScroll = clampHelpScroll(m.helpScroll-1, len(m.helpBodyLines()), m.helpViewportH())
-	case "down":
+	case "down", "j":
 		m.helpScroll = clampHelpScroll(m.helpScroll+1, len(m.helpBodyLines()), m.helpViewportH())
 	case "pgup":
 		m.helpScroll = clampHelpScroll(m.helpScroll-m.helpViewportH(), len(m.helpBodyLines()), m.helpViewportH())

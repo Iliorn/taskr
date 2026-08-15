@@ -41,6 +41,11 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Added
 
+- **`j`/`k` move the cursor**, everywhere `↑`/`↓` do: the task lists, the detail
+  pane, the drill-ins, the board, the calendar, settings, and scrolling the help
+  overlay. They are aliases resolved at dispatch rather than per-switch cases,
+  so a context that answers an arrow answers them too — and a key you rebind
+  onto `j` or `k` still wins over the alias.
 - **The score reads as a percentage of the current field.** The raw score is
   unbounded upward — Age alone adds 0.2/day forever — so "24.4" in the Score
   column asked to be calibrated against a scale nobody had published, and read
