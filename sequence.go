@@ -550,6 +550,26 @@ func sequenceScore(t *todo.Todo) float64 {
 	return sequenceComponentsAt(time.Now(), t, activeBiases, activeHeat).Total
 }
 
+// sequenceScoreNow returns sequenceScore bound to a single instant, and is what
+// every *sort* and *ranking* must use — never sequenceScore itself.
+//
+// Age contributes 0.2/day continuously, so sequenceScore reads its own clock
+// and two tasks created at the same moment score differently by ~1e-11 purely
+// because their scores were computed microseconds apart. The comparator then
+// separates them on that float and never reaches the ID tie-break, so the order
+// of equal tasks is decided by whatever order they were scored in — which
+// sort.Slice does not preserve. The result was a listing whose ordering of
+// equal-scoring tasks could change between two runs over identical data.
+// Freezing the clock for the duration of one sort makes equal tasks actually
+// tie, so lessBySequenceTie runs and the order ends at ID, like every other
+// comparator in this repo.
+func sequenceScoreNow() func(*todo.Todo) float64 {
+	now := time.Now()
+	return func(t *todo.Todo) float64 {
+		return sequenceComponentsAt(now, t, activeBiases, activeHeat).Total
+	}
+}
+
 // ── The percentage scale ─────────────────────────────────────────────────────
 //
 // The raw score is unbounded upward — Age alone adds 0.2/day forever — so a

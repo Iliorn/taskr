@@ -594,3 +594,37 @@ func TestSeqSuggestionGates(t *testing.T) {
 		t.Errorf("suggestion with flat gaps = %q, want the calibrated note", s)
 	}
 }
+
+// A sort must score every task against ONE instant. sequenceScore reads
+// time.Now() per call and Age accrues continuously, so scoring tasks one at a
+// time makes identical tasks differ by ~1e-11 — enough for the comparator to
+// separate them on the float and never reach the ID tie-break, leaving the
+// order of equal tasks up to sort.Slice. Guard the property directly, at the
+// engine, rather than only through the CLI listing that exposed it.
+func TestSequenceSortIsDeterministicForIdenticalTasks(t *testing.T) {
+	created := time.Now().AddDate(0, 0, -5)
+	build := func(ids []string) []*todo.Todo {
+		out := make([]*todo.Todo, 0, len(ids))
+		for _, id := range ids {
+			x := todo.New("identical")
+			x.ID = id
+			x.CreatedAt, x.ModifiedAt = created, created
+			cp := x
+			out = append(out, &cp)
+		}
+		return out
+	}
+	forward := build([]string{"aaaa", "bbbb", "cccc"})
+	shuffled := build([]string{"cccc", "aaaa", "bbbb"})
+	sortTodoPtrsBySequence(forward, nil, sequenceScoreNow())
+	sortTodoPtrsBySequence(shuffled, nil, sequenceScoreNow())
+	for i := range forward {
+		if forward[i].ID != shuffled[i].ID {
+			t.Fatalf("same tasks in a different input order sorted differently: %s vs %s at %d",
+				forward[i].ID, shuffled[i].ID, i)
+		}
+	}
+	if forward[0].ID != "aaaa" {
+		t.Errorf("tie-break did not fall through to ID: got %s first, want aaaa", forward[0].ID)
+	}
+}

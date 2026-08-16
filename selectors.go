@@ -227,13 +227,13 @@ func selectActiveDone(todos []*todo.Todo, search string, focus bool, sortMode ta
 	case taskSortSequence:
 		rollup := descendantScoreRollup(todos)
 		rollup = dependencyScoreRollup(todos, rollup)
-		sortTodoPtrsBySequence(activeP, rollup, sequenceScore)
+		sortTodoPtrsBySequence(activeP, rollup, sequenceScoreNow())
 	case taskSortDueDate:
 		sortTodoPtrs(activeP, lessByDueDate)
 	case taskSortSize:
 		sortTodoPtrs(activeP, lessBySize)
 	default:
-		sortTodoPtrsBySequence(activeP, nil, sequenceScore)
+		sortTodoPtrsBySequence(activeP, nil, sequenceScoreNow())
 	}
 	sortTodoPtrs(doneP, historyLess(historyMode))
 	return todoValues(activeP), todoValues(doneP)

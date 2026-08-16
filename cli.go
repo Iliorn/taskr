@@ -860,7 +860,7 @@ func cliDone(args []string) int {
 // -n limit. `taskr top`'s displayed SCORE stays each task's own score (matching
 // the TUI); only the ordering reflects the boost.
 func rankTopBySequence(todos []*todo.Todo) []todo.Todo {
-	return rankTopBySequenceBy(todos, sequenceScore)
+	return rankTopBySequenceBy(todos, sequenceScoreNow())
 }
 
 // rankTopBySequenceBy is the shared implementation behind rankTopBySequence and

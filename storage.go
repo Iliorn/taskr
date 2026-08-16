@@ -410,7 +410,7 @@ func sortTodoValues(todos []todo.Todo, less func(a, b *todo.Todo) bool) {
 // preserves the original behaviour (used by callers that don't have the
 // child set on hand, e.g. on-disk loads).
 func sortTodosBySequenceWithRollup(todos []todo.Todo, rollup map[string]float64) {
-	sortTodosBySequenceWithRollupBy(todos, rollup, sequenceScore)
+	sortTodosBySequenceWithRollupBy(todos, rollup, sequenceScoreNow())
 }
 
 // sortTodosBySequenceWithRollupBy is the parameterised form of
