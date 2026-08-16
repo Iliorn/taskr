@@ -8,6 +8,8 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+## [1.32.0] - 2026-08-16
+
 ### Added
 
 - **The board scrolls sideways.** Splitting the width across every stage is
