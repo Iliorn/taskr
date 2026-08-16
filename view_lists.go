@@ -840,6 +840,7 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	tagsPart := m.getRenderedTagsForTask(&t)
 	mainW := len([]rune(cursorStr)) + 4 + len([]rune(rowTail))
 	tagsStr := ""
+	tagsDrawnW := 0
 	if tagsPart != "" {
 		tagsW := tagsRenderWidth(t.Tags)
 		if mainW+1+tagsW <= m.termWidth-8 {
@@ -848,19 +849,23 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 			} else {
 				tagsStr = " " + tagsPart
 			}
+			tagsDrawnW = 1 + tagsW
 		} else {
 			// Render the omission marker as the Tags-column value, in tag colour.
 			// The fixed cursor+checkbox prefix occupies six cells and is rendered
 			// separately below so the done checkmark can keep its own colour.
 			rowTail, tagsStr = renderTaskTagOverflow(rowTail, m.termWidth-8-6, selected)
+			tagsDrawnW = 4 // " (…)"
 		}
 	}
 
 	if selected {
+		drawn := len([]rune(cursorStr)) + 4 + len([]rune(rowTail)) + tagsDrawnW
 		return fastSelectedRow.render(cursorStr+"[") +
 			fastCheckDone.render("✓") +
 			fastSelectedRow.render("] "+rowTail) +
-			tagsStr + "\n"
+			tagsStr +
+			selectedRowTail(fastSelectedRow, drawn, m.termWidth-8) + "\n"
 	}
 	return fastNormal.render(cursorStr+"[") +
 		fastCheckDone.render("✓") +
@@ -895,7 +900,8 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 	body := "   " + connector + " " + check + " " + title
 
 	if selected {
-		return fastSelectedRow.render(cursorStr+body) + "\n"
+		return fastSelectedRow.render(cursorStr+body) +
+			selectedRowTail(fastSelectedRow, len([]rune(cursorStr+body)), m.termWidth-8) + "\n"
 	}
 	if sub.Status == todo.Done {
 		// Keep ✓ in checkDoneStyle so the done marker stays legible
@@ -985,6 +991,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 
 	// Only append tags if they fit within the inner panel content width.
 	tagsStr := ""
+	tagsDrawnW := 0
 	if tagsPart != "" {
 		tagsW := tagsRenderWidth(t.Tags)
 		if len([]rune(line))+1+tagsW <= m.termWidth-8 {
@@ -993,10 +1000,12 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 			} else {
 				tagsStr = " " + tagsPart
 			}
+			tagsDrawnW = 1 + tagsW
 		} else {
 			// The omission marker is a Tags-column value, not part of whichever
 			// preceding column happened to be last, so it keeps the tag colour.
 			line, tagsStr = renderTaskTagOverflow(line, m.termWidth-8, selected)
+			tagsDrawnW = 4 // " (…)"
 		}
 	}
 
@@ -1021,6 +1030,10 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		st = fastSelectedRow
 	default:
 		st = fastNormal
+	}
+	if selected {
+		return st.render(line) + tagsStr +
+			selectedRowTail(st, len([]rune(line))+tagsDrawnW, m.termWidth-8) + "\n"
 	}
 	return st.render(line) + tagsStr + "\n"
 }

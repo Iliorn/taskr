@@ -8,6 +8,15 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The selected row is highlighted all the way across.** The highlight covered
+  only what the row had drawn, so on the Overview it stopped wherever that
+  task's last column ended — at the Tags column on a task with no tags, a few
+  characters in on a subtask — and the bar looked like a block sitting in the
+  middle of the list rather than the line you are on. It now reaches the
+  panel's right edge on every row: task, subtask and completed alike.
+
 ## [1.33.0] - 2026-08-16
 
 ### Added

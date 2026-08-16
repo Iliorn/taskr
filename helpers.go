@@ -169,6 +169,21 @@ func renderSelectedTaskTagsPart(tags []string) string {
 	return taskTagSelectedRowStyle.Render(sb.String())
 }
 
+// selectedRowTail fills the rest of a selected row with the selection
+// background. A row's columns stop where its content does — a task with no
+// tags ends at the Project column, a subtask a few characters after its title —
+// so without this the highlight ends partway across the pane, which reads as a
+// stray block rather than "this is the row you are on". drawn is the display
+// width the row has already emitted; contentW is the pane's inner width
+// (termWidth-8, the same budget the header pads itself to).
+func selectedRowTail(st fastStyle, drawn, contentW int) string {
+	pad := contentW - drawn
+	if pad <= 0 {
+		return ""
+	}
+	return st.render(strings.Repeat(" ", pad))
+}
+
 // renderTaskTagOverflow places a tag-coloured (…) in the Tags column when the
 // actual chips do not fit. It trims only as much trailing space/content from
 // the preceding columns as is needed to reserve the marker plus its one-cell

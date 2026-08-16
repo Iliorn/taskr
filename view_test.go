@@ -474,6 +474,66 @@ func TestSelectedTaskRowHighlightIncludesTags(t *testing.T) {
 	}
 }
 
+// The selected row is a bar, not a stretch of coloured text: it has to reach
+// the pane's right edge whether or not the task has tags, or it stops wherever
+// that row's last column happened to end — at the Tags column on a tagless
+// task — and reads as a block sitting in the middle of the list.
+func TestSelectedRowHighlightReachesThePaneEdge(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	applyTheme(themes[0])
+	defer func() {
+		lipgloss.SetColorProfile(before)
+		applyTheme(themes[0])
+	}()
+
+	tagged := todo.New("Tagged task")
+	tagged.Tags = []string{"home"}
+	bare := todo.New("Bare task")
+	parent := todo.New("Parent task")
+	sub := todo.New("A subtask")
+	sub.ParentID = parent.ID
+
+	m := modelWithTasks(t, tagged, bare, parent, sub)
+	m.termWidth = 100
+	m.expandedTasks[parent.ID] = true
+	m.refreshCaches()
+
+	selStyle := newFastStyle(selectedRowStyle)
+	for title, id := range map[string]string{
+		"Tagged task": tagged.ID,
+		"Bare task":   bare.ID,
+		"A subtask":   sub.ID,
+	} {
+		m.cursor = m.visibleActiveIndexOf(id)
+		if m.cursor < 0 {
+			t.Fatalf("%s should be a visible row", title)
+		}
+
+		var row string
+		for _, line := range strings.Split(m.renderTaskList(), "\n") {
+			if strings.Contains(ansi.Strip(line), title) {
+				row = line
+				break
+			}
+		}
+		if row == "" {
+			t.Fatalf("%s row should render", title)
+		}
+		if w := ansi.StringWidth(row); w != m.termWidth-8 {
+			t.Errorf("selected %q row spans %d columns, want the pane's %d", title, w, m.termWidth-8)
+		}
+		tail := strings.TrimSuffix(row, selStyle.suffix)
+		cut := strings.LastIndex(tail, selStyle.prefix)
+		if cut < 0 {
+			t.Fatalf("selected %q row should carry the selection background: %q", title, row)
+		}
+		if pad := tail[cut+len(selStyle.prefix):]; strings.TrimLeft(pad, " ") != "" {
+			t.Errorf("selected %q row should end in selection-styled padding, got %q", title, pad)
+		}
+	}
+}
+
 func TestTaskTagOverflowShowsTruncationMarker(t *testing.T) {
 	before := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
