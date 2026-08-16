@@ -788,3 +788,63 @@ func TestDetailScrollReachesWrappedComment(t *testing.T) {
 		t.Error("selected comment should be scrolled into view")
 	}
 }
+
+// The boxed footer fields — search, quick-add, the pickers, the palette — are
+// drawn under a pane and have to line up with it. They carry the panels'
+// MarginLeft(2) to manage it; without it every box is inset two columns to the
+// left of everything above it, which is exactly what it looks like. The plain
+// footer rows (hints, prompts, picker results) share the same rule one level
+// in: a 4-cell gutter puts their text in the box's own text column.
+func TestFooterBoxesLineUpWithThePaneAbove(t *testing.T) {
+	a := todo.New("alpha")
+	a.AddTag("home")
+	base := modelWithTasks(t, a, todo.New("beta"))
+
+	for _, mode := range []struct {
+		name string
+		set  func(*model)
+	}{
+		{"search", func(m *model) { m.mode = modeSearch; m.searchInput.SetValue("ho") }},
+		{"quick add", func(m *model) { m.mode = modeInput; m.textInput.SetValue("buy milk") }},
+		{"dependency picker", func(m *model) { m.mode = modeSearchDep; m.depSearchInput.SetValue("a") }},
+		{"tag picker", func(m *model) { m.mode = modeSearchTag; m.tagSearchInput.SetValue("h") }},
+		{"project picker", func(m *model) { m.mode = modeSearchProject }},
+		{"palette", func(m *model) { m.mode = modePalette; m.paletteInput.SetValue("bo") }},
+		{"stage editor", func(m *model) { m.mode = modeEditStages; m.textInput.SetValue(stagesDisplay()) }},
+	} {
+		// Both layouts: stacked (one box per line) and side-by-side, where the
+		// list area is two boxes and only the leftmost edge is comparable.
+		for _, w := range []int{90, 140} {
+			m := base
+			m.termWidth, m.termHeight = w, 26
+			mode.set(&m)
+
+			type edge struct {
+				line string
+				col  int
+			}
+			var edges []edge
+			for _, line := range strings.Split(ansi.Strip(m.View()), "\n") {
+				i := strings.IndexAny(line, "╭╰")
+				if i < 0 {
+					continue
+				}
+				edges = append(edges, edge{line, ansi.StringWidth(line[:i])})
+			}
+			if len(edges) < 4 {
+				t.Fatalf("%s at w=%d: found %d box edges, expected a pane and a field",
+					mode.name, w, len(edges))
+			}
+			for _, e := range edges[1:] {
+				if e.col != edges[0].col {
+					t.Errorf("%s at w=%d: box starts at column %d, the pane above at %d:\n%s\n%s",
+						mode.name, w, e.col, edges[0].col, edges[0].line, e.line)
+				}
+				if got, want := ansi.StringWidth(e.line), ansi.StringWidth(edges[0].line); got != want {
+					t.Errorf("%s at w=%d: box line is %d cells wide, the pane above %d:\n%s\n%s",
+						mode.name, w, got, want, edges[0].line, e.line)
+				}
+			}
+		}
+	}
+}

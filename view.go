@@ -638,7 +638,9 @@ func (m model) footerContentFor(w int) string {
 		}
 		return field
 	case modeIdlePrompt, modeConfirmUpdate:
-		return calTodayStyle.Render(m.confirmMsg)
+		// Same 4-space gutter as the key hints these prompts replace, so a
+		// prompt appears where the line it stands in for was.
+		return calTodayStyle.Render("    " + m.confirmMsg)
 	case modeSearch:
 		field := searchStyle.Width(w).Render(m.searchInput.View())
 		// Same two-stage footer as quick-add: while the caret sits in a #tag /
@@ -772,7 +774,7 @@ func (m model) footerContentFor(w int) string {
 	case modePalette:
 		return m.renderPalette(w)
 	case modeConfirm:
-		return confirmStyle.Render(m.confirmMsg)
+		return confirmStyle.Render("    " + m.confirmMsg)
 	}
 	return ""
 }
@@ -788,7 +790,7 @@ func (m model) renderPalette(w int) string {
 	results := paletteResults(m.paletteInput.Value())
 	sel := m.paletteSelection(len(results))
 	if len(results) == 0 {
-		b.WriteString("\n" + dimStyle.Render("  "+tr("No command matches that.")))
+		b.WriteString("\n" + dimStyle.Render("    "+tr("No command matches that.")))
 		for i := 1; i < maxPaletteResults; i++ {
 			b.WriteString("\n")
 		}
@@ -811,16 +813,21 @@ func (m model) renderPalette(w int) string {
 				meta += "  " + c.section
 			}
 			label := c.label
-			gap := w - 4 - len([]rune(label)) - len([]rune(meta))
+			// The row occupies the field's own text columns — a 4-cell gutter
+			// for the cursor (margin 2 + border + padding), then the field's
+			// inner width — so the palette reads as one block with the box
+			// above it rather than a list shifted out from under it.
+			inner := w - 2
+			gap := inner - len([]rune(label)) - len([]rune(meta))
 			if gap < 2 {
 				gap = 2
-				label = truncate(label, w-6-len([]rune(meta)))
+				label = truncate(label, inner-2-len([]rune(meta)))
 			}
-			row := "  " + label + strings.Repeat(" ", gap) + meta
+			row := label + strings.Repeat(" ", gap) + meta
 			if idx == sel {
-				b.WriteString("\n" + selectedStyle.Render("→"+row))
+				b.WriteString("\n" + selectedStyle.Render("  → "+row))
 			} else {
-				b.WriteString("\n" + normalStyle.Render(" "+row[1:]) + "")
+				b.WriteString("\n" + normalStyle.Render("    "+row))
 			}
 		default:
 			b.WriteString("\n")

@@ -256,12 +256,15 @@ func applyTheme(t theme) {
 	detailValueStyle = lipgloss.NewStyle().Foreground(t.fg)
 	detailSelectedStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
 
-	inputStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.accent).Padding(0, 1)
+	// The boxed footer fields carry the panels' MarginLeft(2) so their borders
+	// sit in the same two columns as the pane above them — without it the box
+	// is inset two columns to the left of everything it appears under.
+	inputStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.accent).Padding(0, 1).MarginLeft(2)
 	confirmStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
 	toastErrorStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
 	toastSuccessStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
 	toastInfoStyle = lipgloss.NewStyle().Foreground(t.blue).Bold(true)
-	searchStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.green).Padding(0, 1)
+	searchStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.green).Padding(0, 1).MarginLeft(2)
 	dimStyle = lipgloss.NewStyle().Foreground(t.dim)
 
 	focusChipStyle = lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(t.orange).Padding(0, 1)

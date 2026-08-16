@@ -38,6 +38,14 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Changed
 
+- **The footer's boxed fields line up with the pane above them.** The search
+  field, quick-add, the pickers and the command palette were all drawn two
+  columns to the left of the box they appear under, so opening any of them put
+  a visible step in the left edge of the screen. They now carry the same margin
+  the panes do, which also lands their text in the column the key hints were
+  already written for. The palette's rows and the confirm prompts moved onto
+  that column with them.
+
 - **The Activity chart is taller.** Its caption — the range, the completions in
   it, and what one block means — moved onto the panel's border, in brackets
   beside "Activity", the way the task list already carries its position and
