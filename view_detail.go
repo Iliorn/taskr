@@ -123,7 +123,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		// Settings rows work — so the hint says so, since this is the only
 		// field in the pane where those keys mean something else.
 		left.WriteString(renderField(tr("Stage"),
-			activeStages[stageIndex(t.Stage)]+dimStyle.Render("  ‹←/→›"), fieldStage) + "\n")
+			stageDisplay(t.Stage)+dimStyle.Render("  ‹←/→›"), fieldStage) + "\n")
 	}
 	left.WriteString(renderField(tr("Project"), projectVal, fieldProject) + "\n")
 	left.WriteString(renderField(tr("Notes"), notesVal, fieldNotes) + "\n")

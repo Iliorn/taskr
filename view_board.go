@@ -8,10 +8,10 @@ import (
 )
 
 // view_board.go renders the Board tab: one kanban column per configured stage
-// (settings.json "stages") plus a trailing Done column. The board is a
-// different projection of the same filtered lists the Tasks tab shows — cards
-// inherit the active list's sequence order and the done list's recency order,
-// and the active search filter applies unchanged.
+// (settings.json "stages"), the last of which is the Done column. The board is
+// a different projection of the same filtered lists the Tasks tab shows —
+// cards inherit the active list's sequence order and the done list's recency
+// order, and the active search filter applies unchanged.
 
 const (
 	boardColGap  = 2
@@ -28,18 +28,18 @@ const (
 )
 
 // buildBoardColumns splits the filtered active/done lists into per-column
-// card lists: index i < len(activeStages) is stage i, the last index is Done
-// (capped at boardDoneCards). Pure so refreshCaches can derive it and tests
-// can drive it directly.
+// card lists: one column per entry of activeStages, with the last one holding
+// the done tasks (capped at boardDoneCards) rather than a stage. Pure so
+// refreshCaches can derive it and tests can drive it directly.
 func buildBoardColumns(active, done []todo.Todo) [][]todo.Todo {
-	cols := make([][]todo.Todo, len(activeStages)+1)
+	cols := make([][]todo.Todo, len(activeStages))
 	for i := range active {
 		cols[stageIndex(active[i].Stage)] = append(cols[stageIndex(active[i].Stage)], active[i])
 	}
 	if len(done) > boardDoneCards {
 		done = done[:boardDoneCards]
 	}
-	cols[len(activeStages)] = append([]todo.Todo(nil), done...)
+	cols[doneColumn()] = append([]todo.Todo(nil), done...)
 	return cols
 }
 
@@ -55,10 +55,11 @@ func (m model) boardColumns() [][]todo.Todo {
 	return buildBoardColumns(m.cache.active, m.cache.done)
 }
 
-// boardColTitles returns the column headers: the stage names plus Done.
+// boardColTitles returns the column headers — the configured names verbatim,
+// the last of which heads the Done column. They are user text, so they are not
+// translated: a board whose columns you named is shown the way you named them.
 func boardColTitles() []string {
-	titles := append([]string(nil), activeStages...)
-	return append(titles, tr("Done"))
+	return append([]string(nil), activeStages...)
 }
 
 // boardSelection clamps the stored board cursor against the current columns,

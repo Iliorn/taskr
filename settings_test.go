@@ -74,6 +74,69 @@ func TestLoadSettingsMigratesLegacyVersion0(t *testing.T) {
 	}
 }
 
+// v2 moved the Done column into the "stages" list as its last entry. A v1 file
+// listed only the working columns, so reading one unchanged would promote its
+// last one ("Review") to Done and file every card in it under completed work.
+// The migration appends the column the v1 renderer drew — in the language it
+// drew it in, since that is the heading the user was looking at.
+func TestSettingsMigrationKeepsTheOldLastColumnWorking(t *testing.T) {
+	cases := []struct {
+		name    string
+		version int
+		lang    string
+		in      []string
+		want    []string
+	}{
+		{"v1 list gains the Done column", 1, "", []string{"Backlog", "In progress", "Review"},
+			[]string{"Backlog", "In progress", "Review", "Done"}},
+		{"legacy pre-version file too", 0, "", []string{"Todo", "Doing"},
+			[]string{"Todo", "Doing", "Done"}},
+		{"in the language the column was shown in", 1, "da", []string{"Todo"},
+			[]string{"Todo", "Færdige"}},
+		{"an unset list still means the defaults", 1, "", nil, nil},
+	}
+	for _, c := range cases {
+		got := migrateSettings(c.version, appSettings{Version: c.version, Language: c.lang, Stages: c.in})
+		if !reflect.DeepEqual(got.Stages, c.want) {
+			t.Errorf("%s: stages = %v, want %v", c.name, got.Stages, c.want)
+		}
+		if got.Version != currentSettingsVersion {
+			t.Errorf("%s: version = %d, want %d", c.name, got.Version, currentSettingsVersion)
+		}
+	}
+
+	// End to end: the migrated list still has Review as a working column, so a
+	// card sitting there stays pending work rather than joining the done pile.
+	if err := os.MkdirAll(filepath.Dir(settingsPath()), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	defer os.Remove(settingsPath())
+	v1 := `{"version":1,"stages":["Backlog","In progress","Review"]}`
+	if err := os.WriteFile(settingsPath(), []byte(v1), 0644); err != nil {
+		t.Fatalf("write v1: %v", err)
+	}
+	s, err := loadSettings()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	stages := stagesFromSettings(s)
+	if want := []string{"Backlog", "In progress", "Review", "Done"}; !reflect.DeepEqual(stages, want) {
+		t.Fatalf("migrated board = %v, want %v", stages, want)
+	}
+	withStages(t, stages, func() {
+		if _, ok := canonicalStage("Review"); !ok {
+			t.Error("Review stopped being a working column after the migration")
+		}
+	})
+
+	// A file already on v2 is left alone — migrating twice would append a
+	// second Done column every launch.
+	twice := migrateSettings(currentSettingsVersion, appSettings{Version: currentSettingsVersion, Stages: []string{"Todo", "Done"}})
+	if want := []string{"Todo", "Done"}; !reflect.DeepEqual(twice.Stages, want) {
+		t.Errorf("re-migrated stages = %v, want %v", twice.Stages, want)
+	}
+}
+
 // TestSaveSettingsStampsVersion confirms saveSettings always writes the
 // current schema version, even if the caller forgot to set it.
 func TestSaveSettingsStampsVersion(t *testing.T) {

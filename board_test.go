@@ -30,6 +30,10 @@ func TestStagesFromSettings(t *testing.T) {
 		{"all-blank falls back to defaults", []string{"", "  "}, defaultStages()},
 		{"trims and keeps order", []string{" Todo ", "Doing"}, []string{"Todo", "Doing"}},
 		{"dedupes case-insensitively onto first spelling", []string{"Todo", "todo", "Done-ish"}, []string{"Todo", "Done-ish"}},
+		// One name cannot be both the work and the finish line, so the missing
+		// half is supplied rather than leaving a board with no working column.
+		{"a lone column gains a Done column", []string{"Doing"}, []string{"Doing", "Done"}},
+		{"a lone Done column gains a working one", []string{"done"}, []string{"Backlog", "done"}},
 	}
 	for _, c := range cases {
 		if got := stagesFromSettings(appSettings{Stages: c.in}); !reflect.DeepEqual(got, c.want) {
@@ -39,13 +43,17 @@ func TestStagesFromSettings(t *testing.T) {
 }
 
 func TestStageIndexAndCanonical(t *testing.T) {
-	withStages(t, []string{"Todo", "Doing", "Waiting"}, func() {
+	withStages(t, []string{"Todo", "Doing", "Waiting", "Shipped"}, func() {
 		for stage, want := range map[string]int{
 			"":        0, // fresh task → first column
 			"Todo":    0,
 			"doing":   1, // case-insensitive
 			"Waiting": 2,
 			"Review":  0, // renamed-away stage strands visibly in the first column
+			// The last column is Done, not a stage: a task carrying its name is
+			// still pending, so it belongs in the first column and not among the
+			// completed work.
+			"Shipped": 0,
 		} {
 			if got := stageIndex(stage); got != want {
 				t.Errorf("stageIndex(%q) = %d, want %d", stage, got, want)
@@ -57,6 +65,54 @@ func TestStageIndexAndCanonical(t *testing.T) {
 		}
 		if _, ok := canonicalStage("nope"); ok {
 			t.Error("canonicalStage('nope') should not resolve")
+		}
+		// --stage <the Done column> would be a second way to complete a task,
+		// which is exactly what the one-close-path rule forbids.
+		if _, ok := canonicalStage("Shipped"); ok {
+			t.Error("canonicalStage resolved the Done column — --stage would complete a task")
+		}
+	})
+}
+
+// The last configured column *is* Done: renaming it renames the heading the
+// completed cards sit under, and does not add a fifth column or turn the
+// renamed name into a stage a pending task can hold.
+func TestLastColumnIsDoneWhateverItIsCalled(t *testing.T) {
+	pending := todo.New("still going")
+	pending.Stage = "Review"
+	finished := todo.New("shipped")
+	finished.Status = todo.Done
+	finished.CompletedAt = time.Now()
+
+	m := newTagModel(pending, finished)
+	withStages(t, []string{"Backlog", "In progress", "Review", "Shipped"}, func() {
+		m.markCacheDirty()
+		m.ensureCache()
+		cols := m.boardColumns()
+		if len(cols) != 4 {
+			t.Fatalf("columns = %d, want the 4 configured ones", len(cols))
+		}
+		if titles := boardColTitles(); titles[len(titles)-1] != "Shipped" {
+			t.Errorf("last column heading = %q, want the configured name", titles[len(titles)-1])
+		}
+		if got := cols[doneColumn()]; len(got) != 1 || got[0].Title != "Shipped" {
+			t.Errorf("Done column = %v, want the completed task", got)
+		}
+		if got := cols[2]; len(got) != 1 || got[0].Title != "Still going" {
+			t.Errorf("Review column = %v, want the pending task", got)
+		}
+		// And the arrows in the detail pane still cannot walk a task into it.
+		seen := map[string]bool{}
+		stage := ""
+		for i := 0; i < len(activeStages)+2; i++ {
+			stage = cycleStage(stage, 1)
+			seen[stage] = true
+		}
+		if seen["Shipped"] {
+			t.Error("cycleStage reached the Done column")
+		}
+		if len(seen) != len(pendingStages()) {
+			t.Errorf("cycleStage visited %d columns, want the %d working ones", len(seen), len(pendingStages()))
 		}
 	})
 }
@@ -77,7 +133,7 @@ func TestBoardColumnsSplitByStage(t *testing.T) {
 	cols := m.boardColumns()
 
 	if len(cols) != 4 {
-		t.Fatalf("columns = %d, want 4 (3 stages + Done)", len(cols))
+		t.Fatalf("columns = %d, want 4 (3 working columns + Done)", len(cols))
 	}
 	for i, want := range []string{"Fresh task", "Moving task", "Almost there", "Shipped"} {
 		if len(cols[i]) != 1 || cols[i][0].Title != want {
@@ -143,7 +199,7 @@ func TestParseStagesInput(t *testing.T) {
 	}{
 		{"splits and trims", "Todo, Doing , Waiting", []string{"Todo", "Doing", "Waiting"}},
 		{"drops blanks from stray commas", "Todo,,Doing,", []string{"Todo", "Doing"}},
-		{"dedupes like a hand-edited settings.json", "Todo, todo", []string{"Todo"}},
+		{"dedupes like a hand-edited settings.json", "Todo, todo", []string{"Todo", "Done"}},
 		{"empty line falls back to the defaults", "   ", defaultStages()},
 	}
 	for _, c := range cases {
@@ -165,26 +221,34 @@ func TestStageRemap(t *testing.T) {
 	}{
 		{
 			"rename in place keeps the column",
-			[]string{"Backlog", "In progress", "Review"},
-			[]string{"Backlog", "In progress", "QA"},
+			[]string{"Backlog", "In progress", "Review", "Done"},
+			[]string{"Backlog", "In progress", "QA", "Done"},
 			map[string]string{"review": "QA"},
 		},
 		{
-			"dropped tail column hands cards to the last one",
-			[]string{"Backlog", "In progress", "Review"},
-			[]string{"Backlog", "In progress"},
+			"dropped tail column hands cards to the last working one",
+			[]string{"Backlog", "In progress", "Review", "Done"},
+			[]string{"Backlog", "In progress", "Done"},
 			map[string]string{"review": "In progress"},
 		},
 		{
 			"unchanged names are not remapped",
-			[]string{"Backlog", "Doing"},
-			[]string{"Backlog", "Doing", "Review"},
+			[]string{"Backlog", "Doing", "Done"},
+			[]string{"Backlog", "Doing", "Review", "Done"},
 			map[string]string{},
 		},
 		{
 			"case-only rename is a no-op for the cards",
-			[]string{"Backlog"},
-			[]string{"backlog"},
+			[]string{"Backlog", "Done"},
+			[]string{"backlog", "Done"},
+			map[string]string{},
+		},
+		{
+			// Done cards are found by status, so the last column's heading can
+			// change without touching a single stored stage.
+			"renaming the Done column moves nothing",
+			[]string{"Backlog", "Doing", "Done"},
+			[]string{"Backlog", "Doing", "Shipped"},
 			map[string]string{},
 		},
 	}

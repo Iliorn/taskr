@@ -38,6 +38,18 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Changed
 
+- **The Done column is the last one in your list, and you can rename it.** It
+  used to be drawn on the end and left out of the column list, so it was the
+  one column on the board you could not name — a board otherwise entirely
+  yours ended in a word chosen for you. It is now the final entry of Settings →
+  "Board columns": call it *Shipped*, *Archive* or *Færdige*, and the completed
+  cards sit under that heading. What it *does* has not moved an inch — the last
+  column is still `Status == Done` rather than a stored stage, so moving a card
+  into it completes the task through the same path `d` uses, and neither the
+  detail pane's Stage row nor `taskr edit --stage` can reach it. Existing
+  configurations gain the column they were already being shown, under the name
+  they were already seeing it, so nothing on screen moves on upgrade.
+
 - **The search parse preview appears wherever the grammar runs.** It was
   limited to the Tasks tab on the belief that no other tab compiled the query.
   The Board and Stats both do — the Board's columns are a projection of the

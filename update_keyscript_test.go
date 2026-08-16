@@ -845,7 +845,7 @@ func TestScriptBoardMoveCardAcrossStages(t *testing.T) {
 	if got.SeqRankAtDone == 0 {
 		t.Error("board close did not capture the sequence rank")
 	}
-	if m.board.col != len(activeStages) {
+	if m.board.col != doneColumn() {
 		t.Errorf("focus should follow into the Done column, col = %d", m.board.col)
 	}
 
@@ -977,7 +977,7 @@ func TestScriptEditBoardColumnsFromSettings(t *testing.T) {
 	// building the model — and put both the global and the file back, or the
 	// edited list leaks into every model a later test builds.
 	restoreStages(t)
-	applyStages([]string{"Backlog", "In progress", "Review"})
+	applyStages([]string{"Backlog", "In progress", "Review", "Done"})
 	m.markCacheDirty()
 
 	m = sendKey(t, m, "7")
@@ -986,17 +986,17 @@ func TestScriptEditBoardColumnsFromSettings(t *testing.T) {
 	if m.mode != modeEditStages {
 		t.Fatalf("enter on the Board columns row: mode = %v, want modeEditStages", m.mode)
 	}
-	if got := m.textInput.Value(); got != "Backlog, In progress, Review" {
+	if got := m.textInput.Value(); got != "Backlog, In progress, Review, Done" {
 		t.Fatalf("editor pre-fill = %q, want the current list", got)
 	}
 
-	m.textInput.SetValue("Backlog, In progress, QA")
+	m.textInput.SetValue("Backlog, In progress, QA, Done")
 	m = sendKey(t, m, "enter")
 
 	if m.mode != modeNormal {
 		t.Fatalf("after applying: mode = %v, want modeNormal", m.mode)
 	}
-	if want := []string{"Backlog", "In progress", "QA"}; !reflect.DeepEqual(activeStages, want) {
+	if want := []string{"Backlog", "In progress", "QA", "Done"}; !reflect.DeepEqual(activeStages, want) {
 		t.Fatalf("activeStages = %v, want %v", activeStages, want)
 	}
 	if got := m.get(card.ID); got == nil || got.Stage != "QA" {
@@ -1011,7 +1011,7 @@ func TestScriptEditBoardColumnsFromSettings(t *testing.T) {
 	// applyStageEdit.)
 	m = settingsCursorTo(t, m, settingStages)
 	m = sendKey(t, m, "enter")
-	m.textInput.SetValue("Backlog, In progress, Review")
+	m.textInput.SetValue("Backlog, In progress, Review, Done")
 	m = sendKey(t, m, "enter")
 	if got := m.get(card.ID); got == nil || got.Stage != "Review" {
 		t.Fatalf("after renaming the column back: card stage = %v, want Review", got)
@@ -1023,7 +1023,7 @@ func TestScriptEditBoardColumnsFromSettings(t *testing.T) {
 func TestScriptEditBoardColumnsEscapeKeepsList(t *testing.T) {
 	m := modelWithTasks(t, todo.New("ship the release"))
 	restoreStages(t)
-	applyStages([]string{"Backlog", "In progress", "Review"})
+	applyStages([]string{"Backlog", "In progress", "Review", "Done"})
 	m.markCacheDirty()
 	m = sendKey(t, m, "7")
 	m = settingsCursorTo(t, m, settingStages)
@@ -1034,7 +1034,7 @@ func TestScriptEditBoardColumnsEscapeKeepsList(t *testing.T) {
 	if m.mode != modeNormal {
 		t.Fatalf("esc: mode = %v, want modeNormal", m.mode)
 	}
-	if want := []string{"Backlog", "In progress", "Review"}; !reflect.DeepEqual(activeStages, want) {
+	if want := []string{"Backlog", "In progress", "Review", "Done"}; !reflect.DeepEqual(activeStages, want) {
 		t.Errorf("activeStages = %v, want the list unchanged %v", activeStages, want)
 	}
 }

@@ -1047,7 +1047,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 					if m.closePendingTask(t) {
-						m.boardFollow(len(activeStages), t.ID)
+						m.boardFollow(doneColumn(), t.ID)
 					}
 				}
 			}

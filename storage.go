@@ -27,7 +27,7 @@ func taskrDir() string {
 
 // currentSettingsVersion is stamped into newly written settings.json. Bump it
 // when the on-disk shape changes in a way migrateSettings must handle.
-const currentSettingsVersion = 1
+const currentSettingsVersion = 2
 
 type appSettings struct {
 	// Version is the schema marker for migrateSettings. Zero means "legacy
@@ -76,9 +76,10 @@ type appSettings struct {
 
 	// Stages is the ordered kanban column list for the Board tab (edited by
 	// hand — everyone has their own naming scheme). Empty means the defaults
-	// (Backlog / In progress / Review); persistSettings writes the active
-	// list out so the field is discoverable in settings.json. The board's
-	// final column is always Done and is not part of this list.
+	// (Backlog / In progress / Review / Done); persistSettings writes the
+	// active list out so the field is discoverable in settings.json. The last
+	// entry is the Done column: renameable like any other, but always the one
+	// holding the completed tasks (see board.go).
 	Stages []string `json:"stages,omitempty"`
 
 	// Keys rebinds actions to keys: {"done": "D", "search": "s"}. Keyed by the
@@ -89,12 +90,30 @@ type appSettings struct {
 }
 
 // migrateSettings brings settings saved under an older schema version up to
-// the current one. No-op today; future breaking field changes get a case
-// here so old files are converted rather than silently misread.
+// the current one, so old files are converted rather than silently misread.
+//
+// v2 made the last entry of "stages" the Done column. Under v1 that column was
+// implicit and appended by the renderer, so reading a v1 list unchanged would
+// silently promote its last working column ("Review") to Done and file every
+// card in it under completed work. Appending the column the old renderer drew
+// is the exact inverse — and it is appended in the *user's* language, because
+// that is the heading v1 showed them.
 func migrateSettings(version int, s appSettings) appSettings {
-	_ = version
+	if version < 2 && len(s.Stages) > 0 {
+		s.Stages = append(s.Stages, doneStageIn(language(s.Language)))
+	}
 	s.Version = currentSettingsVersion
 	return s
+}
+
+// doneStageIn is the default Done heading in a given language. Migration runs
+// before applyLang (loadSettings is what tells us which language to apply), so
+// it cannot go through tr.
+func doneStageIn(l language) string {
+	if t, ok := translations[l][defaultDoneStage]; ok && t != "" {
+		return t
+	}
+	return defaultDoneStage
 }
 
 // biasesFromSettings is the small adapter between the persisted appSettings

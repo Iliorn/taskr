@@ -12,7 +12,8 @@ import (
 // usable: a column window that scrolls, a Stage field in the detail pane, and
 // a switch that removes the whole surface for people who never use it.
 
-// manyStages installs an n-stage board and restores the previous list. It must
+// manyStages installs a board of n columns — n-1 working ones plus the Done
+// column that always ends the list — and restores the previous list. It must
 // be called *after* the model is built: initialModel re-applies settings.json,
 // which would reset activeStages to the defaults underneath it.
 func manyStages(t *testing.T, n int) func() {
@@ -21,12 +22,12 @@ func manyStages(t *testing.T, n int) func() {
 	stages := make([]string, 0, n)
 	for _, name := range []string{"Active", "On hold", "Awaiting", "Review", "Blocked",
 		"Cancelled", "Later", "Icebox", "Triage", "Ready"} {
-		if len(stages) == n {
+		if len(stages) == n-1 {
 			break
 		}
 		stages = append(stages, name)
 	}
-	applyStages(stages)
+	applyStages(append(stages, "Done"))
 	return func() { applyStages(prev) }
 }
 
@@ -64,7 +65,7 @@ func TestBoardWindowShowsWhatFitsAndScrolls(t *testing.T) {
 // That is what makes it scroll a column at a time rather than jump.
 func TestBoardWindowFollowsTheFocusedColumn(t *testing.T) {
 	m := modelWithTasks(t, todo.New("a card"))
-	defer manyStages(t, 10)()
+	defer manyStages(t, 11)()
 	m.termWidth, m.termHeight = 120, 30
 	m.switchTab(tabBoard)
 	m.markCacheDirty()
@@ -100,7 +101,7 @@ func TestBoardWindowFollowsTheFocusedColumn(t *testing.T) {
 // A scrolled board must say so, or it just looks like a board missing columns.
 func TestBoardTitleNamesTheVisibleSlice(t *testing.T) {
 	m := modelWithTasks(t, todo.New("a card"))
-	defer manyStages(t, 10)()
+	defer manyStages(t, 11)()
 	m.termWidth, m.termHeight = 120, 30
 	m.switchTab(tabBoard)
 	m.markCacheDirty()
@@ -134,15 +135,15 @@ func TestStageFieldCyclesWithTheArrows(t *testing.T) {
 	start := stageIndex(task.Stage)
 
 	m = sendKey(t, m, "right")
-	if got := stageIndex(m.get(task.ID).Stage); got != (start+1)%len(activeStages) {
-		t.Errorf("→ moved to stage %d, want %d", got, (start+1)%len(activeStages))
+	if got := stageIndex(m.get(task.ID).Stage); got != (start+1)%len(pendingStages()) {
+		t.Errorf("→ moved to stage %d, want %d", got, (start+1)%len(pendingStages()))
 	}
 	m = sendKey(t, m, "left")
 	if got := stageIndex(m.get(task.ID).Stage); got != start {
 		t.Errorf("← did not undo →: stage %d, want %d", got, start)
 	}
-	// It wraps rather than stopping at the ends, and never reaches Done —
-	// completing a task has one path, and it is not this one.
+	// It wraps rather than stopping at the ends, and never reaches the last
+	// column — completing a task has one path, and it is not this one.
 	for i := 0; i < len(activeStages)+2; i++ {
 		m = sendKey(t, m, "right")
 		if m.get(task.ID).Status != todo.Pending {

@@ -126,9 +126,9 @@ func (m *model) boardFollow(col int, id string) {
 }
 
 // boardMoveCard moves the selected card one column left or right: between
-// stages it's a stage edit (undoable), into the Done column it completes the
-// task via the shared close path, and out of Done it stages the reopen
-// confirm — the card then reappears in its stored stage.
+// stages it's a stage edit (undoable), into the last column it completes the
+// task via the shared close path, and out of it stages the reopen confirm —
+// the card then reappears in its stored stage.
 func (m *model) boardMoveCard(dir int) {
 	cols := m.boardColumns()
 	col, _ := m.boardSelection(cols)
@@ -136,7 +136,7 @@ func (m *model) boardMoveCard(dir int) {
 	if t == nil {
 		return
 	}
-	doneCol := len(activeStages)
+	doneCol := doneColumn()
 	target := col + dir
 	if target < 0 || target > doneCol {
 		return
@@ -152,7 +152,7 @@ func (m *model) boardMoveCard(dir int) {
 		return
 	}
 	m.pushUndo("move stage", t.ID)
-	t.SetStage(activeStages[target])
+	t.SetStage(pendingStages()[target])
 	m.markModified(t.ID)
 	m.boardFollow(target, t.ID)
 }

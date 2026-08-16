@@ -239,7 +239,7 @@ func cliAdd(args []string) int {
 	if *stage != "" {
 		name, ok := canonicalStage(*stage)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "taskr add: unknown stage %q (configured: %s)\n", *stage, strings.Join(activeStages, ", "))
+			fmt.Fprintf(os.Stderr, "taskr add: unknown stage %q (configured: %s)\n", *stage, strings.Join(pendingStages(), ", "))
 			return 2
 		}
 		stageName = name
@@ -1091,7 +1091,7 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo) {
 	}
 	fmt.Printf("Status:   %s\n", status)
 	if t.Status == todo.Pending && t.ParentID == "" {
-		fmt.Printf("Stage:    %s\n", activeStages[stageIndex(t.Stage)])
+		fmt.Printf("Stage:    %s\n", stageDisplay(t.Stage))
 	}
 	fmt.Printf("Priority: %s\n", t.Priority.String())
 	fmt.Printf("Size:     %s\n", t.Size.String())
@@ -1243,7 +1243,7 @@ func cliEdit(args []string) int {
 	if *stage != "" {
 		name, ok := canonicalStage(*stage)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "taskr edit: unknown stage %q (configured: %s)\n", *stage, strings.Join(activeStages, ", "))
+			fmt.Fprintf(os.Stderr, "taskr edit: unknown stage %q (configured: %s)\n", *stage, strings.Join(pendingStages(), ", "))
 			return 2
 		}
 		t.SetStage(name)

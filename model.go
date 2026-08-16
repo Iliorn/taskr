@@ -243,9 +243,9 @@ type calendarState struct {
 }
 
 // boardState is the Board tab's cursor: which column is focused and which
-// card within it. col indexes activeStages; col == len(activeStages) is the
-// Done column. Both are clamped at render/move time, so stale values after a
-// stage-list edit or task completion degrade to the nearest valid card.
+// card within it. col indexes activeStages, whose last entry (doneColumn) is
+// the Done column. Both are clamped at render/move time, so stale values after
+// a stage-list edit or task completion degrade to the nearest valid card.
 type boardState struct {
 	col    int
 	cursor int
