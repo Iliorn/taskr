@@ -8,6 +8,8 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+## [1.33.0] - 2026-08-16
+
 ### Added
 
 - **Backlog-review flags on `list`.** `--stale=30d` keeps only what nothing has
@@ -56,6 +58,16 @@ belong in the commit log, not here — unless they change behaviour.
   columns the bar shows `1 Tasks 2 Cal 3 Pro …` where it used to be bare
   digits. When the window really is too narrow for both, the hint now goes
   whole rather than leaving a fragment behind.
+
+- **The pre-migration backup says what it is for.** Upgrading the schema is
+  one-way: once a newer build has opened the store, an older taskr cannot —
+  migration 011 dropped a table, so a 1.25 binary fails on every command with
+  "no such table". The line announcing the backup named a file and nothing
+  else, which is a diagnosis away from being useful when it is a dev build or a
+  second machine mid-upgrade that did the upgrading. It now names the schema
+  step, says older builds can no longer open the store, and spells out the
+  rollback: stop whatever holds the database, copy the backup over it, delete
+  the `-wal`/`-shm` sidecars.
 
 ### Fixed
 
