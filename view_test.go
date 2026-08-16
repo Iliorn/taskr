@@ -848,3 +848,52 @@ func TestFooterBoxesLineUpWithThePaneAbove(t *testing.T) {
 		}
 	}
 }
+
+// The status line's corner is for the state you have to act on. A healthy sync
+// used to put a dim ✓ there — a symbol with nowhere to look it up, saying only
+// that nothing was wrong — so the corner now stays empty and Settings carries
+// the steady state in words. The failure keeps its place, and the help overlay
+// explains it: a mark nobody can decode is the thing this replaced.
+func TestStatusLineSpeaksOnlyWhenSyncFails(t *testing.T) {
+	on := true
+	configured := func(m *model) {
+		m.syncCfg = syncConfig{URL: "https://example.invalid", Token: "a-token", AutoSync: &on}
+		m.autoSync = true
+	}
+
+	for _, c := range []struct {
+		name string
+		set  func(*model)
+		want string // "" = the line says nothing
+	}{
+		{"sync not configured", func(m *model) {}, ""},
+		{"sync healthy", configured, ""},
+		{"sync failing", func(m *model) { configured(m); m.lastSyncFailed = true }, tr("✕ sync")},
+	} {
+		m := modelWithTasks(t, todo.New("alpha"))
+		m.termWidth, m.termHeight = 90, 20
+		c.set(&m)
+
+		got := strings.TrimSpace(ansi.Strip(m.renderStatusLine()))
+		if got != c.want {
+			t.Errorf("%s: status line = %q, want %q", c.name, got, c.want)
+		}
+		if strings.Contains(got, "✓") {
+			t.Errorf("%s: status line carries a ✓ again: %q", c.name, got)
+		}
+	}
+
+	// Whatever the line can still show has to be explained where symbols are
+	// looked up, or it is the same unreadable mark under a different glyph.
+	m := modelWithTasks(t, todo.New("alpha"))
+	m.termWidth, m.termHeight = 100, 40
+	m.mode = modeHelp
+	// The body rather than the rendered overlay: the sections below the fold
+	// are still what the overlay scrolls through.
+	help := ansi.Strip(strings.Join(m.helpBodyLines(), "\n"))
+	for _, mark := range []string{tr("✕ sync"), tr("⚡FOCUS")} {
+		if !strings.Contains(help, mark) {
+			t.Errorf("the help overlay does not explain %q", mark)
+		}
+	}
+}

@@ -692,10 +692,16 @@ var daTranslations = map[string]string{
 	"blocked — waiting on an unfinished dependency":             "blokeret — venter på en uafsluttet afhængighed",
 	"blocked — waiting on an unfinished dependency (ST column)": "blokeret — venter på en uafsluttet afhængighed (ST-kolonnen)",
 	"others depend on this — finishing it unblocks them":        "andre afhænger af denne — at afslutte den frigør dem",
-	"↑ scroll up":   "↑ rul op",
-	"↓ scroll down": "↓ rul ned",
-	"↑/↓ scroll":    "↑/↓ rul",
-	"⚡FOCUS":        "⚡FOKUS",
+
+	// ── Help: the status line ──
+	"Status line": "Statuslinje",
+	"background sync is failing — Settings has the error": "baggrundssynkronisering fejler — fejlen står under Indstillinger",
+	"the focus filter is on: today + overdue only":        "fokusfilteret er slået til: kun i dag + overskredne",
+	"a search filter is narrowing the list":               "et søgefilter indsnævrer listen",
+	"↑ scroll up":                                         "↑ rul op",
+	"↓ scroll down":                                       "↓ rul ned",
+	"↑/↓ scroll":                                          "↑/↓ rul",
+	"⚡FOCUS":                                              "⚡FOKUS",
 
 	// ── Unchanged in Danish, listed so the completeness check stays honest ──
 	"Score":      "Score",
@@ -1292,10 +1298,16 @@ var deTranslations = map[string]string{
 	"blocked — waiting on an unfinished dependency":             "blockiert — wartet auf offene Abhängigkeit",
 	"blocked — waiting on an unfinished dependency (ST column)": "blockiert — wartet auf offene Abhängigkeit (Spalte ST)",
 	"others depend on this — finishing it unblocks them":        "andere hängen daran — Abschluss gibt sie frei",
-	"↑ scroll up":   "↑ nach oben",
-	"↓ scroll down": "↓ nach unten",
-	"↑/↓ scroll":    "↑/↓ scrollen",
-	"⚡FOCUS":        "⚡FOKUS",
+
+	// ── Help: the status line ──
+	"Status line": "Statuszeile",
+	"background sync is failing — Settings has the error": "Hintergrund-Sync schlägt fehl — der Fehler steht in den Einstellungen",
+	"the focus filter is on: today + overdue only":        "der Fokusfilter ist an: nur heute + überfällig",
+	"a search filter is narrowing the list":               "ein Suchfilter schränkt die Liste ein",
+	"↑ scroll up":                                         "↑ nach oben",
+	"↓ scroll down":                                       "↓ nach unten",
+	"↑/↓ scroll":                                          "↑/↓ scrollen",
+	"⚡FOCUS":                                              "⚡FOKUS",
 
 	// ── Unchanged in Danish, listed so the completeness check stays honest ──
 	"Score":      "Punkte",

@@ -503,17 +503,25 @@ func (m model) tagSortLabel() string {
 	}
 }
 
-// syncGlyph reports background-sync health for the status line: a quiet dim
-// tick when sync is configured and healthy, a red mark after a failure, and
-// nothing when sync isn't configured.
+// syncGlyph reports background-sync health for the status line: a red mark
+// after a failure, and nothing otherwise.
+//
+// Healthy sync says nothing on purpose. It used to show a dim ✓, which spent
+// the status line's best corner on "there is nothing wrong" — in a symbol with
+// nowhere to look it up, so the one question it reliably provoked was what it
+// meant. The steady-state answer belongs in Settings, which carries it in
+// words ("Last sync: sent 3, received 1") next to the rows that configure it,
+// and which Init populates with a launch sync.
+//
+// The failure keeps its place here: sync failing means this device is drifting
+// away from the others, which is the one sync fact a user must not have to go
+// looking for. So the corner speaks only when something is wrong, and what it
+// says carries the word "sync".
 func (m model) syncGlyph() string {
-	if !m.autoSync {
+	if !m.autoSync || !m.lastSyncFailed {
 		return ""
 	}
-	if m.lastSyncFailed {
-		return syncFailStyle.Render(tr("✕ sync"))
-	}
-	return syncOkStyle.Render("✓")
+	return syncFailStyle.Render(tr("✕ sync"))
 }
 
 // ── Detail scroll ────────────────────────────────────────────────────────────
@@ -1318,6 +1326,16 @@ func (m model) helpBodyLines() []string {
 		{"↧", tr("blocked — waiting on an unfinished dependency")},
 		{"↻", tr("recurring task")},
 		{"(2/5)", tr("subtasks done / total")},
+	}})
+
+	// Reference section: the status line. Everything here appears only in a
+	// state that is not the default — the line is empty when there is nothing
+	// to say — so each entry answers "why is that there?", which is the
+	// question a symbol in the corner of the screen actually provokes.
+	sections = append(sections, helpSec{tr("Status line"), [][2]string{
+		{"✕ sync", tr("background sync is failing — Settings has the error")},
+		{tr("⚡FOCUS"), tr("the focus filter is on: today + overdue only")},
+		{"/…", tr("a search filter is narrowing the list")},
 	}})
 
 	// Reference section: date-input grammar. Not key bindings, so it lives

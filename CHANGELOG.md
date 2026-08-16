@@ -40,6 +40,16 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Changed
 
+- **A healthy sync no longer marks the corner of the screen.** The status line
+  carried a dim `✓` whenever background sync was working — a symbol with
+  nowhere to look it up, spending the best corner of the screen on "nothing is
+  wrong". Settings already answers that in words, next to the rows that
+  configure sync and updated by the sync that runs at launch. The corner now
+  speaks only when it has something you must act on: `✕ sync` still appears
+  when the device is drifting away from the others, and the help overlay has a
+  new **Status line** section explaining it, the focus chip and the search chip
+  — the three things that can appear there.
+
 - **The footer's boxed fields line up with the pane above them.** The search
   field, quick-add, the pickers and the command palette were all drawn two
   columns to the left of the box they appear under, so opening any of them put

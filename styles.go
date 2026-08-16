@@ -178,7 +178,6 @@ var (
 	focusChipStyle  lipgloss.Style
 	searchChipStyle lipgloss.Style
 	statusSortStyle lipgloss.Style
-	syncOkStyle     lipgloss.Style
 	syncFailStyle   lipgloss.Style
 
 	listPanelStyle   lipgloss.Style
@@ -270,7 +269,6 @@ func applyTheme(t theme) {
 	focusChipStyle = lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(t.orange).Padding(0, 1)
 	searchChipStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
 	statusSortStyle = lipgloss.NewStyle().Foreground(t.dim)
-	syncOkStyle = lipgloss.NewStyle().Foreground(t.dim)
 	syncFailStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
 
 	// Leave one quiet row below the border title before the pane's first
