@@ -922,22 +922,22 @@ func TestTabBarFitsTheWidthItIsGiven(t *testing.T) {
 	}
 }
 
-// The hint is a courtesy the header drops whole when the tabs need the room —
-// a fragment of it ("? h") is worse than none, and is what a plain truncate
-// leaves behind.
-func TestHeaderHintIsWholeOrAbsent(t *testing.T) {
+// The one thing the header says about getting unstuck is a single "?", so it
+// must actually be there on any terminal anyone uses. It is allowed to go on a
+// window too narrow for the tab bar itself — the tabs are the navigation and
+// the hint is a courtesy — but not one column sooner.
+func TestHeaderShowsTheHelpKey(t *testing.T) {
 	t.Cleanup(func() { applyLang(string(langEN)) })
 	for _, lang := range availableLanguages {
-		for w := 8; w <= 200; w++ {
+		for w := 50; w <= 200; w++ {
 			m := modelWithTasks(t, todo.New("alpha"))
 			applyLang(string(lang))
 			m.termWidth, m.termHeight = w, 20
+			// The tab labels carry no "?" in any language, so its presence in
+			// the header is the hint and nothing else.
 			header := ansi.Strip(strings.SplitN(m.View(), "\n", 2)[0])
-			hint := tr("? help")
-			// The tab labels carry no "?", so its presence means the hint began
-			// to render.
-			if strings.Contains(header, "?") && !strings.Contains(header, hint) {
-				t.Fatalf("lang=%s w=%d: header carries a fragment of %q: %q", lang, w, hint, header)
+			if !strings.Contains(header, "?") {
+				t.Fatalf("lang=%s w=%d: no help key in the header: %q", lang, w, header)
 			}
 		}
 	}

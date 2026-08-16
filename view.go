@@ -270,16 +270,24 @@ func (m model) View() string {
 	w := m.termWidth - 6
 
 	// ── HEADER ───────────────────────────────────────────────────────────
-	shortcutHint := helpStyle.Render(tr("? help"))
+	// One bare "?" is everything the header says about getting unstuck. It is
+	// the universal key for it, the overlay it opens lists ctrl+k among the
+	// shortcuts, and the palette can find the overlay back — so one character
+	// reaches the whole app, and the columns a sentence would cost go to the
+	// tab labels instead.
+	shortcutHint := helpStyle.Render("?")
 	title := titleStyle.Render("taskr")
-	// Width left for the tab bar between the title and the right-aligned hint.
-	avail := m.termWidth - ansi.StringWidth(title) - 2 - ansi.StringWidth(shortcutHint) - 4
+	// Right margin of the line, then the blank columns the hint is held off the
+	// tab bar by. The bar is budgeted against both, so a bar that exactly fills
+	// its budget still leaves the gap standing rather than costing the hint.
+	budget := m.termWidth - 4
+	avail := budget - ansi.StringWidth(title) - 2 - ansi.StringWidth(shortcutHint) - headerHintGap
 	tabsStr := title + "  " + m.renderTabs(avail)
-	padW := m.termWidth - ansi.StringWidth(tabsStr) - ansi.StringWidth(shortcutHint) - 4
-	if padW < 1 {
-		// No room for both. The tabs are the navigation and the hint is a
-		// courtesy, so the hint goes — whole, rather than as the fragment the
-		// line's truncate would otherwise leave standing ("? h").
+	padW := budget - ansi.StringWidth(tabsStr) - ansi.StringWidth(shortcutHint)
+	if padW < headerHintGap {
+		// A window too narrow for both. The tabs are the navigation and the
+		// hint is a courtesy, so the hint goes — whole, rather than as the
+		// fragment the line's truncate would otherwise leave standing.
 		shortcutHint, padW = "", 1
 	}
 	out.WriteString(ansi.Truncate(tabsStr+strings.Repeat(" ", padW)+shortcutHint, m.termWidth-2, "") + "\n")

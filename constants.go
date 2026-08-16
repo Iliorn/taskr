@@ -9,6 +9,12 @@ const (
 	detailMaxHeightPct     = 55
 	overlayWidthPct        = 60
 
+	// headerHintGap is the least blank space between the tab bar and the "?"
+	// in the header, so the hint reads as its own thing rather than as another
+	// tab. The bar's width budget subtracts it, which is what keeps a bar that
+	// exactly fills its budget from costing the hint a column it needed.
+	headerHintGap = 2
+
 	// detailScrollMargin is how many rendered lines of the detail document stay
 	// visible past the cursor before the pane scrolls. It is what makes the
 	// scroll gradual: the window holds still while the cursor moves inside it

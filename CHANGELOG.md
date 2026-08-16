@@ -10,12 +10,13 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Changed
 
-- **The header hint is just `? help`.** It read
+- **The header hint is one `?`.** It read
   `? shortcuts · ctrl+k commands` — two doors advertised where one will do, in
-  twenty-eight columns taken from the tab bar. `?` is the door that leads to
-  the other: the help overlay lists `ctrl+k` among its shortcuts. The palette
-  did not return the favour, so it now has an entry for the help too, and the
-  two point at each other whichever one you find first.
+  twenty-eight columns taken from the tab bar, to say what a single universal
+  character says. `?` is also the door that leads to the other: the help
+  overlay lists `ctrl+k` among its shortcuts. The palette did not return the
+  favour, so it now has an entry for the help too, and the two point at each
+  other whichever one you find first.
 - **The tab bar stays inside its width.** Every tab renders with a cell of
   padding either side, which the bar's own measurement left out — so it could
   pick a set of labels that measured within budget and drew fourteen columns
