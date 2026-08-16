@@ -177,7 +177,7 @@ func (m model) detailPanelTitle() string {
 		}
 		return tr("Tag")
 	case tabStats:
-		return tr("Activity")
+		return m.statsPanelTitle()
 	default:
 		if t := m.currentTodo(); t != nil {
 			// A drilled-in subtask is not a top-level task; prefix a chevron
@@ -1458,49 +1458,42 @@ type statsCell struct {
 	bg int
 }
 
-func (m model) renderStatsDetail() string {
-	b := getBuilder()
-	defer putBuilder(b)
+// statsBucket is one column of the Activity chart: the day (or Monday-started
+// week) it covers, and how many top-level tasks were completed inside it.
+type statsBucket struct {
+	start time.Time
+	count int
+}
 
+// statsActivity builds the Activity chart's buckets for the selected range,
+// with the range's label, whether a bucket spans a week, and the total. Shared
+// by the chart and by the panel title that names the range, so the two cannot
+// disagree about what the count counts.
+func (m model) statsActivity() (label string, buckets []statsBucket, weekly bool, total int) {
 	now := m.frameTime
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	innerW := m.termWidth - 8
-	if innerW < 12 {
-		innerW = 12
-	}
-	gradLen := len(statsGradient)
 
-	// Build the time buckets for the selected range. Each bucket spans one day,
-	// except the 6-month view which spans one (Mon-started) week.
-	type bucket struct {
-		start time.Time
-		count int
-	}
-	var buckets []bucket
-	var title string
-	weekly := false
 	switch m.statsRange {
 	case statsRange30Days:
-		title = tr("Last 30 days")
+		label = tr("Last 30 days")
 		for d := 29; d >= 0; d-- {
-			buckets = append(buckets, bucket{start: today.AddDate(0, 0, -d)})
+			buckets = append(buckets, statsBucket{start: today.AddDate(0, 0, -d)})
 		}
 	case statsRange6Months:
-		title = tr("Last 26 weeks")
+		label = tr("Last 26 weeks")
 		weekly = true
 		curMon := today.AddDate(0, 0, -((int(today.Weekday()) + 6) % 7))
 		for w := 25; w >= 0; w-- {
-			buckets = append(buckets, bucket{start: curMon.AddDate(0, 0, -w*7)})
+			buckets = append(buckets, statsBucket{start: curMon.AddDate(0, 0, -w*7)})
 		}
 	default:
-		title = tr("Last 7 days")
+		label = tr("Last 7 days")
 		for d := 6; d >= 0; d-- {
-			buckets = append(buckets, bucket{start: today.AddDate(0, 0, -d)})
+			buckets = append(buckets, statsBucket{start: today.AddDate(0, 0, -d)})
 		}
 	}
 
 	first := buckets[0].start
-	total := 0
 	for _, t := range m.tasks {
 		if t.Status != todo.Done || t.CompletedAt.IsZero() || t.ParentID != "" {
 			continue
@@ -1524,22 +1517,91 @@ func (m model) renderStatsDetail() string {
 		buckets[idx].count++
 		total++
 	}
+	return label, buckets, weekly, total
+}
 
-	// Chart height, also the per-bar cap. Kept modest so the stats list keeps
-	// most of a short screen.
-	chartH := m.termHeight*detailMaxHeightPct/100 - 2 - 9
-	if chartH < 5 {
-		chartH = 5
+// statsPanelTitle is the Activity pane's border title, carrying the caption
+// the pane used to spend a row on: the range, the completions in it, and what
+// a block stands for. On the border it costs nothing, and the row it gives
+// back is one more block a busy day can stack. Dropped back to front as the
+// window narrows, so the least useful half goes first.
+func (m model) statsPanelTitle() string {
+	name := tr("Activity")
+	label, _, _, total := m.statsActivity()
+	scope := "[" + label + " · " + fmt.Sprintf(tr("%d done"), total) + "]"
+	legend := "[" + tr("1 block = 1 completed task") + "]"
+	budget := m.termWidth - 10 // withBorderTitle's own max: (termWidth-6) - 4
+	for _, form := range []string{
+		name + "  " + scope + "  " + legend,
+		name + "  " + scope,
+		scope, // narrow: the range outranks the pane's own name, which the tab already gives
+		"[" + label + "]",
+		name,
+	} {
+		if ansi.StringWidth(form) <= budget {
+			return form
+		}
 	}
-	if chartH > 9 {
-		chartH = 9
-	}
+	return name // withBorderTitle truncates from here
+}
 
-	// Header: "<range> · N done" on the left, the legend on the right. Folding
-	// the legend in here saves a whole row versus a separate caption line.
-	headerLeft := statsHeaderStyle.Render(title) + dimStyle.Render("  ·  "+fmt.Sprintf(tr("%d done"), total))
+// statsChartHeight is the tallest the Activity chart may draw, and so the
+// per-bar cap: past it the bars halve to two tasks a row (▀/▄), and past twice
+// it they cap with `+`. The caption moved to the border title, so the pane is
+// nothing but chart and takes the panel's budget less the baseline and
+// axis-label rows. Capped both ways: a floor so a short window still shows a
+// chart, and a ceiling near the gradient's length, past which more blocks stop
+// reading as taller and the stats list is the better use of the rows.
+func (m model) statsChartHeight() int {
+	h := m.termHeight*detailMaxHeightPct/100 - 2 - 8
+	if h < statsChartMinH {
+		return statsChartMinH
+	}
+	if h > statsChartMaxH {
+		return statsChartMaxH
+	}
+	return h
+}
+
+// statsChartRows is the height the chart actually draws at: the budget, or the
+// busiest bucket when that is shorter. Rows above the tallest bar are blank in
+// a fixed-height chart — spending the pane's height on them costs the stats
+// list rows to show nothing.
+func statsChartRows(budget int, buckets []statsBucket) int {
+	peak := 0
+	for _, bk := range buckets {
+		if bk.count > peak {
+			peak = bk.count
+		}
+	}
+	if peak >= budget {
+		return budget
+	}
+	if peak < statsChartMinH {
+		return statsChartMinH
+	}
+	return peak
+}
+
+func (m model) renderStatsDetail() string {
+	b := getBuilder()
+	defer putBuilder(b)
+
+	innerW := m.termWidth - 8
+	if innerW < 12 {
+		innerW = 12
+	}
+	gradLen := len(statsGradient)
+
+	// The range's name is on the border title now; the chart only needs its
+	// shape.
+	_, buckets, weekly, total := m.statsActivity()
+
+	chartH := statsChartRows(m.statsChartHeight(), buckets)
+
 	if total == 0 {
-		b.WriteString(headerLeft + "\n")
+		// The range and the count are on the border; all this row has to say
+		// is that there is nothing to draw.
 		b.WriteString("  " + dimStyle.Render(tr("No completions in this range.")) + "\n")
 		return b.String()
 	}
@@ -1553,14 +1615,6 @@ func (m model) renderStatsDetail() string {
 			break
 		}
 	}
-	swatch := statsGradient[0].Render("▆") + statsGradient[gradLen/2].Render("▆") + statsGradient[gradLen-1].Render("▆")
-	legend := swatch + dimStyle.Render(tr(": 1 block = 1 completed task"))
-	spacer := innerW - ansi.StringWidth(headerLeft) - ansi.StringWidth(legend)
-	if spacer < 1 {
-		spacer = 1
-	}
-	b.WriteString(ansi.Truncate(headerLeft+strings.Repeat(" ", spacer)+legend, innerW, "") + "\n")
-
 	// Pick a bar width that fills the available width (capped so a handful of
 	// bars don't become absurdly fat), with a 1-column gap between bars.
 	avail := innerW - 2

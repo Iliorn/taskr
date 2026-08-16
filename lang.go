@@ -333,7 +333,7 @@ var daTranslations = map[string]string{
 	"Last 7 days":                   "Sidste 7 dage",
 	"%d done":                       "%d færdige",
 	"No completions in this range.": "Ingen afsluttede i denne periode.",
-	": 1 block = 1 completed task":  ": 1 blok = 1 afsluttet opgave",
+	"1 block = 1 completed task":    "1 blok = 1 afsluttet opgave",
 
 	// Stats list — sections & labels
 	"  Workload":            "  Arbejdsbyrde",
@@ -933,7 +933,7 @@ var deTranslations = map[string]string{
 	"Last 7 days":                   "Letzte 7 Tage",
 	"%d done":                       "%d erledigt",
 	"No completions in this range.": "Keine Abschlüsse in diesem Zeitraum.",
-	": 1 block = 1 completed task":  ": 1 Block = 1 erledigte Aufgabe",
+	"1 block = 1 completed task":    "1 Block = 1 erledigte Aufgabe",
 
 	// Stats list — sections & labels
 	"  Workload":            "  Auslastung",

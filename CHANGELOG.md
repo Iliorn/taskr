@@ -38,6 +38,16 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Changed
 
+- **The Activity chart is taller.** Its caption — the range, the completions in
+  it, and what one block means — moved onto the panel's border, in brackets
+  beside "Activity", the way the task list already carries its position and
+  sort there. That gives the chart the row back, and the ceiling on its height
+  went from 9 blocks to 12, so a day of ten closed tasks now stacks ten whole
+  blocks instead of collapsing to half-height ones. The chart also stops
+  drawing empty rows above its tallest bar and hands them to the stats list
+  instead. On a narrow window the caption sheds its least useful half first,
+  rather than being cut mid-sentence.
+
 - **The detail pane scrolls gradually instead of jumping.** Its top was
   derived from the field cursor, which pinned the cursor to the third row and
   slid the whole document underneath it: every press moved the text by the

@@ -154,10 +154,17 @@ func TestStatsHistogram(t *testing.T) {
 			m.tab = tabStats
 			m.statsRange = r
 			m.refreshCaches()
-			out := m.renderStatsDetail()
-			if !strings.Contains(out, title) {
-				t.Errorf("w=%d range=%d: missing title %q in:\n%s", w, r, title, out)
+			// The range, the count and the legend live on the panel's
+			// border title now — the pane itself is nothing but chart.
+			panelTitle := m.statsPanelTitle()
+			if !strings.Contains(panelTitle, title) {
+				t.Errorf("w=%d range=%d: missing range %q in panel title %q", w, r, title, panelTitle)
 			}
+			if tw, budget := ansi.StringWidth(panelTitle), w-10; tw > budget {
+				t.Errorf("w=%d range=%d: panel title is %d cells, past the border's %d: %q",
+					w, r, tw, budget, panelTitle)
+			}
+			out := m.renderStatsDetail()
 			for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
 				if cw := ansi.StringWidth(line); cw > w-8 {
 					t.Errorf("w=%d range=%d: line %d cells exceeds inner width %d: %q",
@@ -178,9 +185,9 @@ func TestStatsHistogram(t *testing.T) {
 	if !weekLabel.MatchString(wideOut) {
 		t.Errorf("expected week-number axis labels in 6-month view, got:\n%s", wideOut)
 	}
-	// On a wide terminal the legend fits in the header's top-right.
-	if !strings.Contains(wideOut, "1 block = 1 completed task") {
-		t.Errorf("expected legend in header, got:\n%s", wideOut)
+	// On a wide terminal the whole caption fits on the border.
+	if got := wide.statsPanelTitle(); !strings.Contains(got, "1 block = 1 completed task") {
+		t.Errorf("expected the legend in the panel title, got: %q", got)
 	}
 
 	// The 30-day view draws dotted separators between weeks.
@@ -200,6 +207,123 @@ func TestStatsHistogram(t *testing.T) {
 	empty.refreshCaches()
 	if out := empty.renderStatsDetail(); !strings.Contains(out, "No completions") {
 		t.Errorf("expected empty-state message, got:\n%s", out)
+	}
+}
+
+// The caption used to be a row of its own inside the pane. On the border it
+// costs nothing and gives the chart a row back — but it has to survive a
+// narrow window by shedding its least useful half rather than being cut
+// mid-word by the border's own truncation.
+func TestStatsPanelTitleCarriesTheCaption(t *testing.T) {
+	t.Cleanup(func() { applyLang(string(langEN)) })
+	now := time.Now()
+	var todos []todo.Todo
+	for i := 0; i < 4; i++ {
+		td := todo.New(fmt.Sprintf("done %d", i))
+		td.Status = todo.Done
+		td.CompletedAt = now
+		todos = append(todos, td)
+	}
+
+	for _, lang := range availableLanguages {
+		var lastW int
+		for _, w := range []int{200, 140, 100, 80, 60, 44, 30, 20, 12} {
+			m := newTagModel(todos...)
+			// After the model: initialModel applies the stored language, which
+			// would put this sweep back into English on every iteration.
+			applyLang(string(lang))
+			m.termWidth, m.termHeight = w, 30
+			m.tab = tabStats
+			m.statsRange = statsRange7Days
+			m.refreshCaches()
+
+			got := m.statsPanelTitle()
+			// It must fit the border's budget on its own; relying on
+			// withBorderTitle's "…" would cut the legend mid-sentence.
+			if tw, budget := ansi.StringWidth(got), w-10; tw > budget && got != tr("Activity") {
+				t.Errorf("lang=%s w=%d: title is %d cells, past the border's %d: %q",
+					lang, w, tw, budget, got)
+			}
+			// Never grows as the window shrinks: the ladder only sheds.
+			if tw := ansi.StringWidth(got); lastW != 0 && tw > lastW {
+				t.Errorf("lang=%s w=%d: title grew from %d to %d cells as the window narrowed: %q",
+					lang, w, lastW, tw, got)
+			}
+			lastW = ansi.StringWidth(got)
+
+			if w >= 140 {
+				for _, want := range []string{tr("Activity"), tr("Last 7 days"), "4", tr("1 block = 1 completed task")} {
+					if !strings.Contains(got, want) {
+						t.Errorf("lang=%s w=%d: title %q is missing %q", lang, w, got, want)
+					}
+				}
+			}
+			// The range survives well past the point the legend has to go —
+			// it is the one thing the chart cannot say for itself.
+			if w >= 60 && !strings.Contains(got, tr("Last 7 days")) {
+				t.Errorf("lang=%s w=%d: title %q dropped the range too early", lang, w, got)
+			}
+			// And nothing is shed while there was still room for it: the pane's
+			// own name goes only once the width it needs is genuinely gone.
+			named := ansi.StringWidth(tr("Activity")) + 2
+			if lastW+named <= w-10 && !strings.Contains(got, tr("Activity")) {
+				t.Errorf("lang=%s w=%d: title %q dropped the pane name with %d cells to spare",
+					lang, w, got, w-10-lastW)
+			}
+		}
+	}
+}
+
+// Rows above the tallest bar are blank, and a fixed-height chart spends the
+// pane's height on them — so the chart draws only as tall as its busiest
+// bucket, and the stats list keeps the rest. A quiet week still gets a floor,
+// and a busy one still stops at the ceiling.
+func TestStatsChartFitsItsTallestBar(t *testing.T) {
+	mk := func(counts ...int) []statsBucket {
+		out := make([]statsBucket, len(counts))
+		for i, c := range counts {
+			out[i] = statsBucket{count: c}
+		}
+		return out
+	}
+	for _, c := range []struct {
+		name   string
+		budget int
+		bucks  []statsBucket
+		want   int
+	}{
+		{"fits the tallest bar", 12, mk(3, 7, 0, 9), 9},
+		{"never below the floor", 12, mk(1, 0, 2), statsChartMinH},
+		{"never past the budget", 8, mk(3, 40), 8},
+		{"exactly the budget", 8, mk(8), 8},
+		{"no completions at all", 12, mk(0, 0), statsChartMinH},
+	} {
+		if got := statsChartRows(c.budget, c.bucks); got != c.want {
+			t.Errorf("%s: statsChartRows = %d, want %d", c.name, got, c.want)
+		}
+	}
+
+	// End to end: a day inside the budget draws one full block per task, which
+	// is the whole point — no half-blocks, and no rows of empty chart above it.
+	now := time.Now()
+	var todos []todo.Todo
+	for i := 0; i < 9; i++ {
+		td := todo.New(fmt.Sprintf("done %d", i))
+		td.Status = todo.Done
+		td.CompletedAt = now
+		todos = append(todos, td)
+	}
+	m := newTagModel(todos...)
+	m.termWidth, m.termHeight = 120, 44
+	m.tab = tabStats
+	m.statsRange = statsRange7Days
+	m.refreshCaches()
+	out := m.renderStatsDetail()
+	if strings.ContainsAny(out, "▀▄") || strings.Contains(out, "+") {
+		t.Errorf("9 tasks inside a %d-row budget should be 9 whole blocks, got:\n%s", m.statsChartHeight(), out)
+	}
+	if rows := strings.Count(strings.TrimRight(out, "\n"), "\n") + 1; rows != 9+2 {
+		t.Errorf("chart is %d rows, want 9 bars + baseline + labels", rows)
 	}
 }
 
@@ -229,6 +353,11 @@ func TestStatsHistogramScalesBeforeOverflow(t *testing.T) {
 		m.refreshCaches()
 		return m.renderStatsDetail()
 	}
+	chartH := func() int {
+		m := newTagModel()
+		m.termWidth, m.termHeight = 100, 30
+		return m.statsChartHeight()
+	}()
 
 	// 9 tasks at scale=2 → 4 paired-half rows (▀) plus a ▄ cap on the 5th
 	// row (the 9th task), no `+`.
@@ -252,10 +381,13 @@ func TestStatsHistogramScalesBeforeOverflow(t *testing.T) {
 		t.Errorf("10 tasks is even, no orphan ▄, got:\n%s", out10)
 	}
 
-	// 12 tasks: scale=2 still overflows chartH=5, so `+` reappears.
-	out2 := render(mk(12))
+	// Past twice the chart height even the half-blocks run out, so `+`
+	// reappears. Derived from statsChartHeight rather than a constant, so
+	// giving the chart more rows moves the threshold instead of the test.
+	over := 2*chartH + 1
+	out2 := render(mk(over))
 	if !strings.Contains(out2, "+") {
-		t.Errorf("12 tasks should overflow scale=2, expected `+`, got:\n%s", out2)
+		t.Errorf("%d tasks should overflow scale=2, expected `+`, got:\n%s", over, out2)
 	}
 }
 
@@ -284,8 +416,8 @@ func TestStatsHistogramTimezoneBucket(t *testing.T) {
 	if strings.Contains(out, "No completions in this range") {
 		t.Fatalf("today's completion (stored UTC) dropped from 7-day window:\n%s", out)
 	}
-	if !strings.Contains(out, "1 done") {
-		t.Errorf("expected '1 done' in header, got:\n%s", out)
+	if got := m.statsPanelTitle(); !strings.Contains(got, "1 done") {
+		t.Errorf("expected '1 done' in the panel title, got: %q", got)
 	}
 }
 

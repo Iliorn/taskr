@@ -24,6 +24,12 @@ const (
 	nameColMinWidth = 20
 	nameColMaxWidth = 50
 
+	// Activity-chart bar height: never squashed below the floor even on a
+	// short window, never past the ceiling even on a tall one (statsGradient
+	// runs out around there, and the stats list wants the rows more).
+	statsChartMinH = 5
+	statsChartMaxH = 12
+
 	minGanttBarWidth   = 10
 	maxGanttBarWidth   = 60
 	minGanttLabelWidth = 20
