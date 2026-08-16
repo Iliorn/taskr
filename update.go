@@ -1204,6 +1204,9 @@ func (m *model) clampCursors() {
 	// actually in use.
 	clamp(&m.tagTabCursor, len(m.getFilteredTagsForTab()))
 	clamp(&m.projectCursor, len(m.allProjectsForList()))
+	// Before the drill's early return: the drilled-in project view shows the
+	// detail pane in its right column too.
+	m.clampDetailScroll()
 	if tasks, drilled := m.drillTaskList(); drilled {
 		clamp(&m.cursor, len(tasks))
 		return // the drill owns m.cursor while it is open

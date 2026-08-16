@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 	"taskr/todo"
@@ -359,6 +361,159 @@ func TestDetailScrollEstimatesAfterTitleRemoval(t *testing.T) {
 	line = m.estimateDetailCursorLine()
 	if line != 1 {
 		t.Errorf("fieldDueDate cursor line = %d, want 1", line)
+	}
+}
+
+// The scroll window is placed from estimateDetailCursorLine, so that estimate
+// has to agree with the document view_detail.go actually renders — a section
+// left out of the arithmetic scrolls the cursor off the pane by exactly the
+// rows it forgot, which is how the Stage row and the whole time-entry block
+// went unnoticed. Rendering the pane and looking for the ▶ marker ties the two
+// together: add a section to the renderer without adding it to the height
+// helpers and this fails.
+func TestDetailCursorEstimateMatchesTheRenderedDocument(t *testing.T) {
+	task := todo.New("a task with every section filled")
+	task.AddTag("home")
+	task.AddTag("errand")
+	task.AddComment("first comment")
+	task.AddComment("second comment")
+	task.AddTimeEntry(time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour))
+	task.AddTimeEntry(time.Now().Add(-30*time.Minute), time.Now().Add(-10*time.Minute))
+	blocker := todo.New("the blocker")
+	task.AddDependency(blocker.ID)
+	sub := todo.New("a subtask")
+	sub.ParentID = task.ID
+
+	m := modelWithTasks(t, task, blocker, sub)
+	m.termWidth, m.termHeight = 120, 40
+	m.pane = paneDetail
+	m.detailTaskID = task.ID // currentTodo follows this while the pane is open
+
+	for _, c := range []struct {
+		name  string
+		field detailField
+		set   func(*model)
+	}{
+		{"first field", fieldStartDate, nil},
+		{"last field above the tags", fieldNotes, nil},
+		{"the conditional stage row", fieldStage, nil},
+		{"second tag", fieldTags, func(m *model) { m.detail.tagCursor = 1 }},
+		{"subtask", fieldSubtasks, nil},
+		{"dependency", fieldDependencies, nil},
+		{"second time entry", fieldTimeEntries, func(m *model) { m.detail.timeEntryCursor = 1 }},
+		{"second comment", fieldComments, func(m *model) { m.detail.commentCursor = 1 }},
+	} {
+		mm := m
+		mm.detail = detailState{field: c.field}
+		if c.set != nil {
+			c.set(&mm)
+		}
+		mm.invalidateDetailCache()
+		lines := strings.Split(strings.TrimRight(mm.buildDetailContent(), "\n"), "\n")
+		marked := -1
+		for i, line := range lines {
+			if strings.HasPrefix(strings.TrimLeft(ansi.Strip(line), " "), "▶") {
+				marked = i
+				break
+			}
+		}
+		if marked < 0 {
+			t.Errorf("%s: no ▶ marker in the rendered detail", c.name)
+			continue
+		}
+		if got := mm.estimateDetailCursorLine(); got != marked {
+			t.Errorf("%s: estimate = %d, rendered on line %d", c.name, got, marked)
+		}
+	}
+
+	// And the document height helper agrees with the same rendering, or the
+	// window is sized against a document of a different length.
+	m.detail = detailState{field: fieldStartDate}
+	m.invalidateDetailCache()
+	rendered := len(strings.Split(strings.TrimRight(m.buildDetailContent(), "\n"), "\n"))
+	if got := m.detailContentHeight(); got != rendered {
+		t.Errorf("detailContentHeight = %d, rendered %d lines", got, rendered)
+	}
+}
+
+// The pane scrolls only when the cursor would leave it, and then by the least
+// that takes. Anchoring the top to the cursor instead slides the whole
+// document under a cursor pinned to one row, so every keypress moved the text
+// by the distance between two fields.
+func TestDetailScrollHoldsStillUntilTheCursorLeaves(t *testing.T) {
+	const visible, total = 10, 60
+
+	// A cursor moving inside the window does not move the window.
+	for cursor := 3; cursor <= 7; cursor++ {
+		if got := detailScrollWindow(1, cursor, visible, total); got != 1 {
+			t.Errorf("cursor %d inside the window: offset = %d, want it to hold at 1", cursor, got)
+		}
+	}
+	// Past the bottom margin it follows a line at a time rather than jumping.
+	if got := detailScrollWindow(1, 9, visible, total); got != 2 {
+		t.Errorf("one line past the margin: offset = %d, want 2", got)
+	}
+	// The same going up.
+	if got := detailScrollWindow(10, 11, visible, total); got != 9 {
+		t.Errorf("cursor above the window: offset = %d, want 9", got)
+	}
+	// It never scrolls past either end, and a document that fits does not
+	// scroll at all.
+	if got := detailScrollWindow(99, 59, visible, total); got != total-visible {
+		t.Errorf("offset past the end = %d, want %d", got, total-visible)
+	}
+	if got := detailScrollWindow(5, 3, visible, 8); got != 0 {
+		t.Errorf("document shorter than the pane: offset = %d, want 0", got)
+	}
+	// Running it again changes nothing — the model paces the offset against
+	// its estimate and the renderer re-runs it against the real lines.
+	once := detailScrollWindow(0, 40, visible, total)
+	if twice := detailScrollWindow(once, 40, visible, total); twice != once {
+		t.Errorf("not idempotent: %d then %d", once, twice)
+	}
+}
+
+// Whatever the model estimates, the cursor has to end up on screen — stacked
+// under the list and as a full-height column beside it, at every size. This is
+// what keeps detailViewportHeight honest: it is an estimate of geometry View
+// computes, and an estimate that drifts scrolls the pane to a place the user
+// is not looking.
+func TestDetailScrollKeepsTheCursorOnScreen(t *testing.T) {
+	task := todo.New("scroll target")
+	for i := 1; i <= 14; i++ {
+		task.AddComment(fmt.Sprintf("comment number %02d with enough text to matter", i))
+	}
+	for _, size := range []struct{ w, h int }{
+		{80, 24}, {80, 40}, {120, 24}, {120, 40}, {160, 30}, {200, 50},
+	} {
+		for _, cursor := range []int{0, 6, 13} {
+			m := modelWithTasks(t, task)
+			m.termWidth, m.termHeight = size.w, size.h
+			m.pane = paneDetail
+			m.detailTaskID = task.ID
+			m.detail = detailState{field: fieldComments, commentCursor: cursor}
+			m.clampDetailScroll() // dispatch does this after every key
+			m.invalidateDetailCache()
+
+			want := fmt.Sprintf("comment number %02d", cursor+1)
+			if !strings.Contains(ansi.Strip(m.View()), want) {
+				t.Errorf("%dx%d, comment %d: %q is not on screen", size.w, size.h, cursor, want)
+			}
+		}
+	}
+}
+
+// A pane too short to hold both margins must still show the cursor rather than
+// letting the two clamps fight.
+func TestDetailScrollSurvivesATinyPane(t *testing.T) {
+	for visible := 1; visible <= 5; visible++ {
+		for cursor := 0; cursor < 20; cursor++ {
+			got := detailScrollWindow(cursor%7, cursor, visible, 20)
+			if cursor < got || cursor >= got+visible {
+				t.Fatalf("visible=%d cursor=%d: window %d..%d does not contain the cursor",
+					visible, cursor, got, got+visible-1)
+			}
+		}
 	}
 }
 

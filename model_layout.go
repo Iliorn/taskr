@@ -4,28 +4,30 @@ import "taskr/todo"
 
 // ── Detail scroll estimation ──────────────────────────────────────────────────
 
+// estimateDetailCursorLine is which line of the rendered detail document the
+// field cursor sits on. It has to agree with what view_detail.go actually
+// emits, section for section: the scroll window is placed from this number, so
+// a section left out here scrolls the cursor off the pane by exactly the rows
+// it forgot.
 func (m model) estimateDetailCursorLine() int {
 	t := m.currentTodo()
 	if t == nil {
 		return 0
 	}
-	line := 0 // title moved to border; content starts at the first field
-	switch m.detail.field {
-	case fieldStartDate:
-		return line
-	case fieldDueDate:
-		return line + 1
-	case fieldRecurrence:
-		return line + 2
-	case fieldPriority:
-		return line + 3
-	case fieldSize:
-		return line + 4
-	case fieldProject:
-		return line + 5
-	case fieldNotes:
-		return line + 6
-	case fieldTags:
+	// Title moved to the border; content starts at the first field. The Stage
+	// row is conditional, so the rows below it shift — walk the render order
+	// rather than hard-coding an offset per field.
+	rows := []detailField{fieldStartDate, fieldDueDate, fieldRecurrence, fieldPriority, fieldSize}
+	if stageFieldVisible(t) {
+		rows = append(rows, fieldStage)
+	}
+	rows = append(rows, fieldProject, fieldNotes)
+	for i, f := range rows {
+		if m.detail.field == f {
+			return i
+		}
+	}
+	if m.detail.field == fieldTags {
 		// Tags label sits below the fields block; +1 skips the label row.
 		return m.detailMainHeight(t) - m.detailTagsRows(t) + m.detail.tagCursor
 	}
@@ -43,12 +45,18 @@ func (m model) estimateDetailCursorLine() int {
 		return relStart + 1 + subRows + 2 + m.detail.depCursor
 	}
 
-	// Comments section: blank after the relations block, label first.
-	// Comments wrap, so sum the rendered line counts of everything above the
-	// cursor — counting one line per comment undershoots in narrow columns
-	// and the scroll window loses the selected comment off the bottom.
-	comStart := relStart + m.detailRelationsHeight(t) + 1
-	line = comStart + 1
+	// Time entries: blank after the relations block, label first.
+	teStart := relStart + m.detailRelationsHeight(t) + 1
+	if m.detail.field == fieldTimeEntries {
+		return teStart + 1 + m.detail.timeEntryCursor
+	}
+
+	// Comments close the document, straight after the time-entry block's own
+	// trailing blank. Comments wrap, so sum the rendered line counts of
+	// everything above the cursor — counting one line per comment undershoots
+	// in narrow columns and the window loses the selected comment off the
+	// bottom.
+	line := teStart + m.detailTimeEntriesHeight(t) + 1
 	available := m.termWidth - 32
 	if available < 10 {
 		available = 10
@@ -57,6 +65,80 @@ func (m model) estimateDetailCursorLine() int {
 		line += commentLineCount(t.Comments[i].Text, available)
 	}
 	return line
+}
+
+// ── Detail scroll window ──────────────────────────────────────────────────────
+
+// detailScrollWindow places the detail viewport: keep the offset where it is
+// unless the cursor would come within detailScrollMargin of an edge, and then
+// move by the least that takes. This is the whole of "scroll gradually" — the
+// pane holds still while the cursor travels through it, and follows a line at
+// a time once the cursor reaches the margin. Pure, so the model can pace the
+// offset against its estimated geometry and the renderer can re-derive it
+// against the lines it actually produced; running it twice changes nothing.
+func detailScrollWindow(offset, cursor, visible, total int) int {
+	if visible >= total {
+		return 0
+	}
+	// A pane too short to hold both margins would have the two clamps cross and
+	// push the cursor out of the window it is supposed to keep it in, so shrink
+	// the margin to what fits: the window then centres on the cursor, which is
+	// the best a four-line pane can do.
+	margin := detailScrollMargin
+	if fits := (visible - 1) / 2; margin > fits {
+		margin = fits
+	}
+	if bottom := cursor - visible + 1 + margin; offset < bottom {
+		offset = bottom
+	}
+	if top := cursor - margin; offset > top {
+		offset = top
+	}
+	if max := total - visible; offset > max {
+		offset = max
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return offset
+}
+
+// detailViewportHeight is how many rendered lines of the detail document the
+// pane shows — the stacked panel's percentage cap, or the full column height
+// when the detail sits beside the list. An estimate: the exact figure comes
+// from panel geometry View computes. It only paces the stored offset, since
+// applyDetailScrollN re-runs detailScrollWindow against the real line count,
+// so an estimate that is off by a line costs a slightly larger step once and
+// never a cursor scrolled out of sight.
+func (m model) detailViewportHeight() int {
+	h := m.termHeight*detailMaxHeightPct/100 - 2
+	if m.sideBySide() || (m.tab == tabProjects && m.projectTaskMode) {
+		// A full-height column beside the list: the window less the fixed
+		// header and footer, less the panel's two borders and the blank row
+		// under its border title. Deliberately not listVisible(), which
+		// additionally subtracts a row per active filter — those render into
+		// the one fixed status line and cost the columns nothing.
+		h = m.termHeight - minHeaderLines - footerHeight - m.extraOverheadLines() - 3
+	}
+	if h < 3 {
+		return 3
+	}
+	return h
+}
+
+// clampDetailScroll keeps the stored offset a window that contains the field
+// cursor, so the scroll position survives between keystrokes instead of being
+// recomputed from the cursor every frame. Called from clampCursors with the
+// other cursors: the document shrinks under the offset just as often as a list
+// shrinks under its cursor — a deleted comment, a closed subtask, a task
+// switched to underneath the pane.
+func (m *model) clampDetailScroll() {
+	if m.currentTodo() == nil {
+		m.detail.scroll = 0
+		return
+	}
+	m.detail.scroll = detailScrollWindow(
+		m.detail.scroll, m.estimateDetailCursorLine(), m.detailViewportHeight(), m.detailContentHeight())
 }
 
 // ── List offset clamping ──────────────────────────────────────────────────────
@@ -245,6 +327,9 @@ func (m model) detailTagsRows(t *todo.Todo) int {
 func (m model) detailMainHeight(t *todo.Todo) int {
 	h := 0  // title is on the border now; content starts at the first field
 	h += 10 // start, due, recurrence, priority, size, project, notes, id, created, modified
+	if stageFieldVisible(t) {
+		h++
+	}
 	if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
 		h++
 	}
@@ -282,6 +367,17 @@ func (m model) detailDepRows(t *todo.Todo) int {
 	return out + in
 }
 
+// detailTimeEntriesHeight is the rendered height of the time-entries section:
+// label, one row per entry (or the one-line empty hint), and the blank row
+// that separates it from the comments below.
+func (m model) detailTimeEntriesHeight(t *todo.Todo) int {
+	rows := len(t.TimeEntries)
+	if rows == 0 {
+		rows = 1
+	}
+	return 1 + rows + 1
+}
+
 // detailCommentsHeight is the rendered height of the comments section:
 // label plus wrapped comment lines (or the one-line empty hint).
 func (m model) detailCommentsHeight(t *todo.Todo) int {
@@ -299,7 +395,9 @@ func (m model) detailCommentsHeight(t *todo.Todo) int {
 	return lines
 }
 
-// detailContentHeight is the full single-column detail document height.
+// detailContentHeight is the full single-column detail document height. The
+// two bare +1s are the blank rows buildDetailContent puts between its three
+// pages; the time-entry block carries its own trailing blank.
 func (m model) detailContentHeight() int {
 	t := m.currentTodo()
 	if t == nil {
@@ -307,6 +405,7 @@ func (m model) detailContentHeight() int {
 	}
 	return m.detailMainHeight(t) + 1 +
 		m.detailRelationsHeight(t) + 1 +
+		m.detailTimeEntriesHeight(t) +
 		m.detailCommentsHeight(t)
 }
 

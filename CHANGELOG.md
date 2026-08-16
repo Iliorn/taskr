@@ -38,6 +38,18 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Changed
 
+- **The detail pane scrolls gradually instead of jumping.** Its top was
+  derived from the field cursor, which pinned the cursor to the third row and
+  slid the whole document underneath it: every press moved the text by the
+  distance between two fields, and a step from Notes to Tags threw the pane
+  seven lines. The scroll position is now kept between keystrokes and moves
+  only when the cursor would come within two lines of an edge, by as little as
+  that takes — so walking down the fields moves nothing at all until the
+  cursor reaches the bottom of the pane, and then it follows a line at a time.
+  Two sections the old arithmetic never counted (the Stage row and the whole
+  time-entries block) put its idea of the cursor four lines above the real one,
+  which the old always-snap-to-the-bottom behaviour had been hiding.
+
 - **The Done column is the last one in your list, and you can rename it.** It
   used to be drawn on the end and left out of the column list, so it was the
   one column on the board you could not name — a board otherwise entirely

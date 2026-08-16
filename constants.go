@@ -9,6 +9,14 @@ const (
 	detailMaxHeightPct     = 55
 	overlayWidthPct        = 60
 
+	// detailScrollMargin is how many rendered lines of the detail document stay
+	// visible past the cursor before the pane scrolls. It is what makes the
+	// scroll gradual: the window holds still while the cursor moves inside it
+	// and then follows by a line at a time, instead of re-anchoring under a
+	// cursor pinned to a fixed row. On a pane too short to hold both margins
+	// the two clamps meet and it degrades to the centred anchor.
+	detailScrollMargin = 2
+
 	// Shared "name" column (task title, project name, tag) so the
 	// gap before the next column follows one rule on every list tab and all four
 	// reflow identically on resize.

@@ -540,17 +540,13 @@ func (m model) applyDetailScrollN(content string, maxVisible int) string {
 		cursorLine = len(lines) - 1
 	}
 
-	scrollStart := cursorLine - 2
-	if scrollStart < 0 {
-		scrollStart = 0
-	}
-	if scrollStart+maxVisible > len(lines) {
-		scrollStart = len(lines) - maxVisible
-	}
-	if scrollStart < 0 {
-		scrollStart = 0
-	}
-	if scrollStart <= 2 {
+	// The stored offset is where the pane was; this moves it only as far as the
+	// cursor demands, against the lines actually rendered rather than the
+	// model's estimate of them.
+	scrollStart := detailScrollWindow(m.detail.scroll, cursorLine, maxVisible, len(lines))
+	// Within a margin of the top there is nothing to gain by hiding the first
+	// rows behind a "(…)" that costs one of them.
+	if scrollStart <= detailScrollMargin {
 		scrollStart = 0
 	}
 	end := scrollStart + maxVisible

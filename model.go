@@ -234,6 +234,13 @@ type detailState struct {
 	tagCursor       int
 	subtaskCursor   int
 	timeEntryCursor int
+	// scroll is the first line of the detail document the pane shows. It
+	// persists between keystrokes on purpose: deriving the top from the cursor
+	// instead glues the cursor to a fixed row and slides the whole document
+	// under it on every press, so a one-field move reads as a jump the size of
+	// the gap between those fields. Kept valid by clampDetailScroll, and
+	// re-derived against the real rendered lines in applyDetailScrollN.
+	scroll int
 }
 
 type calendarState struct {
