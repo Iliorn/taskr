@@ -214,7 +214,17 @@ func (m model) listPanelTitle() string {
 	case tabTags:
 		return tr("Overview")
 	case tabBoard:
-		return tr("Workflow")
+		title := tr("Workflow")
+		if cols := m.boardColumns(); len(cols) > 0 {
+			start, count, _ := boardWindow(len(cols), m.board.colOffset, m.termWidth-8)
+			if count > 0 && count < len(cols) {
+				// Which slice of the board this is, and that ←/→ reaches the
+				// rest. Without it a scrolled board just looks like a board
+				// that lost its columns.
+				title += fmt.Sprintf("  ‹ %d–%d/%d ›", start+1, start+count, len(cols))
+			}
+		}
+		return title
 	case tabStats:
 		return tr("Summary")
 	case tabSettings:
@@ -2030,23 +2040,34 @@ func (m model) renderTabs(avail int) string {
 	names := unselNames
 	names[m.tab] = selLabel
 
-	var parts [numTabs]string
+	// A hidden tab is dropped from the bar, leaving a visible gap in the
+	// numbering (…4 Tags  6 Stats…). The numbers stay fixed on purpose: they
+	// are baked into the labels and their translations, and renumbering would
+	// move Stats under the user's fingers every time the board is toggled.
+	// A gap reads as "something is off", which is exactly true.
+	parts := make([]string, 0, numTabs)
 	for i := range names {
+		if !tabVisible(tab(i)) {
+			continue
+		}
 		if tab(i) == m.tab {
-			parts[i] = activeStyles[i].Render(names[i])
+			parts = append(parts, activeStyles[i].Render(names[i]))
 		} else {
-			parts[i] = inactiveStyles[i].Render(names[i])
+			parts = append(parts, inactiveStyles[i].Render(names[i]))
 		}
 	}
-	return strings.Join(parts[:], " ")
+	return strings.Join(parts, " ")
 }
 
 // tabsWidthMixed measures the width of a mixed tab bar where tab sel uses
 // selLabel and all other tabs use the corresponding label from names
 // (rune length of the pre-style plain text, single-space separators).
 func tabsWidthMixed(names [numTabs]string, sel tab, selLabel string) int {
-	w := numTabs - 1 // single-space separators
+	w := visibleTabCount() - 1 // single-space separators
 	for i, n := range names {
+		if !tabVisible(tab(i)) {
+			continue
+		}
 		if tab(i) == sel {
 			w += len([]rune(selLabel))
 		} else {

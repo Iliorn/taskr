@@ -1,6 +1,10 @@
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"taskr/todo"
+)
 
 // board.go — the kanban stage configuration. A "stage" is a named board
 // column a pending top-level task moves through (todo.Todo.Stage); the final
@@ -20,6 +24,17 @@ func defaultStages() []string {
 var activeStages = defaultStages()
 
 func applyStages(stages []string) { activeStages = stages }
+
+// showBoard gates the whole kanban surface: the Board tab and the detail
+// pane's Stage row. Stages are a workflow some people run their tasks through
+// and others never touch, and for the second group the tab is a permanent
+// wrong turn in the tab order and the field a row to skip past. Package-level
+// and set by applySettings, following applyTheme / applyLang / applyStages.
+// Defaults on: the board is the documented behaviour, and a fresh install
+// should show what the README describes.
+var showBoard = true
+
+func applyShowBoard(v bool) { showBoard = v }
 
 // stagesFromSettings sanitizes the persisted list: entries are trimmed, blanks
 // dropped, and duplicates (case-insensitive) collapsed onto their first
@@ -119,4 +134,28 @@ func stageRemap(oldStages, newStages []string) map[string]string {
 		out[strings.ToLower(strings.TrimSpace(old))] = newStages[j]
 	}
 	return out
+}
+
+// ── The detail pane's Stage field ────────────────────────────────────────────
+
+// stageFieldVisible reports whether the detail pane shows a Stage row for this
+// task. A subtask never reaches the board, and Done is a status rather than a
+// stage — offering to move either between columns would describe something the
+// board does not do. The Settings toggle turns the row off for anyone not
+// using the board at all.
+func stageFieldVisible(t *todo.Todo) bool {
+	return showBoard && t != nil && t.Status == todo.Pending && t.ParentID == ""
+}
+
+// cycleStage moves a task one column along the configured stages, wrapping at
+// both ends. It deliberately cannot reach Done: Done is Status==Done, and
+// completing a task from a field labelled "Stage" would be a second, hidden
+// path into the one transition that carries timer, subtask and recurrence
+// semantics (closePendingTask). Done stays a d away.
+func cycleStage(current string, dir int) string {
+	if len(activeStages) == 0 {
+		return current
+	}
+	next := (stageIndex(current) + dir + len(activeStages)) % len(activeStages)
+	return activeStages[next]
 }

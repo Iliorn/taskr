@@ -1193,6 +1193,7 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 var settingsPreferences = []int{
 	settingAutoCloseParent,
 	settingAutoCloseSubtasks,
+	settingShowBoard,
 	settingTheme,
 	settingLanguage,
 	settingStages,
@@ -1258,6 +1259,7 @@ func (m model) renderSettingsSections(sequencerW int) (string, string) {
 		settingAging:             tr("Aging increases score"),
 		settingAutoCloseParent:   tr("Auto-close parent"),
 		settingAutoCloseSubtasks: tr("Auto-close subtasks"),
+		settingShowBoard:         tr("Kanban board"),
 		settingTheme:             tr("Theme"),
 		settingLanguage:          tr("Language"),
 		settingStages:            tr("Board columns"),
@@ -1278,6 +1280,10 @@ func (m model) renderSettingsSections(sequencerW int) (string, string) {
 	autoCloseVal := tr("Off")
 	if m.autoCloseParent {
 		autoCloseVal = tr("On")
+	}
+	showBoardVal := tr("Off")
+	if showBoard {
+		showBoardVal = tr("On")
 	}
 	autoCloseSubsVal := tr("Off")
 	if m.autoCloseSubtasks {
@@ -1325,6 +1331,7 @@ func (m model) renderSettingsSections(sequencerW int) (string, string) {
 		settingAging:             "‹ " + agingVal + " ›",
 		settingAutoCloseParent:   "‹ " + autoCloseVal + " ›",
 		settingAutoCloseSubtasks: "‹ " + autoCloseSubsVal + " ›",
+		settingShowBoard:         "‹ " + showBoardVal + " ›",
 		settingTheme:             "‹ " + m.themeName + " ›",
 		settingLanguage:          "‹ " + activeLang.displayName() + " ›",
 		settingStages:            stagesDisplay(),

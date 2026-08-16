@@ -59,6 +59,7 @@ func paletteTabName(tb tab) string {
 // entry per direction, because "move card between stages" is two commands once
 // you can no longer see which key you pressed.
 var paletteExtras = []paletteCmd{
+	// The two board entries are dropped with the board — see paletteCommands.
 	{label: "move card to the next stage", key: "L", tab: tabBoard},
 	{label: "move card to the previous stage", key: "H", tab: tabBoard},
 	{label: "next month", key: "]", tab: tabCalendar},
@@ -95,12 +96,20 @@ func paletteCommands() []paletteCmd {
 		{tr("Go to Stats"), "6", tabStats},
 		{tr("Go to Settings"), "7", tabSettings},
 	} {
+		// A hidden tab is not somewhere the palette can send you — its digit
+		// does nothing, so the entry would be a command that silently fails.
+		if !tabVisible(t.tb) {
+			continue
+		}
 		out = append(out, paletteCmd{label: t.label, key: t.key, section: tr(secNavigation), anyTab: true})
 	}
 
 	// Per-tab actions, tab by tab so the list reads in tab order rather than
 	// registry order (which interleaves the sections a binding belongs to).
 	for _, tb := range []tab{tabTasks, tabCalendar, tabProjects, tabTags, tabBoard, tabStats, tabSettings} {
+		if !tabVisible(tb) {
+			continue // its keys are unreachable, so they are not commands
+		}
 		for ctx, mapped := range paletteTabs {
 			if mapped != tb {
 				continue
@@ -121,6 +130,9 @@ func paletteCommands() []paletteCmd {
 	}
 
 	for _, extra := range paletteExtras {
+		if !tabVisible(extra.tab) {
+			continue
+		}
 		extra.label = tr(extra.label)
 		extra.section = paletteTabName(extra.tab)
 		out = append(out, extra)

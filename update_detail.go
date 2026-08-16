@@ -66,10 +66,22 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "left":
-		m.detailSectionJump(-1)
-	case "right":
-		m.detailSectionJump(+1)
+	case "left", "right":
+		// On the Stage row the arrows change the value, as they do on a
+		// Settings row; everywhere else in the pane they jump section. The
+		// cost is that Stage is the one field you cannot section-jump *from* —
+		// one press of ↑ or ↓ and the arrows mean what they always did.
+		dir := 1
+		if key.String() == "left" {
+			dir = -1
+		}
+		if t := m.currentTodo(); m.detail.field == fieldStage && stageFieldVisible(t) {
+			m.pushUndo("move stage", t.ID)
+			t.SetStage(cycleStage(t.Stage, dir))
+			m.markModified(t.ID)
+			return m, nil
+		}
+		m.detailSectionJump(dir)
 
 	case "up":
 		m.detailCursorUp()
@@ -228,8 +240,13 @@ func (m *model) detailCursorUp() {
 		m.detail.field = fieldRecurrence
 	case fieldSize:
 		m.detail.field = fieldPriority
+	case fieldStage:
+		m.detail.field = fieldSize
 	case fieldProject:
 		m.detail.field = fieldSize
+		if stageFieldVisible(t) {
+			m.detail.field = fieldStage
+		}
 	case fieldNotes:
 		m.detail.field = fieldProject
 	case fieldTags:
@@ -294,6 +311,11 @@ func (m *model) detailCursorDown() {
 	case fieldPriority:
 		m.detail.field = fieldSize
 	case fieldSize:
+		m.detail.field = fieldProject
+		if stageFieldVisible(t) {
+			m.detail.field = fieldStage
+		}
+	case fieldStage:
 		m.detail.field = fieldProject
 	case fieldProject:
 		m.detail.field = fieldNotes

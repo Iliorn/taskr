@@ -471,6 +471,7 @@ var daTranslations = map[string]string{
 	"Due date":                           "Forfaldsdato",
 	"Recurrence":                         "Gentagelse",
 	"Size":                               "Størrelse",
+	"Stage":                              "Fase",
 	"Notes":                              "Noter",
 	"none (press enter or 'n' to edit)":  "ingen (tryk enter eller 'n' for at redigere)",
 	"Created:":                           "Oprettet:",
@@ -608,6 +609,7 @@ var daTranslations = map[string]string{
 	"Aging increases score":     "Alder øger scoren",
 	"Auto-close parent":         "Luk forælder automatisk",
 	"Auto-close subtasks":       "Luk delopgaver automatisk",
+	"Kanban board":              "Kanban-tavle",
 	"Top 5 with these weights:": "Top 5 med disse vægte:",
 	"Score resync failed: %v":   "Genberegning af score mislykkedes: %v",
 
@@ -1069,6 +1071,7 @@ var deTranslations = map[string]string{
 	"Due date":                           "Fälligkeit",
 	"Recurrence":                         "Wiederholung",
 	"Size":                               "Größe",
+	"Stage":                              "Phase",
 	"Notes":                              "Notizen",
 	"none (press enter or 'n' to edit)":  "keine (enter oder 'n' bearbeitet)",
 	"Created:":                           "Erstellt:",
@@ -1206,6 +1209,7 @@ var deTranslations = map[string]string{
 	"Aging increases score":     "Alter erhöht Punktzahl",
 	"Auto-close parent":         "Eltern autom. schließen",
 	"Auto-close subtasks":       "Teilaufg. autom. schließen",
+	"Kanban board":              "Kanban-Tafel",
 	"Top 5 with these weights:": "Top 5 mit diesen Gewichten:",
 	"Score resync failed: %v":   "Punkte-Neuberechnung fehlgeschlagen: %v",
 

@@ -179,6 +179,7 @@ func cliAdd(args []string) int {
 	}
 	applyBiases(biasesFromSettings(settings))
 	applyStages(stagesFromSettings(settings))
+	applyShowBoard(!settings.BoardDisabled)
 	repo := newSQLiteRepo()
 
 	// Resolve everything that's shared across all created tasks exactly once

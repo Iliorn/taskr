@@ -18,6 +18,7 @@ func loadForCLI() (Repository, []todo.Todo, error) {
 	}
 	applyBiases(biasesFromSettings(settings))
 	applyStages(stagesFromSettings(settings))
+	applyShowBoard(!settings.BoardDisabled)
 	// The CLI has no keys of its own, but it persists settings on some paths;
 	// applying the overlay keeps a round trip from dropping it.
 	keys, _ := sanitizeKeyOverrides(settings.Keys)

@@ -69,6 +69,11 @@ type appSettings struct {
 	// keep open — the confirm/prompt path stays the default.
 	AutoCloseSubtasks bool `json:"auto_close_subtasks"`
 
+	// BoardDisabled hides the kanban surface: the Board tab and the detail
+	// pane's Stage row. Negative like SeqAgingDisabled, so the zero value
+	// leaves the board on and no existing settings.json needs migrating.
+	BoardDisabled bool `json:"board_disabled"`
+
 	// Stages is the ordered kanban column list for the Board tab (edited by
 	// hand — everyone has their own naming scheme). Empty means the defaults
 	// (Backlog / In progress / Review); persistSettings writes the active

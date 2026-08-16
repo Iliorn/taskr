@@ -40,6 +40,7 @@ const (
 	settingAging
 	settingAutoCloseParent
 	settingAutoCloseSubtasks
+	settingShowBoard
 	settingTheme
 	settingLanguage
 	settingStages
@@ -87,6 +88,7 @@ const (
 	fieldRecurrence
 	fieldPriority
 	fieldSize
+	fieldStage
 	fieldProject
 	fieldNotes
 	fieldTags
@@ -247,6 +249,10 @@ type calendarState struct {
 type boardState struct {
 	col    int
 	cursor int
+	// colOffset is the first column on screen. A board with more stages than
+	// fit is not a reason to shrink every column past readability, so the view
+	// is a window over the columns that follows the focus — see boardWindow.
+	colOffset int
 }
 
 // ── Model ─────────────────────────────────────────────────────────────────────
@@ -449,6 +455,7 @@ func initialModel(repo Repository) model {
 	applyLang(settings.Language)
 	applyBiases(biasesFromSettings(settings))
 	applyStages(stagesFromSettings(settings))
+	applyShowBoard(!settings.BoardDisabled)
 	// A rejected rebind must be visible: silently falling back to the default
 	// looks like the setting was ignored at random.
 	keys, keyProblems := sanitizeKeyOverrides(settings.Keys)

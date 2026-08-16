@@ -10,6 +10,25 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Added
 
+- **The board scrolls sideways.** Splitting the width across every stage is
+  what a three-stage board wants and what a ten-stage one cannot survive —
+  eleven columns need a 204-column terminal before each is even readable. The
+  columns that fit are now shown at a readable width and the rest scrolled to:
+  `←/→` move the focus and the view follows a column at a time, with the panel
+  title naming the visible slice. Below three columns it still falls back to
+  the stacked list, which shows every stage at once and is the better answer on
+  a genuinely narrow window.
+- **A Stage row in the detail pane.** `←/→` move a task between board columns
+  without leaving the task, the way the arrows change a value in Settings. It
+  shows only where it means something — a pending top-level task — since a
+  subtask never reaches the board and Done is a status rather than a stage. It
+  cannot reach Done either: completing a task has one path, and it carries
+  timer, subtask and recurrence semantics this row has no business duplicating.
+- **Settings → "Kanban board" turns the whole surface off**: the Board tab and
+  the Stage row together. The tab leaves the bar, `tab`/`shift+tab` step over
+  it, its digit stops working and the palette drops its commands. The digits do
+  not renumber — Stats stays `6` either way — so the numbering shows a gap
+  rather than moving under your fingers every time you toggle.
 - **The search field completes tags and projects**, the same way quick-add
   does: type `#` or `@` and the existing names appear, most recently used
   first, `tab` splices one in. Search was the other place you had to remember

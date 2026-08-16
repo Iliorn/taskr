@@ -806,6 +806,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.toggleAutoCloseParent()
 			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseSubtasks {
 				m.toggleAutoCloseSubtasks()
+			} else if m.tab == tabSettings && m.settingsCursor == settingShowBoard {
+				m.toggleShowBoard()
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
@@ -832,6 +834,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.toggleAutoCloseParent()
 			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseSubtasks {
 				m.toggleAutoCloseSubtasks()
+			} else if m.tab == tabSettings && m.settingsCursor == settingShowBoard {
+				m.toggleShowBoard()
 			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
 				m.cycleTheme(-1)
 			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
@@ -1209,6 +1213,36 @@ func (m *model) clampCursors() {
 		clamp(&m.cursor, m.currentTaskListLen())
 	case tabCalendar:
 		clamp(&m.calendar.entryCursor, len(m.activitiesForDay(m.calendar.selected)))
+	case tabBoard:
+		m.clampBoardWindow()
+	}
+}
+
+// clampBoardWindow scrolls the visible column range just enough to keep the
+// focused column on screen. ←/→ move the focus; the view comes along only when
+// the focus would leave it, which is what makes the board scroll a column at a
+// time rather than jumping a page. Clamped here, with every other cursor, so
+// an offset left stale by a stage-list edit or a filter degrades to a valid
+// window instead of rendering past the end.
+func (m *model) clampBoardWindow() {
+	cols := m.boardColumns()
+	_, count, _ := boardWindow(len(cols), m.board.colOffset, m.termWidth-8)
+	if count == 0 || count >= len(cols) {
+		m.board.colOffset = 0 // everything fits (or nothing does): no window
+		return
+	}
+	col, _ := m.boardSelection(cols)
+	if col < m.board.colOffset {
+		m.board.colOffset = col
+	}
+	if col >= m.board.colOffset+count {
+		m.board.colOffset = col - count + 1
+	}
+	if max := len(cols) - count; m.board.colOffset > max {
+		m.board.colOffset = max
+	}
+	if m.board.colOffset < 0 {
+		m.board.colOffset = 0
 	}
 }
 
@@ -1249,7 +1283,17 @@ func (m *model) filterTasksByCurrentTag() {
 // tabForNumberKey maps a digit shortcut to its tab. It is the one place the
 // number→tab assignment lives, so the list pane and the detail pane can't
 // drift apart on it — the help advertises the digits as global, and they are.
+// tabForNumberKey maps a digit to its tab. The digits never renumber when a
+// tab is hidden — 6 is Stats whether or not the board is on — so a hidden
+// tab's digit simply does nothing rather than silently meaning something else.
 func tabForNumberKey(key string) (tab, bool) {
+	if t, ok := tabForNumberKeyRaw(key); ok {
+		return t, tabVisible(t)
+	}
+	return 0, false
+}
+
+func tabForNumberKeyRaw(key string) (tab, bool) {
 	switch key {
 	case "1":
 		return tabTasks, true
@@ -1271,12 +1315,46 @@ func tabForNumberKey(key string) (tab, bool) {
 
 // nextTab steps delta tabs from cur, wrapping in both directions — tab walks
 // forward, shift+tab back.
+// tabVisible reports whether a tab is reachable. Only the Board is hideable
+// (Settings → "Kanban board"), and hiding it takes it out of the bar, out of
+// tab/shift+tab, and off its digit — a tab you cannot see must not be one you
+// can land on by accident.
+func tabVisible(t tab) bool {
+	return t != tabBoard || showBoard
+}
+
+func visibleTabCount() int {
+	n := 0
+	for i := 0; i < numTabs; i++ {
+		if tabVisible(tab(i)) {
+			n++
+		}
+	}
+	return n
+}
+
+// nextTab steps to the next visible tab, so cycling never stops on a hidden
+// one. At least Tasks is always visible, so the walk terminates.
 func nextTab(cur tab, delta int) tab {
-	return tab((int(cur) + delta + numTabs) % numTabs)
+	if delta == 0 {
+		return cur
+	}
+	step := 1
+	if delta < 0 {
+		step = -1
+	}
+	next := cur
+	for i := 0; i < numTabs; i++ {
+		next = tab((int(next) + step + numTabs) % numTabs)
+		if tabVisible(next) {
+			return next
+		}
+	}
+	return cur
 }
 
 func (m *model) switchTab(t tab) {
-	if t == m.tab {
+	if t == m.tab || !tabVisible(t) {
 		return
 	}
 	// Snapshot the leaving tab's shared UI state and restore the entering
@@ -1464,6 +1542,22 @@ func (m *model) toggleAutoCloseSubtasks() {
 
 // persistSettings writes all current preferences to disk, surfacing any write
 // failure so a setting that silently won't stick is at least visible.
+// toggleShowBoard turns the kanban surface on and off. Turning it off while
+// standing on the Board would leave the cursor on a tab that no longer exists
+// in the bar, so the move off happens here rather than being discovered by the
+// next keystroke.
+func (m *model) toggleShowBoard() {
+	applyShowBoard(!showBoard)
+	if !showBoard && m.tab == tabBoard {
+		m.switchTab(tabTasks)
+	}
+	// The Stage row appears and disappears with it, and the detail pane caches
+	// its rendered lines.
+	m.invalidateDetailCache()
+	m.persistSettings()
+	m.markCacheDirty()
+}
+
 func (m *model) persistSettings() {
 	if err := saveSettings(appSettings{
 		TaskSort:          m.taskSort,
@@ -1477,6 +1571,7 @@ func (m *model) persistSettings() {
 		SeqAgingDisabled:  !activeBiases.Aging,
 		AutoCloseParent:   m.autoCloseParent,
 		AutoCloseSubtasks: m.autoCloseSubtasks,
+		BoardDisabled:     !showBoard,
 		Stages:            activeStages,
 		Keys:              activeKeys,
 	}); err != nil {
@@ -1716,6 +1811,8 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		m.toggleAutoCloseParent()
 	case settingAutoCloseSubtasks:
 		m.toggleAutoCloseSubtasks()
+	case settingShowBoard:
+		m.toggleShowBoard()
 	case settingTheme:
 		m.cycleTheme(1)
 	case settingLanguage:

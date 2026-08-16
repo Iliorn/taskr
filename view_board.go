@@ -16,6 +16,12 @@ import (
 const (
 	boardColGap  = 2
 	boardMinColW = 16 // below this per-column width the board degrades to a stacked list
+	// boardMinWindowCols is the fewest columns worth scrolling between. A board
+	// showing one or two columns of eleven has stopped being a board — the
+	// stacked list shows every stage at once and is the better answer on a
+	// genuinely narrow window. Scrolling is for the case the stacked list
+	// cannot help with: a wide enough terminal, too many stages.
+	boardMinWindowCols = 3
 	// The Done column reads the (potentially long) history list; anything past
 	// this many cards can never be visible, so don't build rows for it.
 	boardDoneCards = 50
@@ -86,13 +92,53 @@ func (m model) boardSelectedTask() *todo.Todo {
 	return m.get(cols[col][cursor].ID)
 }
 
+// boardWindow decides which columns are on screen: the first visible index,
+// how many are visible, and their width. Splitting the width across every
+// stage is what a three-stage board wants and what a ten-stage one cannot
+// survive — eleven columns need a 204-column terminal before each is even
+// boardMinColW wide. So the columns that fit are shown at a readable width and
+// the rest are scrolled to, one column at a time.
+//
+// count == 0 means not even one column fits; the caller falls back to the
+// stacked layout, which is still the right answer on a genuinely narrow window.
+func boardWindow(n, offset, availW int) (start, count, colW int) {
+	if n <= 0 {
+		return 0, 0, 0
+	}
+	fit := 0
+	for k := 1; k <= n; k++ {
+		if (availW-(k-1)*boardColGap)/k < boardMinColW {
+			break
+		}
+		fit = k
+	}
+	// Too few columns to still read as a board: let the caller stack instead.
+	// Capped at n, so a two-stage board is never told it needs three.
+	need := boardMinWindowCols
+	if need > n {
+		need = n
+	}
+	if fit < need {
+		return 0, 0, 0
+	}
+	count = fit
+	start = offset
+	if max := n - count; start > max {
+		start = max
+	}
+	if start < 0 {
+		start = 0
+	}
+	return start, count, (availW - (count-1)*boardColGap) / count
+}
+
 func (m model) renderBoardList() string {
 	cols := m.boardColumns()
 	titles := boardColTitles()
 	n := len(cols)
 	availW := m.termWidth - 8
-	colW := (availW - (n-1)*boardColGap) / n
-	if colW < boardMinColW {
+	start, count, colW := boardWindow(n, m.board.colOffset, availW)
+	if count == 0 {
 		return m.renderBoardStacked(cols, titles)
 	}
 	// Rows available inside the list panel: buildListContent subtracts the two
@@ -103,13 +149,14 @@ func (m model) renderBoardList() string {
 		budget = 4
 	}
 	selCol, selCursor := m.boardSelection(cols)
-	rendered := make([][]string, n)
-	for c := range cols {
+	rendered := make([][]string, 0, count)
+	for c := start; c < start+count; c++ {
 		cursor := -1
 		if c == selCol {
 			cursor = selCursor
 		}
-		rendered[c] = m.renderBoardColumn(cols[c], titles[c], c == len(cols)-1, cursor, colW, budget)
+		rendered = append(rendered,
+			m.renderBoardColumn(cols[c], titles[c], c == n-1, cursor, colW, budget))
 	}
 	return zipColumns(colW, boardColGap, rendered...)
 }
