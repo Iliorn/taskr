@@ -8,6 +8,24 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Changed
+
+- **The header hint is just `? help`.** It read
+  `? shortcuts · ctrl+k commands` — two doors advertised where one will do, in
+  twenty-eight columns taken from the tab bar. `?` is the door that leads to
+  the other: the help overlay lists `ctrl+k` among its shortcuts. The palette
+  did not return the favour, so it now has an entry for the help too, and the
+  two point at each other whichever one you find first.
+- **The tab bar stays inside its width.** Every tab renders with a cell of
+  padding either side, which the bar's own measurement left out — so it could
+  pick a set of labels that measured within budget and drew fourteen columns
+  past it. The header paid for the overrun by truncating what sat to its right,
+  which is why the hint used to read `? shortcuts · ctr` on a narrow window.
+  Counted properly, the tab labels also stay readable further down: at 80
+  columns the bar shows `1 Tasks 2 Cal 3 Pro …` where it used to be bare
+  digits. When the window really is too narrow for both, the hint now goes
+  whole rather than leaving a fragment behind.
+
 ## [1.32.0] - 2026-08-16
 
 ### Added

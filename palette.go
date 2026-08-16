@@ -138,10 +138,15 @@ func paletteCommands() []paletteCmd {
 		out = append(out, extra)
 	}
 
-	// Undo is the one global action worth a name. Quit is deliberately not
-	// here: a fuzzy list is the wrong place to keep something irreversible one
-	// keystroke away.
-	out = append(out, paletteCmd{label: tr("undo last change"), key: "u", section: tr(secApp), anyTab: true})
+	// Two globals are worth a name. Undo, and the help overlay — the palette
+	// is one of the two doors into the app for someone who knows nothing about
+	// it, and a door that cannot lead to the map is a worse door. (The help
+	// overlay lists ctrl+k, so with this the two point at each other.) Quit is
+	// deliberately not here: a fuzzy list is the wrong place to keep something
+	// irreversible one keystroke away.
+	out = append(out,
+		paletteCmd{label: tr("undo last change"), key: "u", section: tr(secApp), anyTab: true},
+		paletteCmd{label: tr("keyboard shortcuts and help"), key: effectiveKey("help", "?"), section: tr(secApp), anyTab: true})
 	return out
 }
 

@@ -270,14 +270,17 @@ func (m model) View() string {
 	w := m.termWidth - 6
 
 	// ── HEADER ───────────────────────────────────────────────────────────
-	shortcutHint := helpStyle.Render(tr("? shortcuts · ctrl+k commands"))
+	shortcutHint := helpStyle.Render(tr("? help"))
 	title := titleStyle.Render("taskr")
 	// Width left for the tab bar between the title and the right-aligned hint.
 	avail := m.termWidth - ansi.StringWidth(title) - 2 - ansi.StringWidth(shortcutHint) - 4
 	tabsStr := title + "  " + m.renderTabs(avail)
 	padW := m.termWidth - ansi.StringWidth(tabsStr) - ansi.StringWidth(shortcutHint) - 4
 	if padW < 1 {
-		padW = 1
+		// No room for both. The tabs are the navigation and the hint is a
+		// courtesy, so the hint goes — whole, rather than as the fragment the
+		// line's truncate would otherwise leave standing ("? h").
+		shortcutHint, padW = "", 1
 	}
 	out.WriteString(ansi.Truncate(tabsStr+strings.Repeat(" ", padW)+shortcutHint, m.termWidth-2, "") + "\n")
 	// One fixed status line replaces the old stack of banner rows, so filters
@@ -2137,8 +2140,16 @@ func (m model) renderTabs(avail int) string {
 // tabsWidthMixed measures the width of a mixed tab bar where tab sel uses
 // selLabel and all other tabs use the corresponding label from names
 // (rune length of the pre-style plain text, single-space separators).
+//
+// Every tab is rendered through a style with Padding(0, 1), so each one is two
+// cells wider than its label. Leaving that out let renderTabs pick a level that
+// measured within budget and rendered fourteen cells past it, which the header
+// paid for by truncating whatever sat to the right of the bar — the shortcut
+// hint, mid-word.
 func tabsWidthMixed(names [numTabs]string, sel tab, selLabel string) int {
-	w := visibleTabCount() - 1 // single-space separators
+	visible := visibleTabCount()
+	w := visible - 1 // single-space separators
+	w += visible * 2 // the per-tab Padding(0, 1)
 	for i, n := range names {
 		if !tabVisible(tab(i)) {
 			continue

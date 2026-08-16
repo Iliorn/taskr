@@ -897,3 +897,70 @@ func TestStatusLineSpeaksOnlyWhenSyncFails(t *testing.T) {
 		}
 	}
 }
+
+// The tab bar renders through styles with Padding(0, 1), so every tab is two
+// cells wider than its label. tabsWidthMixed used to leave that out, which let
+// renderTabs pick a level that measured inside its budget and rendered fourteen
+// cells past it — paid for by the header truncating whatever sat to its right.
+// That is why the shortcut hint used to read "? shortcuts · ctr".
+func TestTabBarFitsTheWidthItIsGiven(t *testing.T) {
+	t.Cleanup(func() { applyLang(string(langEN)) })
+	for _, lang := range availableLanguages {
+		for _, tb := range []tab{tabTasks, tabCalendar, tabSettings} {
+			m := modelWithTasks(t, todo.New("alpha"))
+			applyLang(string(lang)) // after the model: initialModel re-applies the stored language
+			m.tab = tb
+			// The floor: bare numbers plus the selected tab's full label, which
+			// renderTabs never goes below. Budgets under it cannot be honoured.
+			floor := ansi.StringWidth(ansi.Strip(m.renderTabs(0)))
+			for avail := floor; avail <= floor+60; avail++ {
+				if got := ansi.StringWidth(ansi.Strip(m.renderTabs(avail))); got > avail {
+					t.Fatalf("lang=%s tab=%v: renderTabs(%d) rendered %d cells", lang, tb, avail, got)
+				}
+			}
+		}
+	}
+}
+
+// The hint is a courtesy the header drops whole when the tabs need the room —
+// a fragment of it ("? h") is worse than none, and is what a plain truncate
+// leaves behind.
+func TestHeaderHintIsWholeOrAbsent(t *testing.T) {
+	t.Cleanup(func() { applyLang(string(langEN)) })
+	for _, lang := range availableLanguages {
+		for w := 8; w <= 200; w++ {
+			m := modelWithTasks(t, todo.New("alpha"))
+			applyLang(string(lang))
+			m.termWidth, m.termHeight = w, 20
+			header := ansi.Strip(strings.SplitN(m.View(), "\n", 2)[0])
+			hint := tr("? help")
+			// The tab labels carry no "?", so its presence means the hint began
+			// to render.
+			if strings.Contains(header, "?") && !strings.Contains(header, hint) {
+				t.Fatalf("lang=%s w=%d: header carries a fragment of %q: %q", lang, w, hint, header)
+			}
+		}
+	}
+}
+
+// The two doors into the app for someone who knows nothing about it must point
+// at each other: the help overlay lists ctrl+k, and the palette has to be able
+// to find the help. Advertising one of them in the header is only safe because
+// of that.
+func TestTheHelpAndThePaletteFindEachOther(t *testing.T) {
+	m := modelWithTasks(t, todo.New("alpha"))
+	m.termWidth, m.termHeight = 100, 40
+	if body := strings.Join(m.helpBodyLines(), "\n"); !strings.Contains(ansi.Strip(body), "ctrl+k") {
+		t.Error("the help overlay does not mention the command palette")
+	}
+	if len(paletteResults("help")) == 0 {
+		t.Error("the palette cannot find the help")
+	}
+	// And the entry works: the palette presses the key rather than calling the
+	// action, so an entry that resolves to nothing would fail silently.
+	m = sendKey(t, m, "ctrl+k")
+	m.paletteInput.SetValue("help")
+	if m = sendKey(t, m, "enter"); m.mode != modeHelp {
+		t.Errorf("choosing the palette's help entry left mode = %v, want modeHelp", m.mode)
+	}
+}
