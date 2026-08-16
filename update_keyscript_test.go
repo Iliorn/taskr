@@ -1051,7 +1051,7 @@ func TestScriptQuickAddCompletesTag(t *testing.T) {
 
 	m = sendKey(t, m, "a")
 	m = script(t, m, "buy milk #")
-	sigil, matches := m.quickAddMatches()
+	sigil, matches := m.completionMatches()
 	if sigil != "#" || len(matches) == 0 {
 		t.Fatalf("after typing '#': sigil %q, matches %v — want the existing tags offered", sigil, matches)
 	}
@@ -1081,7 +1081,7 @@ func TestScriptQuickAddPicksSuggestionWithArrows(t *testing.T) {
 
 	m = sendKey(t, m, "a")
 	m = script(t, m, "buy milk #h")
-	_, matches := m.quickAddMatches()
+	_, matches := m.completionMatches()
 	if len(matches) < 2 {
 		t.Fatalf("matches = %v, want at least two to pick between", matches)
 	}
@@ -1105,7 +1105,7 @@ func TestScriptQuickAddTabIsInertWithoutSuggestions(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Fix boiler"))
 	m = sendKey(t, m, "a")
 	m = script(t, m, "buy milk")
-	if _, matches := m.quickAddMatches(); len(matches) != 0 {
+	if _, matches := m.completionMatches(); len(matches) != 0 {
 		t.Fatalf("plain title offered completions: %v", matches)
 	}
 	m = sendKey(t, m, "tab")

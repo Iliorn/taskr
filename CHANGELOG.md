@@ -8,8 +8,24 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Added
+
+- **The search field completes tags and projects**, the same way quick-add
+  does: type `#` or `@` and the existing names appear, most recently used
+  first, `tab` splices one in. Search was the other place you had to remember
+  your own vocabulary — and the one where a near-miss is silent, since a
+  mistyped `#hjme` just drops into the free-text match and takes the results
+  with it.
+
 ### Changed
 
+- **The search parse preview appears wherever the grammar runs.** It was
+  limited to the Tasks tab on the belief that no other tab compiled the query.
+  The Board and Stats both do — the Board's columns are a projection of the
+  same filtered lists — so on those two you were typing tokens with no
+  indication of which ones took. Projects still shows neither preview nor
+  completions: its search matches project names, where a token would describe
+  a filter that is not running.
 - **Release notes come from the CHANGELOG.** A release page listed commit
   subjects, which describe the work to whoever wrote it rather than to whoever
   is deciding whether to upgrade — while the entries below, written for exactly

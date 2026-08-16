@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	"taskr/todo"
 )
 
@@ -148,15 +149,71 @@ func acceptQuickAddSuggestion(value string, pos int, choice string) (string, int
 	return next, start + len([]rune(token)), true
 }
 
-// quickAddMatches is the live completion set for the quick-add field, and the
-// gate for the keys that drive it: it returns nothing unless the quick-add
-// input is the thing on screen, so tab/↑/↓ keep their normal meaning in the
-// detail pane's editors, which share modeInput.
-func (m model) quickAddMatches() (string, []string) {
-	if m.mode != modeInput || m.pane != paneList {
-		return "", nil
+// searchUsesTokenGrammar reports whether the active tab runs the search query
+// through compileSearch — the #tag / @project / p: / due: vocabulary — rather
+// than matching a plain name substring.
+//
+// Tasks, Board and Stats all filter the same task set with the same grammar:
+// the Board's columns are a projection of cache.active/cache.done, and
+// statsScopedTodos compiles the query itself. The Projects tab is the odd one
+// out, filtering project *names*, where "#home" would only ever match a
+// project literally called that. So it gets neither the completions nor the
+// parse preview — offering either would describe a filter it does not run.
+func (m model) searchUsesTokenGrammar() bool {
+	switch m.tab {
+	case tabTasks, tabBoard, tabStats:
+		return true
 	}
-	return m.quickAddSuggestions(m.textInput.Value(), m.textInput.Position())
+	return false
+}
+
+// completionMatches is the live completion set for whichever field is on
+// screen, and the gate for the keys that drive it. It returns nothing unless a
+// field that takes completions is showing, so tab/↑/↓ keep their normal
+// meaning in the detail pane's editors (which share modeInput) and on the tabs
+// whose search is a name substring.
+func (m model) completionMatches() (string, []string) {
+	switch {
+	case m.mode == modeInput && m.pane == paneList:
+		return m.quickAddSuggestions(m.textInput.Value(), m.textInput.Position())
+	case m.mode == modeSearch && m.searchUsesTokenGrammar():
+		// The same vocabulary reads differently here — a search `#tag` matches
+		// a substring rather than setting one — but the question the row
+		// answers is identical: what did I call that tag again.
+		return m.quickAddSuggestions(m.searchInput.Value(), m.searchInput.Position())
+	}
+	return "", nil
+}
+
+// applyCompletionKey handles the keys that drive the completion row against
+// whichever input is showing it: tab splices the highlighted candidate in, ↑/↓
+// move the highlight. Reports whether the key was consumed, so a caller can
+// fall through to its own meaning when no completions are live.
+func (m *model) applyCompletionKey(key string, in *textinput.Model, matches []string) bool {
+	if len(matches) == 0 {
+		return false
+	}
+	switch key {
+	case "tab":
+		// Enter deliberately keeps its own meaning at both call sites — submit
+		// the task, apply the filter. A completion row must never stand
+		// between the user and the thing they came to do.
+		val, pos, ok := acceptQuickAddSuggestion(in.Value(), in.Position(), matches[m.suggestIndex(len(matches))])
+		if ok {
+			in.SetValue(val)
+			in.SetCursor(pos)
+			m.suggestCursor = 0
+		}
+		return true
+	case "up", "down":
+		step := 1
+		if key == "up" {
+			step = -1
+		}
+		m.suggestCursor = (m.suggestIndex(len(matches)) + step + len(matches)) % len(matches)
+		return true
+	}
+	return false
 }
 
 // suggestIndex clamps the stored highlight against the live match count — the

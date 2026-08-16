@@ -608,7 +608,7 @@ func (m model) footerContentFor(w int) string {
 			// While the caret sits in a #tag / @project token, the completion
 			// row is the useful feedback — the parse preview comes back the
 			// moment the token is finished.
-			if sigil, matches := m.quickAddMatches(); len(matches) > 0 {
+			if sigil, matches := m.completionMatches(); len(matches) > 0 {
 				return field + "\n" + renderQuickAddSuggestions(sigil, matches, m.suggestIndex(len(matches)), w)
 			}
 			if strings.TrimSpace(m.textInput.Value()) == "" {
@@ -635,10 +635,16 @@ func (m model) footerContentFor(w int) string {
 		return calTodayStyle.Render(m.confirmMsg)
 	case modeSearch:
 		field := searchStyle.Width(w).Render(m.searchInput.View())
-		// The token grammar (compileSearch) only drives the Tasks list; on the
-		// other tabs the query is a plain name substring, so a chip preview
-		// would misrepresent it. Show the preview once the query is non-empty.
-		if m.tab == tabTasks {
+		// Same two-stage footer as quick-add: while the caret sits in a #tag /
+		// @project token the completion row is the useful feedback, and the
+		// parse preview comes back the moment the token is finished.
+		if sigil, matches := m.completionMatches(); len(matches) > 0 {
+			return field + "\n" + renderQuickAddSuggestions(sigil, matches, m.suggestIndex(len(matches)), w)
+		}
+		// Both are gated on the tab actually running the token grammar — on
+		// Projects the query is a plain name substring, and a chip preview
+		// would describe a filter that is not the one in effect.
+		if m.searchUsesTokenGrammar() {
 			if val := m.searchInput.Value(); strings.TrimSpace(val) != "" {
 				return field + "\n" + renderSearchPreview(val, w)
 			}

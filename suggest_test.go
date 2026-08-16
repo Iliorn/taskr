@@ -2,9 +2,11 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"taskr/todo"
 )
 
@@ -158,6 +160,147 @@ func TestAcceptQuickAddSuggestion(t *testing.T) {
 		if got != c.want || pos != c.wantPos || ok != c.wantDone {
 			t.Errorf("%s: accept(%q, %d, %q) = %q/%d/%v, want %q/%d/%v",
 				c.name, c.value, c.pos, c.choice, got, pos, ok, c.want, c.wantPos, c.wantDone)
+		}
+	}
+}
+
+// ── The search field takes the same completions ───────────────────────────────
+
+// suggestSearchModel gives every tab something to complete against: three tags
+// where two share a prefix, and two projects.
+func suggestSearchModel(t *testing.T) model {
+	t.Helper()
+	var tasks []todo.Todo
+	for _, spec := range []struct{ title, tag, project string }{
+		{"Fix the boiler", "home", "House"},
+		{"Write the memo", "work", "Q3"},
+		{"Call the plumber", "homework", "House"},
+	} {
+		task := todo.New(spec.title)
+		task.AddTag(spec.tag)
+		task.Project = spec.project
+		tasks = append(tasks, task)
+	}
+	return modelWithTasks(t, tasks...)
+}
+
+// typeInto sends a string one key at a time, the way a user produces it.
+func typeInto(t *testing.T, m model, s string) model {
+	t.Helper()
+	for _, r := range s {
+		m = sendKey(t, m, string(r))
+	}
+	return m
+}
+
+// The Board's search offers the same tag and project names quick-add does, and
+// tab splices one in and narrows the columns with it.
+func TestSearchCompletesTagsOnTheBoard(t *testing.T) {
+	m := suggestSearchModel(t)
+	m.switchTab(tabBoard)
+	m = sendKey(t, m, "/")
+	m = typeInto(t, m, "#ho")
+
+	sigil, matches := m.completionMatches()
+	if sigil != "#" || len(matches) != 2 {
+		t.Fatalf("sigil %q matches %v, want both ho-tags offered", sigil, matches)
+	}
+	// Prefix matches float to the front of the row.
+	if matches[0] != "homework" && matches[0] != "home" {
+		t.Errorf("first candidate = %q, want a tag starting with the typed text", matches[0])
+	}
+
+	m = sendKey(t, m, "tab")
+	if m.searchQuery != "#"+matches[0]+" " {
+		t.Fatalf("query = %q after tab, want the completed tag", m.searchQuery)
+	}
+	m.ensureCache()
+	cards := 0
+	for _, col := range m.boardColumns() {
+		cards += len(col)
+	}
+	if cards != 1 {
+		t.Errorf("board shows %d cards for %q, want the one task carrying it", cards, m.searchQuery)
+	}
+}
+
+func TestSearchCompletesProjectsOnTheBoard(t *testing.T) {
+	m := suggestSearchModel(t)
+	m.switchTab(tabBoard)
+	m = sendKey(t, m, "/")
+	m = typeInto(t, m, "@Ho")
+
+	sigil, matches := m.completionMatches()
+	if sigil != "@" || len(matches) != 1 || matches[0] != "House" {
+		t.Fatalf("sigil %q matches %v, want the House project", sigil, matches)
+	}
+}
+
+// ↑/↓ move the highlight rather than the list cursor, and enter still applies
+// the filter — the completion row must not stand between the user and the
+// thing they opened the field to do.
+func TestSearchCompletionKeysKeepEnterAndEsc(t *testing.T) {
+	m := suggestSearchModel(t)
+	m.switchTab(tabBoard)
+	m = sendKey(t, m, "/")
+	m = typeInto(t, m, "#ho")
+
+	_, matches := m.completionMatches()
+	m = sendKey(t, m, "down")
+	if m.suggestCursor != 1%len(matches) {
+		t.Errorf("suggestCursor = %d after ↓, want the next candidate", m.suggestCursor)
+	}
+	m = sendKey(t, m, "enter")
+	if m.mode != modeNormal {
+		t.Errorf("mode = %v after enter, want the filter applied and the field closed", m.mode)
+	}
+	if m.searchQuery != "#ho" {
+		t.Errorf("query = %q, want what was typed — enter applies, it does not complete", m.searchQuery)
+	}
+}
+
+// The Projects tab filters project *names* with a plain substring, so a #tag
+// completion there would offer to build a query it does not run.
+func TestSearchOffersNoCompletionsWhereTheGrammarDoesNotRun(t *testing.T) {
+	m := suggestSearchModel(t)
+	m.switchTab(tabProjects)
+	m = sendKey(t, m, "/")
+	m = typeInto(t, m, "#ho")
+
+	if _, matches := m.completionMatches(); len(matches) != 0 {
+		t.Errorf("Projects offered %v, but its search is a name substring", matches)
+	}
+	if m.searchUsesTokenGrammar() {
+		t.Error("searchUsesTokenGrammar is true for Projects")
+	}
+	for _, tab := range []tab{tabTasks, tabBoard, tabStats} {
+		probe := suggestSearchModel(t)
+		probe.switchTab(tab)
+		if !probe.searchUsesTokenGrammar() {
+			t.Errorf("tab %v runs compileSearch on its query but is not marked as such", tab)
+		}
+	}
+}
+
+// The parse preview used to be gated to the Tasks tab on the belief that no
+// other tab ran the grammar. Board and Stats both do, and typing a token there
+// with no feedback is how a mistyped one goes unnoticed.
+func TestSearchPreviewShowsWhereverTheGrammarRuns(t *testing.T) {
+	for _, tab := range []tab{tabTasks, tabBoard, tabStats} {
+		m := suggestSearchModel(t)
+		m.switchTab(tab)
+		m = sendKey(t, m, "/")
+		m = typeInto(t, m, "p:high")
+		// The caret is not in a #/@ token, so the preview owns the footer row.
+		if _, matches := m.completionMatches(); len(matches) != 0 {
+			t.Fatalf("tab %v offered completions for a p: token: %v", tab, matches)
+		}
+		// Assert on the preview's own marker, not on the token: "p:high" is in
+		// the input field too, so looking for it would pass with no preview at
+		// all — which is exactly how the first version of this test lied.
+		body := ansi.Strip(m.View())
+		if !strings.Contains(body, "→ p:") {
+			t.Errorf("tab %v shows no parse preview while filtering:\n%s", tab, body)
 		}
 	}
 }
