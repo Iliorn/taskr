@@ -3,8 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"taskr/todo"
 )
@@ -166,8 +169,105 @@ type listFilterOpts struct {
 	tag         string // matched case-insensitively after NormalizeTag
 	project     string // matched case-insensitively for equality
 	search      string // case-insensitive substring of title
-	onlyReady   bool   // only actionable pending tasks (not blocked by an unfinished dependency)
-	onlyBlocked bool   // only tasks blocked by at least one unfinished dependency
+	searchWord  string // like search, but only whole-word matches
+	searchRe    *regexp.Regexp
+	onlyReady   bool // only actionable pending tasks (not blocked by an unfinished dependency)
+	onlyBlocked bool // only tasks blocked by at least one unfinished dependency
+	// staleFor keeps only tasks untouched for at least this long — the
+	// "what has been sitting here" question a backlog review is made of.
+	staleFor time.Duration
+	// unblockedFor keeps only tasks that became actionable within this window:
+	// they have dependencies, none of them is still pending, and the last one
+	// to close did so recently. Nothing else surfaces "you can start this now"
+	// — a freed task looks exactly like one that never had a blocker.
+	unblockedFor time.Duration
+	now          time.Time // injectable clock for the windows above; zero = time.Now()
+}
+
+// matchesText applies whichever of the three text filters are set. They are
+// separate fields rather than one string with a mode, because `list --search
+// RAM --search-word RAM` is a contradiction worth catching at the flag layer,
+// not a precedence puzzle here.
+func (o listFilterOpts) matchesText(t *todo.Todo) bool {
+	if q := strings.ToLower(strings.TrimSpace(o.search)); q != "" {
+		if !strings.Contains(strings.ToLower(t.Title), q) && !strings.Contains(strings.ToLower(t.Notes), q) {
+			return false
+		}
+	}
+	if o.searchWord != "" && !containsWord(t.Title, o.searchWord) && !containsWord(t.Notes, o.searchWord) {
+		return false
+	}
+	if o.searchRe != nil && !o.searchRe.MatchString(t.Title) && !o.searchRe.MatchString(t.Notes) {
+		return false
+	}
+	return true
+}
+
+// containsWord reports whether word occurs in s delimited by non-word runes on
+// both sides, case-insensitively. Plain substring search answers "RAM" with
+// "Ramte", which is right for recall and wrong for the question "is anything
+// about RAM still open" — the one you ask when clearing a backlog.
+//
+// A "word rune" here is a letter or digit, so the Danish, German and other
+// non-ASCII titles in this store behave like the English ones: 'å' is part of
+// a word, '-' and ':' are not.
+func containsWord(s, word string) bool {
+	word = strings.TrimSpace(word)
+	if word == "" {
+		return true
+	}
+	hay := []rune(strings.ToLower(s))
+	needle := []rune(strings.ToLower(word))
+	isWordRune := func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
+	for i := 0; i+len(needle) <= len(hay); i++ {
+		if string(hay[i:i+len(needle)]) != string(needle) {
+			continue
+		}
+		if i > 0 && isWordRune(hay[i-1]) {
+			continue
+		}
+		if j := i + len(needle); j < len(hay) && isWordRune(hay[j]) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// unblockedSet returns the tasks whose last pending dependency completed within
+// the window: still-pending tasks that have dependencies, all of them done, and
+// the most recent completion no older than `within`. A task whose blocker was
+// deleted rather than completed is not included — there is no moment to date it
+// from, so it would be either always or never recent.
+func unblockedSet(todos []todo.Todo, within time.Duration, now time.Time) map[string]bool {
+	byID := make(map[string]*todo.Todo, len(todos))
+	for i := range todos {
+		byID[todos[i].ID] = &todos[i]
+	}
+	cutoff := now.Add(-within)
+	out := make(map[string]bool)
+	for i := range todos {
+		t := &todos[i]
+		if t.Status != todo.Pending || t.Deleted || len(t.Dependencies) == 0 {
+			continue
+		}
+		var newest time.Time
+		ok := true
+		for _, depID := range t.Dependencies {
+			dep := byID[depID]
+			if dep == nil || dep.Status != todo.Done || dep.CompletedAt.IsZero() {
+				ok = false
+				break
+			}
+			if dep.CompletedAt.After(newest) {
+				newest = dep.CompletedAt
+			}
+		}
+		if ok && newest.After(cutoff) {
+			out[t.ID] = true
+		}
+	}
+	return out
 }
 
 // buildBlockedSet returns a set of task IDs that are "blocked": each task has
@@ -199,13 +299,20 @@ func buildBlockedSet(todos []todo.Todo) map[string]bool {
 func filterTopLevel(todos []todo.Todo, opts listFilterOpts) []todo.Todo {
 	tagQ := todo.NormalizeTag(opts.tag)
 	projQ := strings.ToLower(strings.TrimSpace(opts.project))
-	searchQ := strings.ToLower(strings.TrimSpace(opts.search))
 
 	// Build the blocked set only when one of the readiness filters is active —
 	// it requires scanning the full task list and is unnecessary otherwise.
 	var blockedSet map[string]bool
 	if opts.onlyReady || opts.onlyBlocked {
 		blockedSet = buildBlockedSet(todos)
+	}
+	now := opts.now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	var freed map[string]bool
+	if opts.unblockedFor > 0 {
+		freed = unblockedSet(todos, opts.unblockedFor, now)
 	}
 
 	rows := make([]todo.Todo, 0, len(todos))
@@ -237,9 +344,15 @@ func filterTopLevel(todos []todo.Todo, opts listFilterOpts) []todo.Todo {
 		// Title or notes. The CLI matches both as plain substrings (the TUI's
 		// compileSearch adds fuzzy title matching and the token grammar on
 		// top); notes have to be reachable here because migration 011 folded
-		// the old per-task learnings into them.
-		if searchQ != "" && !strings.Contains(strings.ToLower(t.Title), searchQ) &&
-			!strings.Contains(strings.ToLower(t.Notes), searchQ) {
+		// the old per-task learnings into them. --search-word and --search-re
+		// narrow the same two fields.
+		if !opts.matchesText(&t) {
+			continue
+		}
+		if opts.staleFor > 0 && now.Sub(t.ModifiedAt) < opts.staleFor {
+			continue
+		}
+		if opts.unblockedFor > 0 && !freed[t.ID] {
 			continue
 		}
 		if opts.onlyReady && blockedSet[t.ID] {
@@ -251,6 +364,108 @@ func filterTopLevel(todos []todo.Todo, opts listFilterOpts) []todo.Todo {
 		rows = append(rows, t)
 	}
 	return rows
+}
+
+// parseAgeSpec parses the duration accepted by --stale and --unblocked-since:
+// "30d", "2w", "12h", "90m", or a bare number taken as days ("--stale=30").
+//
+// Days and weeks are the units a backlog is actually discussed in, and Go's
+// time.ParseDuration knows neither. Note that 'm' keeps its Go meaning of
+// minutes — the same as `taskr log 45m` — so months have no shorthand; write
+// them as days.
+func parseAgeSpec(s string) (time.Duration, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return 0, fmt.Errorf("empty duration")
+	}
+	mult := time.Duration(0)
+	switch {
+	case strings.HasSuffix(s, "d"):
+		mult = 24 * time.Hour
+	case strings.HasSuffix(s, "w"):
+		mult = 7 * 24 * time.Hour
+	}
+	if mult > 0 {
+		n, err := strconv.ParseFloat(strings.TrimRight(s, "dw"), 64)
+		if err != nil || n <= 0 {
+			return 0, fmt.Errorf("invalid duration %q (try 30d, 2w, 12h)", s)
+		}
+		return time.Duration(n * float64(mult)), nil
+	}
+	if n, err := strconv.ParseFloat(s, 64); err == nil {
+		if n <= 0 {
+			return 0, fmt.Errorf("invalid duration %q (try 30d, 2w, 12h)", s)
+		}
+		return time.Duration(n * float64(24*time.Hour)), nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("invalid duration %q (try 30d, 2w, 12h)", s)
+	}
+	return d, nil
+}
+
+// cliSortSpec names the orders `list`/`search` can be asked for. Three of them
+// delegate to the shared comparators the TUI sorts by (so a listing can't
+// disagree with the app about what "by due date" means); age and idle are
+// CLI-only, because the TUI's sort modes are contracted to line up with a
+// visible column and neither timestamp has one.
+var cliSortSpec = []struct {
+	name string
+	desc string
+}{
+	{"seq", "sequence score, highest first (default)"},
+	{"due", "due date, soonest first"},
+	{"size", "size, small first"},
+	{"age", "creation time, oldest first"},
+	{"idle", "last modification, longest untouched first"},
+	{"pri", "priority, highest first"},
+}
+
+func cliSortNames() []string {
+	out := make([]string, 0, len(cliSortSpec))
+	for _, s := range cliSortSpec {
+		out = append(out, s.name)
+	}
+	return out
+}
+
+// sortTodosByCLIMode orders rows for a CLI listing. Every order ends at ID so
+// it is total and the output is reproducible between runs, matching the
+// house rule for the comparators in storage.go.
+func sortTodosByCLIMode(rows []todo.Todo, mode string) error {
+	switch mode {
+	case "", "seq":
+		sortTodosByMode(rows, taskSortSequence)
+	case "due":
+		sortTodosByMode(rows, taskSortDueDate)
+	case "size":
+		sortTodosByMode(rows, taskSortSize)
+	case "age":
+		sortTodoValues(rows, func(a, b *todo.Todo) bool {
+			if !a.CreatedAt.Equal(b.CreatedAt) {
+				return a.CreatedAt.Before(b.CreatedAt)
+			}
+			return a.ID < b.ID
+		})
+	case "idle":
+		sortTodoValues(rows, func(a, b *todo.Todo) bool {
+			if !a.ModifiedAt.Equal(b.ModifiedAt) {
+				return a.ModifiedAt.Before(b.ModifiedAt)
+			}
+			return a.ID < b.ID
+		})
+	case "pri":
+		sortTodoValues(rows, func(a, b *todo.Todo) bool {
+			if a.Priority != b.Priority {
+				return a.Priority > b.Priority
+			}
+			return a.ID < b.ID
+		})
+	default:
+		return fmt.Errorf("unknown sort %q (use %s)", mode, strings.Join(cliSortNames(), "|"))
+	}
+	return nil
 }
 
 // trackedToday sums the portion of every TimeEntry across all todos that falls

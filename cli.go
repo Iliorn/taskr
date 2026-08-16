@@ -8,7 +8,9 @@ import (
 	"io"
 	"math"
 	"os"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,7 +30,7 @@ import (
 // route to runCLI instead of launching the TUI.
 func isCLICommand(arg string) bool {
 	switch arg {
-	case "add", "list", "ls", "done", "top",
+	case "add", "list", "ls", "done", "reopen", "top",
 		"show", "why", "edit", "delete", "rm", "undelete", "comment",
 		"stats", "start", "stop", "log", "export", "import", "subtask",
 		"search", "tags", "projects", "serve", "sync", "undo",
@@ -59,7 +61,7 @@ func runCLI(args []string) int {
 // trigger an auto-sync afterward).
 func cliMutates(cmd string) bool {
 	switch cmd {
-	case "add", "done", "edit", "delete", "rm", "undelete", "comment", "start", "stop", "log", "subtask", "undo", "suggest", "import":
+	case "add", "done", "reopen", "edit", "delete", "rm", "undelete", "comment", "start", "stop", "log", "subtask", "undo", "suggest", "import":
 		return true
 	}
 	return false
@@ -74,6 +76,8 @@ func dispatchCLI(args []string) int {
 		return cliList(rest)
 	case "done":
 		return cliDone(rest)
+	case "reopen":
+		return cliReopen(rest)
 	case "top":
 		return cliTop(rest)
 	case "show":
@@ -502,28 +506,34 @@ func cliList(args []string) int {
 	tag := fs.String("tag", "", "only tasks carrying this tag (case-insensitive)")
 	project := fs.String("project", "", "only tasks in this project")
 	search := fs.String("search", "", "only tasks whose title contains this substring")
+	searchWord := fs.String("search-word", "", "like --search, but only whole-word matches ('RAM' won't match 'Ramte')")
+	searchRe := fs.String("search-re", "", "only tasks whose title or notes match this regular expression")
 	ready := fs.Bool("ready", false, "only actionable pending tasks (no unfinished dependencies)")
 	blocked := fs.Bool("blocked", false, "only tasks blocked by at least one unfinished dependency")
+	stale := fs.String("stale", "", "only tasks untouched for at least this long (30d, 2w, 12h; a bare number means days)")
+	unblocked := fs.String("unblocked-since", "", "only tasks freed within this window: every dependency done, the last one recently")
+	sortBy := fs.String("sort", "", "order rows: "+strings.Join(cliSortNames(), "|")+" (default seq)")
+	wide := fs.Bool("wide", false, "add AGE and IDLE columns (days since creation / last change)")
 	flagArgs, _ := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
+	opts, code := listOptsFromFlags(*all, *focus, *tag, *project, *search, *searchWord, *searchRe, *stale, *unblocked)
+	if code != 0 {
+		return code
+	}
+	opts.onlyReady = *ready
+	opts.onlyBlocked = *blocked
 	_, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	opts := listFilterOpts{
-		includeDone: *all,
-		focus:       *focus,
-		tag:         *tag,
-		project:     *project,
-		search:      *search,
-		onlyReady:   *ready,
-		onlyBlocked: *blocked,
-	}
 	rows := filterTopLevel(todos, opts)
-	sortTodosByMode(rows, taskSortSequence)
+	if err := sortTodosByCLIMode(rows, *sortBy); err != nil {
+		fmt.Fprintf(os.Stderr, "taskr list: %v\n", err)
+		return 2
+	}
 	if *limit > 0 && len(rows) > *limit {
 		rows = rows[:*limit]
 	}
@@ -542,8 +552,54 @@ func cliList(args []string) int {
 		}
 	}
 	blockedSet := buildBlockedSet(todos)
-	printTaskTable(rows, blockedSet)
+	printTaskTableWide(rows, blockedSet, *wide)
 	return 0
+}
+
+// listOptsFromFlags builds the shared filter from the text/window flags, so
+// `list` and `search` can't drift on what --search-word or --stale mean. It
+// reports its own usage errors and returns the exit code to propagate.
+func listOptsFromFlags(all, focus bool, tag, project, search, searchWord, searchRe, stale, unblocked string) (listFilterOpts, int) {
+	opts := listFilterOpts{
+		includeDone: all,
+		focus:       focus,
+		tag:         tag,
+		project:     project,
+		search:      search,
+		searchWord:  searchWord,
+	}
+	if search != "" && searchWord != "" {
+		fmt.Fprintln(os.Stderr, "taskr: --search and --search-word both narrow the same fields — pass one")
+		return opts, 2
+	}
+	if searchRe != "" {
+		// Case-insensitive by default: every other text filter here is, and a
+		// regex that misses "RAM" because the note says "ram" would be a trap
+		// rather than a feature.
+		re, err := regexp.Compile("(?i)" + searchRe)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "taskr: invalid --search-re: %v\n", err)
+			return opts, 2
+		}
+		opts.searchRe = re
+	}
+	if stale != "" {
+		d, err := parseAgeSpec(stale)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "taskr: --stale: %v\n", err)
+			return opts, 2
+		}
+		opts.staleFor = d
+	}
+	if unblocked != "" {
+		d, err := parseAgeSpec(unblocked)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "taskr: --unblocked-since: %v\n", err)
+			return opts, 2
+		}
+		opts.unblockedFor = d
+	}
+	return opts, 0
 }
 
 // cliSearch is sugar for `list --all --search=...` — kept as its own verb for
@@ -555,25 +611,48 @@ func cliSearch(args []string) int {
 	asJSON := fs.Bool("json", false, "emit JSON instead of a table")
 	pendingOnly := fs.Bool("pending", false, "exclude completed tasks (default: include)")
 	limit := fs.Int("limit", 0, "cap rows (0 = no cap)")
+	word := fs.Bool("word", false, "match the term as a whole word ('RAM' won't match 'Ramte')")
+	asRegexp := fs.Bool("re", false, "treat the term as a regular expression")
+	sortBy := fs.String("sort", "", "order rows: "+strings.Join(cliSortNames(), "|")+" (default seq)")
 	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
 	if len(positionals) == 0 {
-		fmt.Fprintln(os.Stderr, `usage: taskr search "term" [--json] [--pending] [--limit=N]`)
+		fmt.Fprintln(os.Stderr, `usage: taskr search "term" [--json] [--pending] [--word] [--re] [--sort=…] [--limit=N]`)
+		return 2
+	}
+	if *word && *asRegexp {
+		fmt.Fprintln(os.Stderr, "taskr search: --word and --re are two ways to read the same term — pass one")
 		return 2
 	}
 	term := strings.Join(positionals, " ")
+	// search takes its term as a positional, so the mode is a flag here while
+	// list spells it out per filter; both land in the same listFilterOpts.
+	opts := listFilterOpts{includeDone: !*pendingOnly}
+	switch {
+	case *word:
+		opts.searchWord = term
+	case *asRegexp:
+		re, err := regexp.Compile("(?i)" + term)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "taskr search: invalid regular expression: %v\n", err)
+			return 2
+		}
+		opts.searchRe = re
+	default:
+		opts.search = term
+	}
 	_, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	rows := filterTopLevel(todos, listFilterOpts{
-		includeDone: !*pendingOnly,
-		search:      term,
-	})
-	sortTodosByMode(rows, taskSortSequence)
+	rows := filterTopLevel(todos, opts)
+	if err := sortTodosByCLIMode(rows, *sortBy); err != nil {
+		fmt.Fprintf(os.Stderr, "taskr search: %v\n", err)
+		return 2
+	}
 	if *limit > 0 && len(rows) > *limit {
 		rows = rows[:*limit]
 	}
@@ -845,6 +924,85 @@ func cliDone(args []string) int {
 	}
 	for _, t := range skipped {
 		fmt.Fprintf(os.Stderr, "already done: %s\n", t.Title)
+	}
+	return 0
+}
+
+// ── reopen ───────────────────────────────────────────────────────────────────
+
+// cliReopen is `done`'s counterpart: it moves tasks back to pending. Without
+// it the CLI could close a task but never undo that, so a mistyped ref in a
+// batch `taskr done a b c` could only be repaired by opening the TUI — which
+// makes every scripted or remote close riskier than it needs to be.
+//
+// Deliberately not a "toggle": a verb that closes a pending task when you
+// meant to reopen a done one is exactly the wrong thing to hand a script.
+// Tasks that are already pending are reported and skipped.
+func cliReopen(args []string) int {
+	fs := flag.NewFlagSet("reopen", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var comment string
+	fs.StringVar(&comment, "comment", "", "append this comment to each task reopened")
+	fs.StringVar(&comment, "m", "", "shorthand for --comment (git muscle memory)")
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
+	if err := fs.Parse(flagArgs); err != nil {
+		return 2
+	}
+	if len(positionals) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: taskr reopen <ref> [<ref>...] [-m \"why\"]")
+		return 2
+	}
+	repo, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	// A done task can only be found by a ref search that includes done tasks;
+	// resolveRefs searches the whole set, so an id prefix or a title substring
+	// both work here.
+	targets, err := resolveRefs(todoPtrs(todos), positionals)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	_, get := sliceTaskLookups(todos)
+	var dirty, skipped []*todo.Todo
+	for _, t := range targets {
+		if t.Status != todo.Done {
+			skipped = append(skipped, t)
+			continue
+		}
+		if comment != "" {
+			t.AddComment(comment)
+		}
+		// Toggle clears CompletedAt and SeqRankAtDone — the rank was a reading
+		// taken at completion, and this task hasn't completed after all.
+		t.Toggle()
+		dirty = append(dirty, t)
+	}
+	if len(dirty) == 0 {
+		for _, t := range skipped {
+			fmt.Fprintf(os.Stderr, "already pending: %s\n", t.Title)
+		}
+		return 0
+	}
+	if err := repo.Save(dirty, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "save: %v\n", err)
+		return 1
+	}
+	for _, t := range dirty {
+		fmt.Printf("reopened  %s  %s\n", t.ID[:8], t.Title)
+		// A subtask under a closed parent is invisible in every list but
+		// `export` — the same trap `done` warns about from the other side.
+		if t.ParentID != "" {
+			if p := get(t.ParentID); p != nil && p.Status == todo.Done {
+				fmt.Fprintf(os.Stderr, "note: parent %s %q is still done — reopen it too, or this subtask stays hidden\n",
+					p.ID[:8], p.Title)
+			}
+		}
+	}
+	for _, t := range skipped {
+		fmt.Fprintf(os.Stderr, "already pending: %s\n", t.Title)
 	}
 	return 0
 }
@@ -1205,15 +1363,22 @@ func cliEdit(args []string) int {
 	appendNote := fs.String("append-note", "", "append a paragraph to the task's notes ('-' reads from stdin)")
 	clearNote := fs.Bool("clear-note", false, "drop the notes")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: taskr edit <id-prefix> [flags]")
+		fmt.Fprintln(os.Stderr, "usage: taskr edit <ref> [<ref>...] [flags]")
 		fs.PrintDefaults()
 	}
 	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
-	if len(positionals) != 1 {
-		fmt.Fprintln(os.Stderr, "taskr edit: exactly one id-prefix required")
+	if len(positionals) < 1 {
+		fmt.Fprintln(os.Stderr, "taskr edit: at least one ref required")
+		return 2
+	}
+	// A title is one task's identity — applying the same one to several is
+	// always a mistake, so it's refused rather than obeyed. Every other flag
+	// here is a property several tasks can genuinely share.
+	if *title != "" && len(positionals) > 1 {
+		fmt.Fprintln(os.Stderr, "taskr edit: --title takes one ref (it would give every task the same title)")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -1221,12 +1386,98 @@ func cliEdit(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	t, err := findByPrefix(todoPtrs(todos), positionals[0])
+	// Resolve every ref before mutating anything, like `done` — an ambiguity
+	// in the third ref shouldn't leave the first two edited.
+	targets, err := resolveRefs(todoPtrs(todos), positionals)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
+	// Read stdin ONCE, ahead of the loop: '-' can only be consumed a single
+	// time, so resolving it per task would give the second task an empty note.
+	noteText, appendText := *note, *appendNote
+	if *note == "-" || *appendNote == "-" {
+		text, terr := noteFlagText("-", os.Stdin)
+		if terr != nil {
+			fmt.Fprintf(os.Stderr, "stdin: %v\n", terr)
+			return 1
+		}
+		if *note == "-" {
+			noteText = text
+		} else {
+			appendText = text
+		}
+	}
+	var saveSet []*todo.Todo
+	var edited []*todo.Todo
+	var allPropagated, allBumped []*todo.Todo
+	for _, t := range targets {
+		changed, code := editOneTask(t, todos, editFields{
+			title: *title, priority: *priority, size: *size, stage: *stage,
+			due: *due, clearDue: *clearDue, start: *start, clearStart: *clearStart,
+			project: *project, clearProject: *clearProject,
+			addTag: *addTag, removeTag: *removeTag,
+			addDep: *addDep, removeDep: *removeDep,
+			note: noteText, appendNote: appendText, clearNote: *clearNote,
+		}, &saveSet, &allPropagated, &allBumped)
+		if code != 0 {
+			return code
+		}
+		if changed {
+			edited = append(edited, t)
+		}
+	}
+	if len(saveSet) == 0 {
+		fmt.Fprintln(os.Stderr, "taskr edit: no fields changed (nothing to save)")
+		return 0
+	}
+	if err := repo.Save(saveSet, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "save: %v\n", err)
+		return 1
+	}
+	for _, t := range edited {
+		fmt.Printf("edited  %s  %s\n", t.ID[:8], t.Title)
+	}
+	// Propagation and ancestor bumps are side-effects of the edit, not its
+	// result — stderr keeps scripting on stdout clean.
+	for _, child := range allPropagated {
+		if child.DueDate.IsZero() {
+			fmt.Fprintf(os.Stderr, "cleared  %s  %s  due\n", child.ID[:8], child.Title)
+		} else {
+			fmt.Fprintf(os.Stderr, "updated  %s  %s  due → %s\n", child.ID[:8], child.Title, child.DueDate.Format("02-01-06"))
+		}
+	}
+	for _, a := range allBumped {
+		fmt.Fprintf(os.Stderr, "bumped  %s  %s  due → %s\n", a.ID[:8], a.Title, a.DueDate.Format("02-01-06"))
+	}
+	return 0
+}
+
+// editFields carries the resolved --edit flags into editOneTask. It exists so
+// the per-task mutation is one body rather than one per ref: `taskr edit a b c
+// --project hoth` and `taskr edit a --project hoth` must mean the same thing to
+// each task they touch.
+type editFields struct {
+	title, priority, size, stage       string
+	due, start, project                string
+	clearDue, clearStart, clearProject bool
+	addTag, removeTag                  string
+	addDep, removeDep                  string
+	note, appendNote                   string
+	clearNote                          bool
+}
+
+// editOneTask applies f to t, appending anything that needs saving to saveSet
+// (and any due-date propagation to the two side-effect lists). It returns a
+// non-zero exit code on a usage error, having reported it — the caller returns
+// before any Save, so a failure on the third ref leaves nothing persisted.
+func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propagatedOut, bumpedOut *[]*todo.Todo) (bool, int) {
 	changed := false
+	title, priority, size, stage := &f.title, &f.priority, &f.size, &f.stage
+	due, start, project := &f.due, &f.start, &f.project
+	clearDue, clearStart, clearProject := &f.clearDue, &f.clearStart, &f.clearProject
+	addTag, removeTag, addDep, removeDep := &f.addTag, &f.removeTag, &f.addDep, &f.removeDep
+	note, appendNote, clearNote := &f.note, &f.appendNote, &f.clearNote
 	if *title != "" {
 		t.Title = todo.CapitalizeTitle(*title)
 		t.ModifiedAt = todo.StampModified(t.ModifiedAt)
@@ -1244,7 +1495,7 @@ func cliEdit(args []string) int {
 		name, ok := canonicalStage(*stage)
 		if !ok {
 			fmt.Fprintf(os.Stderr, "taskr edit: unknown stage %q (configured: %s)\n", *stage, strings.Join(pendingStages(), ", "))
-			return 2
+			return false, 2
 		}
 		t.SetStage(name)
 		changed = true
@@ -1257,7 +1508,7 @@ func cliEdit(args []string) int {
 		d, err := parseDueDate(*due)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "invalid due date %q: %v\n", *due, err)
-			return 2
+			return false, 2
 		}
 		t.SetDueDate(d)
 		changed = true
@@ -1270,7 +1521,7 @@ func cliEdit(args []string) int {
 		d, err := parseDueDate(*start)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "invalid start date %q: %v\n", *start, err)
-			return 2
+			return false, 2
 		}
 		t.SetStartDate(d)
 		changed = true
@@ -1298,7 +1549,7 @@ func cliEdit(args []string) int {
 		dep, err := findTaskByRef(todoPtrs(todos), *addDep)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			return 2
+			return false, 2
 		}
 		// Refuse a dependency that would close a loop: dep already (transitively)
 		// depends on t, or is t itself. Same rule the TUI picker filters by.
@@ -1308,7 +1559,7 @@ func cliEdit(args []string) int {
 		}
 		if loopingDepCandidates(byID, t.ID)[dep.ID] {
 			fmt.Fprintf(os.Stderr, "taskr edit: %q can't depend on %q — it would create a dependency loop\n", t.Title, dep.Title)
-			return 2
+			return false, 2
 		}
 		t.AddDependency(dep.ID)
 		changed = true
@@ -1317,75 +1568,48 @@ func cliEdit(args []string) int {
 		dep, err := findTaskByRef(todoPtrs(todos), *removeDep)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			return 2
+			return false, 2
 		}
 		t.RemoveDependency(dep.ID)
 		changed = true
 	}
 	// Notes: clear wins, then replace, then append (a new paragraph). Notes
 	// were previously settable only at `add` and editable only via the TUI's
-	// $EDITOR flow. '-' reads the text from stdin, mirroring `comment -`.
+	// $EDITOR flow. The '-' stdin form is resolved by the caller, once.
 	switch {
 	case *clearNote:
 		t.SetNotes("")
 		changed = true
 	case *note != "":
-		text, terr := noteFlagText(*note, os.Stdin)
-		if terr != nil {
-			fmt.Fprintf(os.Stderr, "stdin: %v\n", terr)
-			return 1
-		}
-		t.SetNotes(text)
+		t.SetNotes(*note)
 		changed = true
 	case *appendNote != "":
-		text, terr := noteFlagText(*appendNote, os.Stdin)
-		if terr != nil {
-			fmt.Fprintf(os.Stderr, "stdin: %v\n", terr)
-			return 1
-		}
 		if t.Notes == "" {
-			t.SetNotes(text)
+			t.SetNotes(*appendNote)
 		} else {
-			t.SetNotes(t.Notes + "\n\n" + text)
+			t.SetNotes(t.Notes + "\n\n" + *appendNote)
 		}
 		changed = true
 	}
 	if !changed {
-		fmt.Fprintln(os.Stderr, "taskr edit: no fields changed (nothing to save)")
-		return 0
+		return changed, 0
 	}
-	saveSet := []*todo.Todo{t}
-	var propagated, bumped []*todo.Todo
+	*saveSet = append(*saveSet, t)
 	if *clearDue || *due != "" {
 		children, get := sliceTaskLookups(todos)
 		// A parent deadline applies to the full subtree, including clearing it.
-		propagated = propagateDescendantsDue(children, get, t)
-		saveSet = append(saveSet, propagated...)
+		propagated := propagateDescendantsDue(children, get, t)
+		*saveSet = append(*saveSet, propagated...)
+		*propagatedOut = append(*propagatedOut, propagated...)
 		// If a subtask's due moved later, also extend every ancestor whose due
 		// falls short of the child — mirrors the TUI flow.
 		if *due != "" && t.ParentID != "" {
-			bumped = extendAncestorsDue(get, t)
-			saveSet = append(saveSet, bumped...)
+			bumped := extendAncestorsDue(get, t)
+			*saveSet = append(*saveSet, bumped...)
+			*bumpedOut = append(*bumpedOut, bumped...)
 		}
 	}
-	if err := repo.Save(saveSet, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "save: %v\n", err)
-		return 1
-	}
-	fmt.Printf("edited  %s  %s\n", t.ID[:8], t.Title)
-	// Propagation and ancestor bumps are side-effects of the edit, not its
-	// result — stderr keeps scripting on stdout clean.
-	for _, child := range propagated {
-		if child.DueDate.IsZero() {
-			fmt.Fprintf(os.Stderr, "cleared  %s  %s  due\n", child.ID[:8], child.Title)
-		} else {
-			fmt.Fprintf(os.Stderr, "updated  %s  %s  due → %s\n", child.ID[:8], child.Title, child.DueDate.Format("02-01-06"))
-		}
-	}
-	for _, a := range bumped {
-		fmt.Fprintf(os.Stderr, "bumped  %s  %s  due → %s\n", a.ID[:8], a.Title, a.DueDate.Format("02-01-06"))
-	}
-	return 0
+	return changed, 0
 }
 
 // ── delete ───────────────────────────────────────────────────────────────────
@@ -2303,18 +2527,25 @@ Tasks:
   taskr add -                          batch add: one task per stdin line (flags apply to all; --chain links each
                                        line as depending on the previous — a plan typed in execution order)
   taskr list [flags]                   list pending top-level tasks (ST: [ ] ready, [~] blocked, [✓] done)
-  taskr search "term" [flags]          title-substring search (includes done by default)
+                                       review filters: --stale=30d (untouched that long), --unblocked-since=14d
+                                       (every blocker now done, the last one recently), --sort=seq|due|size|age|idle|pri,
+                                       --wide (AGE + IDLE columns), --search-word / --search-re
+  taskr search "term" [flags]          title/notes substring search (includes done by default; --word matches
+                                       whole words only, --re treats the term as a regular expression)
   taskr top [-n=N] [--json] [--wide]   show top-N by sequence score
   taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
   taskr why <ref> [--json]             why it ranks where it does: each score factor with its cause,
                                        the margins to the tasks either side, and when the ranking
                                        moves on its own (deadline steps, momentum expiring)
-  taskr edit <ref> [flags]             change fields on one task (incl. --note/--append-note/--clear-note,
-                                       --stage to move it on the board — stage names live in settings.json)
+  taskr edit <ref>... [flags]          change fields on one or more tasks (incl. --note/--append-note/--clear-note,
+                                       --stage to move it on the board — stage names live in settings.json;
+                                       --title takes a single ref)
   taskr done <ref>... [-m "why"]       mark one or more tasks done, stopping any running timer on them
                                        (--cascade also closes pending subtasks; without it a parent with
                                        open subtasks prompts on a TTY, else warns and leaves them open)
                                        (-m/--comment adds a closing comment to each)
+  taskr reopen <ref>... [-m "why"]     move tasks back to pending (the counterpart to done; already-pending
+                                       tasks are reported and skipped)
   taskr delete <ref> [-f]              soft-delete a task (alias: rm; substring matches confirm first)
   taskr undo [--list]                  restore the most recent deletion (task + subtasks)
   taskr undelete <ref> | --list        restore a specific deleted task by ref (browse with --list)
@@ -2361,7 +2592,8 @@ Sync (cross-device):
                                             ~/.taskr/sync.json to disable); conflicts log to ~/.taskr/sync.log
   taskr sync --status                        print the last sync time/result (local only, no network)
   taskr sync --accept-stale                  rejoin after being offline past the deletion-memory window
-                                            (~6 months; auto-sync pauses then so deleted tasks can't resurrect)
+                                            (~6 months; BOTH auto-sync and a manual "taskr sync" refuse until
+                                            then, so tasks deleted elsewhere can't resurrect)
   taskr sync --recover                       list dropped edits from ~/.taskr/sync.log (local only, no network)
   taskr sync --recover=<ref>                 reapply one dropped edit by id-prefix or title substring;
                                             stamps a fresh ModifiedAt so the fix propagates on the next sync
@@ -2528,9 +2760,32 @@ func priorityLetter(p todo.Priority) string {
 // to true when the task is waiting on at least one unfinished dependency; those
 // tasks receive the [~] glyph in the ST column instead of [ ].
 func printTaskTable(rows []todo.Todo, blockedSet map[string]bool) {
+	printTaskTableWide(rows, blockedSet, false)
+}
+
+// printTaskTableWide is printTaskTable with the two time columns --wide adds:
+// AGE (days since the task was created) and IDLE (days since it last changed).
+// They are opt-in rather than always shown because they are review columns, not
+// working ones — a daily `taskr list` doesn't need them, and every column costs
+// width the title would otherwise have.
+func printTaskTableWide(rows []todo.Todo, blockedSet map[string]bool, wide bool) {
 	if len(rows) == 0 {
 		fmt.Println("(no tasks)")
 		return
+	}
+	now := time.Now()
+	// Whole days, floored: "how long has this been sitting" is a question
+	// about days, and rounding up would report a task edited an hour ago as
+	// one day idle.
+	days := func(t time.Time) string {
+		if t.IsZero() {
+			return ""
+		}
+		d := int(now.Sub(t).Hours() / 24)
+		if d < 0 {
+			d = 0
+		}
+		return strconv.Itoa(d) + "d"
 	}
 	// Adaptive PROJ column: shown only when at least one row has a project,
 	// width hugging the widest entry (capped at 15 so a long project name
@@ -2549,11 +2804,18 @@ func printTaskTable(rows []todo.Todo, blockedSet map[string]bool) {
 	if projW > 0 && projW < len("PROJ") {
 		projW = len("PROJ")
 	}
+	// The time columns sit between DUE and PROJ: the row then reads
+	// identifier, state, then everything time-shaped, then the labels.
+	timeHdr, timeFmt := "", ""
+	if wide {
+		timeHdr = fmt.Sprintf("%-5s  %-5s  ", "AGE", "IDLE")
+		timeFmt = "%-5s  %-5s  "
+	}
 	if projW > 0 {
-		fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %-*s  %s\n",
-			"ID", "ST", "SIZE", "PRI", "DUE", projW, "PROJ", "TITLE")
+		fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s%-*s  %s\n",
+			"ID", "ST", "SIZE", "PRI", "DUE", timeHdr, projW, "PROJ", "TITLE")
 	} else {
-		fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s\n", "ID", "ST", "SIZE", "PRI", "DUE", "TITLE")
+		fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s%s\n", "ID", "ST", "SIZE", "PRI", "DUE", timeHdr, "TITLE")
 	}
 	for _, t := range rows {
 		st := "[ ]"
@@ -2570,12 +2832,16 @@ func printTaskTable(rows []todo.Todo, blockedSet map[string]bool) {
 		// Lowercase the size letter to match the TUI list column — uppercase
 		// "M" looked like a hotkey hint.
 		sz := strings.ToLower(t.Size.Letter())
+		times := ""
+		if wide {
+			times = fmt.Sprintf(timeFmt, days(t.CreatedAt), days(t.ModifiedAt))
+		}
 		if projW > 0 {
-			fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %-*s  %s\n",
-				t.ID[:8], st, sz, priorityLetter(t.Priority), due, projW, truncate(t.Project, projW), t.Title)
+			fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s%-*s  %s\n",
+				t.ID[:8], st, sz, priorityLetter(t.Priority), due, times, projW, truncate(t.Project, projW), t.Title)
 		} else {
-			fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s\n",
-				t.ID[:8], st, sz, priorityLetter(t.Priority), due, t.Title)
+			fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s%s\n",
+				t.ID[:8], st, sz, priorityLetter(t.Priority), due, times, t.Title)
 		}
 	}
 }

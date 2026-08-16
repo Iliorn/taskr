@@ -218,6 +218,10 @@ are English, so its input is too.
 taskr add "Buy milk" --size=s --due=tomorrow --p=high --tag=shopping
 taskr list                       # pending top-level tasks (table)
 taskr list --json --focus        # JSON, today + overdue only
+taskr list --stale=30d --sort=idle --wide   # backlog review: nothing touched in a month,
+                                 # longest-untouched first, with AGE and IDLE columns
+taskr list --unblocked-since=14d # tasks freed recently: every blocker done, the last one this fortnight
+taskr search RAM --word          # whole-word match ("RAM" won't match "Ramte"); --re for a regexp
 taskr top -n=5                   # top 5 by sequence score (percent of the current field)
 taskr show milk                  # full detail (incl. score breakdown + subtask IDs)
 taskr why milk                   # why it ranks there: each factor's cause, the margins to the
@@ -225,7 +229,9 @@ taskr why milk                   # why it ranks there: each factor's cause, the 
 taskr edit milk --p=high --add-tag=urgent --due=tomorrow
 taskr edit deploy --add-dep=sign-off   # depend on another task (refused if it would loop)
 taskr edit deploy --remove-dep=sign-off
+taskr edit a1b2 c3d4 e5f6 --project=hoth   # one change across several tasks (--title stays single-ref)
 taskr done milk                  # mark a task done
+taskr reopen milk                # move it back to pending (the counterpart to done)
 taskr delete milk                # soft delete (alias: taskr rm)
 taskr subtask milk "find receipt"   # create a subtask of "milk"
 taskr add "Deploy release" --depends="sign-off"   # block the new task until "sign-off" is done

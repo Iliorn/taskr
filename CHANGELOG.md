@@ -8,6 +8,29 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Added
+
+- **Backlog-review flags on `list`.** `--stale=30d` keeps only what nothing has
+  touched in that long, `--sort=seq|due|size|age|idle|pri` orders by any of
+  them, and `--wide` adds AGE and IDLE columns. Clearing a backlog used to mean
+  exporting to JSON and doing the date arithmetic somewhere else, because the
+  CLI could filter on everything except time.
+- **`list --unblocked-since=14d`** — tasks that became actionable recently:
+  every dependency done, the last one within the window. A task freed weeks ago
+  by a blocker you closed looks exactly like one that never had a blocker, so
+  nothing surfaced it.
+- **`taskr reopen <ref>...`**, the counterpart to `done`. Closing was a
+  one-way door from the CLI: an accidental `taskr done` could only be undone by
+  opening the TUI. Not a toggle — a verb that closes a pending task when you
+  meant to reopen a done one is the wrong thing to hand a script.
+- **`taskr edit` takes several refs**, like `done` already did, so one change
+  across a cluster is one command. `--title` still takes exactly one: a title
+  is identity, not a shared property.
+- **Whole-word and regexp search.** `list --search-word` / `search --word`
+  match on word boundaries, and `--search-re` / `search --re` take a regular
+  expression. Plain substring search answers "RAM" with "Ramte", which is right
+  for recall and wrong for "is anything about RAM still open".
+
 ### Changed
 
 - **One cursor, everywhere.** The marker for "the row you are on" was three
@@ -33,6 +56,17 @@ belong in the commit log, not here — unless they change behaviour.
   columns the bar shows `1 Tasks 2 Cal 3 Pro …` where it used to be bare
   digits. When the window really is too narrow for both, the hint now goes
   whole rather than leaving a fragment behind.
+
+### Fixed
+
+- **Equal-scoring tasks now sort in a stable order.** Every sequence sort scored
+  each task against its own `time.Now()`, and Age accrues continuously, so two
+  identical tasks differed by ~1e-11 — enough for the comparator to separate
+  them on the float and never reach the ID tie-break. The order of equal tasks
+  was left to `sort.Slice` and could change between two runs over the same data.
+  One clock per sort now, so the documented "ties break by ID" is true.
+- **`taskr help` no longer claims only auto-sync pauses** past the
+  deletion-memory window. A manual `taskr sync` refuses too, and says so.
 
 ## [1.32.0] - 2026-08-16
 
