@@ -10,6 +10,13 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Changed
 
+- **One cursor, everywhere.** The marker for "the row you are on" was three
+  different glyphs: `▶` in the task, tag and project lists and all through the
+  detail pane, `>` on the board's cards, and `→` on the Settings rows, in the
+  command palette and in the tag/project/dependency pickers. Three shapes for
+  one idea reads as three kinds of selection. Everything draws `▶` now — which
+  also settles a collision, since `→` is the medium-priority icon and could sit
+  in the same row as a `→` that meant something else entirely.
 - **The header hint is one `?`.** It read
   `? shortcuts · ctrl+k commands` — two doors advertised where one will do, in
   twenty-eight columns taken from the tab bar, to say what a single universal

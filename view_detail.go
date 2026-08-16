@@ -56,10 +56,10 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	}
 
 	renderField := func(label, value string, field detailField) string {
-		cur := "  "
+		cur := cursorGap
 		isCurrent := isDetailFocused && m.detail.field == field
 		if isCurrent {
-			cur = "▶ "
+			cur = cursorMark
 		}
 		value = truncate(value, valW)
 		paddedLabel := detailLabelStyle.Render(padRight(label+":", detailLabelColWidth))
@@ -185,18 +185,18 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	b.WriteString(right.String())
 	b.WriteString("\n")
 
-	tagCur := "  "
+	tagCur := cursorGap
 	if isDetailFocused && m.detail.field == fieldTags && len(t.Tags) == 0 {
-		tagCur = "▶ "
+		tagCur = cursorMark
 	}
 	b.WriteString(tagCur + detailLabelStyle.Render(tr("Tags:")) + "\n")
 	if len(t.Tags) == 0 {
 		b.WriteString("  " + detailValueStyle.Render(tr("No tags. Press 'a' to add one.")) + "\n")
 	} else {
 		for i, tag := range t.Tags {
-			pfx := "  "
+			pfx := cursorGap
 			if isDetailFocused && m.detail.field == fieldTags && i == m.detail.tagCursor {
-				pfx = "▶ "
+				pfx = cursorMark
 				b.WriteString(detailSelectedStyle.Render(pfx) + tagStyle.Render("⟨#"+tag+"⟩") + "\n")
 			} else {
 				b.WriteString(dimStyle.Render(pfx) + tagStyle.Render("⟨#"+tag+"⟩") + "\n")
@@ -227,9 +227,9 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	depB := getBuilder()
 	defer putBuilder(depB)
 
-	subtaskCur := "  "
+	subtaskCur := cursorGap
 	if isDetailFocused && m.detail.field == fieldSubtasks && m.subtaskCount(t.ID) == 0 {
-		subtaskCur = "▶ "
+		subtaskCur = cursorMark
 	}
 	subB.WriteString(subtaskCur + detailLabelStyle.Render(tr("Subtasks:")) + "\n")
 	if m.subtaskCount(t.ID) == 0 {
@@ -237,10 +237,10 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	} else {
 		for i, subID := range m.subtaskIDs(t.ID) {
 			sub := m.findTodoByID(subID)
-			pfx := "  "
+			pfx := cursorGap
 			isSubSelected := isDetailFocused && m.detail.field == fieldSubtasks && i == m.detail.subtaskCursor
 			if isSubSelected {
-				pfx = "▶ "
+				pfx = cursorMark
 			}
 			if sub == nil {
 				subB.WriteString(dimStyle.Render(fmt.Sprintf(tr("%s[?] unknown subtask"), pfx)) + "\n")
@@ -268,9 +268,9 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	}
 
 	inbound := dependentsOf(m.allTodos(), t.ID)
-	depCur := "  "
+	depCur := cursorGap
 	if isDetailFocused && m.detail.field == fieldDependencies && len(t.Dependencies) == 0 && len(inbound) == 0 {
-		depCur = "▶ "
+		depCur = cursorMark
 	}
 	depB.WriteString(depCur + detailLabelStyle.Render(tr("Dependencies:")) + "\n")
 	if len(t.Dependencies) == 0 {
@@ -280,10 +280,10 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	} else {
 		for i, depID := range t.Dependencies {
 			dep := m.findTodoByID(depID)
-			pfx := "  "
+			pfx := cursorGap
 			isDepSelected := isDetailFocused && m.detail.field == fieldDependencies && i == m.detail.depCursor
 			if isDepSelected {
-				pfx = "▶ "
+				pfx = cursorMark
 			}
 			if dep == nil {
 				depB.WriteString(dimStyle.Render(fmt.Sprintf(tr("%s[?] unknown task"), pfx)) + "\n")
@@ -316,9 +316,9 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	for i, d := range inbound {
 		sel := isDetailFocused && m.detail.field == fieldDependencies &&
 			len(t.Dependencies)+i == m.detail.depCursor
-		pfx := "  "
+		pfx := cursorGap
 		if sel {
-			pfx = "▶ "
+			pfx = cursorMark
 		}
 		line := pfx + "    ↥ " + truncate(d.Title, itemW-2)
 		if sel {
@@ -346,9 +346,9 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 	isDetailFocused := m.pane == paneDetail
 
 	// ── Time Entries ─────────────────────────────────────────────────────────
-	entryCur := "  "
+	entryCur := cursorGap
 	if isDetailFocused && m.detail.field == fieldTimeEntries && len(t.TimeEntries) == 0 {
-		entryCur = "▶ "
+		entryCur = cursorMark
 	}
 	b.WriteString(entryCur + detailLabelStyle.Render(tr("Time entries:")) + "\n")
 	if len(t.TimeEntries) == 0 {
@@ -364,9 +364,9 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 		}
 		for i, e := range t.TimeEntries {
 			isSelected := isDetailFocused && m.detail.field == fieldTimeEntries && i == m.detail.timeEntryCursor
-			pfx := "  "
+			pfx := cursorGap
 			if isSelected {
-				pfx = "▶ "
+				pfx = cursorMark
 			}
 			endStr := e.StoppedAt.Format("15:04")
 			running := e.IsRunning()
@@ -397,9 +397,9 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 	b.WriteString("\n")
 
 	// ── Comments ─────────────────────────────────────────────────────────────
-	commentCur := "  "
+	commentCur := cursorGap
 	if isDetailFocused && m.detail.field == fieldComments && len(t.Comments) == 0 {
-		commentCur = "▶ "
+		commentCur = cursorMark
 	}
 	b.WriteString(commentCur + detailLabelStyle.Render(tr("Comments:")) + "\n")
 	if len(t.Comments) == 0 {
@@ -411,9 +411,9 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 		}
 		for i, c := range t.Comments {
 			isSelected := isDetailFocused && m.detail.field == fieldComments && i == m.detail.commentCursor
-			pfx := "  "
+			pfx := cursorGap
 			if isSelected {
-				pfx = "▶ "
+				pfx = cursorMark
 			}
 			header := fmt.Sprintf("%s[%s] ", pfx, c.CreatedAt.Format("02-01-06 15:04"))
 			wrapped := wrapText(c.Text, available)

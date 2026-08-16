@@ -488,7 +488,7 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 	focused := m.calendar.focusTimeline && index == m.calendar.entryCursor
 	cur := "  "
 	if focused {
-		cur = "▶ "
+		cur = cursorMark
 	}
 
 	running := a.stop.IsZero() && !a.completed

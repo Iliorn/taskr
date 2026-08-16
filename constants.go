@@ -9,6 +9,20 @@ const (
 	detailMaxHeightPct     = 55
 	overlayWidthPct        = 60
 
+	// cursorMark is the one marker for "the row you are on", and cursorGap the
+	// blank of the same width for the rows you are not. Every list the app
+	// draws uses them — task rows, history, subtasks, tags, projects, the
+	// calendar timeline, every section of the detail pane, board cards, the
+	// Settings rows, the pickers and the palette.
+	//
+	// They were once three different glyphs (▶ in the lists, > on the board, →
+	// in Settings and the pickers), which read as three different kinds of
+	// selection rather than one idea drawn three ways. ▶ won on numbers and on
+	// one hard fact: → is already the medium-priority icon (todo.Priority.Icon),
+	// so a → cursor would sit in the same row as a → that means something else.
+	cursorMark = "▶ "
+	cursorGap  = "  "
+
 	// headerHintGap is the least blank space between the tab bar and the "?"
 	// in the header, so the hint reads as its own thing rather than as another
 	// tab. The bar's width budget subtracts it, which is what keeps a bar that

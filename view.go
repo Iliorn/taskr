@@ -699,7 +699,7 @@ func (m model) footerContentFor(w int) string {
 			case idx < len(results):
 				r := results[idx]
 				if idx == m.depSearch.cursor {
-					b.WriteString("\n" + selectedStyle.Render("  → "+r.Title))
+					b.WriteString("\n" + selectedStyle.Render(cursorGap+cursorMark+r.Title))
 				} else {
 					b.WriteString("\n" + normalStyle.Render("    "+r.Title))
 				}
@@ -717,7 +717,7 @@ func (m model) footerContentFor(w int) string {
 		results := m.tagSearchResults()
 		shown := 0
 		if len(results) == 0 && m.tagSearch.query != "" {
-			b.WriteString("\n" + dimStyle.Render("  → "+tr("create new tag: ")) + tagStyle.Render(m.tagSearch.query))
+			b.WriteString("\n" + dimStyle.Render(cursorGap+cursorMark+tr("create new tag: ")) + tagStyle.Render(m.tagSearch.query))
 			shown++
 		} else {
 			start, hasAbove, hasBelow := pickerWindowStart(m.tagSearch.cursor, len(results), maxTagSearchResults)
@@ -734,7 +734,7 @@ func (m model) footerContentFor(w int) string {
 				case idx < len(results):
 					r := results[idx]
 					if idx == m.tagSearch.cursor {
-						b.WriteString("\n" + selectedStyle.Render("  → #"+r))
+						b.WriteString("\n" + selectedStyle.Render(cursorGap+cursorMark+"#"+r))
 					} else {
 						b.WriteString("\n" + normalStyle.Render("    #"+r))
 					}
@@ -757,7 +757,7 @@ func (m model) footerContentFor(w int) string {
 		results := m.projSearchResults()
 		shown := 0
 		if len(results) == 0 && m.projSearch.query != "" {
-			b.WriteString("\n" + dimStyle.Render("  → "+tr("create new project: ")) + selectedStyle.Render(m.projSearch.query))
+			b.WriteString("\n" + dimStyle.Render(cursorGap+cursorMark+tr("create new project: ")) + selectedStyle.Render(m.projSearch.query))
 			shown++
 		} else {
 			start, hasAbove, hasBelow := pickerWindowStart(m.projSearch.cursor, len(results), maxProjSearchResults)
@@ -774,7 +774,7 @@ func (m model) footerContentFor(w int) string {
 				case idx < len(results):
 					r := results[idx]
 					if idx == m.projSearch.cursor {
-						b.WriteString("\n" + selectedStyle.Render("  → "+r))
+						b.WriteString("\n" + selectedStyle.Render(cursorGap+cursorMark+r))
 					} else {
 						b.WriteString("\n" + normalStyle.Render("    "+r))
 					}
@@ -844,7 +844,7 @@ func (m model) renderPalette(w int) string {
 			}
 			row := label + strings.Repeat(" ", gap) + meta
 			if idx == sel {
-				b.WriteString("\n" + selectedStyle.Render("  → "+row))
+				b.WriteString("\n" + selectedStyle.Render(cursorGap+cursorMark+row))
 			} else {
 				b.WriteString("\n" + normalStyle.Render("    "+row))
 			}
@@ -2038,9 +2038,9 @@ func (m model) buildTagDetailLines() []string {
 		if t.Project != "" {
 			projStr = "  [" + t.Project + "]"
 		}
-		lead := "  "
+		lead := cursorGap
 		if i == sel {
-			lead = "→ "
+			lead = cursorMark
 		}
 		line := truncate(fmt.Sprintf("%s%s %s%s%s", lead, status, t.Title, dueStr, projStr), availW)
 		switch {

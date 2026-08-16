@@ -152,7 +152,7 @@ func TestBoardRenderWideAndStacked(t *testing.T) {
 	m.termHeight = 30
 
 	out := ansi.Strip(m.renderBoardList())
-	for _, want := range []string{"Backlog (1)", "In progress (0)", "Review (1)", "Done (0)", "> Alpha"} {
+	for _, want := range []string{"Backlog (1)", "In progress (0)", "Review (1)", "Done (0)", cursorMark + "Alpha"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("wide board missing %q:\n%s", want, out)
 		}

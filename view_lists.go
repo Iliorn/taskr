@@ -168,9 +168,9 @@ func (m model) renderTagList() string {
 		}
 		filled := filledEighths / 8
 		partialEighths := filledEighths % 8
-		cur := "  "
+		cur := cursorGap
 		if i == m.tagTabCursor {
-			cur = "▶ "
+			cur = cursorMark
 		}
 		tagLabel := padRight(truncate(r.label, nameW-4), nameW-2)
 
@@ -815,10 +815,10 @@ func (m model) renderHistoryList() string {
 
 func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, cols listCols) string {
 	titleW := cols.titleW
-	cursorStr := "  "
+	cursorStr := cursorGap
 	selected := index == cursor && active
 	if selected {
-		cursorStr = "▶ "
+		cursorStr = cursorMark
 	}
 	dueVal := ""
 	if !t.DueDate.IsZero() {
@@ -881,10 +881,10 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 	if sub.IsTimerRunning() {
 		title = "⧗ " + title
 	}
-	cursorStr := "  "
+	cursorStr := cursorGap
 	selected := flatIndex == cursor && active
 	if selected {
-		cursorStr = "▶ "
+		cursorStr = cursorMark
 	}
 	check := "[ ]"
 	if sub.Status == todo.Done {
@@ -909,10 +909,10 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 
 func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
 	titleW := cols.titleW
-	cursorStr := "  "
+	cursorStr := cursorGap
 	selected := index == cursor && active
 	if selected {
-		cursorStr = "▶ "
+		cursorStr = cursorMark
 	}
 	checkbox := "[ ]"
 	if t.Status == todo.Done {
@@ -1087,9 +1087,9 @@ func (m model) renderProjectListContent(projects []string) string {
 				}
 			}
 		}
-		cursorStr := "  "
+		cursorStr := cursorGap
 		if i == m.projectCursor {
-			cursorStr = "▶ "
+			cursorStr = cursorMark
 		}
 		if m.mode == modeEditProjectInline && i == m.projectCursor {
 			b.WriteString(normalStyle.Render(cursorStr) + m.textInput.View() + "\n")
@@ -1357,10 +1357,10 @@ func (m model) renderSettingsSections(sequencerW int) (string, string) {
 	}
 
 	renderRow := func(id, labelW int) string {
-		cursor := "  "
+		cursor := cursorGap
 		labelStyle := normalStyle
 		if id == m.settingsCursor {
-			cursor = selectedStyle.Render("→ ")
+			cursor = selectedStyle.Render(cursorMark)
 			labelStyle = selectedStyle
 		}
 		return cursor + labelStyle.Render(padRight(labels[id], labelW)) + helpStyle.Render(values[id])

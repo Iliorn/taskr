@@ -964,3 +964,67 @@ func TestTheHelpAndThePaletteFindEachOther(t *testing.T) {
 		t.Errorf("choosing the palette's help entry left mode = %v, want modeHelp", m.mode)
 	}
 }
+
+// One marker for "the row you are on", everywhere. The app used to draw three
+// — ▶ in the lists, > on the board, → in Settings and the pickers — which read
+// as three kinds of selection rather than one idea drawn three ways. Every
+// surface renders cursorMark now, and a new list that invents its own glyph
+// fails here.
+func TestEveryListMarksItsCursorTheSameWay(t *testing.T) {
+	a := todo.New("alpha")
+	a.AddTag("home")
+	a.Project = "house"
+	a.DueDate = startOfDay(time.Now()) // so the calendar's timeline has a row
+	b := todo.New("beta")
+	b.AddTag("work")
+	sub := todo.New("a subtask")
+	sub.ParentID = a.ID
+
+	for _, c := range []struct {
+		name string
+		set  func(*model)
+	}{
+		{"task list", func(m *model) { m.switchTab(tabTasks) }},
+		{"detail pane", func(m *model) {
+			m.switchTab(tabTasks)
+			m.pane = paneDetail
+			m.detailTaskID = a.ID
+		}},
+		{"tag list", func(m *model) { m.switchTab(tabTags) }},
+		{"project list", func(m *model) { m.switchTab(tabProjects) }},
+		{"board", func(m *model) { m.switchTab(tabBoard) }},
+		{"settings", func(m *model) { m.switchTab(tabSettings) }},
+		{"calendar timeline", func(m *model) {
+			m.switchTab(tabCalendar)
+			m.calendar.focusTimeline = true
+		}},
+		{"command palette", func(m *model) { m.mode = modePalette; m.paletteInput.SetValue("go to") }},
+		{"tag picker", func(m *model) { m.mode = modeSearchTag; m.tagSearchInput.SetValue("") }},
+		{"project picker", func(m *model) { m.mode = modeSearchProject }},
+		{"dependency picker", func(m *model) { m.mode = modeSearchDep; m.depSearchInput.SetValue("b") }},
+	} {
+		m := modelWithTasks(t, a, b, sub)
+		m.termWidth, m.termHeight = 120, 40
+		c.set(&m)
+		m.markCacheDirty()
+		m.ensureCache()
+		m.invalidateDetailCache()
+
+		out := ansi.Strip(m.View())
+		if !strings.Contains(out, strings.TrimSpace(cursorMark)) {
+			t.Errorf("%s: no %q anywhere on screen", c.name, strings.TrimSpace(cursorMark))
+		}
+		// The glyphs this replaced. ">" and "→" both occur legitimately in
+		// content (a "→" priority icon, "±0 → steady"), so only their use as a
+		// row marker is checked: at the start of a line, or after the two-cell
+		// gutter the footer lists use.
+		for _, stale := range []string{"> ", "→ "} {
+			for _, line := range strings.Split(out, "\n") {
+				trimmed := strings.TrimLeft(line, " ")
+				if strings.HasPrefix(trimmed, stale) {
+					t.Errorf("%s: row still marked with %q: %q", c.name, stale, line)
+				}
+			}
+		}
+	}
+}

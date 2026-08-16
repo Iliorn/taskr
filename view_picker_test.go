@@ -120,7 +120,8 @@ func buildFooterForTagSearch(m model) string {
 
 func TestTagPickerCursorBeyond5IsVisible(t *testing.T) {
 	// 8 distinct tags → picker has 8 rows, cursor at row 6 (0-based).
-	// The selected row (→) must appear in the rendered footer.
+	// The selected row must appear in the rendered footer, marked the way
+	// every list in the app marks the row you are on.
 	tags := []string{"alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"}
 	const cursor = 6 // 7th tag: "eta"
 
@@ -132,7 +133,7 @@ func TestTagPickerCursorBeyond5IsVisible(t *testing.T) {
 	selectedTag := results[cursor]
 
 	out := buildFooterForTagSearch(m)
-	if !strings.Contains(out, "→ #"+selectedTag) {
+	if !strings.Contains(out, cursorMark+"#"+selectedTag) {
 		t.Errorf("cursor=%d: selected tag %q not visible in picker output:\n%s",
 			cursor, selectedTag, out)
 	}
@@ -252,7 +253,7 @@ func TestProjectPickerCursorBeyond5IsVisible(t *testing.T) {
 	selectedProj := results[cursor]
 
 	out := buildFooterForProjSearch(m)
-	if !strings.Contains(out, "→ "+selectedProj) {
+	if !strings.Contains(out, cursorMark+selectedProj) {
 		t.Errorf("cursor=%d: selected project %q not visible in picker:\n%s",
 			cursor, selectedProj, out)
 	}

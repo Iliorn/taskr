@@ -201,9 +201,9 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 // the high-priority "!" the task list uses. Selected cards get the selection
 // style; Done-column cards are dim.
 func (m model) renderBoardCard(t *todo.Todo, doneCol, selected bool, colW int) string {
-	marker := "  "
+	marker := cursorGap
 	if selected {
-		marker = "> "
+		marker = cursorMark
 	}
 	suffix := ""
 	if !doneCol && t.Priority == todo.PriorityHigh {
