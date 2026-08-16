@@ -55,7 +55,21 @@ func runMigrations(db *sql.DB) error {
 		if path, err := snapshotDBBeforeMigrations(db, from); err != nil {
 			return fmt.Errorf("pre-migration backup failed: %w", err)
 		} else if path != "" {
+			// Say what the backup is FOR. Migrating is one-way: a store this
+			// build has upgraded can no longer be opened by an older taskr —
+			// migration 011 drops task_learnings, and a 1.25 binary querying
+			// it fails with "no such table" on every command. That is exactly
+			// what happens when a newer build (a dev build, or a second
+			// machine mid-upgrade) is pointed at a store an older installed
+			// binary still uses, and the fix is this file. Naming it here is
+			// the difference between a two-second rollback and a debugging
+			// session; the message is unconditional because a migration that
+			// only ever adds a column today can still remove one tomorrow.
 			fmt.Fprintf(os.Stderr, "taskr: wrote pre-migration backup to %s\n", path)
+			fmt.Fprintf(os.Stderr, "taskr: schema %d → %d. Older taskr builds can no longer open this store;\n"+
+				"       to go back, stop anything using it (e.g. systemctl --user stop taskr-sync),\n"+
+				"       copy that backup over the database, and delete the -wal/-shm sidecars.\n",
+				from, pending[len(pending)-1].version)
 		}
 	}
 
