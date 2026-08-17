@@ -216,7 +216,7 @@ func (m model) buildCalendarContent(w, outerH int) string {
 	}
 	calPanel := calStyle.Width(calPanelWidth).Render(strings.Join(calLines, "\n"))
 	tlPanel := tlStyle.Width(tlW).Render(strings.Join(tlLines, "\n"))
-	tlPanel = withBorderTitle(tlPanel, localizedDayDateAbbrev(m.calendar.selected), tlW, m.calendar.focusTimeline)
+	tlPanel = withBorderTitle(tlPanel, m.calendarTimelineTitle(localizedDayDateAbbrev(m.calendar.selected), tlW), tlW, m.calendar.focusTimeline)
 	calPanel = withBorderTitle(calPanel, localizedMonthYear(m.calendar.selected), calPanelWidth, !m.calendar.focusTimeline)
 	return lipgloss.JoinHorizontal(lipgloss.Top, tlPanel, calPanel)
 }
@@ -239,7 +239,7 @@ func (m model) buildCalendarNarrow(w, innerH int) string {
 
 	panel := listPanelFocusedStyle.Width(w).Render(strings.Join(lines, "\n"))
 	title := localizedDayDateAbbrev(m.calendar.selected) + " · " + localizedMonthYear(m.calendar.selected)
-	return withBorderTitle(panel, title, w, true)
+	return withBorderTitle(panel, m.calendarTimelineTitle(title, w), w, true)
 }
 
 // ── Month calendar (right panel) ──────────────────────────────────────────────
@@ -368,24 +368,38 @@ func (m model) renderDayRollupLines(innerW int) []string {
 
 // ── Activity timeline (right panel) ───────────────────────────────────────────
 
-func (m model) renderTimelineLines(innerW, innerH int) []string {
+// timelineSummary is the "3 entries · 1h 20m" line for the selected day. It
+// rides in the agenda pane's border title (see calendarTimelineTitle) rather
+// than inside the pane: as a right-aligned first line plus its blank spacer it
+// cost two of the agenda's rows on every render, and the border had the room.
+func (m model) timelineSummary() string {
 	acts := m.activitiesForDay(m.calendar.selected)
-
 	var total time.Duration
 	for _, a := range acts {
 		total += a.duration()
 	}
-
-	suffix := fmt.Sprintf(tr("%d entries · %s"), len(acts), formatDuration(total))
 	if len(acts) == 1 {
-		suffix = tr("1 entry · ") + formatDuration(total)
+		return tr("1 entry · ") + formatDuration(total)
 	}
-	pad := innerW - len([]rune(suffix))
-	if pad < 1 {
-		pad = 1
-	}
-	lines := []string{strings.Repeat(" ", pad) + dimStyle.Render(suffix), ""}
+	return fmt.Sprintf(tr("%d entries · %s"), len(acts), formatDuration(total))
+}
 
+// calendarTimelineTitle appends the day's summary in brackets to the agenda
+// pane's border title. withBorderTitle truncates at boxW-4, which would eat the
+// date before the summary, so the bracket is dropped whole when it doesn't fit
+// — the day is the part you can't navigate without.
+func (m model) calendarTimelineTitle(base string, boxW int) string {
+	title := base + " [" + m.timelineSummary() + "]"
+	if len([]rune(title)) > boxW-4 {
+		return base
+	}
+	return title
+}
+
+func (m model) renderTimelineLines(innerW, innerH int) []string {
+	acts := m.activitiesForDay(m.calendar.selected)
+
+	var lines []string
 	if len(acts) == 0 {
 		lines = append(lines, dimStyle.Render(tr("  No activity on this day.")))
 		lines = append(lines, dimStyle.Render(tr("  Press t on a task (tab 1) to start tracking.")))
@@ -402,7 +416,7 @@ func (m model) renderTimelineLines(innerW, innerH int) []string {
 		}
 	}
 
-	bodyH := innerH - 2
+	bodyH := innerH
 	if bodyH < 1 {
 		bodyH = 1
 	}
