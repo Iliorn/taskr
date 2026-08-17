@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"taskr/todo"
 )
 
@@ -48,6 +49,26 @@ func truncate(s string, max int) string {
 		return string(r[:max])
 	}
 	return string(r[:max-3]) + "(…)"
+}
+
+// truncateStyled is truncate for a string that has already been through a
+// lipgloss .Render. truncate counts runes, and an SGR sequence is a dozen of
+// them, so it cuts *inside* the escape: the terminal then reads the "(…)"
+// marker as more sequence parameters and swallows it, printing whatever falls
+// out the other end, and the style never terminates — which is what leaked
+// into the panel border and broke the frame. Measuring and cutting through
+// ansi keeps every sequence whole.
+func truncateStyled(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if ansi.StringWidth(s) <= max {
+		return s
+	}
+	if max <= 3 {
+		return ansi.Truncate(s, max, "")
+	}
+	return ansi.Truncate(s, max, "(…)")
 }
 
 // shortID returns the first 8 chars of a task ID — the same prefix the CLI

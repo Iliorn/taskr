@@ -534,6 +534,62 @@ func TestSelectedRowHighlightReachesThePaneEdge(t *testing.T) {
 	}
 }
 
+// The Stage row hands renderField a value that is already styled (the dim
+// ‹←/→› hint). Truncating that by rune count cuts an SGR sequence in half: the
+// terminal swallows the "(…)" marker as sequence parameters, prints whatever
+// falls out — a stray ")" beside the stage name — and never sees the reset, so
+// the style leaks into the panel border and the frame breaks. The widths here
+// are the side-by-side ones, where the detail pane is half the window and the
+// value budget is tight enough to truncate.
+func TestDetailValuesTruncateWithoutBreakingEscapes(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	applyTheme(themes[0])
+	defer func() {
+		lipgloss.SetColorProfile(before)
+		applyTheme(themes[0])
+	}()
+
+	task := todo.New("Create dashboard for solution teams")
+	task.Stage = activeStages[0]
+	m := modelWithTasks(t, task)
+	m.termHeight = 40
+	m.pane = paneDetail
+	m.detailTaskID = task.ID
+
+	for _, w := range []int{110, 120, 130, 140, 160, 200} {
+		m.termWidth = w
+		m.refreshCaches()
+		out := m.View()
+		// ansi.Strip removes complete sequences only, so a leftover ESC is the
+		// fingerprint of a cut one.
+		if stripped := ansi.Strip(out); strings.ContainsRune(stripped, 0x1b) {
+			for _, line := range strings.Split(stripped, "\n") {
+				if strings.ContainsRune(line, 0x1b) {
+					t.Fatalf("width %d: a truncated value cut an escape sequence: %q", w, line)
+				}
+			}
+		}
+		var stage string
+		for _, line := range strings.Split(out, "\n") {
+			if strings.Contains(ansi.Strip(line), tr("Stage")+":") {
+				stage = ansi.Strip(line)
+			}
+		}
+		if stage == "" {
+			t.Fatalf("width %d: the Stage row should render", w)
+		}
+		// The hint is decoration: it renders whole or not at all, never as a
+		// truncation marker standing in for it.
+		if strings.Contains(stage, "‹←/→") && !strings.Contains(stage, "‹←/→›") {
+			t.Errorf("width %d: the key hint should go whole rather than be clipped: %q", w, stage)
+		}
+		if !strings.Contains(stage, activeStages[0]) {
+			t.Errorf("width %d: the stage name itself must survive: %q", w, stage)
+		}
+	}
+}
+
 func TestTaskTagOverflowShowsTruncationMarker(t *testing.T) {
 	before := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)

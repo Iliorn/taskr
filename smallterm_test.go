@@ -8,7 +8,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 	"taskr/todo"
 )
 
@@ -93,6 +95,17 @@ const noWrapFloor = 8
 var smallTermHeights = []int{0, 1, 2, 3, 5, 10, 24}
 
 func TestSmallTerminalRendersWithoutPanic(t *testing.T) {
+	// Render in colour: with the test binary's default profile every style is
+	// a no-op, so a truncation that cuts an SGR sequence in half — the bug
+	// assertRenderFits checks for — cannot even be expressed.
+	before := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	applyTheme(themes[0])
+	defer func() {
+		lipgloss.SetColorProfile(before)
+		applyTheme(themes[0])
+	}()
+
 	for _, tb := range smallTermTabs {
 		for _, st := range smallTermStates {
 			for _, w := range smallTermWidths {
@@ -145,6 +158,21 @@ func assertRenderFits(t *testing.T, m model, what string, w int) {
 		}
 	}()
 	out := m.View()
+	// A styled string cut by rune count loses the tail of an SGR sequence, and
+	// the terminal then reads the following characters as sequence parameters
+	// and never resets the style — the panel border was the visible casualty.
+	// ansi.Strip removes complete sequences only, so a leftover ESC is exactly
+	// the fingerprint of a truncation that should have gone through
+	// truncateStyled. Checked at every size, including the degenerate ones,
+	// since that is where the budgets are tightest.
+	if stripped := ansi.Strip(out); strings.ContainsRune(stripped, 0x1b) {
+		for _, line := range strings.Split(stripped, "\n") {
+			if strings.ContainsRune(line, 0x1b) {
+				t.Fatalf("%s at %dx%d: truncation cut an escape sequence in half: %q",
+					what, m.termWidth, m.termHeight, line)
+			}
+		}
+	}
 	// The panels carry a 3-column lead-in (View's left pad plus the panel
 	// margin) and two border columns, so below noWrapFloor there is no layout
 	// left to shrink — only chrome. The contract is asserted from there up;

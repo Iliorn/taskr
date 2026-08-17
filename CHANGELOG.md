@@ -25,6 +25,16 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Fixed
 
+- **The Stage row no longer breaks the detail panel.** Its value carries a dim
+  `‹←/→›` hint, and the pane truncated that already-styled string by counting
+  runes — which counts the invisible escape codes too, so the cut landed in the
+  middle of one. The terminal then read the `(…)` marker as more of the escape
+  and printed what was left of it (a stray `)` beside the stage name), and with
+  no reset the style ran on into the panel border, which drew the frame wrong.
+  Styled values are measured and cut as styled text now, and the key hint —
+  decoration, not data — is dropped whole when the pane is too narrow for both
+  rather than being clipped to a marker.
+
 - **The selected row is highlighted all the way across.** The highlight covered
   only what the row had drawn, so on the Overview it stopped wherever that
   task's last column ended — at the Tags column on a task with no tags, a few

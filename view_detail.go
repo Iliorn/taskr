@@ -61,7 +61,10 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		if isCurrent {
 			cur = cursorMark
 		}
-		value = truncate(value, valW)
+		// truncateStyled, not truncate: a value may arrive already styled (the
+		// Stage row appends a dim key hint), and cutting that by rune count
+		// slices an escape sequence in half.
+		value = truncateStyled(value, valW)
 		paddedLabel := detailLabelStyle.Render(padRight(label+":", detailLabelColWidth))
 		var v string
 		if isCurrent {
@@ -121,9 +124,14 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	if stageFieldVisible(t) {
 		// ←/→ change the value here rather than jumping section, the way the
 		// Settings rows work — so the hint says so, since this is the only
-		// field in the pane where those keys mean something else.
-		left.WriteString(renderField(tr("Stage"),
-			stageDisplay(t.Stage)+dimStyle.Render("  ‹←/→›"), fieldStage) + "\n")
+		// field in the pane where those keys mean something else. The hint is
+		// decoration: when the pane is too narrow for both it goes whole,
+		// rather than being truncated to a marker that says nothing.
+		stageVal := stageDisplay(t.Stage)
+		if hint := "  ‹←/→›"; len([]rune(stageVal))+len([]rune(hint)) <= valW {
+			stageVal += dimStyle.Render(hint)
+		}
+		left.WriteString(renderField(tr("Stage"), stageVal, fieldStage) + "\n")
 	}
 	left.WriteString(renderField(tr("Project"), projectVal, fieldProject) + "\n")
 	left.WriteString(renderField(tr("Notes"), notesVal, fieldNotes) + "\n")
