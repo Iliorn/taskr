@@ -828,7 +828,7 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	if !t.CompletedAt.IsZero() {
 		completedVal = t.CompletedAt.Format("02-01-06")
 	}
-	titleCol := padRight(truncate(t.Title, titleW-1), titleW)
+	titleCol := padRight(truncate(t.Title, titleW-listColGap), titleW)
 	dateCols := ""
 	if cols.showDue {
 		dateCols += padRight(dueVal, cols.dueW)
@@ -963,7 +963,10 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	}
 	// Reserve one trailing space inside the column so a truncated title (ending
 	// in "(…)") never butts up against the Score column that follows.
-	titleCol := padRight(truncate(title, titleW-1), titleW)
+	// Truncate at titleW-listColGap so even a clipped title keeps the full gap
+	// to the next column, instead of leaving the single space the column's own
+	// padding happened to have left.
+	titleCol := padRight(truncate(title, titleW-listColGap), titleW)
 	tagsPart := m.getRenderedTagsForTask(t)
 	line := cursorStr + checkbox + foldIcon + titleCol
 	if cols.showLast {
@@ -971,22 +974,24 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		// detail view, where the user can still set it. It reads as a percent
 		// of the current field (sequence.go): "82%" says how close to the top
 		// this is, where a bare "24.4" only said "a number".
-		line += padRight(formatSequencePercent(sequenceScore(t)), scoreColW)
+		// Right-aligned in the field so every score ends in the same column and
+		// the % signs line up; the field's trailing listColGap is the gap to Due.
+		line += padRight(padLeft(formatSequencePercent(sequenceScore(t)), cols.lastW-listColGap), cols.lastW)
 	}
 	if cols.showDue {
-		line += padRight(dueVal, cols.dueW)
+		// Right-aligned for the same reason: "2d" and "20-09-27" share a right
+		// edge, so the gap to Size is the same on every row.
+		line += padRight(padLeft(dueVal, cols.dueW-listColGap), cols.dueW)
 	}
 	if cols.showSize {
-		// Asymmetric pad (2 left + letter + 5 right) so the gap from Due to the
-		// letter matches the gap from the letter to the Project column — both 5
-		// chars, matching the Score→Due rhythm.
-		line += "  " + padRight(strings.ToLower(t.Size.Letter()), sizeColW-2)
+		// One letter at the column's left edge, under its header; the column
+		// carries its own trailing gap, the same way every other column does.
+		line += padRight(strings.ToLower(t.Size.Letter()), cols.sizeW)
 	}
 	if cols.showProject {
-		// Truncate at projectW-4 so the column always leaves ≥4 trailing
-		// spaces; combined with the 1-space prefix on tags below that's a 5-char
-		// minimum gap between project text and the first tag.
-		line += padRight(truncate(t.Project, cols.projectW-4), cols.projectW)
+		// Truncate at projectW-listColGap so the column always leaves its full
+		// gap before the tags, clipped name or not.
+		line += padRight(truncate(t.Project, cols.projectW-listColGap), cols.projectW)
 	}
 
 	// Only append tags if they fit within the inner panel content width.

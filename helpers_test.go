@@ -535,13 +535,13 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 	shownColsW := func(c listCols) int {
 		w := 0
 		if c.showSize {
-			w += sizeColW
+			w += c.sizeW
 		}
 		if c.showDue {
 			w += c.dueW
 		}
 		if c.showLast {
-			w += scoreColW
+			w += c.lastW
 		}
 		if c.showProject {
 			w += c.projectW
@@ -569,7 +569,7 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 			// Never wider than the longest title needs (+gap), but at least the
 			// header label — growth must not produce an empty padded column.
 			floor := len([]rune(tr("Active tasks")))
-			want := tt.contentMax + 4
+			want := tt.contentMax + listColGap
 			if want < floor {
 				want = floor
 			}
@@ -599,13 +599,15 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 			c.titleW, nameColMaxWidth)
 	}
 	// But a short title still hugs its content — no needless sprawl.
-	if c := taskListCols(200, false, 18, 0, true, 8, 0); c.titleW != 18+4 {
-		t.Errorf("short title titleW = %d, want %d (hug content)", c.titleW, 18+4)
+	if c := taskListCols(200, false, 18, 0, true, 8, 0); c.titleW != 18+listColGap {
+		t.Errorf("short title titleW = %d, want %d (hug content)", c.titleW, 18+listColGap)
 	}
 	// Reserving tag room must shrink the grown title vs. the no-tags case, so
 	// the tags column survives.
-	noTags := taskListCols(200, false, 120, 0, true, 8, 0)
-	withTags := taskListCols(200, false, 120, 40, true, 8, 0)
+	// At a width where the title cannot reach its full content need, the tags
+	// reserve is what it gives way to.
+	noTags := taskListCols(160, false, 120, 0, true, 8, 0)
+	withTags := taskListCols(160, false, 120, 40, true, 8, 0)
 	if !(withTags.titleW < noTags.titleW) {
 		t.Errorf("titleW with tags reserve = %d, want < no-reserve %d",
 			withTags.titleW, noTags.titleW)
@@ -643,7 +645,7 @@ func TestDueColumnAppearsWhenAtLeastOneDue(t *testing.T) {
 	b.Reset()
 	renderListHeader(&b, 120, false, noDueCols, "")
 	hdrNoDue := b.String()
-	// The header label is "Due" padded to dueColW; when absent it must not appear.
+	// The header label is "Due" padded to the Due column; when absent it must not appear.
 	if strings.Contains(hdrNoDue, tr("Due")) {
 		t.Errorf("no due dates: list header should not show 'Due', got: %q", hdrNoDue)
 	}
@@ -737,11 +739,11 @@ func TestProjectColumnHugsWidestEntry(t *testing.T) {
 		want   int
 		desc   string
 	}{
-		{3, projHdrW, "short name floors at header"},
-		{projHdrW - 2, projHdrW + 2, "name shorter than header still includes its gap"},
-		{projHdrW + 2, projHdrW + 2 + 4, "name wider than header: hug + gap"},
-		{projectColCompactW - 4, projectColCompactW, "name at compact boundary"},
-		{projectColCompactW + 15, projectColCompactW + 15 + 4, "long name expands past compact width"},
+		{1, projHdrW + listColGap, "name below the header floors at header + gap"},
+		{projHdrW - 2, projHdrW + listColGap, "name shorter than header floors at header + gap"},
+		{projHdrW + 2, projHdrW + 2 + listColGap, "name wider than header: hug + gap"},
+		{projectColCompactW - listColGap, projectColCompactW, "name at compact boundary"},
+		{projectColCompactW + 15, projectColCompactW + 15 + listColGap, "long name expands past compact width"},
 	}
 
 	for _, tc := range cases {

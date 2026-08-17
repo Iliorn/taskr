@@ -217,11 +217,27 @@ type listCols struct {
 	titleW      int
 	projectW    int // actual width of the Project column (0 when showProject=false)
 	dueW        int // width of the Due column (sized to content on the active list)
+	lastW       int // Score (active) or Completed (history)
+	sizeW       int // Size column: one letter, but its header is four
 	showSize    bool
 	showDue     bool
 	showLast    bool // Score (active) or Completed (history)
 	showProject bool
 	showTags    bool // true when at least one visible row has tags
+}
+
+// hugColW sizes one list column: the wider of its header label and its widest
+// value, plus a single column gap. That is the whole rule — a column costs what
+// it has to show and not a cell more, so the space it does not need goes to the
+// title and the tags, which are the columns that can actually use it. Sizing a
+// column for anything else (a fixed constant, an asymmetric pad meant to add up
+// to some rhythm) strands blanks on every row whose value is shorter.
+func hugColW(valueW int, header string) int {
+	w := valueW
+	if h := len([]rune(header)); h > w {
+		w = h
+	}
+	return w + listColGap
 }
 
 // dueColMax returns the widest rendered due value (formatDueShort) across the
@@ -274,11 +290,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 			// Start at the compact baseline for ordinary layouts. After the fixed
 			// columns and title have claimed what they need, genuine spare width is
 			// offered back to Project below so wide terminals reveal longer names.
-			projHdrW := len([]rune(tr("Project")))
-			projectWant = widestProject + 4
-			if projectWant < projHdrW {
-				projectWant = projHdrW
-			}
+			projectWant = hugColW(widestProject, tr("Project"))
 			c.projectW = projectWant
 			if c.projectW > projectColCompactW {
 				c.projectW = projectColCompactW
@@ -286,38 +298,37 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 		}
 	}
 
-	// Title column fits its longest entry (+gap), floored to the header label so
-	// it never truncates, capped by the shared responsive width.
+	// Title column fits its longest entry (+ the shared column gap), floored to
+	// the header label so it never truncates, capped by the shared responsive
+	// width.
 	floor := len([]rune(tr("Active tasks")))
 	if isHistory {
 		floor = len([]rune(tr("Completed tasks")))
 	}
-	c.titleW = contentFitWidth(termWidth, contentMax, 4, floor)
+	c.titleW = contentFitWidth(termWidth, contentMax, listColGap, floor)
 
-	lastW := scoreColW
+	// Score holds a percentage, so its widest value is "100%"; the header is
+	// wider than that, which is what actually sizes the column.
+	lastW := hugColW(scoreValW, tr("Score"))
+	sizeW := hugColW(1, tr("Size"))
 	// The active list shows short relative due values ("2d", "today"), so hug the
-	// Due column to its widest entry plus a single trailing space; the Size
-	// column's own 2-space left pad supplies the rest of the inter-column gap, so
-	// a 2-char "3d" no longer strands a wide empty column. Floored to the header
-	// label ("Due") so it never clips, capped at dueColW, the full-date worst
-	// case. History always shows absolute dates, so it keeps the fixed 12-wide
-	// column that also matches its Completed column.
-	dueW := dueMax + 1
-	if hdr := len([]rune(tr("Due"))); dueW < hdr {
-		dueW = hdr
-	}
-	if dueW > dueColW {
-		dueW = dueColW
-	}
+	// Due column to its widest entry: a list with nothing but "3d" values does
+	// not strand a full-date-wide empty column. Capped at dueValMaxW, the
+	// full-date worst case, so one far-off task cannot widen it further. History
+	// always shows absolute dates, so it keeps the fixed 12-wide column that also
+	// matches its Completed column.
+	dueW := hugColW(min(dueMax, dueValMaxW), tr("Due"))
 	if isHistory {
 		lastW = 12
 		dueW = 12
 	}
 	c.dueW = dueW
+	c.lastW = lastW
+	c.sizeW = sizeW
 	colsW := func() int {
 		w := 0
 		if c.showSize {
-			w += sizeColW
+			w += c.sizeW
 		}
 		if c.showDue {
 			w += dueW
@@ -360,7 +371,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	if tagsMax > 0 {
 		tagsReserve = 1 + tagsMax
 	}
-	if want := contentMax + 4; c.titleW < want {
+	if want := contentMax + listColGap; c.titleW < want {
 		if spare := inner - fixed - c.titleW - colsW() - tagsReserve; spare > 0 {
 			grow := want - c.titleW
 			if grow > spare {
@@ -407,13 +418,21 @@ func listPosLabel(cursor, total int) string {
 // as a scroll-position indicator; pass "" to omit it.
 func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listCols, posLabel string) {
 	dueW := c.dueW
-	sizeLabel := padCenter(tr("Size"), sizeColW)
-	dueLabel := padRight(tr("Due"), dueW)
-	lastLabel := padRight(tr("Score"), scoreColW)
+	sizeLabel := padRight(tr("Size"), c.sizeW)
+	// Score and Due are right-aligned value fields on the active list (see
+	// listColGap), so their labels sit over the field rather than at the
+	// column's left edge — otherwise the header names a column whose values
+	// end five cells further right.
+	dueLabel := padRight(padLeft(tr("Due"), dueW-listColGap), dueW)
+	lastLabel := padRight(padLeft(tr("Score"), c.lastW-listColGap), c.lastW)
 	// The active-sort cue lives in the panel border title, so column headers
 	// stay plain — no >..< decoration to reflow.
 	title := tr("Active tasks")
 	if isHistory {
+		// History's dates are all the same width, so its columns stay
+		// left-aligned and its labels with them.
+		sizeLabel = padCenter(tr("Size"), c.sizeW)
+		dueLabel = padRight(tr("Due"), dueW)
 		title = tr("Completed tasks")
 		lastLabel = padRight(tr("Completed"), 12)
 	}

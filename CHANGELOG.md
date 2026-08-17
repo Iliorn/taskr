@@ -8,6 +8,21 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Changed
+
+- **Every column on the Overview now costs what it shows.** Each one is sized
+  as the wider of its header and its widest value plus a two-space gap —
+  nothing else. The spacing used to be assembled per column, a two-space lead
+  here and a one-space trail there, chosen to sum to five for the *widest*
+  value in each column and therefore ragged for every shorter one: a `2d` in a
+  Due column sized for `20-09-27` left nine spaces before Size where the full
+  date left three, and `100%` left four before Due where `73%` left five, with
+  the percent sign a cell adrift on every two-digit score. Score and Due are
+  now right-aligned fields, so the numbers share an edge and the dates line up
+  under each other. The columns take about four cells less than before, which
+  goes where it is worth something: longer titles and tags that fit on a
+  narrower window.
+
 ### Fixed
 
 - **The selected row is highlighted all the way across.** The highlight covered

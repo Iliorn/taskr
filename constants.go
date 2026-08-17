@@ -111,31 +111,32 @@ const (
 	// is what fits a line comfortably rather than the pickers' window height.
 	maxQuickAddSuggestions = 5
 
-	// sizeColW is the Size column on the Tasks list. Rendered as 2-left + letter
-	// + 5-right asymmetric pad: the 2 left spaces extend the Due column's
-	// 3-trailing into the 5-char inter-column gap; the 5 right spaces form the
-	// same gap on the way to the Project column. Header uses padCenter at this
-	// width so "Size" / ">Size<" stay centered.
-	sizeColW = 8
+	// listColGap is the gap between any two columns of the Tasks list — the only
+	// spacing number in the layout. Every column is sized by hugColW as "the
+	// wider of its header and its widest value, plus this", so no column is ever
+	// padded for a value it does not have. Two is what separates two columns
+	// legibly; the cells it saves go to the title and the tags, which are the
+	// columns whose content is actually open-ended. The old layout spent five
+	// here and assembled it out of asymmetric per-column pads, which only summed
+	// to five for the widest value in each column.
+	listColGap = 2
+
+	// scoreValW is the widest Score value: "100%". The header is wider, so it is
+	// the header that sizes the column — but a shorter translated header must
+	// not clip the values, which is what this floor is for. Values are
+	// right-aligned in the field: they are numbers, and left-aligning them
+	// floated the % sign one cell left on every two-digit score.
+	scoreValW = 4
+
+	// dueValMaxW caps the Due column's value field at the full-date worst case,
+	// "DD-MM-YY". Below it the column hugs whatever this frame's widest due
+	// actually renders to, so an all-"3d" list costs three cells and not eight.
+	dueValMaxW = 8
 
 	// projectColCompactW is the Project column's compact baseline on the Tasks
 	// list. At wider widths the column can grow past this to reveal the full
 	// project name; narrow layouts retain the familiar compact footprint.
 	projectColCompactW = 14
-
-	// scoreColW is the Score column on the active Tasks list. Wide enough for
-	// the ">Score<" sort indicator (7 runes) plus a one-char buffer so it never
-	// butts up against the Due column. The history view keeps the wider 12-col
-	// width since its "Completed" header is longer.
-	scoreColW = 8
-
-	// dueColW is the maximum width of the Due column on the active Tasks list;
-	// taskListCols sizes the column to its actual content and caps it here. The
-	// cap is the full-date worst case: "DD-MM-YY" (8) plus the 3-trailing-space
-	// gap which, with the 2-space left pad of the centered Size column, equals
-	// the 5-space gap a typical "X.X" score leaves before Due. History keeps a
-	// fixed 12-col width to match its Completed column.
-	dueColW = 11
 
 	footerHeight   = 1
 	minHeaderLines = 2
