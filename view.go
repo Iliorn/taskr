@@ -1338,6 +1338,7 @@ func (m model) helpBodyLines() []string {
 		{"↧", tr("blocked — waiting on an unfinished dependency")},
 		{"↻", tr("recurring task")},
 		{"(2/5)", tr("subtasks done / total")},
+		{"+ / -", tr("subtasks collapsed / expanded")},
 	}})
 
 	// Reference section: the status line. Everything here appears only in a

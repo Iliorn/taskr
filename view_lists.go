@@ -928,12 +928,16 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	} else if m.cache.blockedSet[t.ID] {
 		checkbox = "[~]" // blocked: waiting on an unfinished dependency
 	}
+	// +/- rather than a triangle: the row already opens with the ▶ cursor, and
+	// a second triangle one cell later read as a second cursor — two arrows on
+	// the same row, one of which does not move. The tree convention says the
+	// same thing without borrowing the cursor's shape.
 	foldIcon := " "
 	if m.subtaskCount(t.ID) > 0 {
 		if m.expandedTasks[t.ID] {
-			foldIcon = "▾"
+			foldIcon = "-"
 		} else {
-			foldIcon = "▸"
+			foldIcon = "+"
 		}
 	}
 	title := t.Title

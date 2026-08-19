@@ -37,6 +37,13 @@ belong in the commit log, not here — unless they change behaviour.
   normal part of upgrading two machines, taskr now refuses, names both schema
   versions, and points at the pre-migration `.bak`.
 
+- **Subtasks fold with `+`/`-` instead of a triangle.** A row with hidden
+  subtasks carried a `▸`, one cell after the `▶` that marks the row you are on
+  — two triangles pointing the same way on the same row, only one of which is
+  the cursor. The fold marker now uses the tree convention (`+` closed, `-`
+  open), which says the same thing without borrowing the cursor's shape, and
+  the help's row-symbol list documents it.
+
 - **The Stage row looks like the picker it is.** It carried a dim `‹←/→›` hint
   after the value — the right information in a place the eye reads as part of
   the field, and the only row in the detail pane with an instruction glued to
