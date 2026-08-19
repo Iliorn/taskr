@@ -8,7 +8,17 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+## [1.33.1] - 2026-08-19
+
 ### Changed
+
+- **The calendar's day summary moved into the pane's border.** The
+  `3 entries · 1h 20m` line sat inside the agenda, right-aligned above a blank
+  spacer, so two of the day's rows went to a fact the border had room for: on a
+  short window that was the difference between seeing the next entry and
+  scrolling for it. It now reads `Sun 16 Aug 2026 [3 entries · 1h 20m]` in the
+  border title, and the agenda pages against the two rows it got back. A window
+  too narrow for both drops the bracket whole rather than clipping the date.
 
 - **Every column on the Overview now costs what it shows.** Each one is sized
   as the wider of its header and its widest value plus a two-space gap —
