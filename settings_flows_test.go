@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -170,9 +171,14 @@ func TestScriptSyncTokenIsStoredPrivately(t *testing.T) {
 	}
 	// SECURITY.md states this file is 0600. It is the only secret taskr
 	// stores, so the mode is a documented property, not an accident of
-	// whichever call happened to create the file.
-	if got := info.Mode().Perm(); got != 0600 {
-		t.Errorf("sync.json mode = %v, want 0600", got)
+	// whichever call happened to create the file. Windows has no POSIX mode
+	// bits — Go reports 0666 for every file it creates there, and the file is
+	// protected by the ACL on the user's profile instead — so the assertion
+	// runs where the mode is real.
+	if runtime.GOOS != "windows" {
+		if got := info.Mode().Perm(); got != 0600 {
+			t.Errorf("sync.json mode = %v, want 0600", got)
+		}
 	}
 }
 

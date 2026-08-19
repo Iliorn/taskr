@@ -136,21 +136,32 @@ func TestPlatformDefaults(t *testing.T) {
 }
 
 // The four kinds must not collapse into one directory by accident — that is the
-// whole point of splitting them.
+// whole point of splitting them. How many directories that *should* be is a
+// platform question, and both exceptions are deliberate: macOS has no state
+// directory of its own (config, data and state share Application Support, and
+// only the cache is separate), and Windows splits roaming config from the rest
+// (data, state and cache share Local). Counting per platform pins the layout
+// the README documents everywhere, where skipping the platforms with fewer
+// directories asserted nothing about them at all.
 func TestTheFourKindsAreDistinct(t *testing.T) {
 	clearPathEnv(t)
-	if runtime.GOOS == "darwin" {
-		t.Skip("macOS deliberately shares Application Support between config, data and state")
+	want := 4
+	switch runtime.GOOS {
+	case "darwin":
+		want = 2 // Application Support + Caches
+	case "windows":
+		want = 2 // Roaming + Local
 	}
-	seen := map[string]pathKind{}
+	seen := map[string][]pathKind{}
 	for _, kind := range []pathKind{pathConfig, pathData, pathState, pathCache} {
 		dir, err := appDir(kind)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if prev, dup := seen[dir]; dup {
-			t.Errorf("kinds %d and %d both resolve to %q", prev, kind, dir)
-		}
-		seen[dir] = kind
+		seen[dir] = append(seen[dir], kind)
+	}
+	if len(seen) != want {
+		t.Errorf("the four kinds resolve to %d directories on %s, want %d: %v",
+			len(seen), runtime.GOOS, want, seen)
 	}
 }
