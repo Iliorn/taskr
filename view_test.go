@@ -534,12 +534,12 @@ func TestSelectedRowHighlightReachesThePaneEdge(t *testing.T) {
 	}
 }
 
-// The Stage row hands renderField a value that is already styled (the dim
-// ‹←/→› hint). Truncating that by rune count cuts an SGR sequence in half: the
+// Detail values are assembled by their callers, so one can arrive already
+// styled. Truncating that by rune count cuts an SGR sequence in half: the
 // terminal swallows the "(…)" marker as sequence parameters, prints whatever
-// falls out — a stray ")" beside the stage name — and never sees the reset, so
-// the style leaks into the panel border and the frame breaks. The widths here
-// are the side-by-side ones, where the detail pane is half the window and the
+// falls out — a stray ")" beside the value — and never sees the reset, so the
+// style leaks into the panel border and the frame breaks. The widths here are
+// the side-by-side ones, where the detail pane is half the window and the
 // value budget is tight enough to truncate.
 func TestDetailValuesTruncateWithoutBreakingEscapes(t *testing.T) {
 	before := lipgloss.ColorProfile()
@@ -579,10 +579,10 @@ func TestDetailValuesTruncateWithoutBreakingEscapes(t *testing.T) {
 		if stage == "" {
 			t.Fatalf("width %d: the Stage row should render", w)
 		}
-		// The hint is decoration: it renders whole or not at all, never as a
-		// truncation marker standing in for it.
-		if strings.Contains(stage, "‹←/→") && !strings.Contains(stage, "‹←/→›") {
-			t.Errorf("width %d: the key hint should go whole rather than be clipped: %q", w, stage)
+		// The ‹ … › brackets are decoration: they render as a pair or not at
+		// all, never as a half-open one left behind by a truncation.
+		if strings.Contains(stage, "‹") != strings.Contains(stage, "›") {
+			t.Errorf("width %d: the picker brackets should go whole rather than be clipped: %q", w, stage)
 		}
 		if !strings.Contains(stage, activeStages[0]) {
 			t.Errorf("width %d: the stage name itself must survive: %q", w, stage)

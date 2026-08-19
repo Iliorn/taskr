@@ -37,6 +37,13 @@ belong in the commit log, not here — unless they change behaviour.
   normal part of upgrading two machines, taskr now refuses, names both schema
   versions, and points at the pre-migration `.bak`.
 
+- **The Stage row looks like the picker it is.** It carried a dim `‹←/→›` hint
+  after the value — the right information in a place the eye reads as part of
+  the field, and the only row in the detail pane with an instruction glued to
+  its contents. The stage now sits inside `‹ … ›` brackets, exactly like the
+  values you cycle on the Settings tab, so the shape says "arrow keys change
+  this" without spending words on it.
+
 - **Package-managed installs are no longer overwritten.** Self-update knew
   about Homebrew and nothing else, so an update run against a binary installed
   by Scoop or a distribution package replaced a file that package manager owns
