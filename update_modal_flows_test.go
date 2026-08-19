@@ -251,7 +251,10 @@ func TestScriptRemoveTagFromTask(t *testing.T) {
 	other.AddTag("home")
 	m := modelWithTasks(t, task, other)
 
-	m = openDetailOn(t, m, fieldTags)
+	// By ID, for the reason the project test below spells out: with equal
+	// CreatedAt these two score identically and the cursor lands on whichever
+	// UUID sorted first.
+	m = openDetailOnTask(t, m, task.ID, fieldTags)
 	m = sendKey(t, m, "x")
 	if m.mode != modeConfirm {
 		t.Fatalf("after 'x': mode = %v, want modeConfirm", m.mode)
