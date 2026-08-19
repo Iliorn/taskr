@@ -399,6 +399,11 @@ it resolved, which is the quickest way to see which of the three rules applied.
 On first launch a legacy `tasks.json` next to the database is imported and then
 left in place as a backup.
 
+A store that a **newer taskr** has already migrated will not open with an older
+binary — it says which schema it found and which one it knows, rather than
+coming up on an empty list over a full database. Update taskr, or restore the
+`tasks.db-pre-migration-*.bak` the upgrade wrote next to it.
+
 ## Sync
 
 taskr can sync tasks across devices through a small **self-hosted** server — one

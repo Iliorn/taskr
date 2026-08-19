@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -29,6 +30,16 @@ func main() {
 		code := runCLI(os.Args[1:])
 		checkpointStore()
 		os.Exit(code)
+	}
+
+	// Fail closed when the store was written by a newer taskr. Every other
+	// load error is reported inside the TUI, which is right for "the disk is
+	// full" but wrong here: the app would come up showing an empty list over a
+	// full database, and the first save would write this build's older columns
+	// back over it (migrator.go).
+	if err := openStore(); errors.Is(err, errSchemaTooNew) {
+		fmt.Fprintf(os.Stderr, "taskr: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Opt-in latency trace (TASKR_TRACE=1). Started before the model so the

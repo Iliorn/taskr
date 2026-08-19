@@ -23,6 +23,13 @@ belong in the commit log, not here — unless they change behaviour.
 
 ### Changed
 
+- **A store written by a newer taskr is no longer opened.** Migrating forward is
+  one-way, and an older binary pointed at an already-migrated store used to open
+  it and read the columns it knew — silently dropping whatever the newer schema
+  added on the next save. Since self-update and sync make mixed versions a
+  normal part of upgrading two machines, taskr now refuses, names both schema
+  versions, and points at the pre-migration `.bak`.
+
 - **Package-managed installs are no longer overwritten.** Self-update knew
   about Homebrew and nothing else, so an update run against a binary installed
   by Scoop or a distribution package replaced a file that package manager owns

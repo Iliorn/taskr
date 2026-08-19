@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -237,4 +238,63 @@ func TestLearningsFoldIntoNotesMigration(t *testing.T) {
 	if _, err := h.Exec(`SELECT 1 FROM task_learnings`); err == nil {
 		t.Error("task_learnings survived the migration")
 	}
+}
+
+// TestOpenRefusesAStoreFromANewerBuild is the fail-closed half of the
+// migrator. Forward migrations are loud — an older binary hits a dropped
+// table and errors on the first query — but an additive one is silent: the
+// old build reads the columns it knows, writes them back, and whatever the
+// newer schema added is gone on the next round-trip. With self-update and a
+// sync server, running two versions against one store is what an upgrade
+// *looks like*, so opening one from the future has to fail instead.
+func TestOpenRefusesAStoreFromANewerBuild(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "tasks.db")
+
+	// A normal, fully migrated store — the state a current build leaves behind.
+	h, err := openStoreAt(dbPath)
+	if err != nil {
+		t.Fatalf("openStoreAt: %v", err)
+	}
+	saveTodos(t, h, []todo.Todo{todo.New("written by the newer build")})
+	// Stamp a version no migration in this tree provides, as a later taskr
+	// would have done on its way past.
+	if _, err := h.Exec(`INSERT INTO schema_version (version, applied_at) VALUES (?, ?)`,
+		9999, time.Now().UTC().Format(time.RFC3339)); err != nil {
+		t.Fatalf("stamp future schema: %v", err)
+	}
+	if err := h.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	_, err = openStoreAt(dbPath)
+	if !errors.Is(err, errSchemaTooNew) {
+		t.Fatalf("openStoreAt on a newer store = %v, want errSchemaTooNew", err)
+	}
+	// The message has to carry both numbers: "which taskr do I need" is the
+	// first question it will be read to answer.
+	for _, want := range []string{"9999", "brew upgrade taskr", ".bak"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error message missing %q: %v", want, err)
+		}
+	}
+}
+
+// TestOpenAcceptsAStoreAtTheCurrentSchema is the guard's other side: the
+// version this build itself just wrote must reopen without complaint, or the
+// check above would lock everyone out on the second launch.
+func TestOpenAcceptsAStoreAtTheCurrentSchema(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tasks.db")
+	h, err := openStoreAt(dbPath)
+	if err != nil {
+		t.Fatalf("first open: %v", err)
+	}
+	if err := h.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	h2, err := openStoreAt(dbPath)
+	if err != nil {
+		t.Fatalf("reopen at the current schema: %v", err)
+	}
+	h2.Close()
 }

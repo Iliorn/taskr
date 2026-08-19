@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,6 +25,19 @@ var migrationFS embed.FS
 // Each runs inside the migrator's transaction; the migrator stamps
 // schema_version on success.
 var goMigrations = map[int]func(*sql.Tx) error{}
+
+// errSchemaTooNew is returned when the store is stamped with a schema version
+// this build has no migration for — i.e. a newer taskr already upgraded it.
+//
+// Migrating forward is the loud case: migration 011 drops task_learnings, so
+// an older binary fails with "no such table" on the first query and nobody
+// loses anything quietly. An *additive* migration is the silent one. A build
+// that predates a column opens the store happily, scans the columns it knows,
+// and writes them back — and the new column is gone on the next round-trip
+// through the newer build. With self-update on two machines and a sync server
+// between them, running mixed versions against one store is the normal state
+// of an upgrade, not an exotic mistake, so this fails closed instead.
+var errSchemaTooNew = errors.New("store was written by a newer taskr")
 
 func runMigrations(db *sql.DB) error {
 	if _, err := db.Exec(`
@@ -178,6 +192,15 @@ func pendingMigrations(db *sql.DB) ([]migration, error) {
 	current, err := currentSchemaVersion(db)
 	if err != nil {
 		return nil, err
+	}
+	if len(all) > 0 {
+		if newest := all[len(all)-1].version; current > newest {
+			return nil, fmt.Errorf("%w: it is at schema %d and this build only knows %d.\n"+
+				"       Update taskr (Settings → \"Update to latest release\", or `brew upgrade taskr`).\n"+
+				"       To go back to this version instead, stop anything using the store, copy the\n"+
+				"       newest tasks.db-pre-migration-*.bak over tasks.db and delete the -wal/-shm sidecars",
+				errSchemaTooNew, current, newest)
+		}
 	}
 	pending := all[:0]
 	for _, m := range all {
