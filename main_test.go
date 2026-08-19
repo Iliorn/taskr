@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -84,6 +85,22 @@ func setTestHome(t *testing.T, dir string) {
 func setWindowsAppData(set func(string, string) error, dir string) {
 	_ = set("APPDATA", filepath.Join(dir, "AppData", "Roaming"))
 	_ = set("LOCALAPPDATA", filepath.Join(dir, "AppData", "Local"))
+}
+
+// releaseStoreSingleton hands the process-wide database back at the end of a
+// test. openStore keeps one *sql.DB for the whole binary, and Windows refuses
+// to delete a file that is still open — so a test that opens the store inside
+// its own t.TempDir() fails in cleanup, on that platform only, with an
+// unlinkat error that says nothing about the test. Closing it also means the
+// next opener gets a store in *its* home rather than this one's.
+func releaseStoreSingleton(t *testing.T) {
+	t.Helper()
+	t.Cleanup(func() {
+		if db != nil {
+			_ = db.Close()
+		}
+		db, dbErr, dbOnce = nil, nil, sync.Once{}
+	})
 }
 
 // The redirect is load-bearing: if it silently stops working on some platform,

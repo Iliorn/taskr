@@ -277,7 +277,11 @@ func TestScriptRemoveProjectFromTask(t *testing.T) {
 	other.SetProject("kitchen")
 	m := modelWithTasks(t, task, other)
 
-	m = openDetailOn(t, m, fieldProject)
+	// By ID, not by cursor position: two tasks built back to back score
+	// identically, and on a clock as coarse as Windows' they also share a
+	// CreatedAt — so the sequence sort falls through to the ID tie-break and
+	// the row under the cursor is whichever UUID sorted first.
+	m = openDetailOnTask(t, m, task.ID, fieldProject)
 	m = sendKey(t, m, "x")
 	if m.mode != modeConfirm {
 		t.Fatalf("after 'x': mode = %v, want modeConfirm", m.mode)

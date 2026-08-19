@@ -171,7 +171,14 @@ func TestAcceptQuickAddSuggestion(t *testing.T) {
 func suggestSearchModel(t *testing.T) model {
 	t.Helper()
 	var tasks []todo.Todo
-	for _, spec := range []struct{ title, tag, project string }{
+	// Stamped an hour apart rather than left on the wall clock: the candidate
+	// pool is ordered by recency (sortByRecency over cache.tagLastUsed), and
+	// three tasks built in a loop are the same instant on a clock as coarse as
+	// Windows' ~15ms — which left "home" and "homework", both prefix matches
+	// of "#ho", in whichever order the tie broke. The last task is the most
+	// recent one, and every assertion below can say so.
+	base := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
+	for i, spec := range []struct{ title, tag, project string }{
 		{"Fix the boiler", "home", "House"},
 		{"Write the memo", "work", "Q3"},
 		{"Call the plumber", "homework", "House"},
@@ -179,6 +186,8 @@ func suggestSearchModel(t *testing.T) model {
 		task := todo.New(spec.title)
 		task.AddTag(spec.tag)
 		task.Project = spec.project
+		task.CreatedAt = base.Add(time.Duration(i) * time.Hour)
+		task.ModifiedAt = task.CreatedAt
 		tasks = append(tasks, task)
 	}
 	return modelWithTasks(t, tasks...)
