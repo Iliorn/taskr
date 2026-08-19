@@ -127,28 +127,19 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateStatus = tr("Check failed")
 			return m, clearErrAfter()
 		}
-		if msg.latest == "" || sameRelease(appVersion, msg.latest) {
+		// planUpdate (version.go) owns the verdict, shared with `taskr update`
+		// so the two surfaces cannot disagree about the same binary; the
+		// sentences stay here because they are translated and the CLI's aren't.
+		switch action, hint := planUpdate(appVersion, msg.latest); action {
+		case updateUpToDate:
 			m.updateStatus = tr("Up to date (") + appVersion + ")"
 			return m, nil
-		}
-		// A binary built from a local checkout is not a release, so the
-		// tag comparison above says "newer" against every release ever
-		// published. Report the release without opening the confirm
-		// prompt: silently overwriting a build the user just made
-		// themselves is the surprising outcome, and they can still reach
-		// the release through their normal install path.
-		if !isReleaseVersion(appVersion) {
+		case updateLocalBuild:
 			m.updateStatus = tr("Latest release: ") + msg.latest + tr(" — this is a local build (") + appVersion + ")"
 			m.flashInfo(m.updateStatus)
 			return m, clearErrAfter()
-		}
-		if runningFromHomebrew() {
-			m.updateStatus = tr("Update available: ") + msg.latest + tr(" — run `brew upgrade taskr`")
-			m.flashInfo(m.updateStatus)
-			return m, clearErrAfter()
-		}
-		if runtime.GOOS == "darwin" {
-			m.updateStatus = tr("Update available: ") + msg.latest + tr(" — install with `brew install iliorn/tap/taskr`")
+		case updateManaged:
+			m.updateStatus = fmt.Sprintf(tr("Update available: %s — run `%s`"), msg.latest, hint)
 			m.flashInfo(m.updateStatus)
 			return m, clearErrAfter()
 		}

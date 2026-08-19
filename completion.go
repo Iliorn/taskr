@@ -61,6 +61,7 @@ var cliCommandSpecs = []cliCommandSpec{
 		"accept-stale", "quiet", "recover", "save", "status", "token", "url"}},
 	{name: "serve", summary: "run the sync server", flags: []string{"listen", "new-token", "token"}},
 	{name: "doctor", summary: "report this installation's health", flags: []string{"json"}},
+	{name: "update", summary: "install the latest release", flags: []string{"check", "y"}},
 	{name: "suggest", summary: "suggest dependency links between tasks", flags: []string{"list"}},
 	{name: "completion", summary: "print a shell completion script"},
 	{name: "man", summary: "print the man page (roff)"},

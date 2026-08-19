@@ -2,6 +2,7 @@ package main
 
 import (
 	"regexp"
+	"runtime"
 	"runtime/debug"
 	"strings"
 )
@@ -133,4 +134,48 @@ func normalizeVersion(v string) string {
 		v = v[:i]
 	}
 	return v
+}
+
+// ── What a version check means ────────────────────────────────────────────────
+
+// updateAction is the verdict of a latest-release check for *this* binary.
+// The decision is shared rather than duplicated: the Settings tab and
+// `taskr update` must not reach different conclusions about the same
+// installation. Only the verdict is shared — each surface writes its own
+// sentence, since the TUI's are translated and the CLI's deliberately are not.
+type updateAction int
+
+const (
+	// updateUpToDate — already running the newest published release.
+	updateUpToDate updateAction = iota
+	// updateLocalBuild — built from a checkout, so every release tag compares
+	// as newer. Report the release, never overwrite the build: silently
+	// replacing a binary the user just compiled is the surprising outcome.
+	updateLocalBuild
+	// updateManaged — a package manager owns this binary and has to do the
+	// upgrade itself; the accompanying hint names the command.
+	updateManaged
+	// updateAvailable — a newer release exists and we can install it.
+	updateAvailable
+)
+
+// planUpdate decides what latest means for a binary running current. Both are
+// arguments so the ordering is testable without a network or a tagged build;
+// the environment questions — who owns the file, which platform — it asks
+// directly, because they are properties of the running process.
+func planUpdate(current, latest string) (updateAction, string) {
+	if latest == "" || sameRelease(current, latest) {
+		return updateUpToDate, ""
+	}
+	if !isReleaseVersion(current) {
+		return updateLocalBuild, ""
+	}
+	if hint := runningPackageManager(); hint != "" {
+		return updateManaged, hint
+	}
+	if runtime.GOOS == "darwin" {
+		// Not from a keg, but macOS ships no release binary at all.
+		return updateManaged, "brew install iliorn/tap/taskr"
+	}
+	return updateAvailable, ""
 }

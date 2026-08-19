@@ -911,13 +911,40 @@ func isHomebrewCellarPath(path string) bool {
 	return strings.Contains(path, "/Cellar/taskr/")
 }
 
-func runningFromHomebrew() bool {
+// packageManagerFor names the tool that owns the binary at path, or "" when the
+// binary looks self-installed. Writing over a package-managed file is undone by
+// that manager's next upgrade and fails its integrity check (`pacman -Qkk`,
+// `scoop status`) until then, so self-update refuses and points at the owner
+// instead. /usr/bin counts because the FHS reserves it for the distribution's
+// packages — a hand-installed binary belongs in /usr/local/bin or ~/.local/bin,
+// and both of those stay self-updatable.
+func packageManagerFor(path string) string {
+	// Normalise separators by hand: filepath.ToSlash is a no-op off Windows,
+	// so a Windows path examined anywhere else (a test, a cross-platform
+	// check) would keep its backslashes and match nothing.
+	path = strings.ReplaceAll(filepath.Clean(path), `\`, "/")
+	switch {
+	case isHomebrewCellarPath(path):
+		return "brew update && brew upgrade taskr"
+	case strings.Contains(strings.ToLower(path), "/scoop/apps/"):
+		return "scoop update taskr"
+	case strings.HasPrefix(path, "/usr/bin/"):
+		return "your distribution's package manager"
+	}
+	return ""
+}
+
+// runningPackageManager asks packageManagerFor about this process's own binary,
+// resolving symlinks first — every one of those layouts is reached through one.
+func runningPackageManager() string {
 	execPath, err := os.Executable()
 	if err != nil {
-		return false
+		return ""
 	}
-	execPath, err = filepath.EvalSymlinks(execPath)
-	return err == nil && isHomebrewCellarPath(execPath)
+	if resolved, err := filepath.EvalSymlinks(execPath); err == nil {
+		execPath = resolved
+	}
+	return packageManagerFor(execPath)
 }
 
 // selfUpdateAsset names the release asset for a platform. The names are
@@ -958,8 +985,8 @@ func selfUpdate() error {
 	if err != nil {
 		return fmt.Errorf("could not resolve executable path: %w", err)
 	}
-	if isHomebrewCellarPath(execPath) {
-		return fmt.Errorf("installed via Homebrew; run `brew update && brew upgrade taskr`")
+	if hint := packageManagerFor(execPath); hint != "" {
+		return fmt.Errorf("this install is package-managed; update it with `%s`", hint)
 	}
 
 	assetName, err := selfUpdateAsset(runtime.GOOS, runtime.GOARCH)

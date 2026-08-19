@@ -97,7 +97,12 @@ func reconcileStaleTimers(h *sql.DB, now time.Time, threshold time.Duration) ([]
 // stderr. Skipped for commands that don't touch the store.
 func reconcileStaleTimersCLI(cmd string) {
 	switch cmd {
-	case "help", "-h", "--help", "--version":
+	// Commands that say nothing about tasks have no business opening the
+	// store — and opening it is not free: a store older than this binary is
+	// migrated on open, which is a one-way change for anyone still running an
+	// older taskr elsewhere. `taskr update --check` asking GitHub for a tag
+	// must not be what upgrades a database schema.
+	case "help", "-h", "--help", "--version", "update", "completion", "man":
 		return
 	}
 	if err := openStore(); err != nil {

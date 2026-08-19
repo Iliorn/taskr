@@ -8,6 +8,35 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Added
+
+- **`taskr update`** installs the latest release from the shell, so updating is
+  no longer the one thing that requires opening the TUI and finding the
+  Settings tab. `--check` only reports ("update available: v1.34.0 (running
+  v1.33.1)") and installs nothing, which makes it safe in a shell profile or a
+  cron; `-y` skips the confirmation, and a run with no terminal on stdin says
+  so rather than reading EOF as "no". The download is checked against the
+  release's `SHA256SUMS` exactly as the Settings button is — it is the same
+  code underneath, and the verdict about *your* install (up to date, a local
+  build, package-managed, or updatable) now comes from one shared decision, so
+  the two surfaces cannot tell you different things.
+
+### Changed
+
+- **Package-managed installs are no longer overwritten.** Self-update knew
+  about Homebrew and nothing else, so an update run against a binary installed
+  by Scoop or a distribution package replaced a file that package manager owns
+  — reverted by its next upgrade, and failing its integrity check until then.
+  Those installs are now told which command to use instead. Homebrew, Scoop and
+  `/usr/bin` are recognised; `/usr/local/bin` and `~/.local/bin` are yours and
+  stay self-updatable.
+
+- **`taskr completion`, `man` and `update` no longer open the database.** Every
+  subcommand but `help` and `--version` opened the store first, and opening a
+  store older than the binary migrates its schema — a one-way change for anyone
+  still running an older taskr against it. Printing a completion script or
+  asking GitHub for a version number should not be what upgrades a database.
+
 ## [1.33.1] - 2026-08-19
 
 ### Changed

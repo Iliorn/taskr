@@ -34,7 +34,7 @@ func isCLICommand(arg string) bool {
 		"show", "why", "edit", "delete", "rm", "undelete", "comment",
 		"stats", "start", "stop", "log", "export", "import", "subtask",
 		"search", "tags", "projects", "serve", "sync", "undo",
-		"doctor", "suggest", "completion", "man", "help", "-h", "--help", "--version",
+		"doctor", "update", "suggest", "completion", "man", "help", "-h", "--help", "--version",
 		// Retired, but still routed so muscle memory gets an explanation
 		// instead of the TUI opening on top of the typed command.
 		"learnings":
@@ -126,6 +126,8 @@ func dispatchCLI(args []string) int {
 		return cliCompletion(rest)
 	case "man":
 		return cliMan(rest)
+	case "update":
+		return cliUpdate(rest)
 	case "doctor":
 		return cliDoctor(rest)
 	case "suggest":
@@ -2516,6 +2518,76 @@ func cliSubtask(args []string) int {
 // (an unrecognised word never gets this far — isCLICommand sends it to the
 // TUI instead), and an explicitly requested document belongs on stdout so
 // `taskr help | grep sync` and `taskr help | less` work.
+
+// ── update ───────────────────────────────────────────────────────────────────
+
+// cliUpdate is the shell-side door to the same self-update the Settings tab
+// offers. Updating used to be the one thing that required opening the TUI,
+// which is a mode switch for someone whose taskr is otherwise a command.
+//
+// The verdict comes from planUpdate, shared with the TUI so a binary cannot be
+// told two different things about itself; only the sentences are local, since
+// CLI output is deliberately English (see lang.go).
+func cliUpdate(args []string) int {
+	fs := flag.NewFlagSet("update", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	check := fs.Bool("check", false, "report the running and latest version, install nothing")
+	yes := fs.Bool("y", false, "install without the confirmation prompt")
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, "usage: taskr update [--check] [-y]   install the latest release (macOS and package-managed installs are told which tool to use instead)")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	latest, err := latestRelease()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "taskr update: %v\n", err)
+		return 1
+	}
+
+	action, hint := planUpdate(appVersion, latest)
+	switch action {
+	case updateUpToDate:
+		fmt.Printf("%s is the latest release\n", appVersion)
+		return 0
+	case updateLocalBuild:
+		fmt.Printf("latest release %s (running %s — a local build, left alone)\n", latest, appVersion)
+		return 0
+	case updateManaged:
+		fmt.Printf("update available: %s (running %s)\n", latest, appVersion)
+		fmt.Fprintf(os.Stderr, "this install is package-managed; update it with `%s`\n", hint)
+		return 1
+	}
+
+	fmt.Printf("update available: %s (running %s)\n", latest, appVersion)
+	if *check {
+		return 0
+	}
+	// A prompt nobody can answer is just a failure with extra steps, so a
+	// non-interactive run says what flag would have carried it through rather
+	// than reading EOF as "no".
+	if !*yes {
+		if !stdinIsTTY() {
+			fmt.Fprintln(os.Stderr, "taskr update: not a terminal — rerun with -y to install without confirming")
+			return 1
+		}
+		if !confirmStdin(fmt.Sprintf("install %s over the running binary?", latest)) {
+			fmt.Fprintln(os.Stderr, "aborted: nothing installed")
+			return 1
+		}
+	}
+	if err := selfUpdate(); err != nil {
+		fmt.Fprintf(os.Stderr, "taskr update: %v\n", err)
+		return 1
+	}
+	// The running process keeps executing the old image either way (the file is
+	// renamed out from under it on Unix, moved aside on Windows), so say so.
+	fmt.Printf("installed %s — restart taskr to run it\n", latest)
+	return 0
+}
+
 func cliHelp() int {
 	fmt.Fprintln(os.Stdout, `taskr — keyboard-driven task manager
 
@@ -2576,6 +2648,9 @@ Diagnostics:
   taskr doctor [--json]                report this installation's health — version, data directory,
                                        database integrity, schema version, settings, sync and editor
                                        (paste the output into a bug report; exits non-zero on a problem)
+  taskr update [--check] [-y]          install the latest release, verified against the release's SHA256SUMS
+                                       (--check only reports; macOS and package-managed installs are pointed
+                                       at brew/scoop/the distro instead of being overwritten)
 
 Reporting / backup:
   taskr stats [--format=text|json|waybar]   one-line health summary (default text)
