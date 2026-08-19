@@ -21,6 +21,10 @@ import (
 // mode and a watcher reload was deferred while they were typing, schedule
 // the reload now so the deferred external change isn't silently lost.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// A panic here is a bug, but it is also the user's data: the guard writes
+	// a report from the panic site and flushes what the save debounce still
+	// owes, then re-panics so Bubble Tea restores the terminal (crash.go).
+	defer m.crashGuard("update", msg)
 	if traceCh != nil {
 		t0 := time.Now()
 		defer func() { lastUpdate, lastUpdateKind = time.Since(t0), msgKind(msg) }()

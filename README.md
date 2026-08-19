@@ -404,6 +404,12 @@ binary — it says which schema it found and which one it knows, rather than
 coming up on an empty list over a full database. Update taskr, or restore the
 `tasks.db-pre-migration-*.bak` the upgrade wrote next to it.
 
+If taskr ever crashes, it writes `crash-<timestamp>.log` to the state directory
+above — the stack trace plus the build, platform, terminal size and what was on
+screen — and flushes any edits the 300ms save debounce still owed before it
+exits. The newest five are kept. Attaching one to an issue is the whole bug
+report.
+
 ## Sync
 
 taskr can sync tasks across devices through a small **self-hosted** server — one

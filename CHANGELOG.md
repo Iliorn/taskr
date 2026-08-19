@@ -21,6 +21,13 @@ belong in the commit log, not here — unless they change behaviour.
   build, package-managed, or updatable) now comes from one shared decision, so
   the two surfaces cannot tell you different things.
 
+- **Crash reports.** A panic used to end as a raw Go stack trace over a restored
+  terminal, with the last few seconds of edits gone and nothing to send anyone.
+  taskr now writes `crash-<timestamp>.log` to its state directory — the stack
+  from where it actually broke, plus the version, platform, terminal size and
+  what was on screen — flushes whatever the save debounce still owed, and
+  finishes with the path and where to report it. The newest five are kept.
+
 ### Changed
 
 - **A store written by a newer taskr is no longer opened.** Migrating forward is

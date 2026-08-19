@@ -250,6 +250,7 @@ func projectTasksTitle(project string) string {
 // ── Top-level View ────────────────────────────────────────────────────────────
 
 func (m model) View() string {
+	defer m.crashGuard("view", nil)
 	// One trace line per frame, pairing this render with the Update that
 	// produced it (see trace.go). Nil channel = tracing off = one branch.
 	if traceCh != nil {

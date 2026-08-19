@@ -68,6 +68,8 @@ func main() {
 	defer stopResize()
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		// Last, so it survives Bubble Tea's stack dump on screen.
+		noteCrashToUser()
 		os.Exit(1)
 	}
 	// Final best-effort sync on exit so the session's last edits propagate
