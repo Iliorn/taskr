@@ -23,6 +23,21 @@ func TestTraceOffByDefault(t *testing.T) {
 	traceFrame("key j", time.Millisecond, time.Millisecond) // must not panic
 }
 
+// wantStateFile spells out where the state directory lands per platform,
+// rather than asking paths.go and comparing its answer to itself. The XDG
+// layout was hard-coded here, so this test failed on macOS — where state lives
+// in Application Support — for a reason that had nothing to do with tracing.
+func wantStateFile(home, name string) string {
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(home, "AppData", "Local", "taskr", name)
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", "taskr", name)
+	default:
+		return filepath.Join(home, ".local", "state", "taskr", name)
+	}
+}
+
 func TestTracePathForms(t *testing.T) {
 	home := t.TempDir()
 	setTestHome(t, home)
@@ -34,7 +49,7 @@ func TestTracePathForms(t *testing.T) {
 	}
 	for _, on := range []string{"1", "true", "on"} {
 		t.Setenv("TASKR_TRACE", on)
-		if got, want := tracePath(), filepath.Join(home, ".local", "state", "taskr", "trace.log"); got != want {
+		if got, want := tracePath(), wantStateFile(home, "trace.log"); got != want {
 			t.Errorf("TASKR_TRACE=%q → %q, want %q", on, got, want)
 		}
 	}

@@ -31,6 +31,15 @@ func TestMain(m *testing.M) {
 	testHome = tmp
 	os.Setenv("HOME", tmp)
 	os.Setenv("USERPROFILE", tmp) // os.UserHomeDir on Windows
+	// Windows resolves config to %APPDATA% and everything else to
+	// %LOCALAPPDATA% *before* it ever looks at the home directory (paths.go),
+	// so redirecting the home alone left the whole Windows suite reading and
+	// writing the runner's real C:\Users\…\AppData\Local\taskr — the
+	// accident this function exists to prevent, and the reason
+	// TestStorageStaysInsideTheTestHome was failing on that platform only.
+	// Pointed into the temp home rather than unset, so the branch real Windows
+	// takes is the branch the tests exercise.
+	setWindowsAppData(os.Setenv, tmp)
 	// Paths now resolve through XDG (paths.go), and an XDG_* variable exported
 	// in the developer's shell is absolute — it would send the whole suite to
 	// the real ~/.local/share while HOME pointed somewhere harmless. Redirect
@@ -55,12 +64,26 @@ func setTestHome(t *testing.T, dir string) {
 	t.Helper()
 	t.Setenv("HOME", dir)
 	t.Setenv("USERPROFILE", dir)
+	// Same reason TestMain sets them: on Windows these win over the home this
+	// function just redirected, so a test isolating itself would still share
+	// one real AppData directory with every other test — and with the person
+	// running the suite.
+	setWindowsAppData(func(k, v string) error { t.Setenv(k, v); return nil }, dir)
 	// Same reason TestMain clears these: an absolute XDG_* or TASKR_HOME would
 	// override the home this function just redirected, and the test would write
 	// outside its own directory.
 	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "TASKR_HOME"} {
 		t.Setenv(v, "")
 	}
+}
+
+// setWindowsAppData points the two variables paths.go consults on Windows at
+// dir. Harmless elsewhere — nothing reads them — so it is unconditional rather
+// than behind a GOOS check, which keeps the Linux run honest about what the
+// Windows run does.
+func setWindowsAppData(set func(string, string) error, dir string) {
+	_ = set("APPDATA", filepath.Join(dir, "AppData", "Roaming"))
+	_ = set("LOCALAPPDATA", filepath.Join(dir, "AppData", "Local"))
 }
 
 // The redirect is load-bearing: if it silently stops working on some platform,
