@@ -6,7 +6,7 @@ and versions are the git tags the [release workflow](.github/workflows/release.y
 Entries describe what changed for someone *using* taskr. Refactors and test work
 belong in the commit log, not here — unless they change behaviour.
 
-## [Unreleased]
+## [1.34.0] - 2026-08-19
 
 ### Added
 
