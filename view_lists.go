@@ -980,7 +980,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		// this is, where a bare "24.4" only said "a number".
 		// Right-aligned in the field so every score ends in the same column and
 		// the % signs line up; the field's trailing listColGap is the gap to Due.
-		line += padRight(padLeft(formatSequencePercent(sequenceScore(t)), cols.lastW-listColGap), cols.lastW)
+		line += padRight(padLeft(formatSequencePercent(m.rankedScore(t)), cols.lastW-listColGap), cols.lastW)
 	}
 	if cols.showDue {
 		// Right-aligned for the same reason: "2d" and "20-09-27" share a right

@@ -70,7 +70,7 @@ func TestPercentPreservesTheOrdering(t *testing.T) {
 	}
 	prev := 101
 	for i := range rows {
-		got := sequencePercent(sequenceScore(m.get(rows[i].ID)))
+		got := sequencePercent(m.rankedScore(m.get(rows[i].ID)))
 		if got > prev {
 			t.Errorf("row %d reads %d%% after a row reading %d%% — the scale reordered the list", i, got, prev)
 		}

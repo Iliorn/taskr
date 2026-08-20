@@ -32,7 +32,7 @@ func loadForCLI() (Repository, []todo.Todo, error) {
 		// Momentum reads recent activity; snapshot it so CLI output ranks
 		// the same way the TUI does after its cache refresh.
 		applyActivityHeat(computeActivityHeat(time.Now(), todoPtrs(todos)))
-		applyScoreMax(maxSequenceScore(todoPtrs(todos)))
+		applyScoreMax(maxRankedScore(todoPtrs(todos)))
 	}
 	return repo, todos, err
 }

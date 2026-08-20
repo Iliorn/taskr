@@ -184,8 +184,17 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		comp := func(v float64) string {
 			return strings.TrimSuffix(fmt.Sprintf("%.1f", v), ".0")
 		}
-		breakdown := fmt.Sprintf(tr("%s  (D %s · P %s · M %s · S %s · A %s)"),
-			formatSequencePercent(sc.Total),
+		// The percentage is the *ranked* score, the one the list column and the
+		// row's position agree on. When a subtask or waiting work lifted it, the
+		// components below are its own and no longer add up to it — the ↑ says
+		// so, and `w` spells out where the lift came from.
+		ranked := m.rankedScore(t)
+		lift := ""
+		if ranked > sc.Total+0.0005 {
+			lift = "↑ "
+		}
+		breakdown := fmt.Sprintf(tr("%s  (%sD %s · P %s · M %s · S %s · A %s)"),
+			formatSequencePercent(ranked), lift,
 			comp(sc.Urgency), comp(sc.Importance), comp(sc.Momentum), comp(sc.Size), comp(sc.Age))
 		roField(tr("Score:"), plainVal, breakdown)
 	}

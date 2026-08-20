@@ -651,3 +651,54 @@ func TestSearchMatchesNotes(t *testing.T) {
 		t.Errorf("title fuzzy matching regressed: %v", got)
 	}
 }
+
+// A lifted blocker must also *show* the score it was lifted to. The ranking
+// already put it above the urgent task waiting on it; printing its own low
+// score beside that position made the row look misplaced rather than promoted,
+// which is the one thing a visible score column is there to prevent.
+func TestRankedScoreShowsWhatTheSortRankedBy(t *testing.T) {
+	now := time.Now()
+	blocker := mkTodo("a", "get sign-off", todo.Pending)
+	urgent := mkTodo("b", "deploy release", todo.Pending)
+	urgent.DueDate = now
+	urgent.Priority = todo.PriorityHigh
+	urgent.Dependencies = []string{"a"}
+
+	all := todoPtrs([]todo.Todo{blocker, urgent})
+	rollup := rankScores(all)
+	shown := rankScoreOf(&blocker, rollup, sequenceScore)
+	if shown < sequenceScore(&urgent) {
+		t.Errorf("blocker shows %.2f, below the %.2f it was lifted to", shown, sequenceScore(&urgent))
+	}
+	// And the scale it is measured against has room for it, so the top of the
+	// list is 100% rather than several rows clamped there.
+	if max := maxRankedScore(all); max < shown {
+		t.Errorf("field maximum %.2f is below the highest ranked score %.2f", max, shown)
+	}
+}
+
+// The Score column must never read lower than the row beneath it: the column
+// and the position are two views of one number, and the sequence sort is the
+// only thing that orders the list.
+func TestScoreColumnNeverContradictsThePosition(t *testing.T) {
+	blocker := todo.New("get sign-off")
+	blocker.Size = todo.SizeLarge
+	urgent := todo.New("deploy release")
+	urgent.Priority = todo.PriorityHigh
+	urgent.DueDate = time.Now()
+	urgent.Dependencies = []string{blocker.ID}
+	filler := todo.New("write the docs")
+
+	m := modelWithTasks(t, blocker, urgent, filler)
+	m.taskSort = taskSortSequence
+	m.refreshCaches()
+
+	prev := 101
+	for i, row := range m.cache.active {
+		got := sequencePercent(m.rankedScore(m.get(row.ID)))
+		if got > prev {
+			t.Errorf("row %d (%q) reads %d%% under a row reading %d%%", i, row.Title, got, prev)
+		}
+		prev = got
+	}
+}

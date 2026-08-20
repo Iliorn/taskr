@@ -129,11 +129,7 @@ func seqRanking(todos []*todo.Todo, score func(*todo.Todo) float64) ([]todo.Todo
 	sortTodosBySequenceWithRollupBy(rows, rollup, score)
 	eff := make(map[string]float64, len(rows))
 	for i := range rows {
-		s := score(&rows[i])
-		if boost, ok := rollup[rows[i].ID]; ok && boost > s {
-			s = boost
-		}
-		eff[rows[i].ID] = s
+		eff[rows[i].ID] = rankScoreOf(&rows[i], rollup, score)
 	}
 	return rows, eff
 }
@@ -320,7 +316,8 @@ func explainSequenceAt(now time.Time, t *todo.Todo, all []*todo.Todo, b biases, 
 	score := func(x *todo.Todo) float64 { return sequenceComponentsAt(now, x, b, heat).Total }
 	rows, eff := seqRanking(all, score)
 	e.Of = len(rows)
-	e.FieldMax = maxSequenceScoreWith(all, score)
+	// eff already carries the lifts, so the overlay's 100% is the list's 100%.
+	e.FieldMax = maxRankedScoreWith(all, eff, score)
 	for i := range rows {
 		if rows[i].ID != t.ID {
 			continue

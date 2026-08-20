@@ -359,13 +359,7 @@ func sortTodoPtrsBySequence(todos []*todo.Todo, rollup map[string]float64, score
 	}
 	rows := make([]scored, len(todos))
 	for i, t := range todos {
-		s := score(t)
-		if rollup != nil {
-			if boost, ok := rollup[t.ID]; ok && boost > s {
-				s = boost
-			}
-		}
-		rows[i] = scored{t, s}
+		rows[i] = scored{t, rankScoreOf(t, rollup, score)}
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].score != rows[j].score {

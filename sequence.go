@@ -606,12 +606,31 @@ func maxSequenceScore(todos []*todo.Todo) float64 {
 // globals. One definition of "the field" keeps the overlay's percentage and the
 // list column's from disagreeing about the same task.
 func maxSequenceScoreWith(todos []*todo.Todo, score func(*todo.Todo) float64) float64 {
+	return maxRankedScoreWith(todos, nil, score)
+}
+
+// maxRankedScore is the top of the field with lifts counted — the highest score
+// anything is actually ranked by. That is the 100% mark because the ranked
+// score is what the list prints: measuring it against the best *raw* score lets
+// a blocker carrying a fan-out bonus land above the top of the scale, where the
+// clamp would print 100% for it and for the task it inherited from, hiding a
+// difference the ranking still makes.
+func maxRankedScore(todos []*todo.Todo) float64 {
+	return maxRankedScoreWith(todos, rankScores(todos), sequenceScore)
+}
+
+// maxRankedScoreWith is the parameterised form: the caller supplies the lift map
+// (nil for the raw field) and the score function, so the explain view can
+// establish the same 100% mark against its own clock and biases as the globals
+// give the list. One definition of "the field" keeps the overlay's percentage
+// and the list column's from disagreeing about the same task.
+func maxRankedScoreWith(todos []*todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) float64 {
 	max := 0.0
 	for _, t := range todos {
 		if t.Deleted || t.Status != todo.Pending {
 			continue
 		}
-		if s := score(t); s > max {
+		if s := rankScoreOf(t, rollup, score); s > max {
 			max = s
 		}
 	}

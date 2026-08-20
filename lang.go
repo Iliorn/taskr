@@ -689,9 +689,10 @@ var daTranslations = map[string]string{
 	"recurring task":                "gentagende opgave",
 	"subtasks done / total":         "delopgaver færdige / i alt",
 	"subtasks collapsed / expanded": "delopgaver foldet sammen / ud",
-	"blocked — waiting on an unfinished dependency":             "blokeret — venter på en uafsluttet afhængighed",
-	"blocked — waiting on an unfinished dependency (ST column)": "blokeret — venter på en uafsluttet afhængighed (ST-kolonnen)",
-	"others depend on this — finishing it unblocks them":        "andre afhænger af denne — at afslutte den frigør dem",
+	"score lifted by a subtask or by work waiting on it (detail pane)": "score løftet af en delopgave eller af arbejde der venter på den (detaljeruden)",
+	"blocked — waiting on an unfinished dependency":                    "blokeret — venter på en uafsluttet afhængighed",
+	"blocked — waiting on an unfinished dependency (ST column)":        "blokeret — venter på en uafsluttet afhængighed (ST-kolonnen)",
+	"others depend on this — finishing it unblocks them":               "andre afhænger af denne — at afslutte den frigør dem",
 
 	// ── Help: the status line ──
 	"Status line": "Statuslinje",
@@ -710,7 +711,7 @@ var daTranslations = map[string]string{
 	"ID:":        "ID:",
 	"Sequence: ": "Sekvens: ",
 	" ◉":         " ◉",
-	"%s  (D %s · P %s · M %s · S %s · A %s)": "%s  (D %s · P %s · M %s · S %s · A %s)",
+	"%s  (%sD %s · P %s · M %s · S %s · A %s)": "%s  (%sD %s · P %s · M %s · S %s · A %s)",
 
 	// ── Sequencer personalities (names and taglines, sequence.go) ──
 	"Drill Sergeant":    "Sergent",
@@ -1295,9 +1296,10 @@ var deTranslations = map[string]string{
 	"recurring task":                "wiederkehrende Aufgabe",
 	"subtasks done / total":         "Teilaufgaben fertig / gesamt",
 	"subtasks collapsed / expanded": "Teilaufgaben ein-/ausgeklappt",
-	"blocked — waiting on an unfinished dependency":             "blockiert — wartet auf offene Abhängigkeit",
-	"blocked — waiting on an unfinished dependency (ST column)": "blockiert — wartet auf offene Abhängigkeit (Spalte ST)",
-	"others depend on this — finishing it unblocks them":        "andere hängen daran — Abschluss gibt sie frei",
+	"score lifted by a subtask or by work waiting on it (detail pane)": "Score angehoben durch eine Teilaufgabe oder wartende Arbeit (Detailbereich)",
+	"blocked — waiting on an unfinished dependency":                    "blockiert — wartet auf offene Abhängigkeit",
+	"blocked — waiting on an unfinished dependency (ST column)":        "blockiert — wartet auf offene Abhängigkeit (Spalte ST)",
+	"others depend on this — finishing it unblocks them":               "andere hängen daran — Abschluss gibt sie frei",
 
 	// ── Help: the status line ──
 	"Status line": "Statuszeile",
@@ -1316,7 +1318,7 @@ var deTranslations = map[string]string{
 	"ID:":        "ID:",
 	"Sequence: ": "Sequenz: ",
 	" ◉":         " ◉",
-	"%s  (D %s · P %s · M %s · S %s · A %s)": "%s  (F %s · P %s · M %s · G %s · A %s)",
+	"%s  (%sD %s · P %s · M %s · S %s · A %s)": "%s  (%sF %s · P %s · M %s · G %s · A %s)",
 
 	// ── Sequencer personalities (names and taglines, sequence.go) ──
 	"Drill Sergeant":    "Ausbilder",

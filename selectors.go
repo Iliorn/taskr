@@ -203,7 +203,45 @@ func todoMatchesFocus(t todo.Todo, focus bool) bool {
 // descendants for ranking only — the displayed score stays the parent's own —
 // so a high-priority subtask pulls its parent up rather than hiding beneath a
 // calmer one.
+// rankScores returns the lift map the sequence ranking sorts by: per task, the
+// best score found among its subtasks and among the pending work waiting on it.
+// It is the two rollups in the order they compose — a dependent's own lift has
+// to be settled before it can be passed on to what blocks it.
+//
+// The map holds candidates, not final scores: a task appears only when
+// something lifted it, and the value is applied with rankScoreOf's max.
+func rankScores(todos []*todo.Todo) map[string]float64 {
+	return dependencyScoreRollup(todos, descendantScoreRollup(todos))
+}
+
+// rankScoreOf is the score the sequencer ranks t by, and — since a rank the
+// list cannot explain reads as a bug — the score every surface shows next to
+// its position. A task that unblocks urgent work is doing that work's job:
+// ranking it high while printing its own low score put the two halves of one
+// row at odds, and the row looked misplaced rather than promoted.
+func rankScoreOf(t *todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) float64 {
+	s := score(t)
+	if rollup != nil {
+		if lift, ok := rollup[t.ID]; ok && lift > s {
+			return lift
+		}
+	}
+	return s
+}
+
 func selectActiveDone(todos []*todo.Todo, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
+	var rollup map[string]float64
+	if sortMode == taskSortSequence {
+		rollup = rankScores(todos)
+	}
+	return selectActiveDoneRanked(todos, rollup, search, focus, sortMode, historyMode)
+}
+
+// selectActiveDoneRanked takes the lift map from its caller. The model computes
+// it once per data change and caches it: it depends on the task set, not on the
+// filter, so recomputing it inside the per-keystroke search path walked every
+// task twice for an answer that had not changed.
+func selectActiveDoneRanked(todos []*todo.Todo, rollup map[string]float64, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
 	match := compileSearch(search)
 	// Split and sort as pointers, then materialize once at the end. The caches
 	// hold values — they outlive this call and are read while the store mutates
@@ -225,8 +263,6 @@ func selectActiveDone(todos []*todo.Todo, search string, focus bool, sortMode ta
 	// since the active modes (score, size) carry no meaning once tasks close.
 	switch sortMode {
 	case taskSortSequence:
-		rollup := descendantScoreRollup(todos)
-		rollup = dependencyScoreRollup(todos, rollup)
 		sortTodoPtrsBySequence(activeP, rollup, sequenceScoreNow())
 	case taskSortDueDate:
 		sortTodoPtrs(activeP, lessByDueDate)

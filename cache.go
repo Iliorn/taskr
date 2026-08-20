@@ -31,6 +31,7 @@ type cacheState struct {
 	projectTasks  map[string][]todo.Todo
 	tagLastUsed   map[string]time.Time   // tag → latest ModifiedAt of a task using it
 	subProgress   map[string]subProgress // parentID → subtask done/total; see refreshSubtaskProgress
+	rankScore     map[string]float64     // taskID → the lift the sequence ranking sorts (and shows) it by; see rankScores
 	projLastUsed  map[string]time.Time   // project → latest ModifiedAt of a task in it
 	tagRender     map[string]string
 	taskTagRender map[string]string
@@ -58,10 +59,14 @@ func (m *model) refreshCaches() {
 	// Momentum reads recent activity; refresh the snapshot before anything
 	// downstream (selectActiveDone, rollups) computes scores from it.
 	applyActivityHeat(computeActivityHeat(m.frameTime, all))
+	// The lift depends on the task set, not on the filter, so it is computed
+	// once here: the ranking sorts by it, every row prints it, and the filter
+	// path below reuses it instead of walking the task set twice per keystroke.
+	m.cache.rankScore = rankScores(all)
 	// The percentage scale is relative to the current field, so its 100% mark
 	// is refreshed in the same step — and after the heat, since the scores it
 	// takes the maximum of read momentum from it.
-	applyScoreMax(maxSequenceScore(all))
+	applyScoreMax(maxRankedScoreWith(all, m.cache.rankScore, sequenceScore))
 
 	for k := range m.cache.overdueSet {
 		delete(m.cache.overdueSet, k)
@@ -74,7 +79,7 @@ func (m *model) refreshCaches() {
 
 	m.rebuildDependencySets(all)
 
-	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
+	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 
 	m.cache.tags = computeTagStats(all)
 	// Recency feeds the Tags-tab recent sort, so refresh it before the sorted
@@ -215,6 +220,13 @@ func (m *model) refreshTaskColMetrics() {
 	m.cache.activeColProjectMax = projectMax
 }
 
+// rankedScore is the score shown beside a task's position: its own, lifted by
+// whatever it unblocks or contains, exactly as the sequence sort ranked it.
+// Reads the cached lift map, so it is a map lookup per row rather than a walk.
+func (m model) rankedScore(t *todo.Todo) float64 {
+	return rankScoreOf(t, m.cache.rankScore, sequenceScore)
+}
+
 // refreshFilteredCaches rebuilds only the views that depend on the search/focus
 // filter: the active/done split and the tag-render cache derived from it. The
 // data-derived caches (overdue set, tag stats, sorted tags, per-project task
@@ -223,7 +235,7 @@ func (m *model) refreshTaskColMetrics() {
 // entire task set on every keypress for no reason.
 func (m *model) refreshFilteredCaches() {
 	all := m.allTodos()
-	m.cache.active, m.cache.done = selectActiveDone(all, m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
+	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
 	m.cache.boardCols = buildBoardColumns(m.cache.active, m.cache.done)
