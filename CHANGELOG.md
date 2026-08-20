@@ -6,6 +6,27 @@ and versions are the git tags the [release workflow](.github/workflows/release.y
 Entries describe what changed for someone *using* taskr. Refactors and test work
 belong in the commit log, not here — unless they change behaviour.
 
+## [Unreleased]
+
+## [1.34.1] - 2026-08-20
+
+### Changed
+
+- **A lifted task now shows the score it was lifted to.** A task that unblocks
+  urgent work is ranked by that work's score — that is what puts a prerequisite
+  directly above the thing waiting on it — but the Score column kept printing
+  the task's own low number. The row looked misplaced rather than promoted, and
+  the column contradicted the only thing ordering the list. Both halves of the
+  row now read the same number, in the list and in the detail pane, where a `↑`
+  marks a score its own five components no longer add up to (`w` says where the
+  lift came from). The same applies to a parent lifted by an urgent subtask.
+
+- **100% means the top of the list.** The percentage scale measured against the
+  best *raw* score, so a blocker carrying the fan-out bonus could rank past the
+  top of the scale — and it and the task it inherited from both printed 100%,
+  hiding a difference the ranking still made. The scale now tops out at the
+  highest ranked score, and the overlay's 100% is the list's 100%.
+
 ## [1.34.0] - 2026-08-19
 
 ### Added
@@ -36,21 +57,6 @@ belong in the commit log, not here — unless they change behaviour.
   added on the next save. Since self-update and sync make mixed versions a
   normal part of upgrading two machines, taskr now refuses, names both schema
   versions, and points at the pre-migration `.bak`.
-
-- **A lifted task now shows the score it was lifted to.** A task that unblocks
-  urgent work is ranked by that work's score — that is what puts a prerequisite
-  directly above the thing waiting on it — but the Score column kept printing
-  the task's own low number. The row looked misplaced rather than promoted, and
-  the column contradicted the only thing ordering the list. Both halves of the
-  row now read the same number, in the list and in the detail pane, where a `↑`
-  marks a score its own five components no longer add up to (`w` says where the
-  lift came from). The same applies to a parent lifted by an urgent subtask.
-
-- **100% means the top of the list.** The percentage scale measured against the
-  best *raw* score, so a blocker carrying the fan-out bonus could rank past the
-  top of the scale — and it and the task it inherited from both printed 100%,
-  hiding a difference the ranking still made. The scale now tops out at the
-  highest ranked score, and the overlay's 100% is the list's 100%.
 
 - **Subtasks fold with `+`/`-` instead of a triangle.** A row with hidden
   subtasks carried a `▸`, one cell after the `▶` that marks the row you are on
