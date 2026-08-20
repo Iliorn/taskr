@@ -191,22 +191,17 @@ func TestActiveDroppedEditsMostRecentWins(t *testing.T) {
 //
 // These tests go through the real save path via repo.Save so the monotonic
 // ModifiedAt clamp (StampModified) is exercised exactly as production code
-// uses it. They use the shared global db (opened lazily in TestMain's temp
-// HOME) — no manual close/reset: the db singleton lives for the whole test
-// binary, and TestMain's temp dir cleanup handles the file. Each test uses
-// a per-test log path to avoid cross-test interference.
+// uses it. They reach the store through testStore, which opens the singleton
+// if the previous test released it, and share TestMain's temp HOME. Each test
+// uses a per-test log path to avoid cross-test interference.
 
 func TestReapplyDroppedEditBumpsModifiedAt(t *testing.T) {
-	// Ensure the global store is open (openStore is a sync.Once; safe to call
-	// repeatedly — subsequent calls are no-ops).
-	if err := openStore(); err != nil {
-		t.Fatalf("openStore: %v", err)
-	}
+	store := testStore(t)
 
 	base := time.Now().Add(-time.Hour)
 	task := todo.New("bumped-modifiedat task " + t.Name())
 	task.ModifiedAt = base
-	saveTodos(t, db, []todo.Todo{task})
+	saveTodos(t, store, []todo.Todo{task})
 
 	// Log entry carries a different title and priority.
 	dropped := task
@@ -227,7 +222,7 @@ func TestReapplyDroppedEditBumpsModifiedAt(t *testing.T) {
 	}
 
 	// Load and verify via the global store.
-	all, err := loadTodosForSync(db)
+	all, err := loadTodosForSync(store)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -254,12 +249,10 @@ func TestReapplyDroppedEditBumpsModifiedAt(t *testing.T) {
 }
 
 func TestReapplyDroppedEditWritesRecoveryMarker(t *testing.T) {
-	if err := openStore(); err != nil {
-		t.Fatalf("openStore: %v", err)
-	}
+	store := testStore(t)
 
 	task := todo.New("recovery-marker task " + t.Name())
-	saveTodos(t, db, []todo.Todo{task})
+	saveTodos(t, store, []todo.Todo{task})
 
 	dropped := task
 	dropped.Title = "Dropped version for marker test"

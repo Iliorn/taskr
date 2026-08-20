@@ -44,7 +44,6 @@ func TestDiagnosticsOnAFreshInstall(t *testing.T) {
 
 func TestDiagnosticsReportsAHealthyStore(t *testing.T) {
 	setTestHome(t, t.TempDir())
-	releaseStoreSingleton(t)
 	repo := newSQLiteRepo()
 	if _, err := repo.Load(); err != nil {
 		t.Fatalf("open store: %v", err)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -51,6 +52,9 @@ func TestMain(m *testing.M) {
 	}
 	os.Unsetenv("TASKR_HOME")
 	code := m.Run()
+	// The last test to open the store leaves it open; on Windows that is
+	// enough to keep the temp home from being removed.
+	closeStoreSingleton()
 	os.RemoveAll(tmp)
 	os.Exit(code)
 }
@@ -76,6 +80,9 @@ func setTestHome(t *testing.T, dir string) {
 	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "TASKR_HOME"} {
 		t.Setenv(v, "")
 	}
+	// Redirecting the paths is only half of it: the store the paths lead to is
+	// a singleton that outlives any one test.
+	releaseStoreSingleton(t)
 }
 
 // setWindowsAppData points the two variables paths.go consults on Windows at
@@ -87,20 +94,43 @@ func setWindowsAppData(set func(string, string) error, dir string) {
 	_ = set("LOCALAPPDATA", filepath.Join(dir, "AppData", "Local"))
 }
 
-// releaseStoreSingleton hands the process-wide database back at the end of a
-// test. openStore keeps one *sql.DB for the whole binary, and Windows refuses
-// to delete a file that is still open — so a test that opens the store inside
-// its own t.TempDir() fails in cleanup, on that platform only, with an
-// unlinkat error that says nothing about the test. Closing it also means the
-// next opener gets a store in *its* home rather than this one's.
+// releaseStoreSingleton gives a test the store to itself, at both ends.
+//
+// openStore keeps one *sql.DB for the whole binary behind a sync.Once, so
+// without this the first test to open it decides where every later test's
+// tasks live: a test that redirects its home and then loads tasks gets handed
+// the previous home's database, silently, and asserts against the wrong file.
+// Releasing on entry closes that; releasing again on exit means the next test
+// is not pinned to a directory that t.TempDir has since deleted — and on
+// Windows, which refuses to delete an open file, that cleanup is what fails
+// with an unlinkat error saying nothing about the test.
 func releaseStoreSingleton(t *testing.T) {
 	t.Helper()
-	t.Cleanup(func() {
-		if db != nil {
-			_ = db.Close()
-		}
-		db, dbErr, dbOnce = nil, nil, sync.Once{}
-	})
+	closeStoreSingleton()
+	t.Cleanup(closeStoreSingleton)
+}
+
+// closeStoreSingleton closes the process-wide database and puts openStore back
+// to "not opened yet", so the next caller opens one wherever the paths point
+// then.
+func closeStoreSingleton() {
+	if db != nil {
+		_ = db.Close()
+	}
+	db, dbErr, dbOnce = nil, nil, sync.Once{}
+}
+
+// testStore is how a test gets at the process-wide database: it opens it if
+// nobody has since the last release, and hands back the handle. Reading the
+// `db` global directly is only correct while something else has already opened
+// it — and now that setTestHome releases the singleton around every isolated
+// test, "already open" is not a property any test can assume.
+func testStore(t *testing.T) *sql.DB {
+	t.Helper()
+	if err := openStore(); err != nil {
+		t.Fatalf("openStore: %v", err)
+	}
+	return db
 }
 
 // The redirect is load-bearing: if it silently stops working on some platform,
@@ -165,5 +195,31 @@ func mustMkdirFor(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir for %s: %v", path, err)
+	}
+}
+
+// TestSetTestHomeGivesTheTestItsOwnStore pins the half of the isolation that is
+// easy to lose: redirecting the paths is not enough while the store those paths
+// lead to is a sync.Once that outlives the test. Without the release, the
+// handle below would still be the one opened against the shared home, and a
+// test asserting on "its" database would be reading someone else's.
+func TestSetTestHomeGivesTheTestItsOwnStore(t *testing.T) {
+	shared := testStore(t) // what an earlier test would have left open
+
+	home := t.TempDir()
+	setTestHome(t, home)
+
+	if err := shared.Ping(); err == nil {
+		t.Error("the previously opened store is still live after setTestHome")
+	}
+	own := testStore(t)
+	if own == shared {
+		t.Fatal("setTestHome handed back the store from the previous home")
+	}
+	if err := own.Ping(); err != nil {
+		t.Fatalf("the test's own store is not usable: %v", err)
+	}
+	if got := dbPath(); !strings.HasPrefix(got, home) {
+		t.Errorf("database at %q, want it inside the test's own home %q", got, home)
 	}
 }

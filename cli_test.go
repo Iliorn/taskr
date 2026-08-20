@@ -1308,7 +1308,7 @@ func TestCliUndoRestoreBeatsSlowClockTombstone(t *testing.T) {
 	if code := cliDelete([]string{got.ID[:8]}); code != 0 { // id ref → no confirm
 		t.Fatalf("delete: exit %d", code)
 	}
-	tombAt := tombstoneDeletedAt(db, got.ID)
+	tombAt := tombstoneDeletedAt(testStore(t), got.ID)
 	if !tombAt.After(future) {
 		t.Fatalf("precondition: tombstone deleted_at = %v, want clamped past modified_at %v", tombAt, future)
 	}

@@ -331,7 +331,7 @@ func TestCliImportStdinLargeSingleLine(t *testing.T) {
 	tomb.Deleted = true
 	tomb.DeletedAt = time.Now()
 	tomb.ModifiedAt = time.Now()
-	if _, _, err := mergeIntoStore(db, []todo.Todo{tomb}); err != nil {
+	if _, _, err := mergeIntoStore(testStore(t), []todo.Todo{tomb}); err != nil {
 		t.Fatalf("cleanup tombstone: %v", err)
 	}
 }
