@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // openFileDBPair opens two independent handles (separate connection pools,

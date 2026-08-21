@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // TestClosePendingSubtreeClosesDescendants covers the helper behind the

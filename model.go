@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/tasksync"
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"taskr/tasksync"
-	"taskr/todo"
 )
 
 // ── Types & constants ─────────────────────────────────────────────────────────

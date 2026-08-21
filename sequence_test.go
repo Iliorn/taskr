@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 func approxEq(a, b float64) bool {

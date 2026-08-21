@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // sequence.go is the sequencing engine: the rule that decides the "Sequence"
@@ -592,14 +592,6 @@ func sequenceScoreNow() func(*todo.Todo) float64 {
 var activeScoreMax float64
 
 func applyScoreMax(v float64) { activeScoreMax = v }
-
-// maxSequenceScore is the top of the current field. It reads each task's *own*
-// score, matching what the lists display — a parent lifted by a subtask ranks
-// on the rollup but still shows its own number, so normalizing against a rollup
-// maximum would make the percentages disagree with the scores they scale.
-func maxSequenceScore(todos []*todo.Todo) float64 {
-	return maxSequenceScoreWith(todos, sequenceScore)
-}
 
 // maxSequenceScoreWith is the parameterised form, so the explain view can
 // establish the same 100% mark against its own clock and biases instead of the

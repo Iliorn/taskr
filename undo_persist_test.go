@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // TestUndoPersistRoundTrip writes a delete entry to the sidecar and reads it

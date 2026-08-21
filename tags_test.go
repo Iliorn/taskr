@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // newTagModel returns a model with a known, hermetic set of todos (initialModel

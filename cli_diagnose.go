@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"strings"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // `taskr doctor` — diagnose this installation.

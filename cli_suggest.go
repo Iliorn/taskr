@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // taskr suggest mines the dependency structure the user already wrote down

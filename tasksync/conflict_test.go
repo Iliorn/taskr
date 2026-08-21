@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // conflict_test.go covers DroppedLocalEdits — the recovery net. When the merge

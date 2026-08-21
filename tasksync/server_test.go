@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // A client clock running far ahead must not own the merge: every

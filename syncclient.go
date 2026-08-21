@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"taskr/tasksync"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/tasksync"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // syncclient.go is the `taskr sync` side: it pushes the local task set (including

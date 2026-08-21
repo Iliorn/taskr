@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // Repository is the persistence port. The app depends on this contract rather

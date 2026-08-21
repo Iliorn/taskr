@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // view_board.go renders the Board tab: one kanban column per configured stage

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
 )
 
 // TestRenderTimelineSubSkipsBareEntries asserts the sub-line is skipped when

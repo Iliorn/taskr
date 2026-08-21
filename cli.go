@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // cli.go is the non-TUI surface: a small set of subcommands sharing the same

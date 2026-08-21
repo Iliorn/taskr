@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
-	"taskr/todo"
 )
 
 // smallterm_test.go is the guard for the class of bug that made taskr crash

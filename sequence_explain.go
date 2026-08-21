@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // sequence_explain.go answers the two questions the score column raises but

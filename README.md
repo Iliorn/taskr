@@ -56,8 +56,9 @@ go install github.com/Iliorn/taskr@latest
 ```
 
 Builds from source on any platform Go supports, including architectures the
-release page doesn't carry. The version then reports as `dev`, since the release
-workflow is what bakes a tag in.
+release page doesn't carry. It reports the module version it was installed at
+(`taskr --version`), because the Go toolchain stamps that into the binary even
+though no release tag was baked in with `-ldflags`.
 
 This is also the install with the strongest integrity guarantee. Go verifies
 every module against `sum.golang.org`, a public append-only transparency log —
@@ -73,6 +74,19 @@ what each check does and does not cover.
 curl -LO https://github.com/Iliorn/taskr/releases/latest/download/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
 ```
+
+That proves your download matches what the release published. To also prove
+*who* published it, verify the build provenance — every release binary is
+signed by the release workflow through Sigstore and recorded in a public
+transparency log:
+
+```sh
+gh attestation verify taskr --repo Iliorn/taskr
+```
+
+It names the workflow, commit and run that produced the file, and it is not
+something a stolen token can forge after the fact. See
+[SECURITY.md](SECURITY.md#the-update-path) for what each check covers.
 
 Release builds pass `-trimpath` with `CGO_ENABLED=0` and the Go version pinned
 in `go.mod`, so they are reproducible: check out the tag, run the same
@@ -253,6 +267,27 @@ taskr completion fish > ~/.config/fish/completions/taskr.fish
 taskr man > ~/.local/share/man/man1/taskr.1
 taskr help
 ```
+
+### The `--json` output is a contract
+
+`list`, `search`, `top`, `show`, `why`, `add`, `tags`, `projects`, `doctor`,
+`stats --format=json|waybar` and `export` all emit machine-readable JSON, and
+that shape is treated as an interface, not an implementation detail:
+
+- **Fields are not renamed or removed in a patch or minor release.** New fields
+  may be added at any time, so parse defensively — read the keys you need and
+  ignore the rest.
+- **A removal or rename waits for a major version** and is called out in the
+  [changelog](CHANGELOG.md).
+- The shape of every one of those commands is pinned by golden files
+  (`testdata/json_contract/`) that a test compares on every CI run, so a field
+  cannot disappear through a refactor without someone deciding to let it. The
+  test reports exactly which key paths appeared and vanished.
+
+Two shapes worth knowing about when you script against them: timestamps are
+always present (Go's `omitempty` does not apply to time values, so an unset
+date is the zero time `0001-01-01T00:00:00Z`, not a missing key), and `size` is
+absent for medium-sized tasks, which is the default.
 
 ### Shell completion and man page
 
@@ -467,8 +502,8 @@ conflicts surface as a brief toast, and the losing version is appended to
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the build/test commands and the
-conventions worth knowing before a pull request; [CLAUDE.md](CLAUDE.md) is the
-architecture tour. Notable changes are in [CHANGELOG.md](CHANGELOG.md).
+conventions worth knowing before a pull request;
+[ARCHITECTURE.md](ARCHITECTURE.md) is the architecture tour. Notable changes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

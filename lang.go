@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // ── Localization ──────────────────────────────────────────────────────────────

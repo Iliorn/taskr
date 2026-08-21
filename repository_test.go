@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // fakeRepo is an in-memory Repository for tests — no database, no filesystem.

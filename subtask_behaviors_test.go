@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // makeSub is a tiny constructor used across the subtask-behavior tests so the

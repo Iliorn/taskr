@@ -1,0 +1,16 @@
+boosted
+factors[].name
+factors[].raw
+factors[].reason
+factors[].weight
+factors[].weighted
+of
+rank
+ranked_on
+score
+shifts[].at
+shifts[].delta
+shifts[].rank
+shifts[].reason
+shifts[].score
+title

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // captureValidationWarnings swaps the package-level validationWarn for the

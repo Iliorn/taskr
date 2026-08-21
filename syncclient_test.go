@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"taskr/tasksync"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/tasksync"
+	"github.com/Iliorn/taskr/todo"
 )
 
 func TestSyncStateRoundTrip(t *testing.T) {
@@ -30,6 +30,7 @@ func TestSyncStateRoundTrip(t *testing.T) {
 }
 
 func TestReadSyncStateAbsent(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if err := os.Remove(syncStatePath()); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("remove: %v", err)
 	}
@@ -43,6 +44,7 @@ func TestReadSyncStateAbsent(t *testing.T) {
 }
 
 func TestPrintSyncStatus(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	// No state → "never".
 	if err := os.Remove(syncStatePath()); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("remove: %v", err)
@@ -190,6 +192,7 @@ func TestDroppedLocalEditsBaseline(t *testing.T) {
 // flags, never the TASKR_SYNC_URL/TOKEN env overlay — a one-off env var must
 // not get baked into sync.json where it would silently outlive the shell.
 func TestSyncSaveIgnoresEnvOverlay(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	t.Setenv("TASKR_SYNC_URL", "http://env-only:1")
 	t.Setenv("TASKR_SYNC_TOKEN", "env-only-token")
 	t.Cleanup(func() { _ = os.Remove(syncConfigPath()) })
@@ -270,6 +273,7 @@ func TestClockSkewWarning(t *testing.T) {
 // has never synced must not (first-sync onboarding holds nothing the fleet
 // ever deleted).
 func TestStaleSyncGuard(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	t.Cleanup(func() { _ = os.Remove(syncStatePath()) })
 	now := time.Now()
 
@@ -306,7 +310,13 @@ func TestStaleSyncGuard(t *testing.T) {
 // exits 2 before touching the network; with the flag it proceeds (and fails on
 // the unreachable test URL with exit 1, proving it got past the guard).
 func TestCLISyncRefusesStale(t *testing.T) {
-	t.Cleanup(func() { _ = os.Remove(syncStatePath()) })
+	setTestHome(t, t.TempDir())
+	// Only the data directory is created eagerly (paths.go); a writer of the
+	// state directory has to make it, which is what writeSyncState does before
+	// it writes this same file.
+	if _, err := ensureDir(pathState); err != nil {
+		t.Fatalf("ensure state dir: %v", err)
+	}
 	old := syncState{LastSync: time.Now().Add(-staleSyncThreshold - 24*time.Hour)}
 	b, _ := json.Marshal(old)
 	if err := os.WriteFile(syncStatePath(), b, 0600); err != nil {

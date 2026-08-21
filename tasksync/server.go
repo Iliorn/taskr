@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // Store is the doorway the sync engine needs into task storage — the only

@@ -12,7 +12,7 @@ import (
 // Scripted flows for the Settings tab: the four inline sync editors and the
 // preference toggles.
 //
-// These are modals, and CLAUDE.md asks for a flow per modal for the usual
+// These are modals, and ARCHITECTURE.md asks for a flow per modal for the usual
 // reason — each one has to write config, reset the mode, and leave the shared
 // text input in a state the *next* modal can use. The sync pair carries an
 // extra obligation the others do not: it holds the bearer token, which

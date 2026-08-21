@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"taskr/todo"
 )
 
 // ── Detail pane ───────────────────────────────────────────────────────────────

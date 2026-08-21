@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 func TestComputeLayout(t *testing.T) {

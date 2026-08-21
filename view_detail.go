@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // joinColumns merges two pre-rendered column streams into one block. Each left

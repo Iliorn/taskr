@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"taskr/tasksync"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/tasksync"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // defaultServerListen is the bind address used when none is configured —

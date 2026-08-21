@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // On a terminal too short to show the whole overlay, the last section ("Date

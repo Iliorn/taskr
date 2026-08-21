@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // cli_review_test.go covers the flags a backlog review needs — the ones added

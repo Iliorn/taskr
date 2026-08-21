@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"taskr/tasksync"
+	"github.com/Iliorn/taskr/tasksync"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"

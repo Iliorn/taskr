@@ -8,6 +8,33 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Added
+
+- **Release binaries now carry build provenance.** Every published binary is
+  signed by the release workflow through Sigstore and recorded in a public
+  transparency log, so a download can be traced to the workflow, commit and run
+  that produced it — not just to bytes that match a checksum published by the
+  same account. Verify with `gh attestation verify taskr --repo Iliorn/taskr`.
+  The in-app updater still checks `SHA256SUMS` only; [SECURITY.md](SECURITY.md)
+  says what each check does and does not cover.
+
+- **The `--json` output is documented as a contract.** Fields will not be
+  renamed or removed in a patch or minor release, only added, and the exact
+  shape of every JSON-emitting command is now pinned by golden files that CI
+  compares on each run — so a field cannot vanish through a refactor without
+  someone deciding to let it go. See the README section for the two shapes
+  worth knowing when parsing (timestamps are always present; `size` is absent
+  for medium tasks).
+
+### Fixed
+
+- **`go install github.com/Iliorn/taskr@latest` works.** The README has
+  recommended it as the install with the strongest integrity guarantee, but the
+  module declared itself as bare `taskr`, so the command failed with a module
+  path mismatch for anyone who tried it. The module path now matches the
+  repository. A binary installed this way reports the version it was installed
+  at, which the README previously said would read as `dev`.
+
 ## [1.34.1] - 2026-08-20
 
 ### Changed

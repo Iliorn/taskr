@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // loadForCLI opens the store with the user's persisted biases and stage list

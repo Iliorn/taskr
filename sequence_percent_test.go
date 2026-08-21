@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
 )
 
 // sequence_percent_test.go covers the display scale: the raw score is unbounded

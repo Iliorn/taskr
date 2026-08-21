@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // cli_sync_recover.go implements `taskr sync --recover` and `taskr sync

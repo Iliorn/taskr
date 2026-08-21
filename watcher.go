@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Iliorn/taskr/tasksync"
+	"github.com/Iliorn/taskr/todo"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fsnotify/fsnotify"
-	"taskr/tasksync"
-	"taskr/todo"
 )
 
 // watcher.go bridges fs events on ~/.taskr/ into Bubble Tea messages so the

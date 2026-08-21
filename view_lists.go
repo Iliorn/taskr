@@ -10,7 +10,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // ── Tags list ─────────────────────────────────────────────────────────────────

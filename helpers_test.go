@@ -13,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 func TestIsHomebrewCellarPath(t *testing.T) {

@@ -30,11 +30,21 @@ jobs:
       # one platform should dump every goroutine's stack while the job still
       # has time to report it. Without it a Windows stall is indistinguishable
       # from a runner that stopped making progress, and the job just sits there.
+      #
+      # -shuffle=on because the suite leans on process-wide state — the theme,
+      # the language, the keymap overlay, the board stages, the store
+      # singleton, the persisted undo stack — and a test that inherits one of
+      # those from whoever ran before it passes in source order and nowhere
+      # else. That is not hypothetical: turning this on found four tests
+      # asserting against another test's leftovers. The seed is printed on
+      # failure; reproduce with `go test -shuffle=<seed>`.
       - name: Test
-        run: go test -timeout 5m ./...
+        run: go test -shuffle=on -timeout 5m ./...
       # The app runs a sync hub, an SSE listener, a filesystem watcher and async
       # saves, so the goroutine surface is wide enough that a data race is a
       # question of when. The suite is race-clean today; -race keeps it that way.
+      # Deliberately *not* shuffled: when both jobs are red, the pair says which
+      # of the two — ordering or concurrency — actually broke.
       - name: Test (race)
         run: go test -race -timeout 10m ./...
       - name: Build
@@ -79,6 +89,67 @@ jobs:
             go test -run="$target" -fuzz="$target" -fuzztime=30s .
             echo "::endgroup::"
           done
+
+  # Dependency CVEs. Dependabot opens PRs when a newer version exists; that is
+  # a different question from "does a version we ship have a known
+  # vulnerability, and do we call it". govulncheck answers the second one, and
+  # it answers it about reachable code — the first run against this tree found
+  # a vulnerability in a required module that no taskr code path calls, which
+  # is exactly the distinction that keeps this from becoming noise to ignore.
+  # A pure-Go SQLite driver and an HTTP sync server are the parts where the
+  # difference stops being academic.
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  # Coverage floors, not a coverage target. The point is not to chase a number
+  # — it is that the three packages carry deliberately different risk, and a
+  # change that quietly drops one of them below where it has been sitting
+  # should have to say so out loud. tasksync and todo are the packages where a
+  # bug loses tasks rather than mis-renders them, which is why their floors are
+  # high; the root package carries the TUI and the CLI and sits lower on
+  # purpose. Raise a floor when the real number has moved up and stayed there.
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Per-package coverage floors
+        run: |
+          # pipefail so a test failure here is not swallowed by tee.
+          set -o pipefail
+          declare -A floor=(
+            ["github.com/Iliorn/taskr"]=78
+            ["github.com/Iliorn/taskr/tasksync"]=92
+            ["github.com/Iliorn/taskr/todo"]=96
+          )
+          go test -cover -timeout 5m ./... | tee /tmp/cover.txt
+          rc=0
+          for pkg in "${!floor[@]}"; do
+            pct=$(awk -v p="$pkg" '$2 == p { for (i = 1; i <= NF; i++) if ($i ~ /%$/) { sub(/%/, "", $i); print $i } }' /tmp/cover.txt)
+            if [ -z "$pct" ]; then
+              echo "::error::no coverage reported for $pkg"
+              rc=1
+              continue
+            fi
+            if awk -v got="$pct" -v want="${floor[$pkg]}" 'BEGIN { exit !(got < want) }'; then
+              echo "::error::$pkg coverage $pct% is below the ${floor[$pkg]}% floor"
+              rc=1
+            else
+              echo "$pkg: $pct% (floor ${floor[$pkg]}%)"
+            fi
+          done
+          exit $rc
 
   lint:
     runs-on: ubuntu-latest

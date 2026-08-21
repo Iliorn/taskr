@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // children_test.go covers the child collections — the comment fold and the

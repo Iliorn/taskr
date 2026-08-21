@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // TestNarrowNoWrap ensures no rendered line ever exceeds the terminal width,

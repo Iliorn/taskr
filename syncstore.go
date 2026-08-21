@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"taskr/tasksync"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/tasksync"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // syncstore.go is the one place a sync merge touches the database. Both sides

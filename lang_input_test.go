@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // lang_input_test.go pins the contract lang_input.go makes: on a translated

@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // resetCrashState clears the globals a guard sets, so one test's report is

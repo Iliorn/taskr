@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 func init() {

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // exportEnvelope is the versioned wrapper emitted by `taskr export`.

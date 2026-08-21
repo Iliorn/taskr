@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // captureStdout redirects os.Stdout for the duration of fn and returns what was
@@ -282,6 +282,7 @@ func TestStartTimerOnRunningTaskRotatesEntry(t *testing.T) {
 }
 
 func TestCliAddDependsLinksExistingTask(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"prereq task"}); code != 0 {
 		t.Fatalf("add prerequisite: exit %d", code)
 	}
@@ -309,6 +310,7 @@ func TestCliAddDependsLinksExistingTask(t *testing.T) {
 }
 
 func TestCliAddNoteAndComment(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	title := "atomic-note-comment-check"
 	if code := cliAdd([]string{title, "--note", "the freeform body", "--comment", "first log entry"}); code != 0 {
 		t.Fatalf("add with --note/--comment: exit %d", code)
@@ -330,6 +332,7 @@ func TestCliAddNoteAndComment(t *testing.T) {
 }
 
 func TestCliAddQuietIDPrintsOnlyID(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	out := captureStdout(t, func() {
 		if code := cliAdd([]string{"quiet-id-check", "--quiet-id"}); code != 0 {
 			t.Fatalf("add --quiet-id: exit %d", code)
@@ -356,6 +359,7 @@ func TestCliAddQuietIDPrintsOnlyID(t *testing.T) {
 // whose matches are all done must say so instead of a bare "(no tasks)" —
 // otherwise a finished project is indistinguishable from a typo'd filter.
 func TestCliDoneShortCommentAndListHintsHiddenDone(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	const project = "done-hint-check"
 	var id string
 	out := captureStdout(t, func() {
@@ -430,6 +434,7 @@ func TestPrintSyncStatusReportsServerRole(t *testing.T) {
 }
 
 func TestCliAddJSONEmitsCreatedTask(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	out := captureStdout(t, func() {
 		if code := cliAdd([]string{"json-add-check", "--json"}); code != 0 {
 			t.Fatalf("add --json: exit %d", code)
@@ -465,6 +470,7 @@ func TestReadTitlesFromStdin(t *testing.T) {
 }
 
 func TestCliAddBatchFromStdinSharesFlags(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	// Redirect stdin so `add -` reads our lines; shared flags must land on every
 	// created task, and all should be written (one save).
 	orig := os.Stdin
@@ -508,6 +514,7 @@ func TestCliAddBatchFromStdinSharesFlags(t *testing.T) {
 }
 
 func TestCliAddBatchRejectsStart(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	orig := os.Stdin
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -528,6 +535,7 @@ func TestCliAddBatchRejectsStart(t *testing.T) {
 }
 
 func TestCliAddDependsUnknownRefFails(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"orphan", "--depends", "no-such-task-zzz"}); code != 2 {
 		t.Errorf("want exit 2 for unknown --depends ref, got %d", code)
 	}
@@ -547,6 +555,7 @@ func findByTitle(t *testing.T, todos []todo.Todo, title string) *todo.Todo {
 }
 
 func TestCliAddDependsCaretChainsOnLastAdded(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"caret-root"}); code != 0 {
 		t.Fatalf("add root: exit %d", code)
 	}
@@ -565,6 +574,7 @@ func TestCliAddDependsCaretChainsOnLastAdded(t *testing.T) {
 }
 
 func TestCliAddDependsCaretWithoutHistoryFails(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if err := os.Remove(lastAddedPath()); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("clear last-added: %v", err)
 	}
@@ -574,6 +584,7 @@ func TestCliAddDependsCaretWithoutHistoryFails(t *testing.T) {
 }
 
 func TestCliAddBatchChain(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	orig := os.Stdin
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -614,12 +625,14 @@ func TestCliAddBatchChain(t *testing.T) {
 }
 
 func TestCliAddChainRequiresBatch(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"solo", "--chain"}); code != 2 {
 		t.Errorf("want exit 2 for --chain without batch stdin, got %d", code)
 	}
 }
 
 func TestCliDoneStampsSeqRank(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"seq-rank-probe", "--p", "h", "--due", "today"}); code != 0 {
 		t.Fatalf("add: exit %d", code)
 	}
@@ -641,6 +654,7 @@ func TestCliDoneStampsSeqRank(t *testing.T) {
 }
 
 func TestCliEditAddDepLinksAndRefusesLoop(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"edit-dep-base"}); code != 0 {
 		t.Fatalf("add base: exit %d", code)
 	}
@@ -676,6 +690,7 @@ func TestCliEditAddDepLinksAndRefusesLoop(t *testing.T) {
 }
 
 func TestCliEditRemoveDep(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"rmdep-base"}); code != 0 {
 		t.Fatalf("add base: exit %d", code)
 	}
@@ -1114,6 +1129,7 @@ func TestFindTaskByRefKindReportsMatchPath(t *testing.T) {
 // `taskr add` parses the same quick-add tokens as the TUI, so a line is
 // copy-pasteable between them. Backlog item 52089090.
 func TestCliAddParsesQuickAddTokens(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"Buy milk #shopping #errand due:friday p:high s:l @home"}); code != 0 {
 		t.Fatalf("add with tokens: exit %d", code)
 	}
@@ -1150,6 +1166,7 @@ func TestCliAddParsesQuickAddTokens(t *testing.T) {
 }
 
 func TestCliEditParentDuePropagatesAndClearsSubtree(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"CLI due propagation parent"}); code != 0 {
 		t.Fatalf("add parent: exit %d", code)
 	}
@@ -1203,6 +1220,7 @@ func TestCliEditParentDuePropagatesAndClearsSubtree(t *testing.T) {
 
 // An explicit flag overrides the matching token in the title.
 func TestCliAddFlagOverridesToken(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"Flag wins p:low", "-p", "high"}); code != 0 {
 		t.Fatalf("add: exit %d", code)
 	}
@@ -1222,6 +1240,7 @@ func TestCliAddFlagOverridesToken(t *testing.T) {
 // A token-free title must not clobber a --like clone: the Medium defaults from
 // parseQuickAdd only apply when a p:/s: token was actually present.
 func TestCliAddLikeNotClobberedByTokenlessTitle(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"Source task p:high s:l"}); code != 0 {
 		t.Fatalf("add source: exit %d", code)
 	}
@@ -1244,6 +1263,7 @@ func TestCliAddLikeNotClobberedByTokenlessTitle(t *testing.T) {
 // `taskr undelete <ref>` restores a soft-deleted task from the tombstones.
 // Backlog item e80b30ed (pivoted from a redo stack to undelete-by-ref).
 func TestCliUndeleteRestoresTask(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"Undelete restore target"}); code != 0 {
 		t.Fatalf("add: exit %d", code)
 	}
@@ -1288,6 +1308,7 @@ func TestCliUndeleteRestoresTask(t *testing.T) {
 // The slow clock is simulated by pushing the task's ModifiedAt into the future
 // before deleting, so the real clock is "behind" it for the whole test.
 func TestCliUndoRestoreBeatsSlowClockTombstone(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"Undo tie target"}); code != 0 {
 		t.Fatalf("add: exit %d", code)
 	}
@@ -1329,6 +1350,7 @@ func TestCliUndoRestoreBeatsSlowClockTombstone(t *testing.T) {
 
 // `taskr undelete --list` browses the deleted tasks.
 func TestCliUndeleteListShowsDeleted(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"Undelete list target"}); code != 0 {
 		t.Fatalf("add: exit %d", code)
 	}
@@ -1356,6 +1378,7 @@ func TestCliUndeleteListShowsDeleted(t *testing.T) {
 // Deleting a parent cascades to its subtasks; undelete brings the whole subtree
 // back with the parent link intact.
 func TestCliUndeleteRestoresSubtree(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"Undelete parent target"}); code != 0 {
 		t.Fatalf("add parent: exit %d", code)
 	}
@@ -1400,6 +1423,7 @@ func TestCliUndeleteRestoresSubtree(t *testing.T) {
 // TestCliAddDependsConfirmationOutput verifies that a successful add with
 // --depends prints a "blocked on" line so the user can see the link took effect.
 func TestCliAddDependsConfirmationOutput(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"dep-confirm-prereq"}); code != 0 {
 		t.Fatalf("add prereq: exit %d", code)
 	}
@@ -1422,6 +1446,7 @@ func TestCliAddDependsConfirmationOutput(t *testing.T) {
 // TestCliAddDependsUnknownRefExitsNonZero verifies the command fails loudly
 // (non-zero exit, no task created) when --depends names a ref that doesn't exist.
 func TestCliAddDependsUnknownRefExitsNonZero(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	countBefore := func() int {
 		_, todos, _ := loadForCLI()
 		return len(todos)
@@ -1440,6 +1465,7 @@ func TestCliAddDependsUnknownRefExitsNonZero(t *testing.T) {
 // TestCliAddDependsCaretConfirmationOutput checks that the ^ shorthand (depend
 // on the last-added task) also prints the "blocked on" confirmation line.
 func TestCliAddDependsCaretConfirmationOutput(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"caret-confirm-root"}); code != 0 {
 		t.Fatalf("add root: exit %d", code)
 	}
@@ -1460,6 +1486,7 @@ func TestCliAddDependsCaretConfirmationOutput(t *testing.T) {
 
 // TestCliAddNoteFromStdin verifies that --note=- reads the note body from stdin.
 func TestCliAddNoteFromStdin(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	orig := os.Stdin
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -1494,6 +1521,7 @@ func TestCliAddNoteFromStdin(t *testing.T) {
 // TestCliAddNoteStdinConflictWithBatchErrors verifies that combining `add -`
 // (batch titles from stdin) and --note=- (note from stdin) is rejected clearly.
 func TestCliAddNoteStdinConflictWithBatchErrors(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	orig := os.Stdin
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -1517,6 +1545,7 @@ func TestCliAddNoteStdinConflictWithBatchErrors(t *testing.T) {
 
 // TestCliAddPriorityAlias verifies --priority sets the same value as --p.
 func TestCliAddPriorityAlias(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"priority-alias-task", "--priority", "h"}); code != 0 {
 		t.Fatalf("add --priority h: exit %d", code)
 	}
@@ -1536,6 +1565,7 @@ func TestCliAddPriorityAlias(t *testing.T) {
 // TestCliAddPriorityShortFlagStillWorks verifies --p still works after the alias
 // is added (backward compat).
 func TestCliAddPriorityShortFlagStillWorks(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"priority-short-task", "--p", "l"}); code != 0 {
 		t.Fatalf("add --p l: exit %d", code)
 	}
@@ -1555,6 +1585,7 @@ func TestCliAddPriorityShortFlagStillWorks(t *testing.T) {
 // TestCliEditPriorityAlias verifies that `edit --priority` is also aliased on
 // the edit verb (for parity with add).
 func TestCliEditPriorityAlias(t *testing.T) {
+	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"edit-priority-alias-task"}); code != 0 {
 		t.Fatalf("add: exit %d", code)
 	}

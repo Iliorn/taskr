@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 func tenTaskModel(t *testing.T) model {

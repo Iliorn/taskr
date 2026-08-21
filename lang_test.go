@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // lang_test.go pins the one way a fallback-to-English translation scheme fails

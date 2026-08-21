@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // Behaviour that nothing reached: the calendar's time-entry delete, the

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 func init() {

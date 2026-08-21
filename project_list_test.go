@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
 )
 
 // TestProjectListWindowFollowsCursor guards fd8502d1: the Projects tab renderer

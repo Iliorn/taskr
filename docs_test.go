@@ -11,7 +11,8 @@ import (
 )
 
 // docs_test.go guards the architecture notes against the drift that made them
-// misleading: CLAUDE.md described prepareSave and markModifiedNoUndo as central
+// misleading: ARCHITECTURE.md (then CLAUDE.md) described prepareSave and
+// markModifiedNoUndo as central
 // mechanisms long after both had been refactored away, and a reader — human or
 // a future Claude session — has no way to tell a stale name from a real one.
 //
@@ -95,7 +96,7 @@ func sourceText(t *testing.T) string {
 
 func TestDocsNameRealSymbols(t *testing.T) {
 	src := sourceText(t)
-	for _, doc := range []string{"CLAUDE.md", "README.md"} {
+	for _, doc := range []string{"ARCHITECTURE.md", "CLAUDE.md", "README.md"} {
 		for _, sym := range docSymbols(t, doc) {
 			if !strings.Contains(src, sym) {
 				t.Errorf("%s references %q, which no longer exists in the source — "+
@@ -170,5 +171,40 @@ func TestReleaseNotesExtractionMatchesTheChangelog(t *testing.T) {
 	}
 	if !strings.Contains(notes, "blob/v"+version+"/CHANGELOG.md") {
 		t.Errorf("extracted notes are missing the full-changelog link:\n%s", notes)
+	}
+}
+
+// The README advertises `go install github.com/Iliorn/taskr@latest` as the
+// install with the strongest integrity guarantee. That command resolves the
+// module by the path in go.mod, not by the repository URL, so a module
+// declared as bare `taskr` fails the install outright:
+//
+//	module declares its path as: taskr
+//	        but was required as: github.com/Iliorn/taskr
+//
+// Nothing in the build catches that — the module path is only consulted by
+// someone installing from outside the tree, which is exactly the person the
+// README is talking to. This ties the advertised command to the declaration.
+func TestGoInstallPathMatchesModulePath(t *testing.T) {
+	mod, err := os.ReadFile("go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^module (\S+)`).FindSubmatch(mod)
+	if m == nil {
+		t.Fatal("go.mod has no module directive")
+	}
+	modulePath := string(m[1])
+
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	install := regexp.MustCompile(`go install (\S+?)@latest`).FindSubmatch(readme)
+	if install == nil {
+		t.Skip("README no longer documents a `go install` command")
+	}
+	if got := string(install[1]); got != modulePath {
+		t.Errorf("README documents `go install %s@latest`, but go.mod declares module %q — that install fails with a module path mismatch", got, modulePath)
 	}
 }

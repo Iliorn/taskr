@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // pickerWindowStart computes the scroll offset for the detail-pane search

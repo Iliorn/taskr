@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
+	"github.com/Iliorn/taskr/todo"
 	tea "github.com/charmbracelet/bubbletea"
-	"taskr/todo"
 )
 
 // Enter is an accept on confirm prompts, matching y (they're already explicit

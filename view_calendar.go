@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/lipgloss"
-	"taskr/todo"
 )
 
 // ── Day activities ────────────────────────────────────────────────────────────

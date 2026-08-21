@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // ── Pure utilities ────────────────────────────────────────────────────────────

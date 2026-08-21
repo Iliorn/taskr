@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	tea "github.com/charmbracelet/bubbletea"
-	"taskr/todo"
 )
 
 // ── Input handlers ────────────────────────────────────────────────────────────

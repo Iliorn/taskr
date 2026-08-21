@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
 )
 
 // withStages runs fn with the active stage list swapped, restoring the

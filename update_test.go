@@ -4,17 +4,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/tasksync"
+	"github.com/Iliorn/taskr/todo"
 	tea "github.com/charmbracelet/bubbletea"
-	"taskr/tasksync"
-	"taskr/todo"
 )
 
 // modelWithTasks builds a fakeRepo-backed model pre-seeded with `tasks` so
 // tests can exercise list-pane behavior without touching real storage. Sets
 // a sane terminal size so layout-dependent paths (cursor clamping, list
 // height) have realistic bounds.
+//
+// The fake repo covers the task store, but not everything initialModel reads:
+// the undo stack is persisted to the state directory, so without an isolated
+// home a test inherits whatever undo history the previous test left behind and
+// asserts against a stack it did not build. That is invisible in source order
+// and only shows up under -shuffle, as an undoStack that is one or two entries
+// too long.
 func modelWithTasks(t *testing.T, tasks ...todo.Todo) model {
 	t.Helper()
+	setTestHome(t, t.TempDir())
 	m := initialModel(&fakeRepo{todos: tasks})
 	m.termWidth = 120
 	m.termHeight = 40

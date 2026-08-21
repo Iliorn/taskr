@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	tea "github.com/charmbracelet/bubbletea"
-	"taskr/todo"
 )
 
 // update_keyscript_test.go drives the real Update dispatch with scripted key

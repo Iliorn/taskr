@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // withKeys applies a keybinding overlay for one test, restoring the previous

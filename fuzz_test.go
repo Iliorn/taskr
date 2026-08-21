@@ -6,7 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // Fuzzing the parsers.

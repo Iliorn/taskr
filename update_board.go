@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // update_board.go — Board tab interactions: column focus, card cursor, and

@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // board.go — the kanban stage configuration. A "stage" is a named board

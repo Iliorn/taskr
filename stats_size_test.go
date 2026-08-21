@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
 )
 
 // The stats page's "Cycle time by size" and "Projected backlog clear" blocks:

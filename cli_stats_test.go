@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // TestComputeStatsBuckets covers the four pending buckets + the two done

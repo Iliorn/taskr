@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // syncTransport is shared by every sync round trip and the SSE listener. The

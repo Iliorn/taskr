@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // benchTodos builds a realistic task set: a mix of pending/done, varied tags

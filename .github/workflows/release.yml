@@ -22,6 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # required to create the release
+      # Build provenance. attest-build-provenance signs with a short-lived
+      # certificate minted from the job's OIDC identity — no key material is
+      # stored anywhere, and nothing to leak or rotate. id-token mints it,
+      # attestations writes the signed statement to this repository.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -51,6 +57,20 @@ jobs:
       # Lets anyone verify a download, and gives packagers something to pin.
       - name: Checksums
         run: sha256sum taskr taskr-linux-arm64 taskr.exe > SHA256SUMS
+
+      # SHA256SUMS proves a download matches what this workflow published. It
+      # cannot prove anything about the publisher, because it is published by
+      # the same account as the binaries it describes — anyone who can edit the
+      # release can edit the sums with it. The attestation is the part that
+      # closes that: a signed statement, recorded in a public transparency log,
+      # that these exact bytes came out of this workflow at this commit. It is
+      # what makes `gh attestation verify` meaningful, and it is the strongest
+      # promise the binary downloads can carry, since a signature that lives
+      # next to the artifact would only ever be as trustworthy as the release.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: taskr, taskr-linux-arm64, taskr.exe
 
       # A Scoop manifest and a PKGBUILD both pin a version and a checksum, so
       # a copy kept by hand in the tree is stale the moment the next tag is

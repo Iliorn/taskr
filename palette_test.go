@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // Every palette entry works by pressing a key, so every entry's key must be one

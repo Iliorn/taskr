@@ -1,4 +1,4 @@
-module taskr
+module github.com/Iliorn/taskr
 
 go 1.25.0
 

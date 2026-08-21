@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // ── Caches ────────────────────────────────────────────────────────────────────

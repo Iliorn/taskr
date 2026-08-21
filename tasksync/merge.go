@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // merge.go is the heart of taskr's cross-device sync: a pure, I/O-free fold of

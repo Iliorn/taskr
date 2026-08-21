@@ -71,14 +71,31 @@ closed: no sums file, no entry for this platform, or a mismatch means nothing
 is installed and the staged file is removed. The install itself is an atomic
 rename. Nothing updates silently; it is a button behind a confirmation.
 
-**What is not checked: who published it.** `SHA256SUMS` lives in the same
-release as the binary, so anyone able to publish a release can publish matching
-checksums. The checksum proves your download was not corrupted or swapped in
-transit. It does not prove the release itself is honest. A compromised
-repository, a stolen token, or a malicious change to the release workflow would
-produce a consistent, verifiable, malicious release. Signing that binds a
-release to the workflow identity that built it — Sigstore/artifact attestation —
-would close this, and is not implemented yet.
+**What is not checked by the updater: who published it.** `SHA256SUMS` lives in
+the same release as the binary, so anyone able to publish a release can publish
+matching checksums. The checksum proves your download was not corrupted or
+swapped in transit. It does not prove the release itself is honest. A
+compromised repository, a stolen token, or a malicious change to the release
+workflow would produce a consistent, verifiable, malicious release.
+
+**What closes that, if you check it yourself.** Since v1.35.0 the release
+workflow attests every published binary with
+[Sigstore](https://www.sigstore.dev/) via GitHub's artifact attestation: a
+signed statement that these exact bytes were produced by this repository's
+release workflow, at a named commit, recorded in a public transparency log.
+The signing certificate is short-lived and minted from the workflow's own OIDC
+identity, so there is no key for anyone — including me — to steal or misuse,
+and the log entry cannot be withdrawn after the fact. Verify a download with:
+
+```sh
+gh attestation verify taskr --repo Iliorn/taskr
+```
+
+That checks the provenance, not just the bytes: it names the workflow, the
+commit and the run that built the file in front of you. The in-app updater
+does **not** perform this check — verifying an attestation needs the Sigstore
+verification stack, which taskr does not carry — so it remains a checksum-level
+guarantee, and this is the check to run by hand when that is not enough.
 
 If that trade is not one you want to make, do not use the in-app updater:
 

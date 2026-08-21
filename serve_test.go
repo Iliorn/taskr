@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"taskr/tasksync"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/tasksync"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // testSyncServer bundles a tasksync.Server with the test database its Store

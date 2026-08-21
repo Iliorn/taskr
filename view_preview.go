@@ -3,8 +3,8 @@ package main
 import (
 	"strings"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
 )
 
 // view_preview.go renders the live parse preview shown under the quick-add and

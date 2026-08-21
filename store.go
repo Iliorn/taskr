@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // Store is the single source of truth: the task set, the undo history, and the

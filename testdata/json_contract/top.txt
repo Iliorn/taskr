@@ -1,0 +1,7 @@
+[].due
+[].id
+[].percent
+[].priority
+[].score
+[].tags[]
+[].title

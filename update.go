@@ -9,9 +9,9 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"taskr/todo"
 )
 
 // ── Top-level Update ──────────────────────────────────────────────────────────

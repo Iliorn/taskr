@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // ── pickerWindowStart unit tests ──────────────────────────────────────────────

@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // Scripted flows for the detail-pane and list-tab modals.
 //
-// CLAUDE.md's rule is that a modal interaction gets a script flow, for the
+// ARCHITECTURE.md's rule is that a modal interaction gets a script flow, for the
 // reason these handlers make plain: each one is a confirm-then-mutate pair
 // that has to push undo before it touches the store, mark the task modified
 // after, and reset the mode — and none of that is visible from the type

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
 )
 
 // TestMain (main_test.go) already redirects $HOME to a temp dir, so

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // protocol_test.go covers the wire: the /v1/sync round trip, authentication,

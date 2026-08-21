@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // The CLI's routing tables are three parallel lists that have to agree:

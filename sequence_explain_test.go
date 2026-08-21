@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
-	"taskr/todo"
 )
 
 // sequence_explain_test.go guards the promise the explain view makes: that what

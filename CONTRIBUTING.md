@@ -23,9 +23,9 @@ loudly if that ever stops working on a platform.
 
 - **Match the file you are editing.** No blanket reformatting, and keep any
   formatting-only change in its own commit.
-- **The architecture notes are in [CLAUDE.md](CLAUDE.md)** — the cache
-  invalidation rules, the keymap registry, the rendering width contracts. Read
-  the section for the area you are touching; most review comments would
+- **The architecture notes are in [ARCHITECTURE.md](ARCHITECTURE.md)** — the
+  cache invalidation rules, the keymap registry, the rendering width contracts.
+  Read the section for the area you are touching; most review comments would
   otherwise just be quotes from it.
 - **Adding a field to `todo.Todo` needs a migration** (`migrations/NNN_*.sql`)
   plus the `Save` upsert and the load scan. A field with only a struct tag is

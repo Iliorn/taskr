@@ -1,6 +1,6 @@
 package main
 
-import "taskr/todo"
+import "github.com/Iliorn/taskr/todo"
 
 // ── Detail scroll estimation ──────────────────────────────────────────────────
 

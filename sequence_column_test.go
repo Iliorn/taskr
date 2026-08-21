@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // assertSequenceColumn reads the persisted sequence column for taskID and

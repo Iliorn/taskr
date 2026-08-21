@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // Undo for deletions persists to a sidecar JSON so the most recent task/subtask

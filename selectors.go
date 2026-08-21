@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // Selectors are pure functions that derive a view from the source of truth (the

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/bubbles/textinput"
-	"taskr/todo"
 )
 
 // suggest.go — inline completion for the #tag / @project tokens of the

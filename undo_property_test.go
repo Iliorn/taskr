@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"taskr/tasksync"
-	"taskr/todo"
+	"github.com/Iliorn/taskr/tasksync"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // undo_property_test.go is a property test for the undo subsystem: every

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // invariants_test.go drives the app with randomized key sequences (fixed seeds,

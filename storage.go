@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"taskr/todo"
+	"github.com/Iliorn/taskr/todo"
 )
 
 // getStoragePath is the legacy JSON file, kept only as the first-run import
