@@ -71,7 +71,7 @@ func TestRebindingShowsUpEverywhere(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Alpha"))
 	withKeys(t, map[string]string{"done": "E"})
 
-	hint := hintString(ctxTasksList, false)
+	hint := hintString(ctxTasksList, false, nil)
 	if !strings.Contains(hint, "E toggle done") {
 		t.Errorf("footer hint = %q, want the rebound key", hint)
 	}

@@ -226,6 +226,9 @@ var daTranslations = map[string]string{
 	"5 Board":    "5 Tavle",
 	"6 Stats":    "6 Statistik",
 	"7 Settings": "7 Indstillinger",
+	"2 Cal":      "2 Kal",
+	"3 Proj":     "3 Proj",
+	"7 Setup":    "7 Indst.",
 
 	// Key hints (footer)
 
@@ -482,6 +485,11 @@ var daTranslations = map[string]string{
 	"Completed on:":                      "Afsluttet:",
 	"Tags:":                              "Mærker:",
 	"No tags. Press 'a' to add one.":     "Ingen mærker. Tryk 'a' for at tilføje et.",
+	"  Closed today (%d)":                "  Lukket i dag (%d)",
+	"stop":                               "stop",
+	"reopen":                             "genåbn",
+	"  ↑ %d more":                        "  ↑ %d mere",
+	"  ↓ %d more":                        "  ↓ %d mere",
 	"Subtasks:":                          "Delopgaver:",
 	"No subtasks. Press 'a' to add one.": "Ingen delopgaver. Tryk 'a' for at tilføje en.",
 	"%s[?] unknown subtask":              "%s[?] ukendt delopgave",
@@ -833,6 +841,9 @@ var deTranslations = map[string]string{
 	"5 Board":    "5 Board",
 	"6 Stats":    "6 Statistik",
 	"7 Settings": "7 Einstell.",
+	"2 Cal":      "2 Kal",
+	"3 Proj":     "3 Proj",
+	"7 Setup":    "7 Einstell.",
 
 	// Key hints (footer)
 
@@ -1089,6 +1100,11 @@ var deTranslations = map[string]string{
 	"Completed on:":                      "Erledigt am:",
 	"Tags:":                              "Schlagwörter:",
 	"No tags. Press 'a' to add one.":     "Keine Schlagwörter. 'a' fügt eines hinzu.",
+	"  Closed today (%d)":                "  Heute geschlossen (%d)",
+	"stop":                               "stopp",
+	"reopen":                             "öffnen",
+	"  ↑ %d more":                        "  ↑ %d weitere",
+	"  ↓ %d more":                        "  ↓ %d weitere",
 	"Subtasks:":                          "Teilaufgaben:",
 	"No subtasks. Press 'a' to add one.": "Keine Teilaufgaben. 'a' fügt eine hinzu.",
 	"%s[?] unknown subtask":              "%s[?] unbekannte Teilaufgabe",

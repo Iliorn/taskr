@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // board_ux_test.go covers the three things that make a many-stage board
@@ -274,5 +274,58 @@ func TestBoardVisibilityPersists(t *testing.T) {
 	applyShowBoard(!appSettings{}.BoardDisabled)
 	if !showBoard {
 		t.Error("a settings file with no board key should leave the board on")
+	}
+}
+
+// ── Column widths ────────────────────────────────────────────────────────────
+
+// An equal split gave a board of one busy stage and three empty ones four
+// columns of the same width — clipping the only real cards while three columns
+// of blanks sat beside them.
+func TestBoardColumnsAreWidthedByWhatTheyHold(t *testing.T) {
+	busy := []todo.Todo{todo.New("A card whose title is a good deal longer than the others")}
+	titles := []string{"Backlog", "In progress", "Review", "Done"}
+	cols := [][]todo.Todo{busy, nil, nil, nil}
+
+	const availW = 100
+	got := boardColWidths(cols, titles, availW)
+	if len(got) != 4 {
+		t.Fatalf("want a width per column, got %d", len(got))
+	}
+	for i, w := range got {
+		if w < boardMinColW {
+			t.Errorf("column %d width %d is below the floor %d — an empty stage is still a place to drop a card",
+				i, w, boardMinColW)
+		}
+	}
+	if !(got[0] > got[1]) {
+		t.Errorf("the column with the long card should be wider than the empty ones: %v", got)
+	}
+	// The row fills the pane exactly: no ragged edge, no overflow.
+	sum := (len(cols) - 1) * boardColGap
+	for _, w := range got {
+		sum += w
+	}
+	if sum != availW {
+		t.Errorf("columns + gaps = %d, want exactly the available %d: %v", sum, availW, got)
+	}
+}
+
+// When there is not enough width to give every column its floor, the split
+// falls back to even columns rather than handing some column a negative width.
+func TestBoardColumnWidthsFallBackWhenCrowded(t *testing.T) {
+	titles := []string{"A", "B", "C", "D"}
+	cols := make([][]todo.Todo, 4)
+	availW := boardMinColW*2 + 3*boardColGap
+	got := boardColWidths(cols, titles, availW)
+	sum := 3 * boardColGap
+	for _, w := range got {
+		if w <= 0 {
+			t.Fatalf("crowded board produced a non-positive width: %v", got)
+		}
+		sum += w
+	}
+	if sum != availW {
+		t.Errorf("columns + gaps = %d, want %d: %v", sum, availW, got)
 	}
 }

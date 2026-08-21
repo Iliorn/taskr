@@ -85,12 +85,12 @@ func TestKeymapGeneratesHintsAndHelp(t *testing.T) {
 		"tagDrill": ctxTagDrill, "projectDrill": ctxProjectDrill,
 	}
 	for name, ctx := range ctxs {
-		if hintString(ctx, false) == "" {
+		if hintString(ctx, false, nil) == "" {
 			t.Errorf("ctx %s produced an empty footer hint", name)
 		}
 	}
 	// Stats has a single binding; assert it at least appears.
-	if !strings.Contains(hintString(ctxStats, false), "cycle activity range") {
+	if !strings.Contains(hintString(ctxStats, false, nil), "cycle activity range") {
 		t.Error("stats hint should mention cycling the activity range")
 	}
 }

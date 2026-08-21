@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/Iliorn/taskr/todo"
 )
 
 // ── Tags list ─────────────────────────────────────────────────────────────────
@@ -215,10 +215,10 @@ func (m model) renderTagList() string {
 			// Remaining empty cells: one fewer because the partial cell occupies a slot.
 			empty := barW - filled - 1
 			if empty > 0 {
-				barStr.WriteString(dimStyle.Render(strings.Repeat("░", empty)))
+				barStr.WriteString(dimStyle.Render(strings.Repeat(barTrack, empty)))
 			}
 		} else if filled < barW {
-			barStr.WriteString(dimStyle.Render(strings.Repeat("░", barW-filled)))
+			barStr.WriteString(dimStyle.Render(strings.Repeat(barTrack, barW-filled)))
 		}
 
 		if m.mode == modeEditTag && m.editingTagName == tag {
@@ -425,20 +425,22 @@ func (m model) renderStatsList() string {
 		}
 		var bar strings.Builder
 		bar.Grow(barW * 4)
-		for j := 0; j < barW; j++ {
-			if j < filled {
-				pos := 0.0
-				if filled > 1 {
-					pos = float64(j) / float64(filled-1)
-				}
-				gradIdx := int(pos * float64(gradLen-1))
-				if gradIdx >= gradLen {
-					gradIdx = gradLen - 1
-				}
-				bar.WriteString(statsGradient[gradIdx].Render("█"))
-			} else {
-				bar.WriteString(dimStyle.Render("░"))
+		for j := 0; j < filled; j++ {
+			pos := 0.0
+			if filled > 1 {
+				pos = float64(j) / float64(filled-1)
 			}
+			gradIdx := int(pos * float64(gradLen-1))
+			if gradIdx >= gradLen {
+				gradIdx = gradLen - 1
+			}
+			bar.WriteString(statsGradient[gradIdx].Render("█"))
+		}
+		// The track shares one style for its whole run, so it costs one Render
+		// call rather than one per cell (ARCHITECTURE.md, "Group same-style
+		// runs") — this loop used to emit an escape pair per empty column.
+		if empty := barW - filled; empty > 0 {
+			bar.WriteString(dimStyle.Render(strings.Repeat(barTrack, empty)))
 		}
 		sb.WriteString(detailLabelStyle.Render(labelStr) + normalStyle.Render(padRight(valStr, valW)) +
 			bar.String() + dimStyle.Render(fmt.Sprintf(" %3d%%", int(pct*100))) + "\n")
@@ -647,6 +649,16 @@ func stackSections(sections ...string) []string {
 // with a gap between. Every column but the last is truncated to colW so a long
 // line can never bleed into its neighbour.
 func zipColumns(colW, gap int, columns ...[]string) string {
+	widths := make([]int, len(columns))
+	for i := range widths {
+		widths[i] = colW
+	}
+	return zipColumnsW(widths, gap, columns...)
+}
+
+// zipColumnsW is zipColumns with a width per column, for layouts whose columns
+// are sized to what they hold rather than to an equal share.
+func zipColumnsW(widths []int, gap int, columns ...[]string) string {
 	maxLen := 0
 	for _, col := range columns {
 		if len(col) > maxLen {
@@ -665,9 +677,13 @@ func zipColumns(colW, gap int, columns ...[]string) string {
 				b.WriteString(strings.TrimRight(line, " "))
 				continue
 			}
-			line = ansi.Truncate(line, colW, "")
-			if lw := ansi.StringWidth(line); lw < colW {
-				line += strings.Repeat(" ", colW-lw)
+			w := 0
+			if c < len(widths) {
+				w = widths[c]
+			}
+			line = ansi.Truncate(line, w, "")
+			if lw := ansi.StringWidth(line); lw < w {
+				line += strings.Repeat(" ", w-lw)
 			}
 			b.WriteString(line + pad)
 		}
@@ -763,7 +779,51 @@ func (m model) renderTaskList() string {
 		}
 		b.WriteString(m.renderSubtaskLine(t, subIdx, len(siblings), cols, i, m.cursor, true))
 	}
+	m.renderClosedTodayBlock(b, maxVisible-(endIdx-startIdx))
 	return b.String()
+}
+
+// renderClosedTodayBlock fills unused rows at the bottom of the list pane with
+// what the user closed today. The pane is a fixed-height box, so on any list
+// shorter than the terminal those rows were drawn as blanks — a third of the
+// screen on a normal day's list.
+//
+// It is a read-out, not a list: the rows carry no cursor and no keys, so
+// nothing above them changes, and the block only ever occupies space the active
+// list is not using. free is how many rows are going spare; the block declines
+// to draw at all below the three it takes to be worth reading (a separating
+// blank, its label, and one task).
+func (m model) renderClosedTodayBlock(b *strings.Builder, free int) {
+	if free < 3 || m.showHistory {
+		return
+	}
+	today := startOfDay(m.frameTime)
+	done := m.cache.done
+	// cache.done is sorted newest-first by the history sort, so the first run of
+	// today's completions is all of them.
+	n := 0
+	for n < len(done) && startOfDay(done[n].CompletedAt).Equal(today) {
+		n++
+	}
+	if n == 0 {
+		return
+	}
+	shown := n
+	if max := free - 2; shown > max {
+		shown = max
+	}
+	avail := m.termWidth - 12
+	if avail < 8 {
+		avail = 8
+	}
+	b.WriteString("\n")
+	label := fmt.Sprintf(tr("  Closed today (%d)"), n)
+	b.WriteString(dimStyle.Render(label) + "\n")
+	for i := 0; i < shown; i++ {
+		b.WriteString(dimStyle.Render("   ") +
+			fastCheckDone.render("✓") +
+			fastDim.render(" "+truncate(done[i].Title, avail)) + "\n")
+	}
 }
 
 func (m model) renderHistoryList() string {
@@ -829,48 +889,32 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 		completedVal = t.CompletedAt.Format("02-01-06")
 	}
 	titleCol := padRight(truncate(t.Title, titleW-listColGap), titleW)
-	dateCols := ""
+	// History rows get the same two-tone treatment as the active list: the
+	// title at full strength, the dates dim. A completed task is a record, and
+	// the record's subject is its title, not the day it closed.
+	rowStyle, metaStyle := fastNormal, fastDim
+	if selected {
+		rowStyle, metaStyle = fastSelectedRow, fastSelectedDim
+	}
+	var r rowBuf
+	r.add(rowStyle, cursorStr+"[")
+	r.add(fastCheckDone, "✓")
+	r.add(rowStyle, "] ")
+	r.add(rowStyle, titleCol)
 	if cols.showDue {
-		dateCols += padRight(dueVal, cols.dueW)
+		r.add(metaStyle, padRight(dueVal, cols.dueW))
 	}
 	if cols.showLast {
-		dateCols += padRight(completedVal, 12)
-	}
-	rowTail := titleCol + dateCols
-	tagsPart := m.getRenderedTagsForTask(&t)
-	mainW := len([]rune(cursorStr)) + 4 + len([]rune(rowTail))
-	tagsStr := ""
-	tagsDrawnW := 0
-	if tagsPart != "" {
-		tagsW := tagsRenderWidth(t.Tags)
-		if mainW+1+tagsW <= m.termWidth-8 {
-			if selected {
-				tagsStr = renderSelectedTaskTagsPart(t.Tags)
-			} else {
-				tagsStr = " " + tagsPart
-			}
-			tagsDrawnW = 1 + tagsW
-		} else {
-			// Render the omission marker as the Tags-column value, in tag colour.
-			// The fixed cursor+checkbox prefix occupies six cells and is rendered
-			// separately below so the done checkmark can keep its own colour.
-			rowTail, tagsStr = renderTaskTagOverflow(rowTail, m.termWidth-8-6, selected)
-			tagsDrawnW = 4 // " (…)"
-		}
+		r.add(metaStyle, padRight(completedVal, 12))
 	}
 
+	contentW := m.termWidth - 8
+	tagsStr, tagsDrawnW := m.renderRowTags(&t, contentW-r.w, selected)
+	line := r.String()
 	if selected {
-		drawn := len([]rune(cursorStr)) + 4 + len([]rune(rowTail)) + tagsDrawnW
-		return fastSelectedRow.render(cursorStr+"[") +
-			fastCheckDone.render("✓") +
-			fastSelectedRow.render("] "+rowTail) +
-			tagsStr +
-			selectedRowTail(fastSelectedRow, drawn, m.termWidth-8) + "\n"
+		return line + tagsStr + selectedRowTail(fastSelectedRow, r.w+tagsDrawnW, contentW) + "\n"
 	}
-	return fastNormal.render(cursorStr+"[") +
-		fastCheckDone.render("✓") +
-		fastNormal.render("] "+rowTail) +
-		tagsStr + "\n"
+	return line + tagsStr + "\n"
 }
 
 func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols listCols, flatIndex, cursor int, active bool) string {
@@ -913,6 +957,148 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 	return fastDim.render(cursorStr+body) + "\n"
 }
 
+// taskRowLabel splits a task's list label into the three pieces a row draws:
+// the running-timer prefix, the title text itself, and the badge suffix
+// (priority, blocker/blocked arrows, recurrence, subtask progress).
+//
+// They are kept apart so the row can truncate the *title* and still draw the
+// badges. Concatenating them first made "!" and "(1/2)" the last characters of
+// the string and therefore the first ones a narrow title column threw away —
+// which are exactly the characters a glance down the list is looking for. The
+// text is what has slack in it; the badges are four cells that change the
+// decision.
+//
+// refreshTaskColMetrics sizes the title column from this same function, so the
+// width it reserves and the width the row draws cannot drift.
+func (m *model) taskRowLabel(t *todo.Todo) (prefix, text, badges string) {
+	if t.IsTimerRunning() {
+		prefix = "⧗ "
+	}
+	text = t.Title
+	var b strings.Builder
+	if t.Priority == todo.PriorityHigh {
+		b.WriteString(" !")
+	}
+	if m.cache.blockerSet[t.ID] {
+		b.WriteString(" ↥") // others depend on this — clearing it unblocks them
+	}
+	if m.cache.blockedSet[t.ID] {
+		b.WriteString(" ↧") // waiting on an unfinished dependency
+	}
+	if t.IsRecurring() {
+		b.WriteString(" ↻")
+	}
+	if subDone, subTotal := m.subtaskProgress(t.ID); subTotal > 0 {
+		fmt.Fprintf(&b, " (%d/%d)", subDone, subTotal)
+	}
+	return prefix, text, b.String()
+}
+
+// taskRowLabelWidth is the display width taskRowLabel's three pieces draw
+// together — what the title column has to hold for the row to render whole.
+func taskRowLabelWidth(prefix, text, badges string) int {
+	return len([]rune(prefix)) + len([]rune(text)) + len([]rune(badges))
+}
+
+// fitTaskRowLabel lays the three pieces into avail cells, clipping the title
+// text and keeping the badges. When even prefix+badges overrun the column
+// there is nothing left to protect, so the whole label is clipped as one
+// string rather than drawn past the column's edge.
+func fitTaskRowLabel(prefix, text, badges string, avail int) string {
+	if avail <= 0 {
+		return ""
+	}
+	fixed := len([]rune(prefix)) + len([]rune(badges))
+	if fixed < avail {
+		return prefix + truncate(text, avail-fixed) + badges
+	}
+	return truncate(prefix+text+badges, avail)
+}
+
+// rowBuf accumulates a task-list row as styled runs while tracking the plain
+// display width it has emitted. Two things make it worth a type: the width has
+// to be counted on the unstyled text (an SGR sequence is a dozen runes, and the
+// tags cell and the selected-row tail are both positioned from this count), and
+// consecutive runs that share a style are coalesced into one render call, so a
+// row still costs a handful of escape sequences rather than one per column.
+type rowBuf struct {
+	out  strings.Builder
+	run  strings.Builder
+	cur  fastStyle
+	open bool
+	w    int
+}
+
+// add appends s in style st. Styles are compared by their cached SGR prefix and
+// suffix rather than by the struct: fastStyle carries a lipgloss.Style, and it
+// is the escape sequences, not the struct identity, that decide whether two
+// runs can share one render call.
+func (r *rowBuf) add(st fastStyle, s string) {
+	if s == "" {
+		return
+	}
+	if r.open && st.prefix == r.cur.prefix && st.suffix == r.cur.suffix {
+		r.run.WriteString(s)
+	} else {
+		r.flush()
+		r.cur, r.open = st, true
+		r.run.WriteString(s)
+	}
+	r.w += len([]rune(s))
+}
+
+func (r *rowBuf) flush() {
+	if !r.open || r.run.Len() == 0 {
+		r.run.Reset()
+		return
+	}
+	r.out.WriteString(r.cur.render(r.run.String()))
+	r.run.Reset()
+}
+
+func (r *rowBuf) String() string {
+	r.flush()
+	r.open = false
+	return r.out.String()
+}
+
+// rowPalette is the pair of styles one task row is painted with. status carries
+// whatever the row's state is saying — normal, overdue, blocked by something
+// overdue, timer running — and meta is the dim tone the secondary columns are
+// drawn in. Both already carry the selection background when the row is the
+// one under the cursor, so a selected overdue row shows the selection and the
+// status at once instead of one masking the other.
+//
+// Splitting the row across two styles is the whole point: painting every cell
+// in the status colour meant the score, the size and the project name shouted
+// as loudly as the title, and an overdue row coloured its project name red —
+// a cell that has nothing to do with being overdue.
+type rowPalette struct {
+	status fastStyle
+	meta   fastStyle
+}
+
+func taskRowPalette(t *todo.Todo, hasOverdueDep, selected bool) rowPalette {
+	switch {
+	case t.IsTimerRunning() && selected:
+		return rowPalette{fastSelectedTimer, fastSelectedDim}
+	case t.IsTimerRunning():
+		return rowPalette{fastTimer, fastDim}
+	case t.IsOverdue() && selected:
+		return rowPalette{fastSelectedOverdue, fastSelectedDim}
+	case t.IsOverdue():
+		return rowPalette{fastOverdue, fastDim}
+	case hasOverdueDep && selected:
+		return rowPalette{fastSelectedDepOverdue, fastSelectedDim}
+	case hasOverdueDep:
+		return rowPalette{fastDepOverdue, fastDim}
+	case selected:
+		return rowPalette{fastSelectedRow, fastSelectedDim}
+	default:
+		return rowPalette{fastNormal, fastDim}
+	}
+}
+
 func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
 	titleW := cols.titleW
 	cursorStr := cursorGap
@@ -940,111 +1126,62 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 			foldIcon = "+"
 		}
 	}
-	title := t.Title
-	if t.Priority == todo.PriorityHigh {
-		title += " !"
-	}
-	// hasOverdueDep drives the row color (the switch at the end), not a glyph.
+	// hasOverdueDep drives the row colour (see taskRowPalette), not a glyph.
 	hasOverdueDep := t.HasOverdueDependencyFast(overdueSet)
-	if m.cache.blockerSet[t.ID] {
-		title += " ↥" // others depend on this — clearing it unblocks them
-	}
-	if m.cache.blockedSet[t.ID] {
-		title += " ↧" // waiting on an unfinished dependency
-	}
-	if t.IsRecurring() {
-		title += " ↻"
-	}
-	if subDone, subTotal := m.subtaskProgress(t.ID); subTotal > 0 {
-		title += fmt.Sprintf(" (%d/%d)", subDone, subTotal)
-	}
-	if t.IsTimerRunning() {
-		title = "⧗ " + title
-	}
+	pal := taskRowPalette(t, hasOverdueDep, selected)
+
 	dueVal := ""
 	if !t.DueDate.IsZero() {
 		dueVal = formatDueShort(t.DueDate, m.frameTime)
 	}
-	// Reserve one trailing space inside the column so a truncated title (ending
-	// in "(…)") never butts up against the Score column that follows.
-	// Truncate at titleW-listColGap so even a clipped title keeps the full gap
-	// to the next column, instead of leaving the single space the column's own
-	// padding happened to have left.
-	titleCol := padRight(truncate(title, titleW-listColGap), titleW)
-	tagsPart := m.getRenderedTagsForTask(t)
-	line := cursorStr + checkbox + foldIcon + titleCol
+	// The due cell is the one piece of metadata the status colour is actually
+	// about, so it keeps the status tone when the task is late and drops to the
+	// dim tone otherwise. That way a red cell in the Due column means the date
+	// is the problem, instead of being one more cell in a uniformly red row.
+	dueStyle := pal.meta
+	if t.IsOverdue() || hasOverdueDep {
+		dueStyle = pal.status
+	}
+
+	prefix, text, badges := m.taskRowLabel(t)
+	// Reserve one trailing space inside the column so a clipped title never
+	// butts up against the Score column that follows.
+	label := fitTaskRowLabel(prefix, text, badges, titleW-listColGap)
+
+	var r rowBuf
+	r.add(pal.status, cursorStr+checkbox+foldIcon)
+	r.add(pal.status, padRight(label, titleW))
 	if cols.showLast {
-		// Score column is always score now — priority lives only in the
-		// detail view, where the user can still set it. It reads as a percent
-		// of the current field (sequence.go): "82%" says how close to the top
-		// this is, where a bare "24.4" only said "a number".
-		// Right-aligned in the field so every score ends in the same column and
-		// the % signs line up; the field's trailing listColGap is the gap to Due.
-		line += padRight(padLeft(formatSequencePercent(m.rankedScore(t)), cols.lastW-listColGap), cols.lastW)
+		// Score reads as a percent of the current field (sequence.go): "82%"
+		// says how close to the top this is, where a bare "24.4" only said "a
+		// number". Right-aligned in the field so every score ends in the same
+		// column and the % signs line up; the field's trailing listColGap is
+		// the gap to Due.
+		r.add(pal.meta, padRight(padLeft(formatSequencePercent(m.rankedScore(t)), cols.lastW-listColGap), cols.lastW))
 	}
 	if cols.showDue {
 		// Right-aligned for the same reason: "2d" and "20-09-27" share a right
 		// edge, so the gap to Size is the same on every row.
-		line += padRight(padLeft(dueVal, cols.dueW-listColGap), cols.dueW)
+		r.add(dueStyle, padRight(padLeft(dueVal, cols.dueW-listColGap), cols.dueW))
 	}
 	if cols.showSize {
 		// One letter at the column's left edge, under its header; the column
 		// carries its own trailing gap, the same way every other column does.
-		line += padRight(strings.ToLower(t.Size.Letter()), cols.sizeW)
+		r.add(pal.meta, padRight(strings.ToLower(t.Size.Letter()), cols.sizeW))
 	}
 	if cols.showProject {
 		// Truncate at projectW-listColGap so the column always leaves its full
 		// gap before the tags, clipped name or not.
-		line += padRight(truncate(t.Project, cols.projectW-listColGap), cols.projectW)
+		r.add(pal.meta, padRight(truncate(t.Project, cols.projectW-listColGap), cols.projectW))
 	}
 
-	// Only append tags if they fit within the inner panel content width.
-	tagsStr := ""
-	tagsDrawnW := 0
-	if tagsPart != "" {
-		tagsW := tagsRenderWidth(t.Tags)
-		if len([]rune(line))+1+tagsW <= m.termWidth-8 {
-			if selected {
-				tagsStr = renderSelectedTaskTagsPart(t.Tags)
-			} else {
-				tagsStr = " " + tagsPart
-			}
-			tagsDrawnW = 1 + tagsW
-		} else {
-			// The omission marker is a Tags-column value, not part of whichever
-			// preceding column happened to be last, so it keeps the tag colour.
-			line, tagsStr = renderTaskTagOverflow(line, m.termWidth-8, selected)
-			tagsDrawnW = 4 // " (…)"
-		}
-	}
-
-	// Status colour owns the foreground; selection owns the background — so a
-	// selected overdue/timer row shows both instead of the status masking the
-	// cursor.
-	var st fastStyle
-	switch {
-	case t.IsTimerRunning() && selected:
-		st = fastSelectedTimer
-	case t.IsTimerRunning():
-		st = fastTimer
-	case t.IsOverdue() && selected:
-		st = fastSelectedOverdue
-	case t.IsOverdue():
-		st = fastOverdue
-	case hasOverdueDep && selected:
-		st = fastSelectedDepOverdue
-	case hasOverdueDep:
-		st = fastDepOverdue
-	case selected:
-		st = fastSelectedRow
-	default:
-		st = fastNormal
-	}
+	contentW := m.termWidth - 8
+	tagsStr, tagsDrawnW := m.renderRowTags(t, contentW-r.w, selected)
+	line := r.String()
 	if selected {
-		return st.render(line) + tagsStr +
-			selectedRowTail(st, len([]rune(line))+tagsDrawnW, m.termWidth-8) + "\n"
+		return line + tagsStr + selectedRowTail(pal.status, r.w+tagsDrawnW, contentW) + "\n"
 	}
-	return st.render(line) + tagsStr + "\n"
+	return line + tagsStr + "\n"
 }
 
 // ── Projects ──────────────────────────────────────────────────────────────────

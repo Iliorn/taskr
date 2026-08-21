@@ -325,9 +325,14 @@ func (m model) detailTagsRows(t *todo.Todo) int {
 // section: the fields block, blank, tags label, tag rows. (The task title has
 // moved to the top border of the panel and is no longer counted here.)
 func (m model) detailMainHeight(t *todo.Todo) int {
-	h := 0  // title is on the border now; content starts at the first field
-	h += 10 // start, due, recurrence, priority, size, project, notes, id, created, modified
+	h := 0 // title is on the border now; content starts at the first field
+	h += 9 // start, due, recurrence, priority, size, project, notes, created, id
 	if stageFieldVisible(t) {
+		h++
+	}
+	// Modified is drawn only when it differs from Created (see
+	// renderDetailPage1) — an untouched task has nothing to say there.
+	if !t.ModifiedAt.Equal(t.CreatedAt) {
 		h++
 	}
 	if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {

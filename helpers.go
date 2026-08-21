@@ -13,12 +13,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ── Pure utilities ────────────────────────────────────────────────────────────
@@ -33,6 +34,12 @@ func clamp(val, min, max int) int {
 	return val
 }
 
+// ellipsis is the one-cell marker every clipped string ends in. It used to be
+// "(…)" — three cells to say the same thing, on a list where the two cells it
+// wasted were exactly the ones the title had run out of. The parentheses also
+// read as content: a title ending "(…)" looks like it has a parenthetical.
+const ellipsis = "…"
+
 func truncate(s string, max int) string {
 	// A width budget computed from the terminal size (termWidth-6 and friends)
 	// goes negative on a very small window. Clamping here rather than at every
@@ -45,15 +52,12 @@ func truncate(s string, max int) string {
 	if len(r) <= max {
 		return s
 	}
-	if max <= 3 {
-		return string(r[:max])
-	}
-	return string(r[:max-3]) + "(…)"
+	return string(r[:max-1]) + ellipsis
 }
 
 // truncateStyled is truncate for a string that has already been through a
 // lipgloss .Render. truncate counts runes, and an SGR sequence is a dozen of
-// them, so it cuts *inside* the escape: the terminal then reads the "(…)"
+// them, so it cuts *inside* the escape: the terminal then reads the ellipsis
 // marker as more sequence parameters and swallows it, printing whatever falls
 // out the other end, and the style never terminates — which is what leaked
 // into the panel border and broke the frame. Measuring and cutting through
@@ -65,10 +69,7 @@ func truncateStyled(s string, max int) string {
 	if ansi.StringWidth(s) <= max {
 		return s
 	}
-	if max <= 3 {
-		return ansi.Truncate(s, max, "")
-	}
-	return ansi.Truncate(s, max, "(…)")
+	return ansi.Truncate(s, max, ellipsis)
 }
 
 // shortID returns the first 8 chars of a task ID — the same prefix the CLI
@@ -174,20 +175,30 @@ func renderTagsPart(tags []string) string {
 	return sb.String()
 }
 
-// renderSelectedTaskTagsPart keeps the tag foreground while extending the
-// selected-row background through the leading gap, every tag chip, and the
-// spaces between them.
-func renderSelectedTaskTagsPart(tags []string) string {
-	if len(tags) == 0 {
+// renderTaskTagCells draws a row's Tags cell: a leading gap, the chips that
+// fit, and an optional "+N" count for the ones that did not. On a selected row
+// the whole cell keeps the tag foreground while the selection background runs
+// through the gap, the chips and the spaces between them, so the highlight does
+// not break where the tags start.
+func renderTaskTagCells(tags []string, marker string, selected bool) string {
+	if len(tags) == 0 && marker == "" {
 		return ""
 	}
-	var sb strings.Builder
-	sb.Grow(len(tags) * 12)
-	sb.WriteByte(' ')
-	for _, tag := range tags {
-		sb.WriteString("⟨#" + tag + "⟩ ")
+	if selected {
+		var sb strings.Builder
+		sb.Grow(len(tags)*12 + len(marker) + 1)
+		sb.WriteByte(' ')
+		for _, tag := range tags {
+			sb.WriteString("⟨#" + tag + "⟩ ")
+		}
+		sb.WriteString(marker)
+		return taskTagSelectedRowStyle.Render(sb.String())
 	}
-	return taskTagSelectedRowStyle.Render(sb.String())
+	out := " " + renderTagsPart(tags)
+	if marker != "" {
+		out += tagStyle.Render(marker)
+	}
+	return out
 }
 
 // selectedRowTail fills the rest of a selected row with the selection
@@ -205,24 +216,41 @@ func selectedRowTail(st fastStyle, drawn, contentW int) string {
 	return st.render(strings.Repeat(" ", pad))
 }
 
-// renderTaskTagOverflow places a tag-coloured (…) in the Tags column when the
-// actual chips do not fit. It trims only as much trailing space/content from
-// the preceding columns as is needed to reserve the marker plus its one-cell
-// column gap, keeping the complete row inside contentW.
-func renderTaskTagOverflow(line string, contentW int, selected bool) (string, string) {
-	const markerW = 3 // display width of (…)
-	runes := []rune(line)
-	trim := len(runes) + 1 + markerW - contentW
-	if trim > 0 {
-		if trim > len(runes) {
-			trim = len(runes)
+// renderTaskTagsClipped draws as many of a row's tag chips as fit in avail
+// display cells and closes with a "+N" count for the rest. It returns the
+// styled cell and the width it drew. Callers reach it through
+// model.renderRowTags, which serves the whole-set case from the render cache
+// and only falls through to here when chips actually have to be dropped.
+//
+// The old rule was all-or-nothing: one cell short of the full set and every
+// chip was replaced by a bare "(…)", three cells spent to say "there is
+// something here you cannot see". "⟨#bug⟩ +2" costs the same three cells in the
+// worst case, names the tag most likely to matter, and says how many are
+// hidden. Chips are dropped from the end because the tag list is already sorted
+// on the task, so the order is stable frame to frame.
+func renderTaskTagsClipped(tags []string, avail int, selected bool) (string, int) {
+	// tagsRenderWidth already counts the trailing space each chip draws, so the
+	// marker needs no separator of its own. k starts at the full set so the
+	// function is total: given room for every chip it draws every chip, and a
+	// caller that has not pre-checked the fit still gets the right answer.
+	for k := len(tags); k >= 1; k-- {
+		if k == len(tags) {
+			if w := 1 + tagsRenderWidth(tags); w <= avail {
+				return renderTaskTagCells(tags, "", selected), w
+			}
+			continue
 		}
-		line = string(runes[:len(runes)-trim])
+		marker := "+" + strconv.Itoa(len(tags)-k)
+		w := 1 + tagsRenderWidth(tags[:k]) + len([]rune(marker))
+		if w <= avail {
+			return renderTaskTagCells(tags[:k], marker, selected), w
+		}
 	}
-	if selected {
-		return line, taskTagSelectedRowStyle.Render(" (…)")
+	marker := "+" + strconv.Itoa(len(tags))
+	if w := 1 + len([]rune(marker)); w <= avail {
+		return renderTaskTagCells(nil, marker, selected), w
 	}
-	return line, " " + tagStyle.Render("(…)")
+	return "", 0
 }
 
 // listCols decides which columns of the task/history list fit at the current
@@ -372,8 +400,16 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	if isHistory {
 		drop = []*bool{&c.showDue, &c.showLast}
 	}
+	// A row that has tags keeps enough room to say so. Three cells buy " +N",
+	// which is the difference between "this task has two more tags" and "this
+	// task has no tags" — a distinction the row cannot make in fewer. It is
+	// only a floor: the chips themselves still take whatever is left over.
+	tagsMin := 0
+	if c.showTags {
+		tagsMin = tagsOverflowMinW
+	}
 	for _, d := range drop {
-		if inner-fixed-c.titleW-colsW() >= 0 {
+		if inner-fixed-c.titleW-colsW()-tagsMin >= 0 {
 			break
 		}
 		*d = false
@@ -388,9 +424,21 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	// that slack — but never past what the longest entry actually needs, and
 	// leave room for the trailing tags column (a leading space + the widest
 	// row's tags) so growing the title can't push tags off the right edge.
+	// Reserve room for the tags before growing the title into spare width — but
+	// only a share of it. Reserving the widest tag row's full width meant one
+	// tag-heavy task clipped every title in the list, and the reserved cells
+	// then went unused anyway, because the chips still did not fit and
+	// collapsed to a marker. Capping the reserve and letting the cell degrade
+	// to "⟨#bug⟩ +2" spends the width on whichever column can use it.
 	tagsReserve := 0
 	if tagsMax > 0 {
 		tagsReserve = 1 + tagsMax
+		if capW := inner * tagsReservePct / 100; tagsReserve > capW {
+			tagsReserve = capW
+		}
+		if tagsReserve < tagsOverflowMinW {
+			tagsReserve = tagsOverflowMinW
+		}
 	}
 	if want := contentMax + listColGap; c.titleW < want {
 		if spare := inner - fixed - c.titleW - colsW() - tagsReserve; spare > 0 {
@@ -494,9 +542,18 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 		posW = 1 + len([]rune(posLabel))
 	}
 	padW := termWidth - 8 - len([]rune(headerLeft)) - posW
-	if c.showTags && padW >= len([]rune(tagsLabel)) {
-		headerLeft += tagsLabel
-		padW -= len([]rune(tagsLabel))
+	if c.showTags {
+		// When only the minimal "+N" cell fits there is no room for the word,
+		// but the sigil the chips themselves are built from says the same
+		// thing in two cells — and a lone "+2" under no heading at all reads
+		// as belonging to whichever column happens to precede it.
+		if padW < len([]rune(tagsLabel)) {
+			tagsLabel = " #"
+		}
+		if padW >= len([]rune(tagsLabel)) {
+			headerLeft += tagsLabel
+			padW -= len([]rune(tagsLabel))
+		}
 	}
 	if padW < 0 {
 		padW = 0

@@ -3,12 +3,13 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/Iliorn/taskr/todo"
 )
 
 // pickerWindowStart computes the scroll offset for the detail-pane search
@@ -82,9 +83,14 @@ func pickerWindowStart(cursor, total, max int) (start int, hasAbove, hasBelow bo
 
 // truncateLines ANSI-aware-truncates every line to maxW display cells so
 // over-long lines can never wrap inside a bordered panel.
+//
+// The cut carries the ellipsis marker. Cutting silently is what produced
+// detail-pane rows like "No dependencies. Press 'a' to add o" — a sentence that
+// stops mid-word and gives the reader no way to tell a clipped line from one
+// that simply ends there.
 func truncateLines(lines []string, maxW int) {
 	for i, line := range lines {
-		lines[i] = ansi.Truncate(line, maxW, "")
+		lines[i] = ansi.Truncate(line, maxW, ellipsis)
 	}
 }
 
@@ -565,7 +571,7 @@ func (m model) applyDetailScrollN(content string, maxVisible int) string {
 	// model's estimate of them.
 	scrollStart := detailScrollWindow(m.detail.scroll, cursorLine, maxVisible, len(lines))
 	// Within a margin of the top there is nothing to gain by hiding the first
-	// rows behind a "(…)" that costs one of them.
+	// rows behind a marker that costs one of them.
 	if scrollStart <= detailScrollMargin {
 		scrollStart = 0
 	}
@@ -577,11 +583,18 @@ func (m model) applyDetailScrollN(content string, maxVisible int) string {
 	visible := make([]string, end-scrollStart)
 	copy(visible, lines[scrollStart:end])
 
+	// The markers carry the count. A bare ellipsis said only "there is more",
+	// which is the one thing the reader could already infer; what they cannot
+	// see is whether one line is hidden or thirty, and that is what decides
+	// whether scrolling is worth it. The list pane has said "[3/47]" in its
+	// border all along — this is the detail pane's version of the same fact.
 	if scrollStart > 0 {
-		visible[0] = dimStyle.Render("  (…)")
+		// The marker replaces the first visible line, so that line is hidden
+		// too and counts toward the total above.
+		visible[0] = dimStyle.Render(fmt.Sprintf(tr("  ↑ %d more"), scrollStart+1))
 	}
 	if end < len(lines) {
-		visible[len(visible)-1] = dimStyle.Render("  (…)")
+		visible[len(visible)-1] = dimStyle.Render(fmt.Sprintf(tr("  ↓ %d more"), len(lines)-end+1))
 	}
 
 	return strings.Join(visible, "\n")
@@ -858,18 +871,44 @@ func (m model) renderPalette(w int) string {
 
 // ── Key hints ─────────────────────────────────────────────────────────────────
 
+// hintLabelOverrides names what the toggle keys would do to the currently
+// selected task, rather than what they do in general. A footer that says
+// "t track" over a task that is already being tracked is not a hint, it is a
+// wrong answer; the keys toggle, so the label has to as well.
+func (m model) hintLabelOverrides() map[string]string {
+	t := m.currentTodo()
+	if t == nil {
+		return nil
+	}
+	var over map[string]string
+	set := func(action, label string) {
+		if over == nil {
+			over = make(map[string]string, 2)
+		}
+		over[action] = label
+	}
+	if t.IsTimerRunning() {
+		set("track", "stop")
+	}
+	if t.Status == todo.Done {
+		set("done", "reopen")
+	}
+	return over
+}
+
 func (m model) renderKeyHints(w int) string {
 	// Both the hint line and the help overlay are generated from the keymap
 	// registry (keymap.go), so they can't drift from each other or from
 	// dispatch.
 	ctx := m.currentKeyCtx()
-	hints := hintString(ctx, false)
+	over := m.hintLabelOverrides()
+	hints := hintString(ctx, false, over)
 	// Prefer the full hint line; when it can't fit, fall back to the curated
 	// short (primary-only) set instead of truncating mid-list — plain
 	// truncation always cut the same trailing keys (e.g. / search on the Tasks
 	// tab), hiding them at common terminal widths. hints is pre-Render plain
 	// text, so rune length is the display width.
-	if short := hintString(ctx, true); short != "" && len([]rune(hints)) > w {
+	if short := hintString(ctx, true, over); short != "" && len([]rune(hints)) > w {
 		hints = short
 	}
 	// 4-space indent aligns the hint under the box's inner content (margin 2 +
@@ -2093,15 +2132,26 @@ func (m model) renderTabs(avail int) string {
 	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"), tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings")}
 	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7"}
 
-	// abbr keeps the "N " prefix and the first 3 letters of the name ("1 Tas").
-	var abbr [numTabs]string
-	for i, n := range full {
-		space := strings.IndexByte(n, ' ')
-		word := []rune(n[space+1:])
-		if len(word) > 3 {
-			word = word[:3]
-		}
-		abbr[i] = n[:space+1] + string(word)
+	// abbr is the curated short label, one per tab, not a mechanical cut of the
+	// full one. Clipping to three letters produced "5 Boa", "6 Sta", "7 Set" —
+	// three tabs whose short forms say nothing and two that are nearly the same
+	// word — and it degrades worse in translation, where a German "7 Ein" is
+	// left of "Einstellungen". A tab that is already short keeps its full label
+	// here, which is why several entries repeat it: shortening a five-letter
+	// word to buy two cells costs more than the cells are worth.
+	abbr := [numTabs]string{tr("1 Tasks"), tr("2 Cal"), tr("3 Proj"), tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Setup")}
+
+	// Overdue work is the one fact worth carrying in the bar itself: it is the
+	// reason to go to the Tasks tab, and from any other tab there was nothing
+	// on screen that said so. The badge rides on the label rather than being
+	// drawn separately, so the width fitting below counts it and the bar cannot
+	// overflow the header on its account. It is deliberately not on the bare-
+	// numbers level — at that width the bar is already down to what it takes to
+	// say where you are.
+	if n := len(m.cache.overdueSet); n > 0 {
+		badge := " ⚠" + strconv.Itoa(n)
+		full[tabTasks] += badge
+		abbr[tabTasks] += badge
 	}
 
 	// The selected tab always shows its full label so it is never truncated

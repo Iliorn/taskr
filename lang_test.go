@@ -87,6 +87,9 @@ func dynamicUIStrings() []string {
 	for _, s := range shortLabel {
 		out = append(out, s)
 	}
+	// The footer relabels the toggle keys from what the selected task's state
+	// makes them mean, so these reach tr() through hintLabelOverrides' map.
+	out = append(out, "stop", "reopen")
 	out = append(out, helpSectionOrder...)
 	out = append(out, secDrill)
 	levels := []biasLevel{biasRelaxed, biasBalanced, biasIntense}

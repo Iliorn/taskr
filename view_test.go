@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
-	"github.com/Iliorn/taskr/todo"
 )
 
 // TestNarrowNoWrap ensures no rendered line ever exceeds the terminal width,
@@ -590,7 +590,11 @@ func TestDetailValuesTruncateWithoutBreakingEscapes(t *testing.T) {
 	}
 }
 
-func TestTaskTagOverflowShowsTruncationMarker(t *testing.T) {
+// A tag cell that cannot show its chips still has to say the tags exist — and
+// say how many. The old marker was a bare "(…)", which spent three cells on
+// "there is something here"; "+1" spends two on the same statement plus the
+// count.
+func TestTaskTagOverflowShowsHiddenCount(t *testing.T) {
 	before := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	applyTheme(themes[0])
@@ -623,17 +627,45 @@ func TestTaskTagOverflowShowsTruncationMarker(t *testing.T) {
 	if row == "" {
 		t.Fatal("task row should render")
 	}
-	if !strings.Contains(row, "(…)") {
-		t.Errorf("hidden tags should leave a truncation marker: %q", row)
+	if !strings.Contains(row, "+1") {
+		t.Errorf("hidden tags should leave a count of what was hidden: %q", row)
 	}
 	if strings.Contains(row, "a-tag-name-far-too-long") {
 		t.Errorf("overflowing tag should not leak past the marker: %q", row)
 	}
-	markerPos := strings.Index(rawRow, "(…)")
+	markerPos := strings.Index(rawRow, "+1")
 	wantTagPrefix := newFastStyle(tagStyle).prefix
 	if markerPos < 0 || !strings.Contains(rawRow[:markerPos], wantTagPrefix) {
 		t.Errorf("overflow marker should be rendered as a Tags-column value in tag colour (%q): %q",
 			wantTagPrefix, rawRow)
+	}
+}
+
+// The degraded cell is a fallback, not the rule: when the chips do fit
+// alongside a wider one, the ones that fit are drawn and only the remainder is
+// counted, so the most useful tag is still on screen.
+func TestTaskTagOverflowKeepsTheChipsThatFit(t *testing.T) {
+	task := todo.New("Short title")
+	task.Tags = []string{"bug", "a-tag-name-far-too-long-for-the-task-list-column"}
+	m := modelWithTasks(t, task)
+	m.termWidth = 80
+	m.refreshCaches()
+
+	var row string
+	for _, line := range strings.Split(m.View(), "\n") {
+		if plain := ansi.Strip(line); strings.Contains(plain, "Short title") {
+			row = plain
+			break
+		}
+	}
+	if row == "" {
+		t.Fatal("task row should render")
+	}
+	if !strings.Contains(row, "⟨#bug⟩") {
+		t.Errorf("the tag that fits should still be drawn: %q", row)
+	}
+	if !strings.Contains(row, "+1") {
+		t.Errorf("the tag that does not fit should be counted: %q", row)
 	}
 }
 
@@ -1142,5 +1174,196 @@ func TestEveryListMarksItsCursorTheSameWay(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// ── Row label: badges outlive the title ──────────────────────────────────────
+
+// The badges are four cells that change a decision — high priority, blocked,
+// recurring, how many subtasks are left. Concatenating them onto the title made
+// them the last runes of the string and so the first ones a narrow title column
+// threw away. The title is what has slack in it.
+func TestTaskRowBadgesSurviveTitleTruncation(t *testing.T) {
+	task := todo.New("A title long enough that it cannot possibly fit the column")
+	task.Priority = todo.PriorityHigh
+	sub := todo.NewSubtask("step one", task.ID)
+	m := modelWithTasks(t, task, sub)
+	m.termWidth = 70
+	m.refreshCaches()
+
+	var row string
+	for _, line := range strings.Split(m.View(), "\n") {
+		if plain := ansi.Strip(line); strings.Contains(plain, "A title long enough") {
+			row = plain
+			break
+		}
+	}
+	if row == "" {
+		t.Fatal("task row should render")
+	}
+	if !strings.Contains(row, ellipsis) {
+		t.Fatalf("this title should be clipped at width 70, so the test proves nothing: %q", row)
+	}
+	if !strings.Contains(row, "!") {
+		t.Errorf("the priority badge should outlive the clipped title: %q", row)
+	}
+	if !strings.Contains(row, "(0/1)") {
+		t.Errorf("the subtask badge should outlive the clipped title: %q", row)
+	}
+}
+
+func TestFitTaskRowLabelClipsTheTextNotTheBadges(t *testing.T) {
+	got := fitTaskRowLabel("⧗ ", "some long title here", " ! (1/2)", 16)
+	if !strings.HasPrefix(got, "⧗ ") {
+		t.Errorf("prefix should survive: %q", got)
+	}
+	if !strings.HasSuffix(got, " ! (1/2)") {
+		t.Errorf("badges should survive: %q", got)
+	}
+	if w := len([]rune(got)); w != 16 {
+		t.Errorf("label width = %d, want exactly the 16 cells it was given: %q", w, got)
+	}
+	// Nothing left to protect: the badges alone overrun the column, so the
+	// whole label is clipped rather than drawn past the column's edge.
+	if w := len([]rune(fitTaskRowLabel("⧗ ", "title", " ! (1/2)", 6))); w != 6 {
+		t.Errorf("over-full label should still be clipped to its column, got width %d", w)
+	}
+}
+
+// ── Row hierarchy ────────────────────────────────────────────────────────────
+
+// One style for the whole row made the score, the size and the project name
+// shout as loudly as the title, and painted an overdue row's project cell red —
+// a cell that has nothing to do with being overdue. The title carries the
+// status; the secondary columns are dim.
+func TestTaskRowDrawsMetadataDimmerThanTheTitle(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	applyTheme(themes[0])
+	defer func() {
+		lipgloss.SetColorProfile(before)
+		applyTheme(themes[0])
+	}()
+
+	task := todo.New("Ship the thing")
+	task.Project = "backend"
+	task.DueDate = time.Now().Add(-48 * time.Hour) // overdue
+	other := todo.New("Something else")
+	m := modelWithTasks(t, task, other)
+	m.termWidth = 120
+	m.cursor = 1 // keep the overdue row unselected
+	m.refreshCaches()
+
+	var raw string
+	for _, line := range strings.Split(m.View(), "\n") {
+		if strings.Contains(ansi.Strip(line), "Ship the thing") {
+			raw = line
+			break
+		}
+	}
+	if raw == "" {
+		t.Fatal("task row should render")
+	}
+	titleAt := strings.Index(raw, "Ship the thing")
+	projectAt := strings.Index(raw, "backend")
+	if titleAt < 0 || projectAt < 0 {
+		t.Fatalf("row should carry both the title and the project: %q", raw)
+	}
+	overdueSGR := newFastStyle(overdueStyle).prefix
+	dimSGR := newFastStyle(dimStyle).prefix
+	if !strings.Contains(raw[:titleAt], overdueSGR) {
+		t.Errorf("an overdue task's title should carry the overdue colour: %q", raw)
+	}
+	// The project cell is metadata: it must have switched to the dim tone
+	// somewhere between the title and itself, and must not still be overdue-red.
+	between := raw[titleAt:projectAt]
+	if !strings.Contains(between, dimSGR) {
+		t.Errorf("the project column should be dimmed, not painted with the row status: %q", raw)
+	}
+}
+
+// ── Closed-today block ───────────────────────────────────────────────────────
+
+// The list pane is a fixed-height box, so a short list drew the rest of the
+// screen as blanks. What the user closed today is the one read-out that belongs
+// in that space: it needs no cursor and no keys, and it closes the loop the
+// active list opens.
+func TestListPaneFillsSpareRowsWithTodaysCompletions(t *testing.T) {
+	open := todo.New("Still open")
+	done := todo.New("Finished this morning")
+	done.Status = todo.Done
+	done.CompletedAt = time.Now().Add(-2 * time.Hour)
+	m := modelWithTasks(t, open, done)
+	m.termWidth = 100
+	m.termHeight = 40
+	m.refreshCaches()
+
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, "Closed today (1)") {
+		t.Errorf("spare rows should carry today's completions: %q", view)
+	}
+	if !strings.Contains(view, "Finished this morning") {
+		t.Errorf("the completed task should be named: %q", view)
+	}
+}
+
+// A task closed on an earlier day is history, not today's read-out.
+func TestClosedTodayBlockIgnoresOlderCompletions(t *testing.T) {
+	open := todo.New("Still open")
+	done := todo.New("Finished last week")
+	done.Status = todo.Done
+	done.CompletedAt = time.Now().Add(-8 * 24 * time.Hour)
+	m := modelWithTasks(t, open, done)
+	m.termWidth = 100
+	m.termHeight = 40
+	m.refreshCaches()
+
+	if view := ansi.Strip(m.View()); strings.Contains(view, "Closed today") {
+		t.Errorf("an older completion should not appear as closed today: %q", view)
+	}
+}
+
+// A full list has no spare rows, so the block must not push the pane past its
+// height — it only ever fills space the active list is not using.
+func TestClosedTodayBlockStaysOutOfAFullList(t *testing.T) {
+	var tasks []todo.Todo
+	for i := 0; i < 40; i++ {
+		tasks = append(tasks, todo.New(fmt.Sprintf("Task %d", i)))
+	}
+	done := todo.New("Finished this morning")
+	done.Status = todo.Done
+	done.CompletedAt = time.Now().Add(-2 * time.Hour)
+	tasks = append(tasks, done)
+	m := modelWithTasks(t, tasks...)
+	m.termWidth = 100
+	m.termHeight = 24
+	m.refreshCaches()
+
+	if view := ansi.Strip(m.View()); strings.Contains(view, "Closed today") {
+		t.Errorf("a full list has no room for the block: %q", view)
+	}
+}
+
+// ── Contextual footer ────────────────────────────────────────────────────────
+
+// "t track" over a task whose timer is already running is not a hint, it is a
+// wrong answer. The key toggles, so the label has to as well.
+func TestFooterHintNamesWhatTheKeyWouldActuallyDo(t *testing.T) {
+	task := todo.New("Write the report")
+	m := modelWithTasks(t, task)
+	m.refreshCaches()
+	if hint := ansi.Strip(m.renderKeyHints(200)); !strings.Contains(hint, "track") {
+		t.Fatalf("an idle task should offer to start tracking: %q", hint)
+	}
+
+	cur := m.currentTodo()
+	cur.StartTimer()
+	m.refreshCaches()
+	hint := ansi.Strip(m.renderKeyHints(200))
+	if !strings.Contains(hint, "stop") {
+		t.Errorf("a running timer should offer to stop it: %q", hint)
+	}
+	if strings.Contains(hint, "start/stop time tracking") {
+		t.Errorf("the generic label should have been replaced: %q", hint)
 	}
 }

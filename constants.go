@@ -47,7 +47,12 @@ const (
 	// Activity-chart bar height: never squashed below the floor even on a
 	// short window, never past the ceiling even on a tall one (statsGradient
 	// runs out around there, and the stats list wants the rows more).
-	statsChartMinH = 5
+	//
+	// The floor is what a chart costs when there is barely anything to plot.
+	// At five it spent four empty rows above a single block on any quiet week
+	// — a chart that is mostly the space where bars would go, if there were
+	// any. Three keeps the shape readable and gives the rest back.
+	statsChartMinH = 3
 	statsChartMaxH = 12
 
 	minGanttBarWidth   = 10
@@ -137,6 +142,34 @@ const (
 	// list. At wider widths the column can grow past this to reveal the full
 	// project name; narrow layouts retain the familiar compact footprint.
 	projectColCompactW = 14
+
+	// tagsOverflowMinW is the smallest Tags cell worth keeping: a leading gap
+	// plus the "+N" count that stands in for the chips that did not fit. A row
+	// that has tags always gets at least this much, because "there are two more
+	// tags here" is a different statement from "this task has no tags", and the
+	// list cannot make it in fewer cells.
+	tagsOverflowMinW = 3
+
+	// barTrack is the glyph the unfilled part of a progress bar is drawn with.
+	// It used to be "░", a half-density shade block: on the Tags tab, where
+	// most rows sit at 0%, that meant twenty-odd shaded cells per row and a
+	// solid wall of texture down the pane in which no row could be told from
+	// any other. A rule reads better than a texture — the fill is a block, the
+	// track is a line — and the bar's extent is still visible.
+	barTrack = "─"
+
+	// tagsReservePct caps how much of the pane the Tags column may hold back
+	// from the task titles when the title column grows into spare width.
+	//
+	// Reserving the widest tag row's full width let one tag-heavy task clip
+	// every title in the list, and the reserved cells then went unused anyway,
+	// because the chips still did not fit and collapsed to a marker. The title
+	// is the primary read, so it takes what it needs first; the cap only bites
+	// when space is tight, which is exactly when the title needs it. Nothing is
+	// lost to the cap either — the tags cell is sized at render time from
+	// whatever the row has left, so width the title did not claim still ends up
+	// in the chips.
+	tagsReservePct = 20
 
 	footerHeight   = 1
 	minHeaderLines = 2

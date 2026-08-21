@@ -228,7 +228,13 @@ var shortLabel = map[string]string{
 // hintString renders the footer hint for a context from the registry. With
 // primaryOnly it emits just the curated short set (used when the full line
 // won't fit the terminal width), with terse labels.
-func hintString(ctx keyCtx, primaryOnly bool) string {
+//
+// overrides replaces an action's label with what that key would do to the row
+// the cursor is on right now — "stop" rather than "track" on a task whose timer
+// is running. The keys themselves are unconditional, so the hint stayed
+// unconditional with them and offered to start a timer that was already
+// running. Nil for a context with nothing to say about its selection.
+func hintString(ctx keyCtx, primaryOnly bool, overrides map[string]string) string {
 	var b []byte
 	first := true
 	for i := range keymap {
@@ -244,6 +250,9 @@ func hintString(ctx keyCtx, primaryOnly bool) string {
 			if s, ok := shortLabel[bd.action]; ok {
 				label = s
 			}
+		}
+		if s, ok := overrides[bd.action]; ok {
+			label = s
 		}
 		if !first {
 			b = append(b, " · "...)

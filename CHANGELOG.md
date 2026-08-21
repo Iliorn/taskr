@@ -8,7 +8,75 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Changed
+
+- **The task list reads as a list again.** Every row used to be painted in one
+  colour, so the score, the size and the project name shouted as loudly as the
+  title — and an overdue task turned its project name red, a cell that has
+  nothing to do with being overdue. The title now carries the row's status and
+  the secondary columns are dimmed, with the Due cell taking the status colour
+  only when the task is actually late.
+
+- **Titles keep their badges when they are clipped.** `!`, `↻`, `↥`, `↧` and the
+  `(1/2)` subtask count used to be appended to the title and truncated with it,
+  so a narrow column threw away the four cells that change a decision and kept
+  the middle of a sentence. Only the title text is clipped now.
+
+- **The tag cell says how many tags it hid.** One cell short of the full set and
+  the whole thing collapsed to a bare `(…)` — three cells spent to say "there is
+  something here you cannot see". The chips that fit are drawn and the rest are
+  counted: `⟨#bug⟩ +2`.
+
+- **Task titles get the width the tags were holding back.** The list reserved
+  room for the widest tag row before growing the title, so one tag-heavy task
+  clipped every title in the list — and the reserved cells then went unused,
+  because the chips did not fit anyway. The title takes what it needs first and
+  the tag cell fills what is left.
+
+- **Clipped text ends in `…` rather than `(…)`.** Two cells back on every
+  truncation, on the surfaces where those two cells were the ones that ran out.
+  Clipped panel rows now carry the marker too — the detail pane used to cut
+  sentences mid-word with nothing to show for it.
+
+- **The detail pane leads with what you act on.** The score sat below the task's
+  ID and two timestamps; it now sits with the other derived facts, and the
+  provenance rows follow. `Modified` is drawn only when it differs from
+  `Created`, and the score's factor breakdown gives way to the percentage alone
+  rather than being clipped into nonsense on a narrow pane.
+
+- **The detail pane says how much is off screen.** Its scroll markers were a
+  bare ellipsis at the top and bottom edge; they now read `↑ 3 more` /
+  `↓ 12 more`, the same fact the list pane has carried in its border all along.
+
+- **Board columns are sized by what they hold.** An equal split gave a board of
+  one busy stage and three empty ones four columns of the same width, clipping
+  the only real cards while three columns of blanks sat beside them. Every stage
+  keeps a floor so it stays a place to drop a card.
+
+- **Progress bars have a quieter track.** The unfilled part was a half-density
+  shade block, which on the Tags tab meant twenty-odd shaded cells on every row
+  sitting at 0% and a wall of texture in which no row could be told from
+  another. It is a thin rule now.
+
+- **The footer names what the key would actually do.** It offered `t track` over
+  a task whose timer was already running, and `d done` over a completed one.
+
+- **Narrow tab labels are chosen, not chopped.** The bar clipped every name to
+  three letters, producing `5 Boa`, `6 Sta`, `7 Set` — and worse in German,
+  where `7 Ein` is what was left of `Einstellungen`.
+
+- **The activity chart no longer reserves four empty rows** above a single block
+  on a quiet week.
+
 ### Added
+
+- **The list pane fills its spare rows with what you closed today.** A list
+  shorter than the window drew the rest of the pane as blanks; it now carries a
+  dim `Closed today (3)` read-out. No cursor, no keys — it only ever occupies
+  space the active list is not using.
+
+- **The Tasks tab carries an overdue count in the tab bar** (`1 Tasks ⚠3`), so
+  the reason to go there is visible from the tab you are on.
 
 - **Release binaries now carry build provenance.** Every published binary is
   signed by the release workflow through Sigstore and recorded in a public

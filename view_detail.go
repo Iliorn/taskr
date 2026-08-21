@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // joinColumns merges two pre-rendered column streams into one block. Each left
@@ -150,10 +150,10 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	timerVal := func(s string) string { return timerStyle.Render(s) }
 	doneVal := func(s string) string { return checkDoneStyle.Render(s) }
 
-	roField(tr("ID:"), plainVal, shortID(t.ID))
-	roField(tr("Created:"), plainVal, t.CreatedAt.Format("02-01-06 15:04"))
-	roField(tr("Modified:"), plainVal, t.ModifiedAt.Format("02-01-06 15:04"))
-
+	// Order within this block is derived-facts first, provenance last. Score is
+	// what the app is *for*, and it used to render below the task's UUID and
+	// two timestamps — three rows nobody acts on, sitting between the reader
+	// and the one number that explains the task's position in the list.
 	subTime := m.descendantTimeSpent(t.ID)
 	if len(t.TimeEntries) > 0 || subTime > 0 {
 		own := t.TotalTimeSpent()
@@ -196,8 +196,25 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		breakdown := fmt.Sprintf(tr("%s  (%sD %s · P %s · M %s · S %s · A %s)"),
 			formatSequencePercent(ranked), lift,
 			comp(sc.Urgency), comp(sc.Importance), comp(sc.Momentum), comp(sc.Size), comp(sc.Age))
+		// The components are an explanation, not a value: clipped to
+		// "(D 10.5 · P 10 · M 10 · S…" they explain nothing and cost a row
+		// saying so. When the column cannot hold the whole account, keep the
+		// percentage — which is the part the list column and the row's
+		// position agree on — and leave the breakdown to `w` and `taskr why`,
+		// which have the width for it.
+		if len([]rune(breakdown)) > valW {
+			breakdown = formatSequencePercent(ranked) + lift
+		}
 		roField(tr("Score:"), plainVal, breakdown)
 	}
+
+	roField(tr("Created:"), plainVal, t.CreatedAt.Format("02-01-06 15:04"))
+	// A task nobody has touched since creating it has nothing to say here, and
+	// the duplicate timestamp reads as though something happened.
+	if !t.ModifiedAt.Equal(t.CreatedAt) {
+		roField(tr("Modified:"), plainVal, t.ModifiedAt.Format("02-01-06 15:04"))
+	}
+	roField(tr("ID:"), plainVal, shortID(t.ID))
 
 	b.WriteString(left.String())
 	b.WriteString(right.String())

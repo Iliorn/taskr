@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -175,33 +174,17 @@ func (m *model) refreshUsageRecency(all []*todo.Todo) {
 // the task tree, so they're computed once per cache refresh instead of being
 // rescanned on every frame — the per-frame scan was O(active) and dominated the
 // render because it called subtaskProgress for every task.
-// It must mirror exactly the width every suffix/prefix renderTaskLineWithSet
-// adds, or the longest row eats into the gap before the Score column.
+// The title width comes from taskRowLabel, the same function the row renders
+// with, so the longest row cannot eat into the gap before the Score column.
 func (m *model) refreshTaskColMetrics() {
 	contentMax, tagsMax, projectMax := 0, 0, 0
 	hasDue := false
 	active := m.cache.active
 	for i := range active {
-		w := len([]rune(active[i].Title))
-		if active[i].Priority == todo.PriorityHigh {
-			w += 2 // " !"
-		}
-		if m.cache.blockerSet[active[i].ID] {
-			w += 2 // " ↥"
-		}
-		if m.cache.blockedSet[active[i].ID] {
-			w += 2 // " ↧"
-		}
-		if active[i].IsRecurring() {
-			w += 2 // " ↻"
-		}
-		if subDone, subTotal := m.subtaskProgress(active[i].ID); subTotal > 0 {
-			w += len([]rune(fmt.Sprintf(" (%d/%d)", subDone, subTotal)))
-		}
-		if active[i].IsTimerRunning() {
-			w += 2 // "⧗ " prefix
-		}
-		if w > contentMax {
+		// Same function the row draws with, so the width reserved here and the
+		// width drawn there cannot drift — which is what the two hand-kept
+		// copies of this arithmetic used to do every time a badge was added.
+		if w := taskRowLabelWidth(m.taskRowLabel(&active[i])); w > contentMax {
 			contentMax = w
 		}
 		if tw := tagsRenderWidth(active[i].Tags); tw > tagsMax {
@@ -383,6 +366,26 @@ func (m model) getProjectTasks(project string) []todo.Todo {
 		return tasks
 	}
 	return nil
+}
+
+// renderRowTags draws a task's Tags cell for a list row, taking the whole-set
+// render from the by-ID cache whenever the chips fit — which is the common case
+// and the one worth caching, since that string is identical frame to frame.
+// Only a row that has to drop chips pays to build its own.
+func (m *model) renderRowTags(t *todo.Todo, avail int, selected bool) (string, int) {
+	if len(t.Tags) == 0 || avail <= 0 {
+		return "", 0
+	}
+	full := 1 + tagsRenderWidth(t.Tags)
+	if full > avail {
+		return renderTaskTagsClipped(t.Tags, avail, selected)
+	}
+	// The selected row's chips carry the selection background, which the cache
+	// does not hold — it is one row per frame, so it renders its own.
+	if selected {
+		return renderTaskTagCells(t.Tags, "", true), full
+	}
+	return " " + m.getRenderedTagsForTask(t), full
 }
 
 // getRenderedTagsForTask returns a task's rendered tags via the by-ID cache

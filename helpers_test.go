@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"fmt"
+	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
-	"github.com/Iliorn/taskr/todo"
 )
 
 func TestIsHomebrewCellarPath(t *testing.T) {
@@ -109,11 +109,12 @@ func TestTruncate(t *testing.T) {
 	}{
 		{"short unchanged", "hi", 10, "hi"},
 		{"exact length", "hello", 5, "hello"},
-		{"needs truncation", "hello world", 8, "hello(…)"},
-		{"max 3 no ellipsis", "hello", 3, "hel"},
-		{"max 4 with ellipsis", "hello", 4, "h(…)"},
+		{"needs truncation", "hello world", 8, "hello w…"},
+		{"max 3", "hello", 3, "he…"},
+		{"max 4", "hello", 4, "hel…"},
 		{"empty string", "", 5, ""},
-		{"max 1", "hello", 1, "h"},
+		{"max 1 is the marker alone", "hello", 1, "…"},
+		{"max 0", "hello", 0, ""},
 	}
 
 	for _, tt := range tests {
@@ -529,26 +530,26 @@ func TestNameColWidth(t *testing.T) {
 
 // ── taskListCols title growth ───────────────────────────────────────────────
 
-func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
-	// shownColsW reconstructs the fixed-column budget from a laid-out listCols so
-	// the no-overflow check below doesn't depend on taskListCols internals.
-	shownColsW := func(c listCols) int {
-		w := 0
-		if c.showSize {
-			w += c.sizeW
-		}
-		if c.showDue {
-			w += c.dueW
-		}
-		if c.showLast {
-			w += c.lastW
-		}
-		if c.showProject {
-			w += c.projectW
-		}
-		return w
+// shownColsW reconstructs the fixed-column budget from a laid-out listCols so
+// the no-overflow checks don't depend on taskListCols internals.
+func shownColsW(c listCols) int {
+	w := 0
+	if c.showSize {
+		w += c.sizeW
 	}
+	if c.showDue {
+		w += c.dueW
+	}
+	if c.showLast {
+		w += c.lastW
+	}
+	if c.showProject {
+		w += c.projectW
+	}
+	return w
+}
 
+func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 	tests := []struct {
 		name       string
 		termWidth  int
@@ -577,13 +578,17 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 				t.Errorf("titleW = %d, exceeds content need %d", c.titleW, want)
 			}
 
-			// No-wrap contract: title + fixed cells + the widest row's tags
-			// (a leading space + tagsMax) must fit the inner width.
+			// No-wrap contract: title + fixed cells + a tags cell that can at
+			// least carry its "+N" count must fit the inner width. The cell
+			// itself is sized at render time from what the row has left over
+			// (renderTaskTagsFitted), so the columns only have to guarantee it
+			// somewhere to live — reserving the widest row's full tag width
+			// here is what used to clip every title in the list.
 			const fixed = 6
 			inner := tt.termWidth - 8
 			tagsReserve := 0
 			if tt.tagsMax > 0 {
-				tagsReserve = 1 + tt.tagsMax
+				tagsReserve = tagsOverflowMinW
 			}
 			if total := c.titleW + fixed + shownColsW(c) + tagsReserve; total > inner {
 				t.Errorf("titleW=%d + fixed + cols + tags = %d overflows inner %d",
@@ -611,6 +616,27 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 	if !(withTags.titleW < noTags.titleW) {
 		t.Errorf("titleW with tags reserve = %d, want < no-reserve %d",
 			withTags.titleW, noTags.titleW)
+	}
+	// ...but only up to the cap. One tag-heavy row must not hold back an
+	// unbounded amount of title width, because the chips degrade to "+N" and
+	// the held-back cells would go unused.
+	inner := 160 - 8
+	huge := taskListCols(160, false, 120, inner, true, 8, 0)
+	if held := noTags.titleW - huge.titleW; held > inner*tagsReservePct/100 {
+		t.Errorf("a tag-heavy row held back %d cells of title, want at most %d%%  of inner (%d)",
+			held, tagsReservePct, inner*tagsReservePct/100)
+	}
+}
+
+// The Tags column is allowed to cost other columns their place, but only the
+// three cells it takes to say "+N". A row that has tags and no room for them
+// should still report that they exist.
+func TestNarrowListKeepsRoomForTheTagCount(t *testing.T) {
+	c := taskListCols(60, false, 40, 30, true, 8, 8)
+	const fixed = 6
+	inner := 60 - 8
+	if left := inner - fixed - c.titleW - shownColsW(c); left < tagsOverflowMinW {
+		t.Errorf("narrow list left %d cells for the tags cell, want >= %d", left, tagsOverflowMinW)
 	}
 }
 
@@ -1294,4 +1320,79 @@ func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
 			t.Fatal("an asset with no published checksum was installed")
 		}
 	})
+}
+
+// ── Row label / column metric agreement ──────────────────────────────────────
+
+// The title column is sized from taskRowLabel and drawn from taskRowLabel, so
+// the reserved width and the drawn width cannot drift. This used to be two
+// hand-kept copies of the same arithmetic, one in cache.go and one in the
+// renderer, and every badge added since had to be added to both.
+func TestTitleColumnReservesExactlyWhatTheRowDraws(t *testing.T) {
+	task := todo.New("Ship the release")
+	task.Priority = todo.PriorityHigh
+	task.Recurrence = "weekly"
+	sub := todo.NewSubtask("write notes", task.ID)
+	m := modelWithTasks(t, task, sub)
+	m.termWidth = 200 // wide enough that nothing is clipped
+	m.refreshCaches()
+
+	cur := m.get(task.ID)
+	if cur == nil {
+		t.Fatal("task should be in the store")
+	}
+	prefix, text, badges := m.taskRowLabel(cur)
+	want := taskRowLabelWidth(prefix, text, badges)
+	if m.cache.activeColContentMax != want {
+		t.Errorf("reserved content width = %d, row draws %d (%q|%q|%q)",
+			m.cache.activeColContentMax, want, prefix, text, badges)
+	}
+	// And the badges really are on the label, not folded into the title.
+	if text != task.Title {
+		t.Errorf("title text = %q, want the bare title %q", text, task.Title)
+	}
+	for _, badge := range []string{"!", "↻", "(0/1)"} {
+		if !strings.Contains(badges, badge) {
+			t.Errorf("badges %q should carry %q", badges, badge)
+		}
+	}
+}
+
+// ── Tag cell ─────────────────────────────────────────────────────────────────
+
+func TestTagCellDropsChipsOneAtATime(t *testing.T) {
+	tags := []string{"bug", "ci", "release"}
+	full := 1 + tagsRenderWidth(tags)
+
+	// Everything fits: no marker.
+	if got, w := renderTaskTagsClipped(tags, full+10, false); w != 0 && strings.Contains(ansi.Strip(got), "+") {
+		t.Errorf("a cell with room for every chip should carry no count: %q", ansi.Strip(got))
+	}
+	// One cell short of the full set: the last chip goes, the count arrives.
+	got, w := renderTaskTagsClipped(tags, full-1, false)
+	plain := ansi.Strip(got)
+	if !strings.Contains(plain, "⟨#bug⟩") {
+		t.Errorf("the first chip should survive: %q", plain)
+	}
+	if !strings.Contains(plain, "+1") {
+		t.Errorf("the dropped chip should be counted: %q", plain)
+	}
+	if w > full-1 {
+		t.Errorf("cell drew %d cells, was given %d", w, full-1)
+	}
+	if aw := ansi.StringWidth(got); aw != w {
+		t.Errorf("reported width %d disagrees with the rendered %d", w, aw)
+	}
+	// Room for nothing but the count.
+	got, w = renderTaskTagsClipped(tags, tagsOverflowMinW, false)
+	if plain := ansi.Strip(got); !strings.Contains(plain, "+3") {
+		t.Errorf("a minimal cell should still say all three are hidden: %q", plain)
+	}
+	if w > tagsOverflowMinW {
+		t.Errorf("minimal cell drew %d cells, was given %d", w, tagsOverflowMinW)
+	}
+	// No room at all: draw nothing rather than overflow the row.
+	if got, w := renderTaskTagsClipped(tags, 1, false); got != "" || w != 0 {
+		t.Errorf("a cell with no room should draw nothing, got %q (%d)", ansi.Strip(got), w)
+	}
 }

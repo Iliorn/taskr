@@ -166,6 +166,10 @@ var (
 	confirmStyle lipgloss.Style
 	searchStyle  lipgloss.Style
 	dimStyle     lipgloss.Style
+	// selectedDimRowStyle is the dim tone carrying the selection background, so
+	// a selected row's secondary columns stay secondary instead of jumping to
+	// full strength the moment the cursor lands on them.
+	selectedDimRowStyle lipgloss.Style
 
 	// Toast styles by kind (see toastKind / renderStatusLine). Error reuses the
 	// red confirm colour; success is green, info a calm blue.
@@ -265,6 +269,7 @@ func applyTheme(t theme) {
 	toastInfoStyle = lipgloss.NewStyle().Foreground(t.blue).Bold(true)
 	searchStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.green).Padding(0, 1).MarginLeft(2)
 	dimStyle = lipgloss.NewStyle().Foreground(t.dim)
+	selectedDimRowStyle = dimStyle.Background(t.sel)
 
 	focusChipStyle = lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(t.orange).Padding(0, 1)
 	searchChipStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)

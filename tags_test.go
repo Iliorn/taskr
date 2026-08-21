@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // newTagModel returns a model with a known, hermetic set of todos (initialModel
@@ -268,7 +268,7 @@ func TestTagBarExpandsWithWidth(t *testing.T) {
 		m.refreshCaches()
 
 		out := m.renderTagList()
-		// Measure bar width by counting █ and ░ on the data row (the header
+		// Measure bar width by counting █ and ─ on the data row (the header
 		// row won't have them). A partial-block glyph (▏▎▍▌▋▊▉) occupies one
 		// cell and one Unicode code-point; ansi.StringWidth counts it correctly.
 		barW := 0
@@ -277,7 +277,7 @@ func TestTagBarExpandsWithWidth(t *testing.T) {
 			cellW := 0
 			for _, ch := range plain {
 				switch ch {
-				case '█', '░':
+				case '█', '─':
 					cellW++
 				case '▏', '▎', '▍', '▌', '▋', '▊', '▉':
 					cellW++

@@ -150,6 +150,7 @@ func (m model) renderBoardList() string {
 		budget = 4
 	}
 	selCol, selCursor := m.boardSelection(cols)
+	widths := boardColWidths(cols[start:start+count], titles[start:start+count], colW*count+(count-1)*boardColGap)
 	rendered := make([][]string, 0, count)
 	for c := start; c < start+count; c++ {
 		cursor := -1
@@ -157,9 +158,84 @@ func (m model) renderBoardList() string {
 			cursor = selCursor
 		}
 		rendered = append(rendered,
-			m.renderBoardColumn(cols[c], titles[c], c == n-1, cursor, colW, budget))
+			m.renderBoardColumn(cols[c], titles[c], c == n-1, cursor, widths[c-start], budget))
 	}
-	return zipColumns(colW, boardColGap, rendered...)
+	return zipColumnsW(widths, boardColGap, rendered...)
+}
+
+// boardColWidths splits the board's width across the visible columns in
+// proportion to what each one has to show, instead of giving every column an
+// equal share. An equal split is what made a board of one busy stage and three
+// empty ones clip its only real cards at twenty characters while three columns
+// of blanks sat beside them at the same width.
+//
+// Every column keeps boardMinColW so an empty stage is still a place a card can
+// be moved to and its heading stays readable; the surplus above that floor goes
+// to the columns that can use it, and no column grows past what it actually
+// wants. This is the same rule the Tasks tab's title column follows
+// (contentFitWidth) — hug the content, cap at a share of the pane — so the
+// board reflows on a resize the way the rest of the app does.
+func boardColWidths(cols [][]todo.Todo, titles []string, availW int) []int {
+	n := len(cols)
+	widths := make([]int, n)
+	if n == 0 {
+		return widths
+	}
+	budget := availW - (n-1)*boardColGap
+	// want is the width that would clip nothing: the widest card (plus the
+	// cursor marker and the priority "!") or the heading with its count,
+	// whichever is longer.
+	want := make([]int, n)
+	surplus := budget
+	for i := range cols {
+		want[i] = len([]rune(fmt.Sprintf("%s (%d)", titles[i], len(cols[i]))))
+		for j := range cols[i] {
+			w := len([]rune(cols[i][j].Title)) + len([]rune(cursorGap)) + 2 // marker + " !"
+			if w > want[i] {
+				want[i] = w
+			}
+		}
+		if want[i] < boardMinColW {
+			want[i] = boardMinColW
+		}
+		widths[i] = boardMinColW
+		surplus -= boardMinColW
+	}
+	if surplus <= 0 {
+		// Nothing to share out: fall back to the equal split the caller sized
+		// its window with, which is what boardWindow already guaranteed fits.
+		even := budget / n
+		for i := range widths {
+			widths[i] = even
+		}
+		widths[n-1] += budget - even*n
+		return widths
+	}
+	// Hand out the surplus in proportion to how much each column still wants,
+	// then give any rounding residue to the hungriest column so the row fills
+	// the pane exactly rather than leaving a ragged edge.
+	totalWant := 0
+	for i := range want {
+		totalWant += want[i] - boardMinColW
+	}
+	left, hungriest := surplus, 0
+	for i := range widths {
+		if totalWant > 0 {
+			grow := surplus * (want[i] - boardMinColW) / totalWant
+			if grow > want[i]-boardMinColW {
+				grow = want[i] - boardMinColW
+			}
+			widths[i] += grow
+			left -= grow
+		}
+		if want[i]-widths[i] > want[hungriest]-widths[hungriest] {
+			hungriest = i
+		}
+	}
+	if left > 0 {
+		widths[hungriest] += left
+	}
+	return widths
 }
 
 // renderBoardColumn builds one column's lines: header with count, a rule, then

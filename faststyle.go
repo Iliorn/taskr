@@ -63,6 +63,7 @@ var (
 	fastCheckDone  fastStyle
 
 	fastSelectedRow        fastStyle
+	fastSelectedDim        fastStyle
 	fastSelectedOverdue    fastStyle
 	fastSelectedDepOverdue fastStyle
 	fastSelectedTimer      fastStyle
@@ -78,6 +79,7 @@ func rebuildFastStyles() {
 	fastCheckDone = newFastStyle(checkDoneStyle)
 
 	fastSelectedRow = newFastStyle(selectedRowStyle)
+	fastSelectedDim = newFastStyle(selectedDimRowStyle)
 	fastSelectedOverdue = newFastStyle(selectedOverdueRowStyle)
 	fastSelectedDepOverdue = newFastStyle(selectedDepOverdueRowStyle)
 	fastSelectedTimer = newFastStyle(selectedTimerRowStyle)
