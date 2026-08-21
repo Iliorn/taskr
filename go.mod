@@ -2,6 +2,13 @@ module github.com/Iliorn/taskr
 
 go 1.25.0
 
+// The language/compatibility minimum above is a claim about what source this
+// module needs. This is a claim about what builds it: every Go before 1.25.13
+// carries stdlib advisories in net/http, crypto/tls and net/url, all of which
+// the sync client and server reach. Releases are built from go.mod, so without
+// this the signed binaries would ship the vulnerable standard library.
+toolchain go1.25.13
+
 require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10

@@ -104,13 +104,20 @@ func checkContract(t *testing.T, name string, got string) {
 		}
 		return
 	}
-	want, err := os.ReadFile(golden)
+	raw, err := os.ReadFile(golden)
 	if err != nil {
 		t.Fatalf("read %s: %v (run with -update-json-contract to create it)", golden, err)
 	}
-	if got != string(want) {
+	// The golden holds one key path per line, and a line ending is not part of
+	// the contract it records. A Windows checkout hands these files back with
+	// CRLF, which made every key differ from its own self — the whole file
+	// reported as removed and re-added, on the one platform where nothing had
+	// actually changed. .gitattributes pins the checkout too; this is the half
+	// that does not depend on the clone being configured correctly.
+	want := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	if got != want {
 		t.Errorf("`taskr %s --json` shape changed.\n%s\nRerun with -update-json-contract if this is intended — and consider whether it breaks somebody's script.",
-			name, diffLines(string(want), got))
+			name, diffLines(want, got))
 	}
 }
 

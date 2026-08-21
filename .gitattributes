@@ -1,0 +1,4 @@
+# Golden files record key paths, one per line; a line ending is not part of
+# the contract. Without this a Windows checkout rewrites them to CRLF and every
+# key differs from itself.
+testdata/** text eol=lf
