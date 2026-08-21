@@ -792,19 +792,16 @@ func (m model) renderTaskList() string {
 // nothing above them changes, and the block only ever occupies space the active
 // list is not using. free is how many rows are going spare; the block declines
 // to draw at all below the three it takes to be worth reading (a separating
-// blank, its label, and one task).
+// blank, its label, and one task). The set itself comes from the cache
+// (refreshClosedToday) rather than from a scan of cache.done, which carries the
+// user's history sort and is not ordered by completion time at all under
+// historySortAlpha.
 func (m model) renderClosedTodayBlock(b *strings.Builder, free int) {
 	if free < 3 || m.showHistory {
 		return
 	}
-	today := startOfDay(m.frameTime)
-	done := m.cache.done
-	// cache.done is sorted newest-first by the history sort, so the first run of
-	// today's completions is all of them.
-	n := 0
-	for n < len(done) && startOfDay(done[n].CompletedAt).Equal(today) {
-		n++
-	}
+	done := m.cache.closedToday
+	n := len(done)
 	if n == 0 {
 		return
 	}

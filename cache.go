@@ -35,6 +35,11 @@ type cacheState struct {
 	tagRender     map[string]string
 	taskTagRender map[string]string
 	boardCols     [][]todo.Todo // Board-tab columns derived from active/done; see buildBoardColumns
+	// closedToday is the tasks completed since midnight, newest first, for the
+	// read-out that fills the list pane's spare rows. It is derived here rather
+	// than scanned per frame for the reason the row metrics are: View runs on
+	// every keystroke, and the done list is the one that only ever grows.
+	closedToday []todo.Todo
 
 	projectSearch string
 
@@ -108,6 +113,7 @@ func (m *model) refreshCaches() {
 
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
+	m.refreshClosedToday()
 	m.cache.boardCols = buildBoardColumns(m.cache.active, m.cache.done)
 
 	m.cache.dirty = false
@@ -176,6 +182,31 @@ func (m *model) refreshUsageRecency(all []*todo.Todo) {
 // render because it called subtaskProgress for every task.
 // The title width comes from taskRowLabel, the same function the row renders
 // with, so the longest row cannot eat into the gap before the Score column.
+// refreshClosedToday collects the tasks completed since midnight.
+//
+// It cannot take the head of cache.done and stop at the first older entry: that
+// list carries whichever history sort the user picked, and under historySortAlpha
+// it is ordered A→Z — so the scan stopped at the first task alphabetically and
+// silently dropped the rest of the day, or all of it. The whole list is scanned
+// and the result ordered on its own terms.
+func (m *model) refreshClosedToday() {
+	m.cache.closedToday = m.cache.closedToday[:0]
+	today := startOfDay(m.frameTime)
+	done := m.cache.done
+	for i := range done {
+		if startOfDay(done[i].CompletedAt).Equal(today) {
+			m.cache.closedToday = append(m.cache.closedToday, done[i])
+		}
+	}
+	sort.Slice(m.cache.closedToday, func(i, j int) bool {
+		a, b := m.cache.closedToday[i], m.cache.closedToday[j]
+		if !a.CompletedAt.Equal(b.CompletedAt) {
+			return a.CompletedAt.After(b.CompletedAt)
+		}
+		return a.ID < b.ID // total order, same as every other comparator
+	})
+}
+
 func (m *model) refreshTaskColMetrics() {
 	contentMax, tagsMax, projectMax := 0, 0, 0
 	hasDue := false
@@ -221,6 +252,7 @@ func (m *model) refreshFilteredCaches() {
 	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
+	m.refreshClosedToday()
 	m.cache.boardCols = buildBoardColumns(m.cache.active, m.cache.done)
 	m.cache.filterDirty = false
 }

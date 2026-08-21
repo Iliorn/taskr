@@ -569,7 +569,7 @@ func TestTaskListColsTitleGrowsOnWideTerminal(t *testing.T) {
 
 			// Never wider than the longest title needs (+gap), but at least the
 			// header label — growth must not produce an empty padded column.
-			floor := len([]rune(tr("Active tasks")))
+			floor := len([]rune(tr("Active tasks"))) + listColGap
 			want := tt.contentMax + listColGap
 			if want < floor {
 				want = floor
@@ -1394,5 +1394,16 @@ func TestTagCellDropsChipsOneAtATime(t *testing.T) {
 	// No room at all: draw nothing rather than overflow the row.
 	if got, w := renderTaskTagsClipped(tags, 1, false); got != "" || w != 0 {
 		t.Errorf("a cell with no room should draw nothing, got %q (%d)", ansi.Strip(got), w)
+	}
+}
+
+// A list whose longest title is shorter than its own column header sized the
+// title column to exactly the header, and the header then ran into the next
+// one: "Active tasksScore".
+func TestShortTitlesStillLeaveAGapAfterTheHeader(t *testing.T) {
+	c := taskListCols(100, false, 4, 0, false, 0, 0)
+	if c.titleW < len([]rune(tr("Active tasks")))+listColGap {
+		t.Errorf("titleW = %d, want at least the header plus its gap (%d)",
+			c.titleW, len([]rune(tr("Active tasks")))+listColGap)
 	}
 }

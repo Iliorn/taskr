@@ -1307,6 +1307,34 @@ func TestListPaneFillsSpareRowsWithTodaysCompletions(t *testing.T) {
 	}
 }
 
+// cache.done carries whichever history sort the user picked. Under
+// historySortAlpha it is ordered A→Z, so taking its head and stopping at the
+// first older entry dropped the rest of the day — or all of it, when the
+// alphabetically-first completion happened to be an old one.
+func TestClosedTodayBlockDoesNotDependOnTheHistorySort(t *testing.T) {
+	open := todo.New("Still open")
+	old := todo.New("Apple closed last week")
+	old.Status = todo.Done
+	old.CompletedAt = time.Now().Add(-7 * 24 * time.Hour)
+	recent := todo.New("Zebra closed today")
+	recent.Status = todo.Done
+	recent.CompletedAt = time.Now().Add(-time.Hour)
+
+	m := modelWithTasks(t, open, old, recent)
+	m.historySort = historySortAlpha
+	m.termWidth = 100
+	m.termHeight = 40
+	m.refreshCaches()
+
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, "Zebra closed today") {
+		t.Errorf("today's completion should show whatever the history sort is: %q", view)
+	}
+	if strings.Contains(view, "Apple closed last week") {
+		t.Errorf("a week-old completion should not reach today's block: %q", view)
+	}
+}
+
 // A task closed on an earlier day is history, not today's read-out.
 func TestClosedTodayBlockIgnoresOlderCompletions(t *testing.T) {
 	open := todo.New("Still open")

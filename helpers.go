@@ -350,9 +350,15 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	// Title column fits its longest entry (+ the shared column gap), floored to
 	// the header label so it never truncates, capped by the shared responsive
 	// width.
-	floor := len([]rune(tr("Active tasks")))
+	// The floor carries the column gap, not just the label. Without it a list
+	// whose longest title is shorter than its own header sized the column to
+	// exactly the header, and the header ran straight into the next one:
+	// "Active tasksScore". Real titles usually dwarf the label, which is why
+	// this only showed on a short list — the Projects tab already floors this
+	// way for the same reason, its names being as short as "Project".
+	floor := len([]rune(tr("Active tasks"))) + listColGap
 	if isHistory {
-		floor = len([]rune(tr("Completed tasks")))
+		floor = len([]rune(tr("Completed tasks"))) + listColGap
 	}
 	c.titleW = contentFitWidth(termWidth, contentMax, listColGap, floor)
 

@@ -68,6 +68,10 @@ belong in the commit log, not here — unless they change behaviour.
 - **The activity chart no longer reserves four empty rows** above a single block
   on a quiet week.
 
+- **A short task list no longer runs its column headers together.** The title
+  column was sized to exactly its own header when every title was shorter than
+  the word "Active tasks", so the header met the next one with no gap.
+
 ### Added
 
 - **The list pane fills its spare rows with what you closed today.** A list
