@@ -68,6 +68,8 @@ git push origin v1.10.0       # ← triggers the build + release
 
 Patch bumps are the norm for stat/layout tweaks; minor bumps for new interactive features.
 
+The release body is the CHANGELOG section for the tag (`packaging/release-notes.sh`, tied to the real file by `TestReleaseNotesExtractionMatchesTheChangelog`), so **a CHANGELOG entry is one line** — capped and enforced by `TestChangelogEntriesAreOneLine`. The reader of a release page is deciding whether to upgrade, not reviewing the change; the argument for a change goes in the commit message, next to the code it explains. Writing the entry as a headline plus a paragraph of reasoning is the failure mode this replaced, and it is the one that comes back by default.
+
 The manual equivalent (if ever building locally) is the same two Linux/Windows `go build -ldflags "-s -w -X main.appVersion=$V"` invocations, feeding `taskr` and `taskr.exe` to `gh release create`. `-s -w` strips the symbol table and DWARF debug info, cutting ~30% off each binary with no functional change; local dev builds (`go run .` / `go build .`) deliberately keep them so `dlv` and rich panic traces still work.
 
 ## Architecture

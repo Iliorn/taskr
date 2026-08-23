@@ -208,3 +208,53 @@ func TestGoInstallPathMatchesModulePath(t *testing.T) {
 		t.Errorf("README documents `go install %s@latest`, but go.mod declares module %q — that install fails with a module path mismatch", got, modulePath)
 	}
 }
+
+// changelogEntryMaxLen caps a CHANGELOG bullet, marker included. Wide enough
+// for a sentence naming a flag or a key, too narrow for a second clause.
+const changelogEntryMaxLen = 100
+
+// A CHANGELOG entry is one line, and this is what keeps it that way.
+//
+// The file grew to 661 lines of entries that each opened with a bold headline
+// and then explained themselves for a paragraph — the reasoning was good, it
+// was just written for the wrong reader. Someone reading a release page is
+// deciding whether to upgrade; the argument for a change belongs in the commit
+// message, next to the code it explains, where it does not have to be re-read
+// by everyone who ever upgrades. The rule is stated at the top of the file for
+// the human writing an entry, and enforced here because a prose convention with
+// nothing checking it lasts exactly as long as the memory of the conversation
+// that set it.
+//
+// Only entries are checked. The prose above the first release heading, the
+// headings themselves and any blank lines are not entries and are left alone.
+func TestChangelogEntriesAreOneLine(t *testing.T) {
+	data, err := os.ReadFile("CHANGELOG.md")
+	if err != nil {
+		t.Fatalf("read CHANGELOG.md: %v", err)
+	}
+	lines := strings.Split(string(data), "\n")
+	inEntries := false
+	for i, line := range lines {
+		if strings.HasPrefix(line, "## ") {
+			// The header prose ends at the first release heading.
+			inEntries = true
+			continue
+		}
+		if !inEntries || !strings.HasPrefix(line, "- ") {
+			continue
+		}
+		if n := len([]rune(line)); n > changelogEntryMaxLen {
+			t.Errorf("CHANGELOG.md:%d is %d characters, over the %d-character entry cap — say less, or say the rest in the commit message:\n%s",
+				i+1, n, changelogEntryMaxLen, line)
+		}
+		// A continuation line is the shape the old paragraphs came back in:
+		// anything indented under the bullet rather than starting a new one.
+		if i+1 < len(lines) {
+			next := lines[i+1]
+			if strings.HasPrefix(next, "  ") && strings.TrimSpace(next) != "" {
+				t.Errorf("CHANGELOG.md:%d runs onto a second line — an entry is one line:\n%s\n%s",
+					i+1, line, next)
+			}
+		}
+	}
+}
