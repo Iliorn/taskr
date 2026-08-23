@@ -1358,13 +1358,15 @@ type settingsGroup struct {
 }
 
 var settingsPreferenceGroups = []settingsGroup{
+	{title: "Appearance", rows: []int{
+		settingTheme,
+		settingLanguage,
+	}},
 	{title: "General", rows: []int{
 		settingAutoCloseParent,
 		settingAutoCloseSubtasks,
 		settingShowBoard,
 		settingStages,
-		settingTheme,
-		settingLanguage,
 	}},
 	{title: "Sync", rows: []int{
 		settingSyncAuto,
@@ -1508,14 +1510,17 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 	if m.syncCfg.Token != "" {
 		syncTokenVal = "•••• " + tr("set")
 	}
+	// Off is the answer for every machine that is not the hub, which is most
+	// of them. The row used to read "needs token" instead, which stated a
+	// prerequisite as if it were an outstanding task — the token is only
+	// needed by someone who wants to turn this on, and toggleServer says so
+	// in the footer the moment they try.
 	serverState := tr("Off")
 	switch {
 	case m.inprocServer != nil:
 		serverState = tr("On")
 	case m.serverExternal:
 		serverState = tr("external")
-	case m.syncCfg.ServerToken == "":
-		serverState = tr("needs token")
 	}
 	serverTokenVal := tr("not set")
 	if m.syncCfg.ServerToken != "" {

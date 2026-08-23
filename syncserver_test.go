@@ -10,13 +10,19 @@ import (
 func TestServerSettingsRender(t *testing.T) {
 	m := initialModel(&fakeRepo{})
 
-	// Unconfigured: no token → "needs token", listen shows the default.
+	// Unconfigured: the row reads Off, listen shows the default. Off is the
+	// truth on every machine that is not the hub; the missing token is a
+	// prerequisite of turning it on, not a task the pane should hand out, and
+	// toggleServer names it in the footer for whoever actually tries.
 	m.syncCfg = syncConfig{}
 	out := m.renderSettingsList()
-	for _, want := range []string{"Server", "Listen", "Server token", "needs token", defaultServerListen, "not set"} {
+	for _, want := range []string{"Server", "Listen", "Server token", "‹ Off ›", defaultServerListen, "not set"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("unconfigured server settings should show %q; got:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "needs token") {
+		t.Errorf("an idle server row must not read as an outstanding task; got:\n%s", out)
 	}
 
 	// Token set, not running → "Off", token masked (never plaintext).

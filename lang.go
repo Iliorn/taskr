@@ -575,8 +575,9 @@ var daTranslations = map[string]string{
 	"Due date (dd-mm-yy, 'today', 'next week', '+3d')...":   "Forfaldsdato (dd-mm-yy, 'today', 'next week', '+3d')...",
 
 	// ── Settings group headings ──
-	"General": "Generelt",
-	"About":   "Om",
+	"Appearance": "Udseende",
+	"General":    "Generelt",
+	"About":      "Om",
 
 	// Row labels that sit under a heading naming the same thing.
 	"Automatic": "Automatisk",
@@ -592,7 +593,6 @@ var daTranslations = map[string]string{
 	"Server token":                    "Servertoken",
 	"press enter to sync":             "tryk enter",
 	"needs server":                    "kræver server",
-	"needs token":                     "kræver token",
 	"external":                        "ekstern",
 	"set":                             "sat",
 	"On":                              "Til",
@@ -1175,8 +1175,9 @@ var deTranslations = map[string]string{
 	"Due date (dd-mm-yy, 'today', 'next week', '+3d')...":   "Fälligkeit (dd-mm-yy, 'today', 'next week', '+3d')…",
 
 	// ── Settings group headings ──
-	"General": "Allgemein",
-	"About":   "Über",
+	"Appearance": "Darstellung",
+	"General":    "Allgemein",
+	"About":      "Über",
 
 	// Row labels that sit under a heading naming the same thing.
 	"Automatic": "Automatisch",
@@ -1192,7 +1193,6 @@ var deTranslations = map[string]string{
 	"Server token":                    "Server-Token",
 	"press enter to sync":             "enter synct",
 	"needs server":                    "Server fehlt",
-	"needs token":                     "Token fehlt",
 	"external":                        "extern",
 	"set":                             "gesetzt",
 	"On":                              "An",

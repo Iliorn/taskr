@@ -466,3 +466,25 @@ func TestSettingsEnterAndRightAgreeOnEveryToggleRow(t *testing.T) {
 		}
 	}
 }
+
+// Theme and Language open the pane. They are the settings someone changes on
+// day one, and they sat six rows down behind the auto-close toggles.
+func TestSettingsOpensWithAppearance(t *testing.T) {
+	first := settingsPreferenceGroups[0]
+	if got := []int{settingTheme, settingLanguage}; len(first.rows) != len(got) ||
+		first.rows[0] != settingTheme || first.rows[1] != settingLanguage {
+		t.Fatalf("the first Preferences group is %q %v, want Theme then Language", first.title, first.rows)
+	}
+	if got := settingsPreferencesLine(settingTheme); got != 1 {
+		t.Errorf("Theme renders on pane line %d, want 1 (the line under the first heading)", got)
+	}
+	// And the pane's first heading is the one the cursor starts under, not a
+	// group the reader has to scroll past.
+	m := settingsModel(t)
+	m.settingsCursor = settingTheme
+	preferences, _ := m.renderSettingsSections(60, 60)
+	lines := strings.Split(ansi.Strip(preferences), "\n")
+	if !strings.Contains(lines[0], tr("Appearance")) {
+		t.Errorf("first pane line is %q, want the Appearance heading", lines[0])
+	}
+}
