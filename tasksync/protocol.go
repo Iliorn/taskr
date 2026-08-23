@@ -37,6 +37,20 @@ const (
 // holding the sync token.
 const ProtocolHeader = "Taskr-Sync-Protocol"
 
+// VersionHeader carries the taskr build the server is running, on *every*
+// response including errors.
+//
+// The wire version above only moves when a field changes meaning, so two
+// builds years apart still negotiate cleanly — which is the point, and also
+// why it cannot answer "why did this stop working". The failure it misses is
+// two taskr builds of different vintages against one store: the newer one
+// migrates the schema, the older server process keeps running and answers
+// every sync with a 500 whose body ("no such table: task_learnings") means
+// nothing to the person reading it. A header rather than a body field because
+// that failure produces no decodable body at all — an http.Error — and that is
+// exactly the moment the client needs to be able to name which side is old.
+const VersionHeader = "Taskr-Version"
+
 // negotiate validates a peer's declared version against what this build
 // supports, returning a user-facing error when they cannot talk. A zero
 // version means the peer predates versioning and is treated as v1.

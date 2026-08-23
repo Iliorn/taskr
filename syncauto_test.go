@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -46,5 +47,37 @@ func TestHandleSyncDoneFirstFailureTogglesToast(t *testing.T) {
 	m = next.(model)
 	if m.err == "" {
 		t.Fatal("failure after recovery should toast again")
+	}
+}
+
+// The Settings footer is where a failed sync explains itself, and the
+// explanation is in the tail — a fixed-width cut here once left a user reading
+// "server returned 500 Internal Server Error" for a week while the sentence
+// naming the stale server sat just past the cut.
+func TestSyncFailureKeepsTheWholeExplanation(t *testing.T) {
+	m := modelWithTasks(t)
+	detail := "sync server runs taskr v1.25.0, this device runs v1.33.1 — restart the sync server (it answered 500 Internal Server Error: merge failed: no such table: task_learnings)"
+
+	next, _ := m.handleSyncDone(syncDoneMsg{err: errors.New(detail)})
+	m = next.(model)
+	if !strings.Contains(m.syncStatus, detail) {
+		t.Errorf("syncStatus = %q, want the whole error", m.syncStatus)
+	}
+}
+
+// A version gap does not fail the sync — which is exactly why the successful
+// case has to mention it. An older server against a migrated store keeps
+// answering 200 while dropping whatever it has no column for.
+func TestSyncSuccessReportsAVersionGap(t *testing.T) {
+	m := modelWithTasks(t)
+	gap := "sync server runs taskr v1.25.0, this device runs v1.33.1"
+
+	next, _ := m.handleSyncDone(syncDoneMsg{summary: syncSummary{sent: 2, received: 0, versionGap: gap}})
+	m = next.(model)
+	if !strings.Contains(m.syncStatus, gap) {
+		t.Errorf("syncStatus = %q, want the version gap named", m.syncStatus)
+	}
+	if m.lastSyncFailed {
+		t.Error("a version gap must not mark the sync as failed")
 	}
 }

@@ -1406,8 +1406,9 @@ func settingsCursorStep(cur, delta int) int {
 
 // renderSettingsSections builds the unboxed content for the two Settings panes.
 // sequencerW controls wrapping and truncation in the ranking explanation and
-// live preview; the pane builder applies the final per-line width contract.
-func (m model) renderSettingsSections(sequencerW int) (string, string) {
+// live preview, preferencesW the same for the status footer; the pane builder
+// applies the final per-line width contract.
+func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, string) {
 	labels := map[int]string{
 		settingBiasDeadline:      tr("Deadline pressure"),
 		settingBiasPriority:      tr("Priority focus"),
@@ -1556,7 +1557,15 @@ func (m model) renderSettingsSections(sequencerW int) (string, string) {
 		preferences.WriteString("\n  " + activeCountStyle.Render(m.updateStatus) + "\n")
 	}
 	if m.syncStatus != "" {
-		preferences.WriteString("\n  " + helpStyle.Render(m.syncStatus) + "\n")
+		// Wrapped, not truncated. This line is where a sync failure explains
+		// itself, and the explanation is the tail: cutting it at a fixed 60
+		// columns once left a user reading "Last sync failed: server returned
+		// 500 Internal Server Error" for a week while the sentence naming the
+		// stale server sat just past the cut.
+		preferences.WriteString("\n")
+		for _, line := range clampLines(wrapText(m.syncStatus, preferencesW-4), syncStatusMaxLines) {
+			preferences.WriteString("  " + helpStyle.Render(line) + "\n")
+		}
 	}
 	return preferences.String(), sequencer.String()
 }
@@ -1573,10 +1582,10 @@ func (m model) renderSettingsList() string {
 		const gap = 4
 		preferencesW := (availW - gap) / 2
 		sequencerW := availW - preferencesW - gap
-		preferences, sequencer := m.renderSettingsSections(sequencerW)
+		preferences, sequencer := m.renderSettingsSections(preferencesW, sequencerW)
 		return joinColumns(preferences, sequencer, preferencesW, gap)
 	}
-	preferences, sequencer := m.renderSettingsSections(availW)
+	preferences, sequencer := m.renderSettingsSections(availW, availW)
 	return strings.TrimRight(preferences, "\n") + "\n\n" + sequencer
 }
 
@@ -1632,7 +1641,7 @@ func (m model) buildSettingsContent(w, outerH int) string {
 		sequencerW = w - preferencesW - gap
 	}
 
-	preferences, sequencer := m.renderSettingsSections(sequencerW - 2)
+	preferences, sequencer := m.renderSettingsSections(preferencesW-2, sequencerW-2)
 	preferencesSelected := settingRowIndex(settingsPreferences, m.settingsCursor)
 	sequencerSelected := settingRowIndex(settingsSequencer, m.settingsCursor)
 

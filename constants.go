@@ -190,4 +190,11 @@ const (
 	// borders/gap between them). Below it buildCalendarContent drops the grid
 	// rather than emitting lines wider than the terminal.
 	calSideBySideMinWidth = calPanelWidth + minInnerWidth + 4
+
+	// syncStatusMaxLines caps the wrapped sync-status footer in Settings. Four
+	// lines is enough for the longest message the sync path produces (a
+	// version gap plus the server's own words) at half-pane width, and the cap
+	// is what keeps a pathological server body from pushing the settings rows
+	// off the pane.
+	syncStatusMaxLines = 4
 )

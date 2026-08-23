@@ -8,7 +8,24 @@ belong in the commit log, not here — unless they change behaviour.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A failing sync now says what is actually wrong.** The Settings footer cut
+  the message at 60 columns, which was exactly enough room for `Last sync
+  failed: server returned 500 Internal Server Error` and nothing else — the
+  server's own explanation sat just past the cut. The footer wraps the whole
+  message now, and the server's words come first, ahead of the HTTP status.
+
 ### Changed
+
+- **Sync tells you when the two ends are running different builds.** The server
+  stamps its taskr version on every response, so a sync against a server left
+  on an older binary — the normal state of a half-finished upgrade, and what
+  happens when the store has been migrated out from under it — reads `sync
+  server runs taskr v1.25.0, this device runs v1.33.1 — restart the sync
+  server` instead of an HTTP status code. A version gap is reported even when
+  the sync *succeeds*, because that is the case that otherwise stays silent
+  while the older end drops fields it has no column for.
 
 - **The task list reads as a list again.** Every row used to be painted in one
   colour, so the score, the size and the project name shouted as loudly as the

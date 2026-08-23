@@ -305,6 +305,12 @@ Options:
 		fmt.Fprintf(os.Stderr, "taskr sync: %v\n", err)
 		return 1
 	}
+	if sum.versionGap != "" {
+		// stderr, and outside the --quiet gate: --quiet suppresses the
+		// routine "synced: sent 3, received 0" line, not a warning that the
+		// two ends are drifting.
+		fmt.Fprintln(os.Stderr, "taskr sync: warning: "+sum.versionGap)
+	}
 	if !*quiet {
 		hint := ""
 		if sum.conflicts > 0 {
@@ -318,6 +324,11 @@ Options:
 
 type syncSummary struct {
 	sent, received, conflicts int
+	// versionGap is set when the sync succeeded against a server running a
+	// different taskr build (tasksync.VersionGapWarning). It rides on the
+	// summary rather than being printed here so both callers can place it:
+	// the CLI on stderr, the TUI in the Settings footer.
+	versionGap string
 }
 
 // runClientSync pushes the local full task set (including tombstones) to the
@@ -329,7 +340,7 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummar
 	if err != nil {
 		return syncSummary{}, err
 	}
-	resp, err := tasksync.PostSync(cfg.URL, cfg.Token, local, timeout)
+	resp, err := tasksync.PostSync(cfg.URL, cfg.Token, appVersion, local, timeout)
 	if err != nil {
 		return syncSummary{}, err
 	}
@@ -366,7 +377,12 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummar
 	}
 	// Count live tasks only: the wire sets include every tombstone ever made,
 	// so raw lengths would overstate forever ("received 400" on a no-op sync).
-	sum := syncSummary{sent: countLive(local), received: countLive(merged), conflicts: len(dropped)}
+	sum := syncSummary{
+		sent:       countLive(local),
+		received:   countLive(merged),
+		conflicts:  len(dropped),
+		versionGap: tasksync.VersionGapWarning(resp.ServerVersion, appVersion),
+	}
 	// Record status for `taskr sync --status`. Best-effort: a write failure here
 	// must not fail an otherwise-successful sync.
 	_ = writeSyncState(sum)

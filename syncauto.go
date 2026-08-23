@@ -50,7 +50,12 @@ func (m model) backgroundSync() tea.Cmd {
 // Settings footer carry the ongoing outage.
 func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		m.syncStatus = tr("Last sync failed: ") + truncate(msg.err.Error(), 60)
+		// The whole message, not a 60-column prefix of it: the footer wraps
+		// (renderSettingsSections), and what a failed sync has to say — which
+		// end is on an old build, which table the merge could not find — is
+		// all in the tail. Truncating here made Settings say "server returned
+		// 500 Internal Server Error" and nothing else.
+		m.syncStatus = tr("Last sync failed: ") + msg.err.Error()
 		firstFailure := !m.lastSyncFailed
 		m.lastSyncFailed = true
 		if firstFailure {
@@ -61,6 +66,13 @@ func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	}
 	m.lastSyncFailed = false
 	m.syncStatus = fmt.Sprintf(tr("Last sync: sent %d, received %d"), msg.summary.sent, msg.summary.received)
+	// A version gap does not fail the sync — that is exactly why it needs
+	// saying. Two builds against one store agree until a migration lands, and
+	// then the older end starts dropping whatever it has no column for, with
+	// every sync still reporting success.
+	if msg.summary.versionGap != "" {
+		m.syncStatus += " — " + msg.summary.versionGap
+	}
 	if msg.summary.conflicts > 0 {
 		m.flashInfo(fmt.Sprintf(tr("Sync: %d conflict(s) resolved — see ~/.taskr/sync.log"), msg.summary.conflicts))
 		return m, clearErrAfter()

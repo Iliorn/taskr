@@ -62,7 +62,7 @@ func TestPostSyncRoundTrip(t *testing.T) {
 	hs := testServer(t, srv)
 
 	local := newTask("from the client", now)
-	resp, err := PostSync(hs.URL, "s3cret", []todo.Todo{local}, 5*time.Second)
+	resp, err := PostSync(hs.URL, "s3cret", "", []todo.Todo{local}, 5*time.Second)
 	if err != nil {
 		t.Fatalf("PostSync: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestPostSyncRoundTrip(t *testing.T) {
 
 	// A second, identical push must not report a change — that is what stops
 	// idle syncs from broadcasting each other in a loop.
-	if _, err := PostSync(hs.URL, "s3cret", []todo.Todo{local}, 5*time.Second); err != nil {
+	if _, err := PostSync(hs.URL, "s3cret", "", []todo.Todo{local}, 5*time.Second); err != nil {
 		t.Fatalf("second PostSync: %v", err)
 	}
 	if store.changed {
@@ -99,7 +99,7 @@ func TestPostSyncRoundTrip(t *testing.T) {
 func TestPostSyncTrimsTrailingSlash(t *testing.T) {
 	store := &fakeStore{}
 	hs := testServer(t, &Server{Token: "t", Store: store})
-	if _, err := PostSync(hs.URL+"/", "t", nil, 5*time.Second); err != nil {
+	if _, err := PostSync(hs.URL+"/", "t", "", nil, 5*time.Second); err != nil {
 		t.Fatalf("PostSync with a trailing slash: %v", err)
 	}
 	if store.calls != 1 {
@@ -143,7 +143,7 @@ func TestSyncRejectsBadAuth(t *testing.T) {
 	}
 
 	// And the client surfaces the rejection rather than reporting an empty sync.
-	if _, err := PostSync(hs.URL, "wrong", nil, 5*time.Second); err == nil {
+	if _, err := PostSync(hs.URL, "wrong", "", nil, 5*time.Second); err == nil {
 		t.Error("PostSync with a bad token returned no error")
 	}
 }
@@ -185,7 +185,7 @@ func TestSyncStoreErrorSurfaces(t *testing.T) {
 	store := &fakeStore{err: fmt.Errorf("disk on fire")}
 	hs := testServer(t, &Server{Token: "t", Store: store})
 
-	_, err := PostSync(hs.URL, "t", []todo.Todo{newTask("x", time.Now())}, 5*time.Second)
+	_, err := PostSync(hs.URL, "t", "", []todo.Todo{newTask("x", time.Now())}, 5*time.Second)
 	if err == nil {
 		t.Fatal("a failing store returned no error to the client")
 	}
@@ -220,7 +220,7 @@ func TestOnClientSyncFires(t *testing.T) {
 	var got time.Time
 	srv := &Server{Token: "t", Store: &fakeStore{}, OnClientSync: func(at time.Time) { got = at }}
 	hs := testServer(t, srv)
-	if _, err := PostSync(hs.URL, "t", nil, 5*time.Second); err != nil {
+	if _, err := PostSync(hs.URL, "t", "", nil, 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	if got.IsZero() {
@@ -292,7 +292,7 @@ func TestEventsStreamDeliversChanges(t *testing.T) {
 	if hub.SubscriberCount() != 1 {
 		t.Fatalf("hub has %d subscribers, want the connected client", hub.SubscriberCount())
 	}
-	if _, err := PostSync(hs.URL, "t", []todo.Todo{newTask("new work", time.Now().UTC())}, 5*time.Second); err != nil {
+	if _, err := PostSync(hs.URL, "t", "", []todo.Todo{newTask("new work", time.Now().UTC())}, 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	if !readSSE(t, body, "event: changed", 3*time.Second) {
@@ -483,7 +483,7 @@ func TestPostSyncSendsAndReportsVersion(t *testing.T) {
 	}))
 	defer hs.Close()
 
-	if _, err := PostSync(hs.URL, "t", nil, 5*time.Second); err != nil {
+	if _, err := PostSync(hs.URL, "t", "", nil, 5*time.Second); err != nil {
 		t.Fatalf("PostSync: %v", err)
 	}
 	if got.Protocol != ProtocolVersion {
@@ -500,7 +500,7 @@ func TestPostSyncRefusesNewerServerWire(t *testing.T) {
 	}))
 	defer hs.Close()
 
-	_, err := PostSync(hs.URL, "t", nil, 5*time.Second)
+	_, err := PostSync(hs.URL, "t", "", nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("a newer server wire must be refused")
 	}
@@ -517,7 +517,7 @@ func TestPostSyncSurfacesMismatchMessagePlainly(t *testing.T) {
 	}))
 	defer hs.Close()
 
-	_, err := PostSync(hs.URL, "t", nil, 5*time.Second)
+	_, err := PostSync(hs.URL, "t", "", nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -539,5 +539,127 @@ func TestHealthAdvertisesProtocolRange(t *testing.T) {
 	want := fmt.Sprintf("%d-%d", MinProtocolVersion, ProtocolVersion)
 	if got := resp.Header.Get(ProtocolHeader); got != want {
 		t.Errorf("%s = %q, want %q", ProtocolHeader, got, want)
+	}
+}
+
+// The outage this whole mechanism exists for: a sync server left running on an
+// old build after the store was migrated answers every sync with a 500 whose
+// body names an internal table. The only sentence that helps names both
+// versions and says which end to restart.
+func TestSyncErrorNamesBothVersionsWhenTheyDiffer(t *testing.T) {
+	store := &fakeStore{err: fmt.Errorf("SQL logic error: no such table: task_learnings (1)")}
+	hs := testServer(t, &Server{Token: "t", Store: store, Version: "v1.25.0"})
+
+	_, err := PostSync(hs.URL, "t", "v1.33.1", nil, 5*time.Second)
+	if err == nil {
+		t.Fatal("a failed merge must surface as an error")
+	}
+	msg := err.Error()
+	for _, want := range []string{"v1.25.0", "v1.33.1", "restart the sync server", "task_learnings"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q does not mention %q", msg, want)
+		}
+	}
+	// The version gap is the actionable half, so it has to survive a surface
+	// that shortens the message — it must lead, not trail.
+	if !strings.HasPrefix(msg, "sync server runs taskr") {
+		t.Errorf("error must lead with the version gap, got %q", msg)
+	}
+}
+
+// Same build on both ends: there is no version story to tell, so the server's
+// own words lead instead of the HTTP status, which carries no information.
+func TestSyncErrorLeadsWithTheServersOwnWords(t *testing.T) {
+	store := &fakeStore{err: fmt.Errorf("disk is full")}
+	hs := testServer(t, &Server{Token: "t", Store: store, Version: "v1.33.1"})
+
+	_, err := PostSync(hs.URL, "t", "v1.33.1", nil, 5*time.Second)
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if !strings.HasPrefix(err.Error(), "merge failed: disk is full") {
+		t.Errorf("error must lead with the server's message, got %q", err)
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Errorf("error dropped the status entirely: %q", err)
+	}
+}
+
+// The header has to be on the responses no handler writes on purpose, because
+// those are the ones a client cannot read a body from.
+func TestVersionHeaderRidesOnEveryResponse(t *testing.T) {
+	hs := testServer(t, &Server{Token: "t", Store: &fakeStore{}, Version: "v1.33.1"})
+
+	cases := []struct {
+		name, path, token string
+	}{
+		{"health", "/v1/health", ""},
+		{"unauthorized", "/v1/sync", "wrong"},
+		{"ok", "/v1/sync", "t"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, _ := http.NewRequest(http.MethodPost, hs.URL+tc.path, strings.NewReader(`{"tasks":[]}`))
+			if tc.token != "" {
+				req.Header.Set("Authorization", "Bearer "+tc.token)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if got := resp.Header.Get(VersionHeader); got != "v1.33.1" {
+				t.Errorf("%s = %q on %s, want the server's version", VersionHeader, got, tc.name)
+			}
+		})
+	}
+}
+
+// A server without a version stamp must say nothing rather than "": the client
+// has to be able to tell "did not say" from "said something".
+func TestVersionHeaderOmittedWhenUnknown(t *testing.T) {
+	hs := testServer(t, &Server{Token: "t", Store: &fakeStore{}})
+	resp, err := http.Get(hs.URL + "/v1/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if _, ok := resp.Header[http.CanonicalHeaderKey(VersionHeader)]; ok {
+		t.Errorf("%s present on a server with no version", VersionHeader)
+	}
+}
+
+func TestPostSyncReportsTheServersVersion(t *testing.T) {
+	hs := testServer(t, &Server{Token: "t", Store: &fakeStore{}, Version: "v1.25.0"})
+	resp, err := PostSync(hs.URL, "t", "v1.33.1", nil, 5*time.Second)
+	if err != nil {
+		t.Fatalf("PostSync: %v", err)
+	}
+	if resp.ServerVersion != "v1.25.0" {
+		t.Errorf("ServerVersion = %q, want v1.25.0", resp.ServerVersion)
+	}
+}
+
+func TestVersionGapWarning(t *testing.T) {
+	cases := []struct {
+		name, server, client string
+		want                 bool
+	}{
+		{"same build", "v1.33.1", "v1.33.1", false},
+		{"server unknown", "", "v1.33.1", false},
+		{"client unknown", "v1.25.0", "", false},
+		{"both unknown", "", "", false},
+		{"gap", "v1.25.0", "v1.33.1", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := VersionGapWarning(tc.server, tc.client)
+			if (got != "") != tc.want {
+				t.Fatalf("VersionGapWarning(%q, %q) = %q, want warning=%v", tc.server, tc.client, got, tc.want)
+			}
+			if tc.want && (!strings.Contains(got, tc.server) || !strings.Contains(got, tc.client)) {
+				t.Errorf("warning %q must name both versions", got)
+			}
+		})
 	}
 }

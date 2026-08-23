@@ -49,6 +49,11 @@ type Response struct {
 	// nothing else in the protocol would ever tell the user. Zero when the
 	// server predates the field; clients skip the check then.
 	ServerTime time.Time `json:"server_time,omitempty"`
+	// ServerVersion is the taskr build that answered, filled in by PostSync
+	// from VersionHeader. Not on the wire (`json:"-"`) on purpose: it has to
+	// come from the header to be readable on the error responses that carry
+	// no body at all, and one source beats two that can disagree.
+	ServerVersion string `json:"-"`
 }
 
 // Server is the sync endpoint: POST /v1/sync does push+pull in one round trip,
@@ -58,6 +63,12 @@ type Response struct {
 type Server struct {
 	Token string
 	Store Store
+	// Version is the taskr build this server is running, stamped onto every
+	// response via VersionHeader. Empty means unknown (a test server, or a
+	// build without the ldflags stamp) and the header is then omitted rather
+	// than sent blank — a client must be able to tell "the server did not say"
+	// from "the server said something".
+	Version string
 	// Hub, when non-nil, is nudged after every merge that changed the store so
 	// connected clients pull immediately.
 	Hub *Hub
@@ -76,7 +87,21 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/health", s.handleHealth)
 	mux.HandleFunc("/v1/sync", s.handleSync)
 	mux.HandleFunc("/v1/events", s.handleEvents)
-	return mux
+	return s.stampVersion(mux)
+}
+
+// stampVersion sets VersionHeader on every response the server produces.
+// Wrapping the mux rather than setting it per handler is deliberate: the
+// responses that most need it are the ones no handler writes on purpose —
+// the 500 from a failed merge, the 401 from a stale token — and a per-handler
+// header is exactly what a future error path would forget.
+func (s *Server) stampVersion(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.Version != "" {
+			w.Header().Set(VersionHeader, s.Version)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

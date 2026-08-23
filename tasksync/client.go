@@ -28,7 +28,11 @@ var syncTransport = &http.Transport{
 
 // PostSync pushes tasks to the server at serverURL and returns its response:
 // the merged authoritative set plus the server's clock reading.
-func PostSync(serverURL, token string, tasks []todo.Todo, timeout time.Duration) (Response, error) {
+//
+// clientVersion is this build's taskr version, used only to describe a
+// version gap in an error — pass "" from anywhere that has no version stamp
+// and the comparison is skipped rather than guessed at.
+func PostSync(serverURL, token, clientVersion string, tasks []todo.Todo, timeout time.Duration) (Response, error) {
 	body, err := json.Marshal(Request{Tasks: tasks, Protocol: ProtocolVersion})
 	if err != nil {
 		return Response{}, err
@@ -54,12 +58,13 @@ func PostSync(serverURL, token string, tasks []todo.Todo, timeout time.Duration)
 		if resp.StatusCode == http.StatusConflict {
 			return Response{}, fmt.Errorf("%s", strings.TrimSpace(string(msg)))
 		}
-		return Response{}, fmt.Errorf("server returned %s: %s", resp.Status, strings.TrimSpace(string(msg)))
+		return Response{}, serverError(resp, clientVersion, string(msg))
 	}
 	var out Response
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return Response{}, err
 	}
+	out.ServerVersion = resp.Header.Get(VersionHeader)
 	// The server accepted our version, but it may still be newer than we
 	// are: it answers in its own wire, and decoding a v2 body as v1 is the
 	// silent misread this whole mechanism exists to prevent. Checking the
@@ -68,6 +73,39 @@ func PostSync(serverURL, token string, tasks []todo.Todo, timeout time.Duration)
 		return Response{}, err
 	}
 	return out, nil
+}
+
+// serverError turns a non-OK sync response into the sentence the user reads.
+//
+// Two rules, both learned from one outage. The server's own words come first,
+// because every surface that shows this eventually shortens it — a status
+// footer, a toast, a log line — and "server returned 500 Internal Server
+// Error" is the half that carries no information. And when the two ends are
+// running different builds, that goes ahead of everything: a server left on an
+// old build after the store was migrated answers every sync with a 500 whose
+// body names an internal table, and the only sentence that helps names the
+// versions and says which end to restart.
+func serverError(resp *http.Response, clientVersion, body string) error {
+	body = strings.TrimSpace(body)
+	if peer := resp.Header.Get(VersionHeader); peer != "" && clientVersion != "" && peer != clientVersion {
+		return fmt.Errorf("sync server runs taskr %s, this device runs %s — restart the sync server (it answered %s: %s)",
+			peer, clientVersion, resp.Status, body)
+	}
+	return fmt.Errorf("%s (server returned %s)", body, resp.Status)
+}
+
+// VersionGapWarning returns a human warning when a *successful* sync came back
+// from a server running a different taskr build. Succeeding is what makes it
+// worth saying: a schema migration that only adds a column lets an older
+// server keep answering 200 while dropping the new field on every round trip,
+// so the mismatch never surfaces as an error — it surfaces as data quietly
+// not arriving. Equal versions, or either side unknown, return "".
+func VersionGapWarning(serverVersion, clientVersion string) string {
+	if serverVersion == "" || clientVersion == "" || serverVersion == clientVersion {
+		return ""
+	}
+	return fmt.Sprintf("sync server runs taskr %s, this device runs %s — restart the sync server after upgrading it, or the two can drift apart",
+		serverVersion, clientVersion)
 }
 
 // ClockSkewWarning returns a human warning when this device's clock and the

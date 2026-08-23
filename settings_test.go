@@ -207,7 +207,7 @@ func TestSettingsRenderSeparatePreferencesAndSequencerPanes(t *testing.T) {
 	m.termHeight = 40
 	applyBiases(defaultBiases())
 	m.ensureCache()
-	preferences, sequencer := m.renderSettingsSections(50)
+	preferences, sequencer := m.renderSettingsSections(50, 50)
 	preferences = ansi.Strip(preferences)
 	sequencer = ansi.Strip(sequencer)
 	if !strings.Contains(preferences, "Theme") || strings.Contains(preferences, "Deadline pressure") {
@@ -325,5 +325,72 @@ func TestSettingsTopPreviewNoWrap(t *testing.T) {
 				t.Errorf("width=%d: line %d is %d cells wide: %q", width, n, lw, line)
 			}
 		}
+	}
+}
+
+// The sync footer wraps instead of being cut, and wrapping must not break the
+// pane's no-wrap contract: a long server error is exactly the string that
+// would otherwise run past the border.
+func TestSettingsFooterWrapsTheSyncStatus(t *testing.T) {
+	m := modelWithTasks(t, todo.New("Ranked task"))
+	m.tab = tabSettings
+	m.termHeight = 40
+	m.ensureCache()
+	m.syncStatus = "Last sync failed: sync server runs taskr v1.25.0, this device runs v1.33.1 — restart the sync server (it answered 500 Internal Server Error: merge failed: no such table: task_learnings)"
+
+	const paneW = 50
+	preferences, _ := m.renderSettingsSections(paneW, paneW)
+	preferences = ansi.Strip(preferences)
+
+	// Only the footer's own lines: this function deliberately leaves the final
+	// per-line width contract to the pane builder, so the settings rows above
+	// are not this test's business.
+	all := strings.Split(strings.TrimRight(preferences, "\n"), "\n")
+	start := -1
+	for i, line := range all {
+		if strings.Contains(line, "Last sync failed:") {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		t.Fatalf("no sync status in the footer:\n%s", preferences)
+	}
+	footer := all[start:]
+	if len(footer) < 2 {
+		t.Errorf("the message should have wrapped, got one line: %q", footer[0])
+	}
+	if len(footer) > syncStatusMaxLines {
+		t.Errorf("footer runs %d lines, over the %d-line cap", len(footer), syncStatusMaxLines)
+	}
+	for _, line := range footer {
+		if w := ansi.StringWidth(line); w > paneW {
+			t.Errorf("footer line is %d wide, over the %d-column pane: %q", w, paneW, line)
+		}
+	}
+	// Read back across the wrap: the part a fixed-width truncation used to eat.
+	flat := strings.Join(strings.Fields(strings.Join(footer, " ")), " ")
+	if !strings.Contains(flat, "restart the sync server") {
+		t.Errorf("footer lost the actionable half of the message:\n%s", preferences)
+	}
+}
+
+// clampLines is the cap that keeps a pathological server message from pushing
+// the settings rows off the pane, and a capped block has to be tellable from
+// one that simply ended.
+func TestClampLinesMarksTheCut(t *testing.T) {
+	lines := []string{"one", "two", "three", "four"}
+	got := clampLines(lines, 2)
+	if len(got) != 2 {
+		t.Fatalf("clampLines returned %d lines, want 2", len(got))
+	}
+	if !strings.HasSuffix(got[1], ellipsis) {
+		t.Errorf("last line %q should carry the ellipsis", got[1])
+	}
+	if same := clampLines(lines, 9); len(same) != len(lines) || strings.HasSuffix(same[3], ellipsis) {
+		t.Errorf("an uncut block must be returned untouched, got %q", same)
+	}
+	if clampLines(lines, 0) != nil {
+		t.Error("clampLines with no room should return nothing")
 	}
 }

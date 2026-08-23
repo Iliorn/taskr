@@ -152,6 +152,27 @@ func wrapText(s string, width int) []string {
 	return lines
 }
 
+// clampLines caps a wrapped block at max lines, marking the last one with the
+// ellipsis so a cut block can be told from one that simply ends there — the
+// same contract truncate and truncateLines keep for a cut line. max <= 0
+// returns nothing.
+func clampLines(lines []string, max int) []string {
+	if max <= 0 {
+		return nil
+	}
+	if len(lines) <= max {
+		return lines
+	}
+	out := append([]string(nil), lines[:max]...)
+	// Mark the cut in place of the last rune rather than after it: every line
+	// here is already wrapped to the pane width, so appending would be the one
+	// column that breaks the no-wrap contract.
+	if last := []rune(out[max-1]); len(last) > 0 {
+		out[max-1] = string(last[:len(last)-1]) + ellipsis
+	}
+	return out
+}
+
 func commentLineCount(text string, available int) int {
 	n := len([]rune(text))
 	if n == 0 {
