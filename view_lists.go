@@ -1397,6 +1397,22 @@ var settingsSequencer = []int{
 // step in the middle of the list.
 func settingsSelectable(id int) bool { return id != settingVersion }
 
+// settingsRowVisible hides the rows that configure something this machine is
+// not doing. The bind address and the server token describe an endpoint that
+// only exists while the server runs, so on a client — which is most installs —
+// they were two rows of setup for a thing the user had already said no to.
+//
+// Turning the server on is what brings them back, and that stays reachable
+// without them: the Enabled row asks for the token itself (serverStartFlow)
+// when there is none, rather than sending the user to a row it just hid.
+func (m model) settingsRowVisible(id int) bool {
+	switch id {
+	case settingServerListen, settingServerToken:
+		return m.inprocServer != nil || m.serverExternal
+	}
+	return true
+}
+
 // settingsEditsText marks the rows whose enter opens a text editor. They render
 // with a trailing mark so an editable value can be told apart from a ‹ cycled ›
 // one without pressing anything.
@@ -1417,12 +1433,13 @@ const settingsSideBySideMinWidth = 80
 
 // settingsNavOrder returns the linear up/down traversal order across both
 // panes: Preferences top→bottom, then Sequencer top→bottom. Rows the cursor
-// cannot land on are left out here, so every caller inherits the skip.
-func settingsNavOrder() []int {
+// cannot land on — unselectable or hidden by the current state — are left out
+// here, so every caller inherits the skip.
+func (m model) settingsNavOrder() []int {
 	out := make([]int, 0, len(settingsSequencer)+8)
 	for _, g := range settingsPreferenceGroups {
 		for _, id := range g.rows {
-			if settingsSelectable(id) {
+			if settingsSelectable(id) && m.settingsRowVisible(id) {
 				out = append(out, id)
 			}
 		}
@@ -1434,8 +1451,8 @@ func settingsNavOrder() []int {
 // settingsCursorStep advances the settings cursor by delta along the visual
 // traversal order, clamping at the ends so up at the top / down at the bottom
 // are no-ops (matching the pre-split behaviour).
-func settingsCursorStep(cur, delta int) int {
-	order := settingsNavOrder()
+func (m model) settingsCursorStep(cur, delta int) int {
+	order := m.settingsNavOrder()
 	idx := 0
 	for i, id := range order {
 		if id == cur {
@@ -1583,18 +1600,24 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 	}
 	preferencesLabelW := 0
 	for _, g := range settingsPreferenceGroups {
-		if w := maxLabelW(g.rows); w > preferencesLabelW {
+		if w := maxLabelW(m.visibleGroupRows(g)); w > preferencesLabelW {
 			preferencesLabelW = w
 		}
 	}
 	sequencerLabelW := maxLabelW(settingsSequencer)
 	var preferences, sequencer strings.Builder
-	for gi, g := range settingsPreferenceGroups {
-		if gi > 0 {
+	drawn := 0
+	for _, g := range settingsPreferenceGroups {
+		rows := m.visibleGroupRows(g)
+		if len(rows) == 0 {
+			continue
+		}
+		if drawn > 0 {
 			preferences.WriteString("\n")
 		}
+		drawn++
 		preferences.WriteString(cursorGap + headerStyle.Render(tr(g.title)) + "\n")
-		for _, id := range g.rows {
+		for _, id := range rows {
 			preferences.WriteString(renderRow(id, preferencesLabelW) + "\n")
 		}
 	}
@@ -1657,14 +1680,18 @@ func settingRowIndex(rows []int, setting int) int {
 // rendered lines no longer map one-to-one onto its rows: it counts the group
 // headings and the blank line between groups, so the pane scrolls to the line
 // the cursor is actually drawn on. Returns -1 when the cursor is elsewhere.
-func settingsPreferencesLine(setting int) int {
+func (m model) settingsPreferencesLine(setting int) int {
 	line := 0
-	for gi, g := range settingsPreferenceGroups {
-		if gi > 0 {
+	for _, g := range settingsPreferenceGroups {
+		rows := m.visibleGroupRows(g)
+		if len(rows) == 0 {
+			continue
+		}
+		if line > 0 {
 			line++ // blank separator
 		}
 		line++ // heading
-		for _, id := range g.rows {
+		for _, id := range rows {
 			if id == setting {
 				return line
 			}
@@ -1672,6 +1699,29 @@ func settingsPreferencesLine(setting int) int {
 		}
 	}
 	return -1
+}
+
+// visibleGroupRows is the group's rows minus the ones the current state hides.
+// It returns the group's own slice when nothing is hidden, which is the common
+// case and the one worth not allocating for.
+func (m model) visibleGroupRows(g settingsGroup) []int {
+	hidden := false
+	for _, id := range g.rows {
+		if !m.settingsRowVisible(id) {
+			hidden = true
+			break
+		}
+	}
+	if !hidden {
+		return g.rows
+	}
+	out := make([]int, 0, len(g.rows))
+	for _, id := range g.rows {
+		if m.settingsRowVisible(id) {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // fitSettingsPane keeps the selected row visible when a narrow/short terminal
@@ -1718,7 +1768,7 @@ func (m model) buildSettingsContent(w, outerH int) string {
 	}
 
 	preferences, sequencer := m.renderSettingsSections(preferencesW-2, sequencerW-2)
-	preferencesSelected := settingsPreferencesLine(m.settingsCursor)
+	preferencesSelected := m.settingsPreferencesLine(m.settingsCursor)
 	sequencerSelected := settingRowIndex(settingsSequencer, m.settingsCursor)
 
 	preferencesH, sequencerH := outerH-2, outerH-2

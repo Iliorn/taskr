@@ -353,7 +353,7 @@ func TestSettingsCursorSkipsTheVersionRow(t *testing.T) {
 		}
 		seen[m.settingsCursor] = true
 	}
-	for _, row := range []int{settingCheckUpdate, settingAging, settingServerToken} {
+	for _, row := range []int{settingCheckUpdate, settingAging, settingServerOn} {
 		if !seen[row] {
 			t.Errorf("row %d is unreachable going down", row)
 		}
@@ -375,7 +375,7 @@ func TestSettingsPreferencesLineMatchesTheRenderedPane(t *testing.T) {
 	m := settingsModel(t)
 	for _, g := range settingsPreferenceGroups {
 		for _, row := range g.rows {
-			if !settingsSelectable(row) {
+			if !settingsSelectable(row) || !m.settingsRowVisible(row) {
 				continue
 			}
 			m.settingsCursor = row
@@ -391,12 +391,12 @@ func TestSettingsPreferencesLineMatchesTheRenderedPane(t *testing.T) {
 			if drawn < 0 {
 				t.Fatalf("row %d: no cursor mark in the rendered pane:\n%s", row, preferences)
 			}
-			if got := settingsPreferencesLine(row); got != drawn {
+			if got := m.settingsPreferencesLine(row); got != drawn {
 				t.Errorf("row %d: settingsPreferencesLine = %d, drawn on line %d", row, got, drawn)
 			}
 		}
 	}
-	if got := settingsPreferencesLine(settingBiasDeadline); got != -1 {
+	if got := m.settingsPreferencesLine(settingBiasDeadline); got != -1 {
 		t.Errorf("a Sequencer row should not report a Preferences line, got %d", got)
 	}
 }
@@ -475,12 +475,12 @@ func TestSettingsOpensWithAppearance(t *testing.T) {
 		first.rows[0] != settingTheme || first.rows[1] != settingLanguage {
 		t.Fatalf("the first Preferences group is %q %v, want Theme then Language", first.title, first.rows)
 	}
-	if got := settingsPreferencesLine(settingTheme); got != 1 {
+	m := settingsModel(t)
+	if got := m.settingsPreferencesLine(settingTheme); got != 1 {
 		t.Errorf("Theme renders on pane line %d, want 1 (the line under the first heading)", got)
 	}
 	// And the pane's first heading is the one the cursor starts under, not a
 	// group the reader has to scroll past.
-	m := settingsModel(t)
 	m.settingsCursor = settingTheme
 	preferences, _ := m.renderSettingsSections(60, 60)
 	lines := strings.Split(ansi.Strip(preferences), "\n")

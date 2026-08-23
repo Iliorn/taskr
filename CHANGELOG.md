@@ -18,6 +18,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Settings drops the sequencer's personality tagline; the top-5 preview stands alone.
 - Settings groups Preferences into sections led by Theme and Language, and marks editable rows.
 - The Settings server row reads Off when this machine is not a sync hub, instead of needs token.
+- Listen and Server token are hidden while the server is off; switching it on asks for the token.
 
 ## [1.35.0] - 2026-08-23
 

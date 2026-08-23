@@ -328,10 +328,14 @@ type model struct {
 	projectCursor        int
 	tagTabCursor         int
 	settingsCursor       int
-	searchQuery          string
-	tagTabSearchQuery    string
-	listOffset           int
-	helpScroll           int
+	// Set when the Server toggle opened the token editor because there was
+	// no token yet: saving one then completes the action the user asked for
+	// (start the server) instead of leaving them in a settings row.
+	serverStartAfterToken bool
+	searchQuery           string
+	tagTabSearchQuery     string
+	listOffset            int
+	helpScroll            int
 	// helpFilter narrows the help overlay's rows; helpFiltering is true while
 	// the user is typing it, so the overlay's own keys (q, space, ?) don't get
 	// swallowed by the filter and vice versa.

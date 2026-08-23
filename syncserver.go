@@ -122,10 +122,20 @@ func (m model) updateEditServerToken(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.saveSyncCfg()
 			m.mode = modeNormal
 			m.textInput.EchoMode = textinput.EchoNormal // un-mask for the next mode
+			// Opened by the Server toggle: the token was the missing half of
+			// "switch this on", so finish that rather than making the user
+			// press the same key again.
+			if m.serverStartAfterToken {
+				m.serverStartAfterToken = false
+				if value != "" {
+					m.toggleServer()
+				}
+			}
 			return m, nil
 		case "esc":
 			m.mode = modeNormal
 			m.textInput.EchoMode = textinput.EchoNormal
+			m.serverStartAfterToken = false
 			return m, nil
 		}
 	}

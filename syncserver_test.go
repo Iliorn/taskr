@@ -10,30 +10,60 @@ import (
 func TestServerSettingsRender(t *testing.T) {
 	m := initialModel(&fakeRepo{})
 
-	// Unconfigured: the row reads Off, listen shows the default. Off is the
-	// truth on every machine that is not the hub; the missing token is a
-	// prerequisite of turning it on, not a task the pane should hand out, and
-	// toggleServer names it in the footer for whoever actually tries.
+	// Server off: one row, reading Off. The bind address and the token
+	// configure an endpoint that is not running, so on a client — which is
+	// most installs — they were setup for something the user already declined.
 	m.syncCfg = syncConfig{}
 	out := m.renderSettingsList()
-	for _, want := range []string{"Server", "Listen", "Server token", "‹ Off ›", defaultServerListen, "not set"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("unconfigured server settings should show %q; got:\n%s", want, out)
+	if !strings.Contains(out, "‹ Off ›") {
+		t.Errorf("an idle server row should read Off; got:\n%s", out)
+	}
+	for _, gone := range []string{"Listen", "Server token", "needs token"} {
+		if strings.Contains(out, gone) {
+			t.Errorf("%q should be hidden while the server is off; got:\n%s", gone, out)
 		}
 	}
-	if strings.Contains(out, "needs token") {
-		t.Errorf("an idle server row must not read as an outstanding task; got:\n%s", out)
-	}
 
-	// Token set, not running → "Off", token masked (never plaintext).
+	// Running: the rows that describe the live endpoint come back, and the
+	// token is masked (never plaintext).
 	m.syncCfg = syncConfig{ServerToken: "hunter2-secret", ServerListen: "100.122.178.43:8765"}
+	m.serverExternal = true
 	out = m.renderSettingsList()
 	if strings.Contains(out, "hunter2-secret") {
 		t.Errorf("server token must be masked; got:\n%s", out)
 	}
-	if !strings.Contains(out, "‹ Off ›") || !strings.Contains(out, "100.122.178.43:8765") {
-		t.Errorf("server should read Off with its listen address; got:\n%s", out)
+	for _, want := range []string{"Listen", "Server token", "100.122.178.43:8765", "external"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("a running server should show %q; got:\n%s", want, out)
+		}
 	}
+}
+
+// Switching the server on with no token stored asks for the token and then
+// completes the start, because the row holding the token is hidden while the
+// server is off — refusing would point at something not on screen.
+func TestServerToggleAsksForATokenThenStarts(t *testing.T) {
+	if err := openStore(); err != nil {
+		t.Fatalf("openStore: %v", err)
+	}
+	m := settingsModel(t)
+	m.syncCfg = syncConfig{ServerListen: "127.0.0.1:0"}
+	m.settingsCursor = settingServerOn
+	m = sendKey(t, m, "enter")
+	if m.mode != modeEditServerToken || !m.serverStartAfterToken {
+		t.Fatalf("mode = %v, startAfterToken = %v; want the token editor", m.mode, m.serverStartAfterToken)
+	}
+	m = script(t, m, "a-strong-enough-server-token", "enter")
+	if m.mode != modeNormal {
+		t.Fatalf("mode = %v after saving the token", m.mode)
+	}
+	if m.inprocServer == nil {
+		t.Fatal("saving the token should have completed the start the toggle asked for")
+	}
+	if m.serverStartAfterToken {
+		t.Error("the pending-start flag must not survive the flow")
+	}
+	m.toggleServer() // leave no listener behind
 }
 
 func TestToggleServerNeedsToken(t *testing.T) {

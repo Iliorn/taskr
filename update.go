@@ -794,7 +794,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.tab == tabCalendar {
 				m.moveCalendarDay(1)
 			} else if m.tab == tabSettings {
-				m.settingsAdjust(+1)
+				return m, m.settingsAdjust(+1)
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil && m.subtaskCount(t.ID) > 0 {
 					m.expandedTasks[t.ID] = true
@@ -806,7 +806,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.tab == tabCalendar {
 				m.moveCalendarDay(-1)
 			} else if m.tab == tabSettings {
-				m.settingsAdjust(-1)
+				return m, m.settingsAdjust(-1)
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil {
 					// On a subtask: collapse the containing parent and
@@ -1173,6 +1173,11 @@ func (m *model) clampCursors() {
 	if tasks, drilled := m.drillTaskList(); drilled {
 		clamp(&m.cursor, len(tasks))
 		return // the drill owns m.cursor while it is open
+	}
+	// Turning the server off takes its detail rows off the pane; a cursor left
+	// on one addresses a row nobody can see, and the next keypress edits it.
+	if !m.settingsRowVisible(m.settingsCursor) || !settingsSelectable(m.settingsCursor) {
+		m.settingsCursor = settingServerOn
 	}
 	switch m.tab {
 	case tabTasks:
@@ -1566,7 +1571,7 @@ func (m *model) moveCursorUp() {
 			m.tagTabCursor = (m.tagTabCursor - 1 + n) % n
 		}
 	case tabSettings:
-		m.settingsCursor = settingsCursorStep(m.settingsCursor, -1)
+		m.settingsCursor = m.settingsCursorStep(m.settingsCursor, -1)
 	case tabProjects:
 		if m.projectTaskMode {
 			if n := m.currentProjectTaskLen(); n > 0 {
@@ -1605,7 +1610,7 @@ func (m *model) moveCursorDown() {
 			m.tagTabCursor = (m.tagTabCursor + 1) % n
 		}
 	case tabSettings:
-		m.settingsCursor = settingsCursorStep(m.settingsCursor, +1)
+		m.settingsCursor = m.settingsCursorStep(m.settingsCursor, +1)
 	case tabProjects:
 		if m.projectTaskMode {
 			if n := m.currentProjectTaskLen(); n > 0 {
@@ -1820,17 +1825,18 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		// Every remaining row is a toggle or a picker, and enter means the
 		// same on it as →. One table, so a row cannot answer one key and not
 		// the other — which is exactly what the two hand-kept chains did.
-		m.settingsAdjust(+1)
+		return m, m.settingsAdjust(+1)
 	}
-	return m, nil
 }
 
 // settingsAdjust applies a value change to the selected Settings row: dir is
 // +1 for →/enter and -1 for ←. Toggles ignore dir; the pickers cycle by it.
-func (m *model) settingsAdjust(dir int) {
+// It returns a command because one row can open a modal: switching the server
+// on without a token asks for the token rather than refusing.
+func (m *model) settingsAdjust(dir int) tea.Cmd {
 	if m.isBiasSettingRow(m.settingsCursor) {
 		m.cycleBias(m.settingsCursor, dir)
-		return
+		return nil
 	}
 	switch m.settingsCursor {
 	case settingAging:
@@ -1848,8 +1854,28 @@ func (m *model) settingsAdjust(dir int) {
 	case settingSyncAuto:
 		m.toggleSyncAuto()
 	case settingServerOn:
-		m.toggleServer()
+		return m.startStopServer()
 	}
+	return nil
+}
+
+// startStopServer is the Server row's ←/→/enter. Stopping is just the toggle;
+// starting needs a token, and the row that holds it is hidden while the server
+// is off, so the first start opens the token editor and picks the start back up
+// when it is saved. Refusing with "set a token first" would point at a row that
+// is not on screen.
+func (m *model) startStopServer() tea.Cmd {
+	if m.inprocServer == nil && m.syncCfg.ServerToken == "" {
+		m.serverStartAfterToken = true
+		m.mode = modeEditServerToken
+		m.textInput.SetValue("")
+		m.textInput.EchoMode = textinput.EchoPassword
+		m.textInput.Placeholder = tr("Server token clients must present (ctrl+g generates one · blank removes it)")
+		m.textInput.Focus()
+		return textinput.Blink
+	}
+	m.toggleServer()
+	return nil
 }
 
 // updateConfirmUpdate handles the "newer release available — update now?" prompt.
