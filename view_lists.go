@@ -1346,23 +1346,43 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 
 // Settings are split into two independent panes. Preferences owns general app,
 // sync, server, and update controls; Sequencer owns every ranking control.
-var settingsPreferences = []int{
-	settingAutoCloseParent,
-	settingAutoCloseSubtasks,
-	settingShowBoard,
-	settingTheme,
-	settingLanguage,
-	settingStages,
-	settingSyncAuto,
-	settingSyncServer,
-	settingSyncToken,
-	settingSyncNow,
-	settingServerOn,
-	settingServerListen,
-	settingServerToken,
-	settingVersion,
-	settingCheckUpdate,
+//
+// Preferences is grouped rather than flat: fifteen rows in one column left
+// "Listen" and "Server token" reading as loose app settings instead of as the
+// sync server's own, and a reader had to already know the model to tell which
+// control belonged to what. Titles are held in English and passed through tr()
+// at render time — a package var would freeze them before applyLang runs.
+type settingsGroup struct {
+	title string
+	rows  []int
 }
+
+var settingsPreferenceGroups = []settingsGroup{
+	{title: "General", rows: []int{
+		settingAutoCloseParent,
+		settingAutoCloseSubtasks,
+		settingShowBoard,
+		settingStages,
+		settingTheme,
+		settingLanguage,
+	}},
+	{title: "Sync", rows: []int{
+		settingSyncAuto,
+		settingSyncServer,
+		settingSyncToken,
+		settingSyncNow,
+	}},
+	{title: "Server", rows: []int{
+		settingServerOn,
+		settingServerListen,
+		settingServerToken,
+	}},
+	{title: "About", rows: []int{
+		settingVersion,
+		settingCheckUpdate,
+	}},
+}
+
 var settingsSequencer = []int{
 	settingBiasDeadline,
 	settingBiasPriority,
@@ -1370,15 +1390,41 @@ var settingsSequencer = []int{
 	settingAging,
 }
 
+// settingsSelectable reports whether the cursor may land on a row. Version is
+// a fact, not a control: enter on it did nothing, so stopping there was a dead
+// step in the middle of the list.
+func settingsSelectable(id int) bool { return id != settingVersion }
+
+// settingsEditsText marks the rows whose enter opens a text editor. They render
+// with a trailing mark so an editable value can be told apart from a ‹ cycled ›
+// one without pressing anything.
+func settingsEditsText(id int) bool {
+	switch id {
+	case settingStages, settingSyncServer, settingSyncToken, settingServerListen, settingServerToken:
+		return true
+	}
+	return false
+}
+
+// settingsEditMark is the affordance on a row that opens an editor.
+const settingsEditMark = " ⏎"
+
 // settingsSideBySideMinWidth is the minimum available content width at which
 // the two panes sit beside each other. Below this they stack vertically.
 const settingsSideBySideMinWidth = 80
 
 // settingsNavOrder returns the linear up/down traversal order across both
-// panes: Preferences top→bottom, then Sequencer top→bottom.
+// panes: Preferences top→bottom, then Sequencer top→bottom. Rows the cursor
+// cannot land on are left out here, so every caller inherits the skip.
 func settingsNavOrder() []int {
-	out := make([]int, 0, len(settingsPreferences)+len(settingsSequencer))
-	out = append(out, settingsPreferences...)
+	out := make([]int, 0, len(settingsSequencer)+8)
+	for _, g := range settingsPreferenceGroups {
+		for _, id := range g.rows {
+			if settingsSelectable(id) {
+				out = append(out, id)
+			}
+		}
+	}
 	out = append(out, settingsSequencer...)
 	return out
 }
@@ -1420,11 +1466,11 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 		settingTheme:             tr("Theme"),
 		settingLanguage:          tr("Language"),
 		settingStages:            tr("Board columns"),
-		settingSyncAuto:          tr("Sync"),
+		settingSyncAuto:          tr("Automatic"),
 		settingSyncServer:        tr("Sync server"),
 		settingSyncToken:         tr("Sync token"),
 		settingSyncNow:           tr("Sync now"),
-		settingServerOn:          tr("Server"),
+		settingServerOn:          tr("Enabled"),
 		settingServerListen:      tr("Listen"),
 		settingServerToken:       tr("Server token"),
 		settingVersion:           tr("Version"),
@@ -1520,17 +1566,32 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 			cursor = selectedStyle.Render(cursorMark)
 			labelStyle = selectedStyle
 		}
-		return cursor + labelStyle.Render(padRight(labels[id], labelW)) + helpStyle.Render(values[id])
+		value := values[id]
+		if settingsEditsText(id) {
+			value += settingsEditMark
+		}
+		return cursor + labelStyle.Render(padRight(labels[id], labelW)) + helpStyle.Render(value)
 	}
 
 	if sequencerW < 8 {
 		sequencerW = 8
 	}
-	preferencesLabelW := maxLabelW(settingsPreferences)
+	preferencesLabelW := 0
+	for _, g := range settingsPreferenceGroups {
+		if w := maxLabelW(g.rows); w > preferencesLabelW {
+			preferencesLabelW = w
+		}
+	}
 	sequencerLabelW := maxLabelW(settingsSequencer)
 	var preferences, sequencer strings.Builder
-	for _, id := range settingsPreferences {
-		preferences.WriteString(renderRow(id, preferencesLabelW) + "\n")
+	for gi, g := range settingsPreferenceGroups {
+		if gi > 0 {
+			preferences.WriteString("\n")
+		}
+		preferences.WriteString(cursorGap + headerStyle.Render(tr(g.title)) + "\n")
+		for _, id := range g.rows {
+			preferences.WriteString(renderRow(id, preferencesLabelW) + "\n")
+		}
 	}
 	for _, id := range settingsSequencer {
 		sequencer.WriteString(renderRow(id, sequencerLabelW) + "\n")
@@ -1587,6 +1648,27 @@ func settingRowIndex(rows []int, setting int) int {
 	return -1
 }
 
+// settingsPreferencesLine is settingRowIndex for the Preferences pane, whose
+// rendered lines no longer map one-to-one onto its rows: it counts the group
+// headings and the blank line between groups, so the pane scrolls to the line
+// the cursor is actually drawn on. Returns -1 when the cursor is elsewhere.
+func settingsPreferencesLine(setting int) int {
+	line := 0
+	for gi, g := range settingsPreferenceGroups {
+		if gi > 0 {
+			line++ // blank separator
+		}
+		line++ // heading
+		for _, id := range g.rows {
+			if id == setting {
+				return line
+			}
+			line++
+		}
+	}
+	return -1
+}
+
 // fitSettingsPane keeps the selected row visible when a narrow/short terminal
 // cannot show an entire pane, then pads the pane to its assigned height.
 func fitSettingsPane(content string, height, width, selectedLine int) []string {
@@ -1631,7 +1713,7 @@ func (m model) buildSettingsContent(w, outerH int) string {
 	}
 
 	preferences, sequencer := m.renderSettingsSections(preferencesW-2, sequencerW-2)
-	preferencesSelected := settingRowIndex(settingsPreferences, m.settingsCursor)
+	preferencesSelected := settingsPreferencesLine(m.settingsCursor)
 	sequencerSelected := settingRowIndex(settingsSequencer, m.settingsCursor)
 
 	preferencesH, sequencerH := outerH-2, outerH-2

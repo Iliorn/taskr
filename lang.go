@@ -574,6 +574,14 @@ var daTranslations = map[string]string{
 	"Start date (dd-mm-yy, 'today', 'next week', '+3d')...": "Startdato (dd-mm-yy, 'today', 'next week', '+3d')...",
 	"Due date (dd-mm-yy, 'today', 'next week', '+3d')...":   "Forfaldsdato (dd-mm-yy, 'today', 'next week', '+3d')...",
 
+	// ── Settings group headings ──
+	"General": "Generelt",
+	"About":   "Om",
+
+	// Row labels that sit under a heading naming the same thing.
+	"Automatic": "Automatisk",
+	"Enabled":   "Aktiveret",
+
 	// ── Sync + server (Settings rows, status line, toasts) ──
 	"Sync":                            "Synkronisering",
 	"Sync server":                     "Synk.server",
@@ -1165,6 +1173,14 @@ var deTranslations = map[string]string{
 	"Edit comment...":                         "Kommentar bearbeiten…",
 	"Start date (dd-mm-yy, 'today', 'next week', '+3d')...": "Startdatum (dd-mm-yy, 'today', 'next week', '+3d')…",
 	"Due date (dd-mm-yy, 'today', 'next week', '+3d')...":   "Fälligkeit (dd-mm-yy, 'today', 'next week', '+3d')…",
+
+	// ── Settings group headings ──
+	"General": "Allgemein",
+	"About":   "Über",
+
+	// Row labels that sit under a heading naming the same thing.
+	"Automatic": "Automatisch",
+	"Enabled":   "Aktiviert",
 
 	// ── Sync + server (Settings rows, status line, toasts) ──
 	"Sync":                            "Sync",

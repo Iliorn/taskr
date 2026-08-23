@@ -793,24 +793,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.boardMoveColumn(1)
 			} else if m.tab == tabCalendar {
 				m.moveCalendarDay(1)
-			} else if m.tab == tabSettings && m.isBiasSettingRow(m.settingsCursor) {
-				m.cycleBias(m.settingsCursor, +1)
-			} else if m.tab == tabSettings && m.settingsCursor == settingAging {
-				m.toggleAging()
-			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseParent {
-				m.toggleAutoCloseParent()
-			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseSubtasks {
-				m.toggleAutoCloseSubtasks()
-			} else if m.tab == tabSettings && m.settingsCursor == settingShowBoard {
-				m.toggleShowBoard()
-			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
-				m.cycleTheme(1)
-			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
-				m.cycleLang(1)
-			} else if m.tab == tabSettings && m.settingsCursor == settingSyncAuto {
-				m.toggleSyncAuto()
-			} else if m.tab == tabSettings && m.settingsCursor == settingServerOn {
-				m.toggleServer()
+			} else if m.tab == tabSettings {
+				m.settingsAdjust(+1)
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil && m.subtaskCount(t.ID) > 0 {
 					m.expandedTasks[t.ID] = true
@@ -821,24 +805,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.boardMoveColumn(-1)
 			} else if m.tab == tabCalendar {
 				m.moveCalendarDay(-1)
-			} else if m.tab == tabSettings && m.isBiasSettingRow(m.settingsCursor) {
-				m.cycleBias(m.settingsCursor, -1)
-			} else if m.tab == tabSettings && m.settingsCursor == settingAging {
-				m.toggleAging()
-			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseParent {
-				m.toggleAutoCloseParent()
-			} else if m.tab == tabSettings && m.settingsCursor == settingAutoCloseSubtasks {
-				m.toggleAutoCloseSubtasks()
-			} else if m.tab == tabSettings && m.settingsCursor == settingShowBoard {
-				m.toggleShowBoard()
-			} else if m.tab == tabSettings && m.settingsCursor == settingTheme {
-				m.cycleTheme(-1)
-			} else if m.tab == tabSettings && m.settingsCursor == settingLanguage {
-				m.cycleLang(-1)
-			} else if m.tab == tabSettings && m.settingsCursor == settingSyncAuto {
-				m.toggleSyncAuto()
-			} else if m.tab == tabSettings && m.settingsCursor == settingServerOn {
-				m.toggleServer()
+			} else if m.tab == tabSettings {
+				m.settingsAdjust(-1)
 			} else if m.tab == tabTasks && !m.showHistory {
 				if t := m.currentTodo(); t != nil {
 					// On a subtask: collapse the containing parent and
@@ -1803,20 +1771,6 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 
 func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	switch m.settingsCursor {
-	case settingAging:
-		m.toggleAging()
-	case settingAutoCloseParent:
-		m.toggleAutoCloseParent()
-	case settingAutoCloseSubtasks:
-		m.toggleAutoCloseSubtasks()
-	case settingShowBoard:
-		m.toggleShowBoard()
-	case settingTheme:
-		m.cycleTheme(1)
-	case settingLanguage:
-		m.cycleLang(1)
-	case settingSyncAuto:
-		m.toggleSyncAuto()
 	case settingStages:
 		m.mode = modeEditStages
 		m.textInput.SetValue(stagesDisplay())
@@ -1846,8 +1800,6 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		}
 		m.syncStatus = tr("Syncing…")
 		return m, m.backgroundSync()
-	case settingServerOn:
-		m.toggleServer()
 	case settingServerListen:
 		m.mode = modeEditServerListen
 		m.textInput.SetValue(m.syncCfg.listenAddr())
@@ -1864,8 +1816,40 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	case settingCheckUpdate:
 		m.updateStatus = tr("Checking…")
 		return m, checkForUpdate()
+	default:
+		// Every remaining row is a toggle or a picker, and enter means the
+		// same on it as →. One table, so a row cannot answer one key and not
+		// the other — which is exactly what the two hand-kept chains did.
+		m.settingsAdjust(+1)
 	}
 	return m, nil
+}
+
+// settingsAdjust applies a value change to the selected Settings row: dir is
+// +1 for →/enter and -1 for ←. Toggles ignore dir; the pickers cycle by it.
+func (m *model) settingsAdjust(dir int) {
+	if m.isBiasSettingRow(m.settingsCursor) {
+		m.cycleBias(m.settingsCursor, dir)
+		return
+	}
+	switch m.settingsCursor {
+	case settingAging:
+		m.toggleAging()
+	case settingAutoCloseParent:
+		m.toggleAutoCloseParent()
+	case settingAutoCloseSubtasks:
+		m.toggleAutoCloseSubtasks()
+	case settingShowBoard:
+		m.toggleShowBoard()
+	case settingTheme:
+		m.cycleTheme(dir)
+	case settingLanguage:
+		m.cycleLang(dir)
+	case settingSyncAuto:
+		m.toggleSyncAuto()
+	case settingServerOn:
+		m.toggleServer()
+	}
 }
 
 // updateConfirmUpdate handles the "newer release available — update now?" prompt.

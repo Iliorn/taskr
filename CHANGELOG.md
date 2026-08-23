@@ -16,6 +16,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 ### Changed
 
 - Settings drops the sequencer's personality tagline; the top-5 preview stands alone.
+- Settings groups Preferences into General, Sync, Server and About, and marks the editable rows.
 
 ## [1.35.0] - 2026-08-23
 

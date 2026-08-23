@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Scripted flows for the Settings tab: the four inline sync editors and the
@@ -333,5 +334,135 @@ func TestCycleLangVisitsEveryLanguageAndWraps(t *testing.T) {
 	// prompts stay in the previous language until a restart.
 	if m.searchInput.Placeholder != searchHint() {
 		t.Errorf("placeholder = %q, not refreshed for %q", m.searchInput.Placeholder, activeLang)
+	}
+}
+
+// ── Grouped Preferences pane ────────────────────────────────────────────────
+
+// The cursor walks the whole list without stopping on Version. Enter on that
+// row did nothing, so a stop there was a keypress that looked broken; the skip
+// lives in settingsNavOrder so every caller inherits it.
+func TestSettingsCursorSkipsTheVersionRow(t *testing.T) {
+	m := settingsModel(t)
+	m.settingsCursor = settingAutoCloseParent
+	seen := map[int]bool{m.settingsCursor: true}
+	for i := 0; i < numSettingsRows*2; i++ {
+		m = sendKey(t, m, "down")
+		if m.settingsCursor == settingVersion {
+			t.Fatalf("the cursor stopped on the Version row after %d presses", i+1)
+		}
+		seen[m.settingsCursor] = true
+	}
+	for _, row := range []int{settingCheckUpdate, settingAging, settingServerToken} {
+		if !seen[row] {
+			t.Errorf("row %d is unreachable going down", row)
+		}
+	}
+	// And the same on the way back up.
+	for i := 0; i < numSettingsRows*2; i++ {
+		m = sendKey(t, m, "up")
+		if m.settingsCursor == settingVersion {
+			t.Fatalf("the cursor stopped on the Version row going up, after %d presses", i+1)
+		}
+	}
+}
+
+// settingsPreferencesLine is what scrolls the pane on a short terminal, and the
+// pane no longer draws one line per row — the headings and the blank line
+// between groups sit in between. Hunt the cursor mark in the rendered pane and
+// compare, the way the detail pane's estimate is pinned to its document.
+func TestSettingsPreferencesLineMatchesTheRenderedPane(t *testing.T) {
+	m := settingsModel(t)
+	for _, g := range settingsPreferenceGroups {
+		for _, row := range g.rows {
+			if !settingsSelectable(row) {
+				continue
+			}
+			m.settingsCursor = row
+			preferences, _ := m.renderSettingsSections(60, 60)
+			lines := strings.Split(strings.TrimRight(ansi.Strip(preferences), "\n"), "\n")
+			drawn := -1
+			for i, line := range lines {
+				if strings.HasPrefix(line, strings.TrimSpace(cursorMark)) || strings.HasPrefix(line, cursorMark) {
+					drawn = i
+					break
+				}
+			}
+			if drawn < 0 {
+				t.Fatalf("row %d: no cursor mark in the rendered pane:\n%s", row, preferences)
+			}
+			if got := settingsPreferencesLine(row); got != drawn {
+				t.Errorf("row %d: settingsPreferencesLine = %d, drawn on line %d", row, got, drawn)
+			}
+		}
+	}
+	if got := settingsPreferencesLine(settingBiasDeadline); got != -1 {
+		t.Errorf("a Sequencer row should not report a Preferences line, got %d", got)
+	}
+}
+
+// A row whose enter opens a text editor is marked, and a row that cycles on
+// ←/→ is not — the two used to look identical, so which key a row answered was
+// only discoverable by pressing one.
+func TestSettingsMarksTheRowsThatOpenAnEditor(t *testing.T) {
+	m := settingsModel(t)
+	preferences, _ := m.renderSettingsSections(60, 60)
+	for _, line := range strings.Split(ansi.Strip(preferences), "\n") {
+		marked := strings.Contains(line, strings.TrimSpace(settingsEditMark))
+		cycled := strings.Contains(line, "‹")
+		if marked && cycled {
+			t.Errorf("a row cannot both cycle and open an editor: %q", line)
+		}
+	}
+	for _, tc := range []struct {
+		row  int
+		want bool
+	}{
+		{settingSyncServer, true},
+		{settingServerListen, true},
+		{settingStages, true},
+		{settingTheme, false},
+		{settingSyncNow, false},
+		{settingVersion, false},
+	} {
+		if got := settingsEditsText(tc.row); got != tc.want {
+			t.Errorf("settingsEditsText(%d) = %v, want %v", tc.row, got, tc.want)
+		}
+	}
+}
+
+// → and enter are one table now. They were two hand-kept chains, and a toggle
+// that answered one key but not the other is what that cost.
+func TestSettingsEnterAndRightAgreeOnEveryToggleRow(t *testing.T) {
+	// Half of these rows write package-level globals; put them back so the
+	// rest of the suite sees the state it started with.
+	base := settingsModel(t)
+	lang, biasesBefore, board, themeBefore := activeLang, activeBiases, showBoard, base.themeName
+	t.Cleanup(func() {
+		applyLang(string(lang))
+		applyBiases(biasesBefore)
+		applyShowBoard(board)
+		applyTheme(themeByName(themeBefore))
+	})
+
+	for _, row := range []int{
+		settingAutoCloseParent, settingAutoCloseSubtasks, settingShowBoard,
+		settingTheme, settingLanguage, settingAging,
+		settingBiasDeadline, settingBiasPriority, settingBiasMomentum,
+	} {
+		byEnter := settingsModel(t)
+		byEnter.settingsCursor = row
+		byEnter = sendKey(t, byEnter, "enter")
+
+		byArrow := settingsModel(t)
+		byArrow.settingsCursor = row
+		byArrow = sendKey(t, byArrow, "right")
+
+		enterPane, enterSeq := byEnter.renderSettingsSections(60, 60)
+		arrowPane, arrowSeq := byArrow.renderSettingsSections(60, 60)
+		if enterPane != arrowPane || enterSeq != arrowSeq {
+			t.Errorf("row %d: enter and → left different values:\nenter:\n%s%s\nright:\n%s%s",
+				row, enterPane, enterSeq, arrowPane, arrowSeq)
+		}
 	}
 }
