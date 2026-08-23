@@ -236,3 +236,61 @@ func TestProjectDrillDetailShowsTaskNotGantt(t *testing.T) {
 		t.Errorf("detail pane should not show Gantt 'Timeline' header:\n%s", out)
 	}
 }
+
+// TestProjectDrillTimelineIsAStripNotASecondList pins the drilled-in Projects
+// layout: the right column draws bars only, windowed to the same rows the task
+// list beside it is showing, so each task's bar sits on the line with its
+// title. Rendering the labelled chart there made the two columns list the same
+// tasks in the same order — and spent half of the right column on the repeat,
+// leaving a chart floored at minChartWidth.
+func TestProjectDrillTimelineIsAStripNotASecondList(t *testing.T) {
+	titles := []string{"Alpha task", "Beta task", "Undated task"}
+	tasks := make([]todo.Todo, 0, len(titles))
+	base := newTestModel().frameTime
+	for i, title := range titles {
+		td := mkTodo(fmt.Sprintf("t%d", i), title, todo.Pending)
+		td.Project = "apollo"
+		if title != "Undated task" {
+			td.StartDate = base.AddDate(0, 0, -3+i)
+			td.DueDate = base.AddDate(0, 0, 4+i*3)
+		}
+		tasks = append(tasks, td)
+	}
+	m := modelWithTasks(t, tasks...)
+	m.tab = tabProjects
+	m = sendKey(t, m, "enter")
+	if !m.projectTaskMode {
+		t.Fatal("enter on project should set projectTaskMode = true")
+	}
+
+	out := m.buildProjectListContent(m.termWidth-6, m.termHeight-4)
+	for _, title := range titles {
+		if n := strings.Count(out, title); n != 1 {
+			t.Errorf("%q appears %d times in the drilled-in view, want 1 (the timeline must not repeat the list):\n%s", title, n, out)
+		}
+	}
+
+	lineWith := func(title string) string {
+		for _, line := range strings.Split(out, "\n") {
+			if strings.Contains(line, title) {
+				return line
+			}
+		}
+		t.Fatalf("no line contains %q:\n%s", title, out)
+		return ""
+	}
+	for _, title := range []string{"Alpha task", "Beta task"} {
+		if !strings.Contains(lineWith(title), "█") {
+			t.Errorf("%q: bar is not on the same line as the title:\n%s", title, lineWith(title))
+		}
+	}
+	if strings.Contains(lineWith("Undated task"), "█") {
+		t.Errorf("undated task drew a bar:\n%s", lineWith("Undated task"))
+	}
+
+	for _, line := range strings.Split(m.View(), "\n") {
+		if lw := ansi.StringWidth(line); lw > m.termWidth {
+			t.Errorf("View() line %d cells exceeds termWidth %d: %q", lw, m.termWidth, line)
+		}
+	}
+}

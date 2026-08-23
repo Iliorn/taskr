@@ -473,12 +473,11 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 
 // ── Gantt ─────────────────────────────────────────────────────────────────────
 
-func (m model) renderGantt(tasks []todo.Todo) string {
-	if len(tasks) == 0 {
-		return dimStyle.Render(tr("  No tasks in this project."))
-	}
-	today := m.frameTime
-	var minDate, maxDate time.Time
+// ganttDateWindow is the range every Gantt surface scales against: the earliest
+// start and the latest due in the set, with a fallback window when the tasks
+// carry no dates at all. Shared by the labelled chart and the drilled-in strip
+// so the two can never scale the same project differently.
+func ganttDateWindow(tasks []todo.Todo, today time.Time) (minDate, maxDate time.Time, totalDays float64) {
 	for _, t := range tasks {
 		if !t.StartDate.IsZero() && (minDate.IsZero() || t.StartDate.Before(minDate)) {
 			minDate = t.StartDate
@@ -496,6 +495,122 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 	if !maxDate.After(minDate) {
 		maxDate = minDate.AddDate(0, 0, 14)
 	}
+	totalDays = maxDate.Sub(minDate).Hours() / 24
+	if totalDays < 1 {
+		totalDays = 1
+	}
+	return minDate, maxDate, totalDays
+}
+
+// ganttColumn maps a date onto a column of a chartW-wide chart.
+func ganttColumn(d, minDate time.Time, totalDays float64, chartW int) int {
+	return int(math.Round(d.Sub(minDate).Hours() / 24 * float64(chartW) / totalDays))
+}
+
+// Cell colours in the Gantt buffers: negative codes are the fixed styles,
+// 99 is a completed bar, 200+ indexes ganttOverdueGradient, and everything
+// else indexes ganttGradient.
+const (
+	ganttCellEmpty = -1
+	ganttCellToday = -2
+	ganttCellGuide = -3
+	ganttCellDone  = 99
+)
+
+// fillGanttBar paints one task's bar into the cell/colour buffers and reports
+// whether the task had both dates (an undated task leaves the row blank but for
+// the today marker). The buffers are cleared here, so a caller can reuse one
+// pair across every row.
+func fillGanttBar(t todo.Todo, minDate time.Time, totalDays float64, chartW, todayPos int, barRunes []rune, barColors []int) bool {
+	for j := range barRunes {
+		barRunes[j] = ' '
+		barColors[j] = ganttCellEmpty
+	}
+	hasDates := !t.StartDate.IsZero() && !t.DueDate.IsZero()
+	if hasDates {
+		gradLen := len(ganttGradient)
+		ovrdLen := len(ganttOverdueGradient)
+		startPos := ganttColumn(t.StartDate, minDate, totalDays, chartW)
+		endPos := ganttColumn(t.DueDate, minDate, totalDays, chartW)
+		if startPos < 0 {
+			startPos = 0
+		}
+		if endPos > chartW {
+			endPos = chartW
+		}
+		barLen := endPos - startPos
+		if barLen < 1 {
+			barLen = 1
+		}
+		isOverdue := t.IsOverdue()
+		isDone := t.Status == todo.Done
+		for j := startPos; j < endPos && j < chartW; j++ {
+			barRunes[j] = '█'
+			var pos float64
+			if barLen > 1 {
+				pos = float64(j-startPos) / float64(barLen-1)
+			}
+			gradIdx := int(pos * float64(gradLen-1))
+			if gradIdx >= gradLen {
+				gradIdx = gradLen - 1
+			}
+			switch {
+			case isDone:
+				barColors[j] = ganttCellDone
+			case isOverdue:
+				idx := int(pos * float64(ovrdLen-1))
+				if idx >= ovrdLen {
+					idx = ovrdLen - 1
+				}
+				barColors[j] = 200 + idx
+			default:
+				barColors[j] = gradIdx
+			}
+		}
+	}
+	if todayPos >= 0 && todayPos < chartW {
+		barRunes[todayPos] = '│'
+		barColors[todayPos] = ganttCellToday
+	}
+	return hasDates
+}
+
+// writeGanttBar emits a buffered row, coalescing consecutive cells that share a
+// colour into one .Render call — a per-cell render would spend a dozen runes of
+// escape sequence on every column.
+func writeGanttBar(b *strings.Builder, barRunes []rune, barColors []int) {
+	chartW := len(barRunes)
+	j := 0
+	for j < chartW {
+		colorIdx := barColors[j]
+		start := j
+		for j < chartW && barColors[j] == colorIdx {
+			j++
+		}
+		group := string(barRunes[start:j])
+		switch {
+		case colorIdx == ganttCellEmpty:
+			b.WriteString(group)
+		case colorIdx == ganttCellToday:
+			b.WriteString(ganttTodayStyle.Render(group))
+		case colorIdx == ganttCellGuide:
+			b.WriteString(dimStyle.Render(group))
+		case colorIdx == ganttCellDone:
+			b.WriteString(ganttDoneStyle.Render(group))
+		case colorIdx >= 200:
+			b.WriteString(ganttOverdueGradient[colorIdx-200].Render(group))
+		default:
+			b.WriteString(ganttGradient[colorIdx].Render(group))
+		}
+	}
+}
+
+func (m model) renderGantt(tasks []todo.Todo) string {
+	if len(tasks) == 0 {
+		return dimStyle.Render(tr("  No tasks in this project."))
+	}
+	today := m.frameTime
+	minDate, maxDate, totalDays := ganttDateWindow(tasks, today)
 
 	labelW := m.termWidth / ganttLabelWidthDivisor
 	if labelW < minGanttLabelWidth {
@@ -510,11 +625,7 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 		chartW = minChartWidth
 	}
 
-	totalDays := maxDate.Sub(minDate).Hours() / 24
-	if totalDays < 1 {
-		totalDays = 1
-	}
-	todayPos := int(math.Round(today.Sub(minDate).Hours() / 24 * float64(chartW) / totalDays))
+	todayPos := ganttColumn(today, minDate, totalDays, chartW)
 	if todayPos < 0 || todayPos >= chartW {
 		todayPos = -1
 	}
@@ -563,9 +674,6 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 	b.WriteString(dimStyle.Render("  "+strings.Repeat("─", labelW-2)) +
 		ganttTodayStyle.Render(string(divider)) + "\n")
 
-	gradLen := len(ganttGradient)
-	ovrdLen := len(ganttOverdueGradient)
-
 	bufs := getGanttBuffers(chartW)
 	defer putGanttBuffers(bufs)
 	barRunes := bufs.bar[:chartW]
@@ -583,91 +691,144 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 		}
 		label := checkbox + " " + padRight(truncate(t.Title, titleTrunc), titleTrunc) + " |"
 
-		for j := range barRunes {
-			barRunes[j] = ' '
-			barColors[j] = -1
-		}
-
-		hasDates := !t.StartDate.IsZero() && !t.DueDate.IsZero()
-		if hasDates {
-			startPos := int(math.Round(t.StartDate.Sub(minDate).Hours() / 24 * float64(chartW) / totalDays))
-			endPos := int(math.Round(t.DueDate.Sub(minDate).Hours() / 24 * float64(chartW) / totalDays))
-			if startPos < 0 {
-				startPos = 0
-			}
-			if endPos > chartW {
-				endPos = chartW
-			}
-			barLen := endPos - startPos
-			if barLen < 1 {
-				barLen = 1
-			}
-			isOverdue := t.IsOverdue()
-			isDone := t.Status == todo.Done
-			for j := startPos; j < endPos && j < chartW; j++ {
-				barRunes[j] = '█'
-				var pos float64
-				if barLen > 1 {
-					pos = float64(j-startPos) / float64(barLen-1)
-				}
-				gradIdx := int(pos * float64(gradLen-1))
-				if gradIdx >= gradLen {
-					gradIdx = gradLen - 1
-				}
-				switch {
-				case isDone:
-					barColors[j] = 99
-				case isOverdue:
-					idx := int(pos * float64(ovrdLen-1))
-					if idx >= ovrdLen {
-						idx = ovrdLen - 1
-					}
-					barColors[j] = 200 + idx
-				default:
-					barColors[j] = gradIdx
-				}
-			}
-		}
-		if todayPos >= 0 && todayPos < chartW {
-			barRunes[todayPos] = '│'
-			barColors[todayPos] = -2
-		}
+		hasDates := fillGanttBar(t, minDate, totalDays, chartW, todayPos, barRunes, barColors)
 		datesSuffix := "|"
 		if hasDates {
 			datesSuffix = fmt.Sprintf("| %s→%s", t.StartDate.Format("02-01"), t.DueDate.Format("02-01"))
 		}
 
-		renderBar := func() {
-			j := 0
-			for j < chartW {
-				colorIdx := barColors[j]
-				start := j
-				for j < chartW && barColors[j] == colorIdx {
-					j++
-				}
-				group := string(barRunes[start:j])
-				switch {
-				case colorIdx == -1:
-					b.WriteString(group)
-				case colorIdx == -2:
-					b.WriteString(ganttTodayStyle.Render(group))
-				case colorIdx == 99:
-					b.WriteString(ganttDoneStyle.Render(group))
-				case colorIdx >= 200:
-					b.WriteString(ganttOverdueGradient[colorIdx-200].Render(group))
-				default:
-					b.WriteString(ganttGradient[colorIdx].Render(group))
-				}
-			}
-		}
 		if isSelected {
 			b.WriteString(selectedStyle.Render(label))
-			renderBar()
+			writeGanttBar(b, barRunes, barColors)
 			b.WriteString(selectedStyle.Render(datesSuffix) + "\n")
 		} else {
 			b.WriteString(label)
-			renderBar()
+			writeGanttBar(b, barRunes, barColors)
 			b.WriteString(datesSuffix + "\n")
+		}
+	}
+	return b.String()
+}
+
+// renderGanttStrip is the timeline as it is drawn beside the drilled-in task
+// list: bars only, one row per task, windowed to the same rows the list is
+// showing so row N on the left is row N on the right. It drops the labelled
+// chart's title column and its start→due suffix on purpose — the column to its
+// left already names every task in the same order and carries the due date, so
+// at the drill's ~40-cell column the labels spent half the pane restating the
+// list and left a 10-cell stub of a chart. The axis is one line rather than two
+// (dates and today marker share it) because the list header beside it is one
+// line, and the rows have to start level.
+func (m model) renderGanttStrip(tasks []todo.Todo, chartW, from, count int) []string {
+	if len(tasks) == 0 || chartW < 1 {
+		return []string{dimStyle.Render(tr("  No tasks in this project."))}
+	}
+	today := m.frameTime
+	minDate, maxDate, totalDays := ganttDateWindow(tasks, today)
+	todayPos := ganttColumn(today, minDate, totalDays, chartW)
+	if todayPos < 0 || todayPos >= chartW {
+		todayPos = -1
+	}
+
+	lines := []string{m.renderGanttAxis(minDate, maxDate, today, chartW, todayPos)}
+
+	bufs := getGanttBuffers(chartW)
+	defer putGanttBuffers(bufs)
+	barRunes := bufs.bar[:chartW]
+	barColors := bufs.color[:chartW]
+
+	// Same clamp as renderProjectDrillTaskList's, so the two windows start on
+	// the same task even when the offset is stale.
+	if from < 0 || from > len(tasks) {
+		from = 0
+	}
+	b := getBuilder()
+	defer putBuilder(b)
+	for i := from; i < from+count && i < len(tasks); i++ {
+		fillGanttBar(tasks[i], minDate, totalDays, chartW, todayPos, barRunes, barColors)
+		// The selected row gets a dotted rule through its empty cells: with no
+		// labels on this side, that is what carries the eye from the highlighted
+		// title on the left across to its bar.
+		if i == m.cursor {
+			for j := range barRunes {
+				if barColors[j] == ganttCellEmpty {
+					barRunes[j] = '·'
+					barColors[j] = ganttCellGuide
+				}
+			}
+		}
+		b.Reset()
+		writeGanttBar(b, barRunes, barColors)
+		lines = append(lines, b.String())
+	}
+	return lines
+}
+
+// renderGanttAxis draws the strip's single ruler line: the window's end dates
+// at the edges and the today marker where it falls, over a dim rule. The label
+// is dropped to a single tick when the span between the dates cannot hold it,
+// so a narrow column loses the word and never the position.
+func (m model) renderGanttAxis(minDate, maxDate, today time.Time, chartW, todayPos int) string {
+	rule := make([]rune, chartW)
+	marks := make([]int, chartW)
+	for i := range rule {
+		rule[i] = '─'
+		marks[i] = ganttCellGuide
+	}
+	write := func(pos int, s string, mark int) {
+		for i, ch := range []rune(s) {
+			if pos+i < 0 || pos+i >= chartW {
+				continue
+			}
+			rule[pos+i] = ch
+			marks[pos+i] = mark
+		}
+	}
+
+	leftDate := minDate.Format("02-01")
+	rightDate := maxDate.Format("02-01")
+	lo, hi := 0, chartW // the span the today label may use
+	if chartW >= len([]rune(leftDate))+len([]rune(rightDate))+4 {
+		write(0, leftDate, ganttCellEmpty)
+		write(chartW-len([]rune(rightDate)), rightDate, ganttCellEmpty)
+		lo, hi = len([]rune(leftDate))+1, chartW-len([]rune(rightDate))-1
+	}
+
+	if todayPos >= 0 {
+		todayLabel := tr("today:") + today.Format("02-01")
+		labelLen := len([]rune(todayLabel))
+		switch {
+		case hi-lo >= labelLen:
+			insertPos := todayPos - labelLen/2
+			if insertPos < lo {
+				insertPos = lo
+			}
+			if insertPos+labelLen > hi {
+				insertPos = hi - labelLen
+			}
+			write(insertPos, todayLabel, ganttCellToday)
+		default:
+			write(todayPos, "┬", ganttCellToday)
+		}
+	}
+
+	b := getBuilder()
+	defer putBuilder(b)
+	j := 0
+	for j < chartW {
+		mark := marks[j]
+		start := j
+		for j < chartW && marks[j] == mark {
+			j++
+		}
+		group := string(rule[start:j])
+		switch mark {
+		case ganttCellToday:
+			b.WriteString(ganttTodayStyle.Render(group))
+		case ganttCellEmpty:
+			b.WriteString(headerStyle.Render(group))
+		default:
+			b.WriteString(dimStyle.Render(group))
 		}
 	}
 	return b.String()

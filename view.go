@@ -1142,9 +1142,10 @@ func (m model) buildProjectListContent(w, listH int) string {
 
 // buildProjectDrillContent renders the drilled-in project view as two columns:
 // the task list (left, using the same row renderer as the Tasks tab) and,
-// in the right column, either the Gantt chart (when browsing the list,
-// pane == paneList) or the task detail (when the user has pressed Enter on a
-// task, pane == paneDetail). Mirrors buildSideBySide's contract — each column
+// in the right column, either the timeline strip (when browsing the list,
+// pane == paneList; see renderGanttStrip — bars only, aligned row-for-row with
+// the list) or the task detail (when the user has pressed Enter on a task,
+// pane == paneDetail). Mirrors buildSideBySide's contract — each column
 // is rendered through a model copy whose termWidth is the column's share, and
 // the focused pane carries the accent border.
 // buildProjectDrillNarrow is the single-column drilled-in project view for
@@ -1225,12 +1226,10 @@ func (m model) buildProjectDrillContent(projects []string, w, outerH int) string
 			rightLines = []string{"", dimStyle.Render(tr("  No task selected."))}
 		}
 	} else {
-		if len(tasks) > 0 {
-			ganttContent := dm.renderGantt(tasks)
-			rightLines = strings.Split(strings.TrimRight(ganttContent, "\n"), "\n")
-		} else {
-			rightLines = []string{dimStyle.Render(tr("  No tasks in this project."))}
-		}
+		// Beside the list the timeline is a strip: no label column, and windowed
+		// to the rows the list is showing, so the two columns read as one table
+		// split by a border instead of two panes listing the same tasks.
+		rightLines = dm.renderGanttStrip(tasks, ganttW-2, m.listOffset, m.projectDrillTaskVisibleRows())
 	}
 
 	fitLines := func(lines []string, h, contentW int) []string {
