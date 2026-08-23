@@ -1405,8 +1405,8 @@ func settingsCursorStep(cur, delta int) int {
 }
 
 // renderSettingsSections builds the unboxed content for the two Settings panes.
-// sequencerW controls wrapping and truncation in the ranking explanation and
-// live preview, preferencesW the same for the status footer; the pane builder
+// sequencerW controls truncation in the live preview, preferencesW the
+// wrapping of the status footer; the pane builder
 // applies the final per-line width contract.
 func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, string) {
 	labels := map[int]string{
@@ -1523,14 +1523,6 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 		return cursor + labelStyle.Render(padRight(labels[id], labelW)) + helpStyle.Render(values[id])
 	}
 
-	// Personality summary: what the current bias mix "feels like", so tweaking a
-	// single bias gives immediate feedback that the sequence has shifted. It
-	// belongs next to the biases that produce it in the Sequencer pane.
-	// personality() lives in the scoring code and stays locale-free, like the
-	// todo package; the words become Danish here at the view layer.
-	name, descr := personality(activeBiases)
-	name, descr = tr(name), tr(descr)
-
 	if sequencerW < 8 {
 		sequencerW = 8
 	}
@@ -1543,12 +1535,9 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 	for _, id := range settingsSequencer {
 		sequencer.WriteString(renderRow(id, sequencerLabelW) + "\n")
 	}
-	sequencer.WriteString("\n  " + activeCountStyle.Render(tr("Sequence: ")+name) + "\n")
-	for _, line := range wrapText(descr, sequencerW-4) {
-		sequencer.WriteString("    " + helpStyle.Render(line) + "\n")
-	}
-	// Live preview: show the top-N tasks ranked with the current knob values so
-	// the user can see the effect without switching tabs.
+	// Live preview: the top-N tasks ranked with the current knob values is the
+	// whole account the pane gives of a bias change — a prose tagline for the
+	// mix said less than the five rows that actually move.
 	if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, sequencerW); preview != "" {
 		sequencer.WriteString(preview)
 	}

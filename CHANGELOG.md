@@ -11,6 +11,12 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Changed
+
+- Settings drops the sequencer's personality tagline; the top-5 preview stands alone.
+
 ## [1.35.0] - 2026-08-23
 
 ### Added

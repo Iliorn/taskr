@@ -25,7 +25,7 @@ import (
 //
 // Two kinds of call site have to be collected differently. Most are literal —
 // tr("Settings") — and come from scanning the sources. The rest reach tr()
-// through a variable (the keymap's descriptions, the sequencer personalities,
+// through a variable (the keymap's descriptions, the bias levels,
 // the enum words behind trPriority/trSize/trRecurrence); a source scan cannot
 // see those, so they are enumerated from the tables that hold them. Both
 // families had gaps: the sync half of Settings was untranslated because nobody
@@ -92,15 +92,8 @@ func dynamicUIStrings() []string {
 	out = append(out, "stop", "reopen")
 	out = append(out, helpSectionOrder...)
 	out = append(out, secDrill)
-	levels := []biasLevel{biasRelaxed, biasBalanced, biasIntense}
-	for _, d := range levels {
+	for _, d := range []biasLevel{biasRelaxed, biasBalanced, biasIntense} {
 		out = append(out, d.String())
-		for _, p := range levels {
-			for _, mo := range levels {
-				name, descr := personality(biases{Deadline: d, Priority: p, Momentum: mo})
-				out = append(out, name, descr)
-			}
-		}
 	}
 	for _, p := range []todo.Priority{todo.PriorityHigh, todo.PriorityMedium, todo.PriorityLow} {
 		out = append(out, p.String())
@@ -110,7 +103,7 @@ func dynamicUIStrings() []string {
 	}
 	out = append(out, "daily", "weekly", "monthly", "yearly", "weekdays")
 	// The explain overlay labels its rows with the dimension names the scoring
-	// code holds, so they reach tr() through a slice like the personalities do.
+	// code holds, so they reach tr() through a slice rather than a literal.
 	out = append(out, seqDimNames[:]...)
 	// Parser keywords reach tr() through inputWord(), indexed off this slice —
 	// a source scan sees the helper, not the words. Their translations are what

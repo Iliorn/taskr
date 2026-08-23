@@ -2734,7 +2734,7 @@ Notes:
     so CLI changes appear without restarting it.
   - The sequencing engine's biases (Deadline/Priority/Momentum) are loaded
     from ~/.taskr/settings.json, so 'top' and 'list' rank the same way as
-    the TUI under the user's current personality.`)
+    the TUI under the user's current bias settings.`)
 	return 0
 }
 
