@@ -329,3 +329,87 @@ func TestBoardColumnWidthsFallBackWhenCrowded(t *testing.T) {
 		t.Errorf("columns + gaps = %d, want %d: %v", sum, availW, got)
 	}
 }
+
+// A board whose columns are a different width every time a card is added reads
+// as clutter even when no row is clipped, so the grid is even until a column
+// would actually be clipped.
+func TestBoardColumnsAreAnEvenGridWhenNothingClips(t *testing.T) {
+	titles := []string{"Backlog", "In progress", "Review", "Done"}
+	cols := [][]todo.Todo{{todo.New("short")}, {todo.New("also short")}, nil, nil}
+
+	const availW = 120
+	got := boardColWidths(cols, titles, availW)
+	lo, hi := got[0], got[0]
+	for _, w := range got {
+		if w < lo {
+			lo = w
+		}
+		if w > hi {
+			hi = w
+		}
+	}
+	if hi-lo > 1 {
+		t.Errorf("columns %v differ by %d; nothing needs the extra width, so the grid should be even", got, hi-lo)
+	}
+	sum := (len(cols) - 1) * boardColGap
+	for _, w := range got {
+		sum += w
+	}
+	if sum != availW {
+		t.Errorf("columns + gaps = %d, want exactly the available %d: %v", sum, availW, got)
+	}
+}
+
+// The heading sits over its own cards. The card marker column is blank on every
+// row but the selected one, so a flush-left heading hung two characters to the
+// left of every title under it.
+func TestBoardHeadingsLineUpWithTheirCards(t *testing.T) {
+	a := todo.New("alpha")
+	b := todo.New("beta")
+	b.Stage = "In progress"
+	m := newTagModel(a, b)
+	m.tab = tabBoard
+	m.termWidth, m.termHeight = 120, 30
+	m.refreshCaches()
+
+	lines := strings.Split(ansi.Strip(m.renderBoardList()), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("board rendered %d lines, want a header, a rule and cards", len(lines))
+	}
+	header, cards := lines[0], lines[2]
+	for _, title := range []string{"In progress", "Beta"} {
+		if !strings.Contains(header+cards, title) {
+			t.Fatalf("board is missing %q:\n%s", title, strings.Join(lines, "\n"))
+		}
+	}
+	// Display columns, not byte offsets: the card row carries the ▶ marker and
+	// the column dividers, which are three bytes each.
+	col := func(line, sub string) int { return ansi.StringWidth(line[:strings.Index(line, sub)]) }
+	if h, c := col(header, "In progress"), col(cards, "Beta"); h != c {
+		t.Errorf("heading starts at column %d but its card at %d:\n%s", h, c, strings.Join(lines, "\n"))
+	}
+}
+
+// The columns are separated by a divider that runs the height of the pane, so
+// an empty stage still holds its place in the grid.
+func TestBoardDividersRunTheFullPane(t *testing.T) {
+	a := todo.New("alpha")
+	m := newTagModel(a)
+	m.tab = tabBoard
+	m.termWidth, m.termHeight = 120, 30
+	m.refreshCaches()
+
+	lines := strings.Split(ansi.Strip(m.renderBoardList()), "\n")
+	want := strings.Count(lines[2], boardColSep)
+	if want != len(activeStages)-1 {
+		t.Fatalf("card row has %d dividers, want one between each of %d columns", want, len(activeStages))
+	}
+	if n := len(lines); n < m.listVisible()-2 {
+		t.Errorf("board drew %d rows, want the pane's %d so the dividers reach the bottom", n, m.listVisible()-2)
+	}
+	for i, line := range lines[2:] {
+		if got := strings.Count(line, boardColSep); got != want {
+			t.Errorf("row %d has %d dividers, want %d: %q", i+2, got, want, line)
+		}
+	}
+}

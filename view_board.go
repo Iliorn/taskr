@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // view_board.go renders the Board tab: one kanban column per configured stage
@@ -14,7 +15,12 @@ import (
 // order, and the active search filter applies unchanged.
 
 const (
-	boardColGap  = 2
+	// boardColGap is the space between two columns: one column of divider with
+	// a space either side. Two bare spaces left the eye nothing to hang a
+	// column edge on, and "where does this column end" was a question a board
+	// of unequal columns kept asking.
+	boardColGap  = 3
+	boardColSep  = "│"
 	boardMinColW = 16 // below this per-column width the board degrades to a stacked list
 	// boardMinWindowCols is the fewest columns worth scrolling between. A board
 	// showing one or two columns of eleven has stopped being a board — the
@@ -138,7 +144,7 @@ func (m model) renderBoardList() string {
 	titles := boardColTitles()
 	n := len(cols)
 	availW := m.termWidth - 8
-	start, count, colW := boardWindow(n, m.board.colOffset, availW)
+	start, count, _ := boardWindow(n, m.board.colOffset, availW)
 	if count == 0 {
 		return m.renderBoardStacked(cols, titles)
 	}
@@ -150,7 +156,10 @@ func (m model) renderBoardList() string {
 		budget = 4
 	}
 	selCol, selCursor := m.boardSelection(cols)
-	widths := boardColWidths(cols[start:start+count], titles[start:start+count], colW*count+(count-1)*boardColGap)
+	// boardColWidths gets the full pane width, not boardWindow's per-column
+	// share: that share is an integer division and drops the remainder, which
+	// is how the grid used to stop a few columns short of its own border.
+	widths := boardColWidths(cols[start:start+count], titles[start:start+count], availW)
 	rendered := make([][]string, 0, count)
 	for c := start; c < start+count; c++ {
 		cursor := -1
@@ -160,21 +169,23 @@ func (m model) renderBoardList() string {
 		rendered = append(rendered,
 			m.renderBoardColumn(cols[c], titles[c], c == n-1, cursor, widths[c-start], budget))
 	}
-	return zipColumnsW(widths, boardColGap, rendered...)
+	return joinBoardColumns(widths, budget, rendered...)
 }
 
-// boardColWidths splits the board's width across the visible columns in
-// proportion to what each one has to show, instead of giving every column an
-// equal share. An equal split is what made a board of one busy stage and three
-// empty ones clip its only real cards at twenty characters while three columns
-// of blanks sat beside them at the same width.
+// boardColWidths splits the board's width across the visible columns. The
+// default is a uniform grid: equal columns are what make a board read as a
+// board, and a column whose width moves every time a card is added or renamed
+// reads as clutter even when every row is legible.
 //
-// Every column keeps boardMinColW so an empty stage is still a place a card can
-// be moved to and its heading stays readable; the surplus above that floor goes
-// to the columns that can use it, and no column grows past what it actually
-// wants. This is the same rule the Tasks tab's title column follows
-// (contentFitWidth) — hug the content, cap at a share of the pane — so the
-// board reflows on a resize the way the rest of the app does.
+// A column deviates from its equal share only when that share would clip it,
+// and then only with width reclaimed from the columns that want less than
+// theirs — so a board of one busy stage and three empty ones still spends its
+// width where the cards are, without the empty stages losing the floor
+// (boardMinColW) that keeps them a readable place to drop a card.
+//
+// The residue nobody wants goes back onto the grid a column at a time. Handing
+// it all to the hungriest column was how a board with a single long title
+// ended up one column of 58 beside three of 16.
 func boardColWidths(cols [][]todo.Todo, titles []string, availW int) []int {
 	n := len(cols)
 	widths := make([]int, n)
@@ -183,12 +194,11 @@ func boardColWidths(cols [][]todo.Todo, titles []string, availW int) []int {
 	}
 	budget := availW - (n-1)*boardColGap
 	// want is the width that would clip nothing: the widest card (plus the
-	// cursor marker and the priority "!") or the heading with its count,
-	// whichever is longer.
+	// cursor marker and the priority "!") or the heading with its count — which
+	// is indented to the card text, so it pays for the marker too.
 	want := make([]int, n)
-	surplus := budget
 	for i := range cols {
-		want[i] = len([]rune(fmt.Sprintf("%s (%d)", titles[i], len(cols[i]))))
+		want[i] = len([]rune(cursorGap)) + len([]rune(fmt.Sprintf("%s (%d)", titles[i], len(cols[i]))))
 		for j := range cols[i] {
 			w := len([]rune(cols[i][j].Title)) + len([]rune(cursorGap)) + 2 // marker + " !"
 			if w > want[i] {
@@ -198,44 +208,100 @@ func boardColWidths(cols [][]todo.Todo, titles []string, availW int) []int {
 		if want[i] < boardMinColW {
 			want[i] = boardMinColW
 		}
-		widths[i] = boardMinColW
-		surplus -= boardMinColW
 	}
-	if surplus <= 0 {
-		// Nothing to share out: fall back to the equal split the caller sized
-		// its window with, which is what boardWindow already guaranteed fits.
-		even := budget / n
-		for i := range widths {
-			widths[i] = even
+	// The even grid, with the rounding remainder spread one column at a time so
+	// no column sits more than a character off its neighbours.
+	even, extra := budget/n, budget%n
+	for i := range widths {
+		widths[i] = even
+		if i < extra {
+			widths[i]++
 		}
-		widths[n-1] += budget - even*n
+	}
+	if even < boardMinColW {
+		// Not enough width to trade: the even split is what boardWindow already
+		// decided fits, and any reshuffle here would push a column under the floor.
 		return widths
 	}
-	// Hand out the surplus in proportion to how much each column still wants,
-	// then give any rounding residue to the hungriest column so the row fills
-	// the pane exactly rather than leaving a ragged edge.
-	totalWant := 0
-	for i := range want {
-		totalWant += want[i] - boardMinColW
-	}
-	left, hungriest := surplus, 0
+	clips := false
 	for i := range widths {
-		if totalWant > 0 {
-			grow := surplus * (want[i] - boardMinColW) / totalWant
-			if grow > want[i]-boardMinColW {
-				grow = want[i] - boardMinColW
-			}
-			widths[i] += grow
-			left -= grow
-		}
-		if want[i]-widths[i] > want[hungriest]-widths[hungriest] {
-			hungriest = i
+		if want[i] > widths[i] {
+			clips = true
+			break
 		}
 	}
-	if left > 0 {
-		widths[hungriest] += left
+	if !clips {
+		// Every column fits in its share: leave the grid alone. Trading width
+		// nobody needs only makes the columns uneven for no gain — and uneven
+		// for a reason that moves whenever a title does.
+		return widths
+	}
+	spare := 0
+	for i := range widths {
+		if want[i] < widths[i] {
+			spare += widths[i] - want[i]
+			widths[i] = want[i]
+		}
+	}
+	// Largest shortfall first, so the busiest column is the one served.
+	for spare > 0 {
+		hungriest, shortfall := -1, 0
+		for i := range widths {
+			if s := want[i] - widths[i]; s > shortfall {
+				hungriest, shortfall = i, s
+			}
+		}
+		if hungriest < 0 {
+			break // nothing clips any more; the rest returns to the grid
+		}
+		give := shortfall
+		if give > spare {
+			give = spare
+		}
+		widths[hungriest] += give
+		spare -= give
+	}
+	for i := 0; spare > 0; i, spare = i+1, spare-1 {
+		widths[i%n]++
 	}
 	return widths
+}
+
+// joinBoardColumns lays the rendered columns side by side with a divider down
+// each gap, padded to height rows so the dividers run the length of the pane
+// instead of stopping under the last card — the column an empty stage occupies
+// is as much a part of the grid as a full one. The header row is left open and
+// the divider ties into the header rule below it, so the headings read as one
+// row rather than as cells.
+func joinBoardColumns(widths []int, height int, columns ...[]string) string {
+	var b strings.Builder
+	for row := 0; row < height; row++ {
+		for c, col := range columns {
+			line := ""
+			if row < len(col) {
+				line = col[row]
+			}
+			if c == len(columns)-1 {
+				b.WriteString(strings.TrimRight(line, " "))
+				continue
+			}
+			line = ansi.Truncate(line, widths[c], "")
+			if lw := ansi.StringWidth(line); lw < widths[c] {
+				line += strings.Repeat(" ", widths[c]-lw)
+			}
+			b.WriteString(line)
+			switch row {
+			case 0:
+				b.WriteString(strings.Repeat(" ", boardColGap))
+			case 1:
+				b.WriteString(dimStyle.Render("─┬─"))
+			default:
+				b.WriteString(dimStyle.Render(" " + boardColSep + " "))
+			}
+		}
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // renderBoardColumn builds one column's lines: header with count, a rule, then
@@ -244,7 +310,9 @@ func boardColWidths(cols [][]todo.Todo, titles []string, availW int) []int {
 // renders its cards dim — they're history, not work.
 func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, cursor, colW, budget int) []string {
 	lines := make([]string, 0, budget)
-	header := truncate(fmt.Sprintf("%s (%d)", title, len(cards)), colW)
+	// Indented to the card text: the marker column is blank on every row but the
+	// selected one, so a flush-left heading hangs out to the left of its own cards.
+	header := truncate(cursorGap+fmt.Sprintf("%s (%d)", title, len(cards)), colW)
 	lines = append(lines, statsHeaderStyle.Render(header))
 	// The focused column is marked by an accented rule under its header — the
 	// header text itself keeps the standard style so it stays legible.
