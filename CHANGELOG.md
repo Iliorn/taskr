@@ -15,6 +15,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ### Changed
 
+- An undated task marks the timeline where it happened: a diamond if high priority, else a dot.
 - A drilled-in project draws bars beside the task list instead of repeating every title.
 - The board draws an even column grid with dividers, and headings now sit over their own cards.
 - Settings drops the sequencer's personality tagline; the top-5 preview stands alone.

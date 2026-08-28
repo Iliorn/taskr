@@ -524,3 +524,87 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// TestGanttPlacementFindsAMomentForUndatedTasks pins ganttMoment's order: a
+// task is missing from its project's timeline only when it has no moment at
+// all. A due date is a deadline, a start is a beginning, a completed task
+// happened when it was completed, and tracked time is work at a moment.
+func TestGanttPlacementFindsAMomentForUndatedTasks(t *testing.T) {
+	base := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	withEntry := mkTodo("e", "tracked", todo.Pending)
+	withEntry.TimeEntries = []todo.TimeEntry{
+		{ID: "1", StartedAt: base.AddDate(0, 0, -5), StoppedAt: base.AddDate(0, 0, -5).Add(time.Hour)},
+		{ID: "2", StartedAt: base.AddDate(0, 0, -2), StoppedAt: base.AddDate(0, 0, -2).Add(time.Hour)},
+	}
+	running := mkTodo("r", "running", todo.Pending)
+	running.TimeEntries = []todo.TimeEntry{{ID: "1", StartedAt: base}}
+	done := mkTodo("d", "done", todo.Done)
+	done.CompletedAt = base.AddDate(0, 0, -1)
+	dueOnly := mkTodo("u", "due", todo.Pending)
+	dueOnly.DueDate = base.AddDate(0, 0, 3)
+	startOnly := mkTodo("s", "start", todo.Pending)
+	startOnly.StartDate = base.AddDate(0, 0, -3)
+	span := mkTodo("p", "span", todo.Pending)
+	span.StartDate, span.DueDate = base.AddDate(0, 0, -3), base.AddDate(0, 0, 3)
+
+	cases := []struct {
+		name string
+		task todo.Todo
+		kind ganttPlacement
+		at   time.Time
+	}{
+		{"both dates span", span, ganttSpan, time.Time{}},
+		{"due only", dueOnly, ganttPoint, dueOnly.DueDate},
+		{"start only", startOnly, ganttPoint, startOnly.StartDate},
+		{"done undated", done, ganttPoint, done.CompletedAt},
+		{"newest time entry", withEntry, ganttPoint, withEntry.TimeEntries[1].StoppedAt},
+		{"running timer", running, ganttPoint, running.TimeEntries[0].StartedAt},
+		{"nothing at all", mkTodo("n", "nothing", todo.Pending), ganttNothing, time.Time{}},
+	}
+	for _, c := range cases {
+		kind, at := ganttPlacementOf(c.task)
+		if kind != c.kind {
+			t.Errorf("%s: placement = %v, want %v", c.name, kind, c.kind)
+		}
+		if !at.Equal(c.at) {
+			t.Errorf("%s: moment = %v, want %v", c.name, at, c.at)
+		}
+	}
+}
+
+// TestGanttMarksUndatedTasksByPriority guards the marker's shape: a task drawn
+// as a moment rather than a span still says whether it mattered — a diamond for
+// high priority, a dot for the rest. Undated completed tasks used to leave the
+// row empty, which read as "this task was never part of the project".
+func TestGanttMarksUndatedTasksByPriority(t *testing.T) {
+	m := newTestModel()
+	m.termWidth = 120
+	base := m.frameTime
+
+	mk := func(id string, p todo.Priority) todo.Todo {
+		td := mkTodo(id, "Finished "+id, todo.Done)
+		td.Priority = p
+		td.CompletedAt = base.AddDate(0, 0, -3)
+		return td
+	}
+	tasks := []todo.Todo{mk("high", todo.PriorityHigh), mk("med", todo.PriorityMedium)}
+	// A pending task with no dates, no timer and no completion has no moment to
+	// be drawn at, and must stay blank rather than pick one.
+	tasks = append(tasks, mkTodo("blank", "Never dated", todo.Pending))
+
+	lines := strings.Split(strings.TrimRight(m.renderGantt(tasks), "\n"), "\n")
+	if len(lines) != len(tasks)+2 { // date axis + today divider + one row per task
+		t.Fatalf("renderGantt emitted %d lines, want %d:\n%s", len(lines), len(tasks)+2, strings.Join(lines, "\n"))
+	}
+	if !strings.Contains(lines[2], "◆") {
+		t.Errorf("high-priority completed task has no diamond marker: %q", lines[2])
+	}
+	if !strings.Contains(lines[3], "•") {
+		t.Errorf("medium-priority completed task has no dot marker: %q", lines[3])
+	}
+	for _, glyph := range []string{"◆", "•", "█"} {
+		if strings.Contains(lines[4], glyph) {
+			t.Errorf("task with no moment drew %q on the timeline: %q", glyph, lines[4])
+		}
+	}
+}

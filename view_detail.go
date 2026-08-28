@@ -473,17 +473,87 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 
 // ── Gantt ─────────────────────────────────────────────────────────────────────
 
+// ganttPlacement is how much of the timeline one task can claim: a span when it
+// has both dates, a single marked moment when it has one date or only a record
+// of having happened, and nothing when the task carries no moment at all.
+type ganttPlacement int
+
+const (
+	ganttNothing ganttPlacement = iota
+	ganttPoint
+	ganttSpan
+)
+
+// ganttMoment is where a task without a start→due span still belongs on the
+// timeline, and whether it belongs anywhere. A task is not absent from a
+// project's history just because nobody dated it: a due date on its own is a
+// deadline, a start on its own is a beginning, a completed task happened when
+// it was completed, and tracked time is a record of work at a moment. Only a
+// pending task that has never been dated, worked on or finished has no place
+// to be drawn, and that is the one case the chart leaves blank.
+func ganttMoment(t todo.Todo) (time.Time, bool) {
+	switch {
+	case !t.DueDate.IsZero():
+		return t.DueDate, true
+	case !t.StartDate.IsZero():
+		return t.StartDate, true
+	case t.Status == todo.Done && !t.CompletedAt.IsZero():
+		return t.CompletedAt, true
+	}
+	var latest time.Time
+	for _, e := range t.TimeEntries {
+		if !e.DeletedAt.IsZero() {
+			continue
+		}
+		when := e.StoppedAt
+		if when.IsZero() {
+			when = e.StartedAt
+		}
+		if when.After(latest) {
+			latest = when
+		}
+	}
+	return latest, !latest.IsZero()
+}
+
+// ganttPlacementOf reports how a task is drawn and, for a point, when.
+func ganttPlacementOf(t todo.Todo) (ganttPlacement, time.Time) {
+	if !t.StartDate.IsZero() && !t.DueDate.IsZero() {
+		return ganttSpan, time.Time{}
+	}
+	if at, ok := ganttMoment(t); ok {
+		return ganttPoint, at
+	}
+	return ganttNothing, time.Time{}
+}
+
 // ganttDateWindow is the range every Gantt surface scales against: the earliest
 // start and the latest due in the set, with a fallback window when the tasks
-// carry no dates at all. Shared by the labelled chart and the drilled-in strip
-// so the two can never scale the same project differently.
+// carry no dates at all. Marked moments widen it too — a marker clamped onto an
+// edge would put a task on a date it does not have. Shared by the labelled
+// chart and the drilled-in strip so the two can never scale the same project
+// differently.
 func ganttDateWindow(tasks []todo.Todo, today time.Time) (minDate, maxDate time.Time, totalDays float64) {
+	fold := func(d time.Time) {
+		if d.IsZero() {
+			return
+		}
+		if minDate.IsZero() || d.Before(minDate) {
+			minDate = d
+		}
+		if maxDate.IsZero() || d.After(maxDate) {
+			maxDate = d
+		}
+	}
 	for _, t := range tasks {
 		if !t.StartDate.IsZero() && (minDate.IsZero() || t.StartDate.Before(minDate)) {
 			minDate = t.StartDate
 		}
 		if !t.DueDate.IsZero() && (maxDate.IsZero() || t.DueDate.After(maxDate)) {
 			maxDate = t.DueDate
+		}
+		if kind, at := ganttPlacementOf(t); kind == ganttPoint {
+			fold(at)
 		}
 	}
 	if minDate.IsZero() {
@@ -517,17 +587,27 @@ const (
 	ganttCellDone  = 99
 )
 
-// fillGanttBar paints one task's bar into the cell/colour buffers and reports
-// whether the task had both dates (an undated task leaves the row blank but for
-// the today marker). The buffers are cleared here, so a caller can reuse one
-// pair across every row.
-func fillGanttBar(t todo.Todo, minDate time.Time, totalDays float64, chartW, todayPos int, barRunes []rune, barColors []int) bool {
+// ganttMarkerRune is the glyph for a task drawn as a single moment rather than
+// a span. Shape carries priority — a diamond for high, a dot for the rest — so
+// a chart of markers still says which ones mattered.
+func ganttMarkerRune(t todo.Todo) rune {
+	if t.Priority == todo.PriorityHigh {
+		return '◆'
+	}
+	return '•'
+}
+
+// fillGanttBar paints one task into the cell/colour buffers and reports how it
+// was drawn: a span (both dates), a single marker at the moment ganttMoment
+// found, or nothing at all. The buffers are cleared here, so a caller can reuse
+// one pair across every row.
+func fillGanttBar(t todo.Todo, minDate time.Time, totalDays float64, chartW, todayPos int, barRunes []rune, barColors []int) (ganttPlacement, time.Time) {
 	for j := range barRunes {
 		barRunes[j] = ' '
 		barColors[j] = ganttCellEmpty
 	}
-	hasDates := !t.StartDate.IsZero() && !t.DueDate.IsZero()
-	if hasDates {
+	kind, at := ganttPlacementOf(t)
+	if kind == ganttSpan {
 		gradLen := len(ganttGradient)
 		ovrdLen := len(ganttOverdueGradient)
 		startPos := ganttColumn(t.StartDate, minDate, totalDays, chartW)
@@ -572,7 +652,30 @@ func fillGanttBar(t todo.Todo, minDate time.Time, totalDays float64, chartW, tod
 		barRunes[todayPos] = '│'
 		barColors[todayPos] = ganttCellToday
 	}
-	return hasDates
+	// The marker is written after the today rule, so it wins its own row: the
+	// rule is repeated on every other row and stays readable, while a marker
+	// hidden under it would drop the row's only piece of information.
+	if kind == ganttPoint {
+		pos := ganttColumn(at, minDate, totalDays, chartW)
+		if pos < 0 {
+			pos = 0
+		}
+		if pos >= chartW {
+			pos = chartW - 1
+		}
+		if pos >= 0 {
+			barRunes[pos] = ganttMarkerRune(t)
+			switch {
+			case t.Status == todo.Done:
+				barColors[pos] = ganttCellDone
+			case t.IsOverdue():
+				barColors[pos] = 200 + len(ganttOverdueGradient) - 1
+			default:
+				barColors[pos] = len(ganttGradient) / 2
+			}
+		}
+	}
+	return kind, at
 }
 
 // writeGanttBar emits a buffered row, coalescing consecutive cells that share a
@@ -691,10 +794,15 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 		}
 		label := checkbox + " " + padRight(truncate(t.Title, titleTrunc), titleTrunc) + " |"
 
-		hasDates := fillGanttBar(t, minDate, totalDays, chartW, todayPos, barRunes, barColors)
+		kind, at := fillGanttBar(t, minDate, totalDays, chartW, todayPos, barRunes, barColors)
 		datesSuffix := "|"
-		if hasDates {
+		switch kind {
+		case ganttSpan:
 			datesSuffix = fmt.Sprintf("| %s→%s", t.StartDate.Format("02-01"), t.DueDate.Format("02-01"))
+		case ganttPoint:
+			// One date, so one date is what the suffix says — writing it as a
+			// span would invent the end the task does not have.
+			datesSuffix = fmt.Sprintf("| %c %s", ganttMarkerRune(t), at.Format("02-01"))
 		}
 
 		if isSelected {
