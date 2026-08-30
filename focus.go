@@ -135,6 +135,9 @@ func (m *model) exitFocus(s uiState) {
 		m.cursor = 0
 		m.listOffset = 0
 		m.markFilterDirty()
+		// The filter is persisted, so clearing it has to reach disk too —
+		// otherwise esc drops it on screen and the next start brings it back.
+		m.persistSettings()
 	case stateTagSearch:
 		m.tagTabSearchQuery = ""
 		m.tagTabCursor = 0

@@ -409,6 +409,7 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.projectCursor = 0
 			m.listOffset = 0
 			m.markFilterDirty()
+			m.persistSettings()
 			return m, nil
 		case "esc":
 			// Cancel: discard the query and restore the unfiltered list.
@@ -419,6 +420,7 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.projectCursor = 0
 			m.listOffset = 0
 			m.markFilterDirty()
+			m.persistSettings()
 			return m, nil
 		case "tab", "up", "down":
 			// Completions, on the tabs whose search runs the token grammar.

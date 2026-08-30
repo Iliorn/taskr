@@ -1249,6 +1249,7 @@ func (m *model) filterTasksByCurrentTag() {
 	m.cursor = 0
 	m.listOffset = 0
 	m.markFilterDirty()
+	m.persistSettings()
 }
 
 // tabForNumberKey maps a digit shortcut to its tab. It is the one place the
@@ -1529,6 +1530,18 @@ func (m *model) toggleShowBoard() {
 	m.markCacheDirty()
 }
 
+// persistedSearch is the search query settings.json keeps: the Tasks tab's,
+// wherever the cursor happens to be. The query is shared by Tasks, Board and
+// Stats but stored per tab in tabViews, and only the leaving tab's copy is
+// snapshotted there — so on any other tab the live m.searchQuery belongs to
+// that tab, and the Tasks one is the snapshot switchTab left behind.
+func (m *model) persistedSearch() string {
+	if m.tab == tabTasks {
+		return m.searchQuery
+	}
+	return m.tabViews[tabTasks].search
+}
+
 func (m *model) persistSettings() {
 	if err := saveSettings(appSettings{
 		TaskSort:          m.taskSort,
@@ -1544,6 +1557,7 @@ func (m *model) persistSettings() {
 		AutoCloseSubtasks: m.autoCloseSubtasks,
 		BoardDisabled:     !showBoard,
 		Stages:            activeStages,
+		Search:            m.persistedSearch(),
 		Keys:              activeKeys,
 	}); err != nil {
 		m.flashError(fmt.Sprintf(tr("Error saving settings: %v"), err))

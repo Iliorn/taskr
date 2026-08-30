@@ -529,6 +529,15 @@ func initialModel(repo Repository) model {
 			projLastUsed:  make(map[string]time.Time),
 		},
 	}
+	// Restore the `/` filter the last session left committed. The tab is
+	// Tasks, which is the tab the query was saved from, and the focus entry
+	// has to be pushed by hand: esc clears the filter by popping the state
+	// that entering it recorded, and nothing entered it this run.
+	if settings.Search != "" {
+		m.searchQuery = settings.Search
+		m.searchInput.SetValue(settings.Search)
+		m.pushFocus(stateSearch)
+	}
 	m.applyLangPlaceholders()
 	m.refreshCaches()
 	// Absorb Age drift since the last open: every task's score creeps daily,

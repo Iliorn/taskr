@@ -82,6 +82,15 @@ type appSettings struct {
 	// holding the completed tasks (see board.go).
 	Stages []string `json:"stages,omitempty"`
 
+	// Search is the committed `/` filter on the Tasks tab, restored at startup
+	// so a filter you were working under survives a restart like every other
+	// view preference. Only the Tasks tab's query is kept: it is the tab the
+	// app opens on, and the other tabs that share the query (Board, Stats)
+	// restore theirs from tabViews, which starts empty. Written when the
+	// search settles (committed, cancelled, or cleared with esc), never per
+	// keystroke — settings.json is rewritten atomically on every save.
+	Search string `json:"search,omitempty"`
+
 	// Keys rebinds actions to keys: {"done": "D", "search": "s"}. Keyed by the
 	// action ids in keymap.go, which is why they exist — see keys.go for what
 	// can be rebound and how a broken entry is handled (dropped with a warning,

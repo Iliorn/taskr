@@ -15,6 +15,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ### Changed
 
+- The `/` search filter survives a restart, and esc still clears it.
 - An undated task marks the timeline where it happened: a diamond if high priority, else a dot.
 - A drilled-in project draws bars beside the task list instead of repeating every title.
 - The board draws an even column grid with dividers, and headings now sit over their own cards.

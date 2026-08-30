@@ -8,6 +8,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/Iliorn/taskr/todo"
 )
 
 // Scripted flows for the Settings tab: the four inline sync editors and the
@@ -486,5 +488,66 @@ func TestSettingsOpensWithAppearance(t *testing.T) {
 	lines := strings.Split(ansi.Strip(preferences), "\n")
 	if !strings.Contains(lines[0], tr("Appearance")) {
 		t.Errorf("first pane line is %q, want the Appearance heading", lines[0])
+	}
+}
+
+// ── The persisted search filter ─────────────────────────────────────────────
+
+// A committed `/` filter is a view preference like the sort modes: it has to
+// reach settings.json when it settles, come back on the next start with the
+// esc that clears it wired up, and be gone from disk once cleared.
+func TestSearchFilterPersistsAndRestores(t *testing.T) {
+	m := modelWithTasks(t, todo.New("pay rent"), todo.New("water plants"))
+
+	m = script(t, m, "/", "rent", "enter")
+	if m.searchQuery != "rent" {
+		t.Fatalf("setup: searchQuery = %q", m.searchQuery)
+	}
+	if got, err := loadSettings(); err != nil {
+		t.Fatal(err)
+	} else if got.Search != "rent" {
+		t.Errorf("settings.json Search = %q, want %q", got.Search, "rent")
+	}
+
+	// The restart: same HOME, a fresh model off the same settings file.
+	restarted := initialModel(&fakeRepo{todos: []todo.Todo{todo.New("pay rent"), todo.New("water plants")}})
+	if restarted.searchQuery != "rent" {
+		t.Fatalf("restored searchQuery = %q, want %q", restarted.searchQuery, "rent")
+	}
+	restarted.termWidth, restarted.termHeight = 120, 40
+	restarted.ensureCache()
+	if n := len(restarted.cache.active); n != 1 {
+		t.Errorf("restored filter matched %d tasks, want 1", n)
+	}
+
+	// esc clears it on screen — and on disk, or the next start would bring
+	// back a filter the user just dismissed.
+	restarted = sendKey(t, restarted, "esc")
+	if restarted.searchQuery != "" {
+		t.Fatalf("esc left searchQuery = %q", restarted.searchQuery)
+	}
+	if got, err := loadSettings(); err != nil {
+		t.Fatal(err)
+	} else if got.Search != "" {
+		t.Errorf("settings.json Search = %q after esc, want empty", got.Search)
+	}
+}
+
+// The query is shared by Tasks, Board and Stats but stored per tab, so a
+// search typed on another tab must not overwrite the Tasks-tab filter that
+// startup restores.
+func TestPersistedSearchIsTheTasksTabQuery(t *testing.T) {
+	m := modelWithTasks(t, todo.New("pay rent"), todo.New("water plants"))
+
+	m = script(t, m, "/", "rent", "enter")
+	m.switchTab(tabBoard)
+	m = script(t, m, "/", "plants", "enter")
+	if m.searchQuery != "plants" {
+		t.Fatalf("board search = %q", m.searchQuery)
+	}
+	if got, err := loadSettings(); err != nil {
+		t.Fatal(err)
+	} else if got.Search != "rent" {
+		t.Errorf("settings.json Search = %q, want the Tasks-tab query %q", got.Search, "rent")
 	}
 }
