@@ -473,8 +473,9 @@ func TestSettingsEnterAndRightAgreeOnEveryToggleRow(t *testing.T) {
 // day one, and they sat six rows down behind the auto-close toggles.
 func TestSettingsOpensWithAppearance(t *testing.T) {
 	first := settingsPreferenceGroups[0]
-	if got := []int{settingTheme, settingLanguage}; len(first.rows) != len(got) ||
-		first.rows[0] != settingTheme || first.rows[1] != settingLanguage {
+	// Appearance may grow more rows; what is pinned is that it leads the pane
+	// and opens on Theme, which is where the cursor starts.
+	if len(first.rows) < 2 || first.rows[0] != settingTheme || first.rows[1] != settingLanguage {
 		t.Fatalf("the first Preferences group is %q %v, want Theme then Language", first.title, first.rows)
 	}
 	m := settingsModel(t)
@@ -549,5 +550,61 @@ func TestPersistedSearchIsTheTasksTabQuery(t *testing.T) {
 		t.Fatal(err)
 	} else if got.Search != "rent" {
 		t.Errorf("settings.json Search = %q, want the Tasks-tab query %q", got.Search, "rent")
+	}
+}
+
+// ── The detail pane placement ───────────────────────────────────────────────
+
+// The row cycles right → left → bottom and back, and the choice has to be on
+// disk before the next start reads it: a layout that resets every launch is
+// the setting not working at all.
+func TestDetailPositionCyclesAndPersists(t *testing.T) {
+	m := settingsModel(t)
+	if m.detailPos != detailRight {
+		t.Fatalf("default detailPos = %v, want right", m.detailPos)
+	}
+
+	m.settingsCursor = settingDetailPos
+	for _, want := range []detailPos{detailLeft, detailBottom, detailRight} {
+		m = sendKey(t, m, "right")
+		if m.detailPos != want {
+			t.Fatalf("→ gave %v, want %v", m.detailPos, want)
+		}
+		if got, err := loadSettings(); err != nil {
+			t.Fatal(err)
+		} else if got.DetailPosition != want.String() {
+			t.Errorf("settings.json detail_position = %q, want %q", got.DetailPosition, want.String())
+		}
+	}
+
+	// ← walks back the other way, and enter means the same as → (settingsAdjust).
+	m = sendKey(t, m, "left")
+	if m.detailPos != detailBottom {
+		t.Fatalf("← gave %v, want bottom", m.detailPos)
+	}
+	m = sendKey(t, m, "enter")
+	if m.detailPos != detailRight {
+		t.Fatalf("enter gave %v, want right", m.detailPos)
+	}
+
+	// The restart: same HOME, the placement read back off the file.
+	m = sendKey(t, m, "left")
+	restarted := initialModel(&fakeRepo{})
+	if restarted.detailPos != detailBottom {
+		t.Errorf("restored detailPos = %v, want bottom", restarted.detailPos)
+	}
+}
+
+// settings.json is hand-editable, so the words are the API — and a word it
+// does not know costs the setting, not the start.
+func TestDetailPositionReadsTheSettingsWord(t *testing.T) {
+	for word, want := range map[string]detailPos{
+		"right": detailRight, "left": detailLeft, "bottom": detailBottom,
+		"Bottom": detailBottom, " left ": detailLeft,
+		"": detailRight, "sideways": detailRight,
+	} {
+		if got := detailPosFromSettings(word); got != want {
+			t.Errorf("detailPosFromSettings(%q) = %v, want %v", word, got, want)
+		}
 	}
 }

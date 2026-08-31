@@ -43,6 +43,7 @@ const (
 	settingShowBoard
 	settingTheme
 	settingLanguage
+	settingDetailPos
 	settingStages
 	settingSyncAuto
 	settingSyncServer
@@ -367,9 +368,13 @@ type model struct {
 	historySort        historySortMode
 	statsRange         statsRangeMode
 	themeName          string
-	updateStatus       string
-	autoCloseParent    bool
-	autoCloseSubtasks  bool
+	// detailPos is which side of the list the detail pane takes (right, left,
+	// or stacked at the bottom). Read by sideBySide, so it decides the layout
+	// for every height helper at once rather than per renderer.
+	detailPos         detailPos
+	updateStatus      string
+	autoCloseParent   bool
+	autoCloseSubtasks bool
 
 	// Persistence
 	dirty         bool
@@ -512,6 +517,7 @@ func initialModel(repo Repository) model {
 		autoCloseParent:   settings.AutoCloseParent,
 		autoCloseSubtasks: settings.AutoCloseSubtasks,
 		themeName:         th.name,
+		detailPos:         detailPosFromSettings(settings.DetailPosition),
 		expandedTasks:     make(map[string]bool),
 		editorCmd:         resolveEditorCmd(),
 		frameTime:         time.Now(),

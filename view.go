@@ -1046,6 +1046,12 @@ func (m model) buildSideBySide(w, outerH int) string {
 	detailPanel := detailStyle.Width(detailW).Render(strings.Join(detailLines, "\n"))
 	listPanel = withBorderTitle(listPanel, m.listPanelTitle(), listW, !detailFocused)
 	detailPanel = withBorderTitle(detailPanel, m.detailPanelTitle(), detailW, detailFocused)
+	// Only the order changes with the placement: both columns are already
+	// sized and clipped, so mirroring the layout is one swap rather than a
+	// second set of width math that could drift from this one.
+	if m.detailPos == detailLeft {
+		return lipgloss.JoinHorizontal(lipgloss.Top, detailPanel, listPanel)
+	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, listPanel, detailPanel)
 }
 

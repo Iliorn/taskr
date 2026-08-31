@@ -1361,6 +1361,7 @@ var settingsPreferenceGroups = []settingsGroup{
 	{title: "Appearance", rows: []int{
 		settingTheme,
 		settingLanguage,
+		settingDetailPos,
 	}},
 	{title: "General", rows: []int{
 		settingAutoCloseParent,
@@ -1484,6 +1485,7 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 		settingShowBoard:         tr("Kanban board"),
 		settingTheme:             tr("Theme"),
 		settingLanguage:          tr("Language"),
+		settingDetailPos:         tr("Detail pane"),
 		settingStages:            tr("Board columns"),
 		settingSyncAuto:          tr("Automatic"),
 		settingSyncServer:        tr("Sync server"),
@@ -1559,6 +1561,7 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 		settingShowBoard:         "‹ " + showBoardVal + " ›",
 		settingTheme:             "‹ " + m.themeName + " ›",
 		settingLanguage:          "‹ " + activeLang.displayName() + " ›",
+		settingDetailPos:         "‹ " + trDetailPos(m.detailPos) + " ›",
 		settingStages:            stagesDisplay(),
 		settingSyncAuto:          syncAutoVal,
 		settingSyncServer:        syncServerVal,

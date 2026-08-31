@@ -625,6 +625,10 @@ var daTranslations = map[string]string{
 	"Auto-close parent":         "Luk forælder automatisk",
 	"Auto-close subtasks":       "Luk delopgaver automatisk",
 	"Kanban board":              "Kanban-tavle",
+	"Detail pane":               "Detaljerude",
+	"Right":                     "Højre",
+	"Left":                      "Venstre",
+	"Bottom":                    "Bund",
 	"Top 5 with these weights:": "Top 5 med disse vægte:",
 	"Score resync failed: %v":   "Genberegning af score mislykkedes: %v",
 
@@ -1225,6 +1229,10 @@ var deTranslations = map[string]string{
 	"Auto-close parent":         "Eltern autom. schließen",
 	"Auto-close subtasks":       "Teilaufg. autom. schließen",
 	"Kanban board":              "Kanban-Tafel",
+	"Detail pane":               "Detailbereich",
+	"Right":                     "Rechts",
+	"Left":                      "Links",
+	"Bottom":                    "Unten",
 	"Top 5 with these weights:": "Top 5 mit diesen Gewichten:",
 	"Score resync failed: %v":   "Punkte-Neuberechnung fehlgeschlagen: %v",
 

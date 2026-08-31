@@ -184,6 +184,74 @@ func TestSideBySideDetailPreview(t *testing.T) {
 	}
 }
 
+// The detail pane's placement is a setting, and all three placements have to
+// hold the same contracts the default one does: the panel is where it was put,
+// and no line is wider than the terminal.
+func TestDetailPanePlacement(t *testing.T) {
+	m := modelWithTasks(t, todo.New("pay rent"), todo.New("water plants"))
+	m.termHeight = 40
+	m.termWidth = sideBySideMinWidth + 10
+
+	// Column order: the two panels are the same two boxes either way, so the
+	// assertion is which border title comes first on the row that holds both.
+	// The detail panel titles itself with the task, so the selected task's
+	// title is what marks that column.
+	titleRow := func(m model) string {
+		for _, line := range strings.Split(ansi.Strip(m.View()), "\n") {
+			if strings.Contains(line, "╭─ ") && strings.Count(line, "╭─ ") == 2 {
+				return line
+			}
+		}
+		return ""
+	}
+
+	m.detailPos = detailRight
+	row := titleRow(m)
+	if row == "" {
+		t.Fatal("right: no row carries both panel titles")
+	}
+	if strings.Index(row, tr("Overview")) > strings.Index(row, "Pay rent") {
+		t.Errorf("right: the list should come first:\n%s", row)
+	}
+
+	m.detailPos = detailLeft
+	row = titleRow(m)
+	if row == "" {
+		t.Fatal("left: no row carries both panel titles")
+	}
+	if strings.Index(row, tr("Overview")) < strings.Index(row, "Pay rent") {
+		t.Errorf("left: the detail should come first:\n%s", row)
+	}
+
+	// Bottom is the stacked layout at any width, which on Tasks means the
+	// detail stays shut until enter — the narrow fallback's behaviour, chosen
+	// rather than fallen into.
+	m.detailPos = detailBottom
+	if m.sideBySide() {
+		t.Error("bottom: the layout should not be side-by-side")
+	}
+	if strings.Contains(m.View(), tr("Priority")) {
+		t.Error("bottom: the detail should stay hidden until enter")
+	}
+	opened := script(t, m, "enter")
+	if !strings.Contains(opened.View(), tr("Priority")) {
+		t.Error("bottom: enter should open the stacked detail")
+	}
+
+	for _, pos := range []detailPos{detailRight, detailLeft, detailBottom} {
+		for _, w := range []int{60, 90, sideBySideMinWidth, 160} {
+			mm := m
+			mm.detailPos = pos
+			mm.termWidth = w
+			for i, line := range strings.Split(mm.View(), "\n") {
+				if got := ansi.StringWidth(line); got > w {
+					t.Fatalf("pos=%v w=%d line %d is %d wide: %q", pos, w, i, got, ansi.Strip(line))
+				}
+			}
+		}
+	}
+}
+
 func TestPersistentPanelsUseContextualBorderTitles(t *testing.T) {
 	applyLang(string(langEN))
 	t.Cleanup(func() { applyLang(string(langEN)) })

@@ -82,6 +82,12 @@ type appSettings struct {
 	// holding the completed tasks (see board.go).
 	Stages []string `json:"stages,omitempty"`
 
+	// DetailPosition is where the detail pane sits on the tabs that have one:
+	// "right" (default), "left", or "bottom". Stored as the word rather than
+	// the enum's number because settings.json is hand-edited, and a number
+	// there would mean nothing without this file open beside it.
+	DetailPosition string `json:"detail_position,omitempty"`
+
 	// Search is the committed `/` filter on the Tasks tab, restored at startup
 	// so a filter you were working under survives a restart like every other
 	// view preference. Only the Tasks tab's query is kept: it is the tab the

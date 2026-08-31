@@ -1558,6 +1558,7 @@ func (m *model) persistSettings() {
 		BoardDisabled:     !showBoard,
 		Stages:            activeStages,
 		Search:            m.persistedSearch(),
+		DetailPosition:    m.detailPos.String(),
 		Keys:              activeKeys,
 	}); err != nil {
 		m.flashError(fmt.Sprintf(tr("Error saving settings: %v"), err))
@@ -1865,12 +1866,23 @@ func (m *model) settingsAdjust(dir int) tea.Cmd {
 		m.cycleTheme(dir)
 	case settingLanguage:
 		m.cycleLang(dir)
+	case settingDetailPos:
+		m.cycleDetailPos(dir)
 	case settingSyncAuto:
 		m.toggleSyncAuto()
 	case settingServerOn:
 		return m.startStopServer()
 	}
 	return nil
+}
+
+// cycleDetailPos moves the detail pane to the next placement. The rendered
+// detail is cached against the width it was drawn at, and the two layouts draw
+// it at very different widths, so the cache goes with the move.
+func (m *model) cycleDetailPos(dir int) {
+	m.detailPos = nextDetailPos(m.detailPos, dir)
+	m.invalidateDetailCache()
+	m.persistSettings()
 }
 
 // startStopServer is the Server row's ←/→/enter. Stopping is just the toggle;

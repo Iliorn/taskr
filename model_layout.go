@@ -1,6 +1,10 @@
 package main
 
-import "github.com/Iliorn/taskr/todo"
+import (
+	"strings"
+
+	"github.com/Iliorn/taskr/todo"
+)
 
 // ── Detail scroll estimation ──────────────────────────────────────────────────
 
@@ -180,13 +184,82 @@ func (m *model) clampListOffsetVisible(cursor, listLen, visible int) {
 	}
 }
 
+// ── Detail pane placement ─────────────────────────────────────────────────────
+
+// detailPos is where the detail pane sits relative to the list on the tabs
+// that have one. Right and left are the two-column layout mirrored; bottom is
+// the stacked panel a narrow window already falls back to, chosen on purpose
+// at any width. There is no "top": the list is what the cursor lives in, and a
+// pane above it would push the rows the keys move through away from the tab
+// bar that says which list they are.
+type detailPos uint8
+
+const (
+	detailRight detailPos = iota
+	detailLeft
+	detailBottom
+)
+
+// String is the settings.json spelling, and the only one — the file is
+// hand-editable, so the words are the API. An unknown value reads as the
+// default rather than erroring: a typo should cost the setting, not the start.
+func (p detailPos) String() string {
+	switch p {
+	case detailLeft:
+		return "left"
+	case detailBottom:
+		return "bottom"
+	}
+	return "right"
+}
+
+func detailPosFromSettings(s string) detailPos {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "left":
+		return detailLeft
+	case "bottom":
+		return detailBottom
+	}
+	return detailRight
+}
+
+// nextDetailPos cycles the placement by dir (+1 →, -1 ←), wrapping.
+func nextDetailPos(p detailPos, dir int) detailPos {
+	const n = 3
+	if dir == 0 {
+		return p
+	}
+	step := 1
+	if dir < 0 {
+		step = n - 1
+	}
+	return detailPos((int(p) + step) % n)
+}
+
+// trDetailPos is the placement as the Settings row says it. The tr() calls are
+// literals so lang_test.go's source scan finds them — going through a table
+// keyed by the enum would hide them from it.
+func trDetailPos(p detailPos) string {
+	switch p {
+	case detailLeft:
+		return tr("Left")
+	case detailBottom:
+		return tr("Bottom")
+	}
+	return tr("Right")
+}
+
 // sideBySide reports whether the current tab renders list and detail as two
-// columns (list full-height left, always-on detail preview right). The list
-// tabs with a selected-item detail — Tasks, Tags — share the shape;
-// below the width threshold each falls back to its stacked layout
-// (enter-to-open for Tasks, always-on below the list for Tags).
+// columns (list full-height on one side, always-on detail preview on the
+// other). The list tabs with a selected-item detail — Tasks, Tags — share the
+// shape; below the width threshold each falls back to its stacked layout
+// (enter-to-open for Tasks, always-on below the list for Tags), and so does
+// every width once the user has put the detail at the bottom. Which side the
+// detail takes is buildSideBySide's business; here it is only two columns or
+// one, because that is the question every height helper is asking.
 func (m model) sideBySide() bool {
-	return (m.tab == tabTasks || m.tab == tabTags) &&
+	return m.detailPos != detailBottom &&
+		(m.tab == tabTasks || m.tab == tabTags) &&
 		m.termWidth >= sideBySideMinWidth
 }
 
