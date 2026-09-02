@@ -16,6 +16,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 ### Changed
 
 - Windows: the console is switched to UTF-8, so æøå and the box borders stop arriving as mojibake.
+- Git Bash and MSYS2 are asked for UTF-8 too, so no ~/.bashrc edit is needed to read the app.
 - The overdue badge and the focus chip drop the symbols terminals draw two cells wide.
 - The detail pane can sit right, left, or at the bottom (Settings → Detail pane).
 - The `/` search filter survives a restart, and esc still clears it.

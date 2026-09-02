@@ -18,10 +18,10 @@ import (
 var appVersion = "dev"
 
 func main() {
-	// The console decodes what we write with its code page, and taskr writes
-	// UTF-8 — borders, chips and the user's own æøå alike. First thing, before
-	// anything can print (console_windows.go; a no-op everywhere else).
-	restoreConsole := useUTF8Console()
+	// Windows terminals get UTF-8 wrong in two ways, and taskr writes UTF-8 —
+	// borders, chips and the user's own æøå alike. First thing, before
+	// anything can print (console.go; a no-op everywhere else).
+	restoreConsole := prepareConsole()
 	defer restoreConsole()
 
 	// Remove leftover binary from a previous Windows self-update, if any.

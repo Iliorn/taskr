@@ -95,8 +95,8 @@ func collectDiagnostics() []diagnostic {
 	add(diagnostic{Name: "go runtime", Value: runtime.Version()})
 	add(diagnostic{Name: "keyboard input", Value: inputPathName()})
 	// Empty off Windows, where there is no console code page to get wrong.
-	if note := consoleEncodingNote(); note != "" {
-		d := diagnostic{Name: "console encoding", Value: note}
+	if note := terminalCharsetNote(); note != "" {
+		d := diagnostic{Name: "terminal charset", Value: note}
 		if strings.Contains(note, "garbled") {
 			d.Status = statusWarn
 			d.Detail = "run in Windows Terminal, or `chcp 65001` before taskr"

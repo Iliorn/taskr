@@ -62,11 +62,40 @@ func TestUIAvoidsGlyphsTerminalsDrawDoubleWide(t *testing.T) {
 // The console helper has to be safe to call where there is no console at all —
 // `taskr export > file`, a pipe, the test binary — and safe to call its undo
 // twice, since main runs it both on the deferred path and before os.Exit.
-func TestUTF8ConsoleIsSafeWithoutAConsole(t *testing.T) {
-	restore := useUTF8Console()
+func TestPrepareConsoleIsSafeWithoutAConsole(t *testing.T) {
+	restore := prepareConsole()
 	if restore == nil {
-		t.Fatal("useUTF8Console returned no restore func")
+		t.Fatal("prepareConsole returned no restore func")
 	}
 	restore()
 	restore()
+}
+
+// The mintty retune is an escape sequence written to stdout, so the gate has
+// to be exact: a redirected `taskr export` must not get one in the file, and a
+// terminal that is not mintty must not be sent an OSC on the off chance.
+func TestMinttyRetuneOnlyWhereItApplies(t *testing.T) {
+	const osc = "\x1b]701;C.UTF-8\a"
+	cases := []struct {
+		name                 string
+		msystem, termProgram string
+		tty                  bool
+		want                 bool
+	}{
+		{"git bash", "MINGW64", "", true, true},
+		{"msys2", "MSYS", "", true, true},
+		{"mintty by name", "", "mintty", true, true},
+		{"redirected git bash", "MINGW64", "", false, false},
+		{"plain linux terminal", "", "", true, false},
+		{"windows terminal", "", "Windows Terminal", true, false},
+	}
+	for _, c := range cases {
+		got := minttyUTF8Sequence(c.msystem, c.termProgram, c.tty)
+		if (got != "") != c.want {
+			t.Errorf("%s: sequence %q, want sent=%v", c.name, got, c.want)
+		}
+		if got != "" && got != "\x1b]701;C.UTF-8\x07" {
+			t.Errorf("%s: sequence is %q, want the OSC 701 charset change (%q)", c.name, got, osc)
+		}
+	}
 }
