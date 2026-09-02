@@ -83,7 +83,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	if !t.DueDate.IsZero() {
 		dueVal = t.DueDate.Format("02-01-06")
 		if t.IsOverdue() {
-			dueVal += tr(" ⚠ overdue")
+			dueVal += tr(" ! overdue")
 		}
 	}
 	recurVal := tr("not set")

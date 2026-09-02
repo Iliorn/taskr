@@ -215,7 +215,7 @@ var daTranslations = map[string]string{
 	"Go to Board":                               "Gå til Tavle",
 	"Go to Stats":                               "Gå til Statistik",
 	"Go to Settings":                            "Gå til Indstillinger",
-	"⚡ FOCUS: today + overdue only (f to toggle)": "⚡ FOKUS: kun i dag + forfaldne (f for at skifte)",
+	"FOCUS: today + overdue only (f to toggle)": "FOKUS: kun i dag + forfaldne (f for at skifte)",
 	"(untagged)": "(uden mærke)",
 
 	// Tab labels (number prefix kept; only the word is translated)
@@ -469,7 +469,7 @@ var daTranslations = map[string]string{
 
 	// Detail pages
 	"not set":                            "ikke sat",
-	" ⚠ overdue":                         " ⚠ forfalden",
+	" ! overdue":                         " ! forfalden",
 	"Start date":                         "Startdato",
 	"Due date":                           "Forfaldsdato",
 	"Recurrence":                         "Gentagelse",
@@ -722,7 +722,7 @@ var daTranslations = map[string]string{
 	"↑ scroll up":                                         "↑ rul op",
 	"↓ scroll down":                                       "↓ rul ned",
 	"↑/↓ scroll":                                          "↑/↓ rul",
-	"⚡FOCUS":                                              "⚡FOKUS",
+	"FOCUS":                                               "FOKUS",
 
 	// ── Unchanged in Danish, listed so the completeness check stays honest ──
 	"Score":  "Score",
@@ -819,7 +819,7 @@ var deTranslations = map[string]string{
 	"Go to Board":                               "Zum Board",
 	"Go to Stats":                               "Zur Statistik",
 	"Go to Settings":                            "Zu Einstellungen",
-	"⚡ FOCUS: today + overdue only (f to toggle)": "⚡ FOKUS: nur heute + überfällig (f schaltet um)",
+	"FOCUS: today + overdue only (f to toggle)": "FOKUS: nur heute + überfällig (f schaltet um)",
 	"(untagged)": "(ohne Schlagwort)",
 
 	// Tab labels (number prefix kept; only the word is translated)
@@ -1073,7 +1073,7 @@ var deTranslations = map[string]string{
 
 	// Detail pages
 	"not set":                            "nicht gesetzt",
-	" ⚠ overdue":                         " ⚠ überfällig",
+	" ! overdue":                         " ! überfällig",
 	"Start date":                         "Startdatum",
 	"Due date":                           "Fälligkeit",
 	"Recurrence":                         "Wiederholung",
@@ -1326,7 +1326,7 @@ var deTranslations = map[string]string{
 	"↑ scroll up":                                         "↑ nach oben",
 	"↓ scroll down":                                       "↓ nach unten",
 	"↑/↓ scroll":                                          "↑/↓ scrollen",
-	"⚡FOCUS":                                              "⚡FOKUS",
+	"FOCUS":                                               "FOKUS",
 
 	// ── Unchanged in Danish, listed so the completeness check stays honest ──
 	"Score":  "Punkte",

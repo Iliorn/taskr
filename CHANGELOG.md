@@ -15,6 +15,8 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ### Changed
 
+- Windows: the console is switched to UTF-8, so æøå and the box borders stop arriving as mojibake.
+- The overdue badge and the focus chip drop the symbols terminals draw two cells wide.
 - The detail pane can sit right, left, or at the bottom (Settings → Detail pane).
 - The `/` search filter survives a restart, and esc still clears it.
 - An undated task marks the timeline where it happened: a diamond if high priority, else a dot.

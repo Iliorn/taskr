@@ -18,6 +18,12 @@ import (
 var appVersion = "dev"
 
 func main() {
+	// The console decodes what we write with its code page, and taskr writes
+	// UTF-8 — borders, chips and the user's own æøå alike. First thing, before
+	// anything can print (console_windows.go; a no-op everywhere else).
+	restoreConsole := useUTF8Console()
+	defer restoreConsole()
+
 	// Remove leftover binary from a previous Windows self-update, if any.
 	if execPath, err := os.Executable(); err == nil {
 		_ = os.Remove(execPath + ".old")
@@ -29,6 +35,7 @@ func main() {
 	if len(os.Args) > 1 && isCLICommand(os.Args[1]) {
 		code := runCLI(os.Args[1:])
 		checkpointStore()
+		restoreConsole() // os.Exit runs no deferred calls
 		os.Exit(code)
 	}
 
@@ -39,6 +46,7 @@ func main() {
 	// back over it (migrator.go).
 	if err := openStore(); errors.Is(err, errSchemaTooNew) {
 		fmt.Fprintf(os.Stderr, "taskr: %v\n", err)
+		restoreConsole()
 		os.Exit(1)
 	}
 
@@ -70,6 +78,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		// Last, so it survives Bubble Tea's stack dump on screen.
 		noteCrashToUser()
+		restoreConsole()
 		os.Exit(1)
 	}
 	// Final best-effort sync on exit so the session's last edits propagate

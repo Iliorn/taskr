@@ -1107,7 +1107,7 @@ func TestStatusLineSpeaksOnlyWhenSyncFails(t *testing.T) {
 	// The body rather than the rendered overlay: the sections below the fold
 	// are still what the overlay scrolls through.
 	help := ansi.Strip(strings.Join(m.helpBodyLines(), "\n"))
-	for _, mark := range []string{tr("✕ sync"), tr("⚡FOCUS")} {
+	for _, mark := range []string{tr("✕ sync"), tr("FOCUS")} {
 		if !strings.Contains(help, mark) {
 			t.Errorf("the help overlay does not explain %q", mark)
 		}

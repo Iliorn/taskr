@@ -447,7 +447,7 @@ func (m model) renderStatusLine() string {
 
 	var chips []string
 	if m.focusFilter {
-		chips = append(chips, focusChipStyle.Render(tr("⚡FOCUS")))
+		chips = append(chips, focusChipStyle.Render(tr("FOCUS")))
 	}
 	if m.searchQuery != "" {
 		label := m.searchQuery
@@ -1392,7 +1392,7 @@ func (m model) helpBodyLines() []string {
 	// question a symbol in the corner of the screen actually provokes.
 	sections = append(sections, helpSec{tr("Status line"), [][2]string{
 		{"✕ sync", tr("background sync is failing — Settings has the error")},
-		{tr("⚡FOCUS"), tr("the focus filter is on: today + overdue only")},
+		{tr("FOCUS"), tr("the focus filter is on: today + overdue only")},
 		{"/…", tr("a search filter is narrowing the list")},
 	}})
 
@@ -2078,7 +2078,7 @@ func (m model) buildTagDetailLines() []string {
 		if !t.DueDate.IsZero() {
 			dueStr = tr("  due: ") + t.DueDate.Format("02-01-06")
 			if t.IsOverdue() {
-				dueStr += " ⚠"
+				dueStr += " !"
 			}
 		}
 		projStr := ""
@@ -2154,7 +2154,7 @@ func (m model) renderTabs(avail int) string {
 	// numbers level — at that width the bar is already down to what it takes to
 	// say where you are.
 	if n := len(m.cache.overdueSet); n > 0 {
-		badge := " ⚠" + strconv.Itoa(n)
+		badge := " !" + strconv.Itoa(n)
 		full[tabTasks] += badge
 		abbr[tabTasks] += badge
 	}
