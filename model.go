@@ -30,9 +30,8 @@ const (
 
 const numTabs = 7
 
-// Stable row IDs for the Settings tab. The renderer groups them into separate
-// Preferences and Sequencer panes; their numeric order remains independent of
-// their visual navigation order.
+// Stable row IDs for the Settings tab. The renderer draws them in groups; their
+// numeric order remains independent of their visual navigation order.
 const (
 	settingBiasDeadline = iota
 	settingBiasPriority
@@ -518,11 +517,15 @@ func initialModel(repo Repository) model {
 		autoCloseSubtasks: settings.AutoCloseSubtasks,
 		themeName:         th.name,
 		detailPos:         detailPosFromSettings(settings.DetailPosition),
-		expandedTasks:     make(map[string]bool),
-		editorCmd:         resolveEditorCmd(),
-		frameTime:         time.Now(),
-		ganttBarBuf:       make([]rune, 256),
-		ganttColorBuf:     make([]int, 256),
+		// The top of the one settings pane. The zero value is a row ID, not a
+		// position, and it happens to be the first bias knob — which opened
+		// the tab with the cursor parked in the middle of the list.
+		settingsCursor: settingTheme,
+		expandedTasks:  make(map[string]bool),
+		editorCmd:      resolveEditorCmd(),
+		frameTime:      time.Now(),
+		ganttBarBuf:    make([]rune, 256),
+		ganttColorBuf:  make([]int, 256),
 		cache: &cacheState{
 			dirty:         true,
 			overdueSet:    make(map[string]bool),

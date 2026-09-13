@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Iliorn/taskr/todo"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -1344,20 +1343,28 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 
 // ── Settings list ─────────────────────────────────────────────────────────────
 
-// Settings are split into two independent panes. Preferences owns general app,
-// sync, server, and update controls; Sequencer owns every ranking control.
+// Settings is one pane of grouped rows. It used to be two — Preferences beside
+// Sequencer — which spent a second border, a second scroll position and half
+// the width of the tab on four ranking knobs, and asked the reader to notice
+// that the cursor had crossed from one document into another. The knobs are a
+// group like Sync or Server.
 //
-// Preferences is grouped rather than flat: fifteen rows in one column left
-// "Listen" and "Server token" reading as loose app settings instead of as the
-// sync server's own, and a reader had to already know the model to tell which
-// control belonged to what. Titles are held in English and passed through tr()
-// at render time — a package var would freeze them before applyLang runs.
+// The grouping is the part that was load-bearing: fifteen rows in one flat
+// column left "Listen" and "Server token" reading as loose app settings
+// instead of as the sync server's own, and a reader had to already know the
+// model to tell which control belonged to what. Titles are held in English and
+// passed through tr() at render time — a package var would freeze them before
+// applyLang runs.
 type settingsGroup struct {
 	title string
 	rows  []int
+	// preview draws the top-N ranking under this group's rows. It is the whole
+	// account the bias knobs give of themselves, so it sits with them rather
+	// than at the foot of the pane where a knob change would scroll it away.
+	preview bool
 }
 
-var settingsPreferenceGroups = []settingsGroup{
+var settingsGroups = []settingsGroup{
 	{title: "Appearance", rows: []int{
 		settingTheme,
 		settingLanguage,
@@ -1368,6 +1375,12 @@ var settingsPreferenceGroups = []settingsGroup{
 		settingAutoCloseSubtasks,
 		settingShowBoard,
 		settingStages,
+	}},
+	{title: "Sequencer", preview: true, rows: []int{
+		settingBiasDeadline,
+		settingBiasPriority,
+		settingBiasMomentum,
+		settingAging,
 	}},
 	{title: "Sync", rows: []int{
 		settingSyncAuto,
@@ -1384,13 +1397,6 @@ var settingsPreferenceGroups = []settingsGroup{
 		settingVersion,
 		settingCheckUpdate,
 	}},
-}
-
-var settingsSequencer = []int{
-	settingBiasDeadline,
-	settingBiasPriority,
-	settingBiasMomentum,
-	settingAging,
 }
 
 // settingsSelectable reports whether the cursor may land on a row. Version is
@@ -1428,30 +1434,48 @@ func settingsEditsText(id int) bool {
 // settingsEditMark is the affordance on a row that opens an editor.
 const settingsEditMark = " ⏎"
 
-// settingsSideBySideMinWidth is the minimum available content width at which
-// the two panes sit beside each other. Below this they stack vertically.
-const settingsSideBySideMinWidth = 80
-
-// settingsNavOrder returns the linear up/down traversal order across both
-// panes: Preferences top→bottom, then Sequencer top→bottom. Rows the cursor
-// cannot land on — unselectable or hidden by the current state — are left out
-// here, so every caller inherits the skip.
+// settingsNavOrder returns the linear up/down traversal order: the groups in
+// the order they are drawn, each top→bottom. Rows the cursor cannot land on —
+// unselectable or hidden by the current state — are left out here, so every
+// caller inherits the skip.
 func (m model) settingsNavOrder() []int {
-	out := make([]int, 0, len(settingsSequencer)+8)
-	for _, g := range settingsPreferenceGroups {
+	out := make([]int, 0, numSettingsRows)
+	for _, g := range settingsGroups {
 		for _, id := range g.rows {
 			if settingsSelectable(id) && m.settingsRowVisible(id) {
 				out = append(out, id)
 			}
 		}
 	}
-	out = append(out, settingsSequencer...)
+	return out
+}
+
+// visibleGroupRows is the group's rows minus the ones the current state hides.
+// It returns the group's own slice when nothing is hidden, which is the common
+// case and the one worth not allocating for.
+func (m model) visibleGroupRows(g settingsGroup) []int {
+	hidden := false
+	for _, id := range g.rows {
+		if !m.settingsRowVisible(id) {
+			hidden = true
+			break
+		}
+	}
+	if !hidden {
+		return g.rows
+	}
+	out := make([]int, 0, len(g.rows))
+	for _, id := range g.rows {
+		if m.settingsRowVisible(id) {
+			out = append(out, id)
+		}
+	}
 	return out
 }
 
 // settingsCursorStep advances the settings cursor by delta along the visual
 // traversal order, clamping at the ends so up at the top / down at the bottom
-// are no-ops (matching the pre-split behaviour).
+// are no-ops.
 func (m model) settingsCursorStep(cur, delta int) int {
 	order := m.settingsNavOrder()
 	idx := 0
@@ -1470,11 +1494,17 @@ func (m model) settingsCursorStep(cur, delta int) int {
 	return order[idx]
 }
 
-// renderSettingsSections builds the unboxed content for the two Settings panes.
-// sequencerW controls truncation in the live preview, preferencesW the
-// wrapping of the status footer; the pane builder
-// applies the final per-line width contract.
-func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, string) {
+// renderSettingsSection builds the unboxed Settings content and, with it, the
+// line the cursor row is drawn on (-1 when the cursor is on nothing visible).
+// The pane scrolls by that number, and it comes back from the renderer rather
+// than from a parallel line-counting function: headings, group separators and
+// the bias preview all sit between the rows, and a second place counting them
+// is a second place to get them wrong. w is the content width available (no
+// outer borders); the pane builder applies the final per-line width contract.
+func (m model) renderSettingsSection(w int) (string, int) {
+	if w < 8 {
+		w = 8
+	}
 	labels := map[int]string{
 		settingBiasDeadline:      tr("Deadline pressure"),
 		settingBiasPriority:      tr("Priority focus"),
@@ -1574,17 +1604,19 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 		settingCheckUpdate:       tr("press enter to check"),
 	}
 
-	maxLabelW := func(ids []int) int {
-		w := 0
-		for _, id := range ids {
-			if n := len([]rune(labels[id])); n > w {
-				w = n
+	// One label column across every group, so the values line up down the
+	// whole pane rather than stepping in and out at each heading.
+	labelW := 0
+	for _, g := range settingsGroups {
+		for _, id := range m.visibleGroupRows(g) {
+			if n := len([]rune(labels[id])); n > labelW {
+				labelW = n
 			}
 		}
-		return w + 2
 	}
+	labelW += 2
 
-	renderRow := func(id, labelW int) string {
+	renderRow := func(id int) string {
 		cursor := cursorGap
 		labelStyle := normalStyle
 		if id == m.settingsCursor {
@@ -1598,44 +1630,35 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 		return cursor + labelStyle.Render(padRight(labels[id], labelW)) + helpStyle.Render(value)
 	}
 
-	if sequencerW < 8 {
-		sequencerW = 8
-	}
-	preferencesLabelW := 0
-	for _, g := range settingsPreferenceGroups {
-		if w := maxLabelW(m.visibleGroupRows(g)); w > preferencesLabelW {
-			preferencesLabelW = w
-		}
-	}
-	sequencerLabelW := maxLabelW(settingsSequencer)
-	var preferences, sequencer strings.Builder
-	drawn := 0
-	for _, g := range settingsPreferenceGroups {
+	var lines []string
+	selected := -1
+	for _, g := range settingsGroups {
 		rows := m.visibleGroupRows(g)
 		if len(rows) == 0 {
 			continue
 		}
-		if drawn > 0 {
-			preferences.WriteString("\n")
+		if len(lines) > 0 {
+			lines = append(lines, "")
 		}
-		drawn++
-		preferences.WriteString(cursorGap + headerStyle.Render(tr(g.title)) + "\n")
+		lines = append(lines, cursorGap+headerStyle.Render(tr(g.title)))
 		for _, id := range rows {
-			preferences.WriteString(renderRow(id, preferencesLabelW) + "\n")
+			if id == m.settingsCursor {
+				selected = len(lines)
+			}
+			lines = append(lines, renderRow(id))
 		}
-	}
-	for _, id := range settingsSequencer {
-		sequencer.WriteString(renderRow(id, sequencerLabelW) + "\n")
-	}
-	// Live preview: the top-N tasks ranked with the current knob values is the
-	// whole account the pane gives of a bias change — a prose tagline for the
-	// mix said less than the five rows that actually move.
-	if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, sequencerW); preview != "" {
-		sequencer.WriteString(preview)
+		// Live preview: the top-N tasks ranked with the current knob values is
+		// the whole account the pane gives of a bias change — a prose tagline
+		// for the mix said less than the five rows that actually move.
+		if g.preview {
+			if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, w); preview != "" {
+				lines = append(lines, strings.Split(strings.TrimRight(preview, "\n"), "\n")...)
+			}
+		}
 	}
 
 	if m.updateStatus != "" {
-		preferences.WriteString("\n  " + activeCountStyle.Render(m.updateStatus) + "\n")
+		lines = append(lines, "", "  "+activeCountStyle.Render(m.updateStatus))
 	}
 	if m.syncStatus != "" {
 		// Wrapped, not truncated. This line is where a sync failure explains
@@ -1643,92 +1666,24 @@ func (m model) renderSettingsSections(preferencesW, sequencerW int) (string, str
 		// columns once left a user reading "Last sync failed: server returned
 		// 500 Internal Server Error" for a week while the sentence naming the
 		// stale server sat just past the cut.
-		preferences.WriteString("\n")
-		for _, line := range clampLines(wrapText(m.syncStatus, preferencesW-4), syncStatusMaxLines) {
-			preferences.WriteString("  " + helpStyle.Render(line) + "\n")
+		lines = append(lines, "")
+		for _, line := range clampLines(wrapText(m.syncStatus, w-4), syncStatusMaxLines) {
+			lines = append(lines, "  "+helpStyle.Render(line))
 		}
 	}
-	return preferences.String(), sequencer.String()
+	return strings.Join(lines, "\n") + "\n", selected
 }
 
 // renderSettingsList preserves a plain, unboxed rendering for focused unit
-// tests and other callers. View uses buildSettingsContent to place the same two
-// sections in independently titled panes.
+// tests and other callers. View uses buildSettingsContent to put the same
+// content in its pane.
 func (m model) renderSettingsList() string {
-	availW := m.termWidth - 8
-	if availW < 8 {
-		availW = 8
-	}
-	if availW >= settingsSideBySideMinWidth {
-		const gap = 4
-		preferencesW := (availW - gap) / 2
-		sequencerW := availW - preferencesW - gap
-		preferences, sequencer := m.renderSettingsSections(preferencesW, sequencerW)
-		return joinColumns(preferences, sequencer, preferencesW, gap)
-	}
-	preferences, sequencer := m.renderSettingsSections(availW, availW)
-	return strings.TrimRight(preferences, "\n") + "\n\n" + sequencer
-}
-
-func settingRowIndex(rows []int, setting int) int {
-	for i, row := range rows {
-		if row == setting {
-			return i
-		}
-	}
-	return -1
-}
-
-// settingsPreferencesLine is settingRowIndex for the Preferences pane, whose
-// rendered lines no longer map one-to-one onto its rows: it counts the group
-// headings and the blank line between groups, so the pane scrolls to the line
-// the cursor is actually drawn on. Returns -1 when the cursor is elsewhere.
-func (m model) settingsPreferencesLine(setting int) int {
-	line := 0
-	for _, g := range settingsPreferenceGroups {
-		rows := m.visibleGroupRows(g)
-		if len(rows) == 0 {
-			continue
-		}
-		if line > 0 {
-			line++ // blank separator
-		}
-		line++ // heading
-		for _, id := range rows {
-			if id == setting {
-				return line
-			}
-			line++
-		}
-	}
-	return -1
-}
-
-// visibleGroupRows is the group's rows minus the ones the current state hides.
-// It returns the group's own slice when nothing is hidden, which is the common
-// case and the one worth not allocating for.
-func (m model) visibleGroupRows(g settingsGroup) []int {
-	hidden := false
-	for _, id := range g.rows {
-		if !m.settingsRowVisible(id) {
-			hidden = true
-			break
-		}
-	}
-	if !hidden {
-		return g.rows
-	}
-	out := make([]int, 0, len(g.rows))
-	for _, id := range g.rows {
-		if m.settingsRowVisible(id) {
-			out = append(out, id)
-		}
-	}
-	return out
+	content, _ := m.renderSettingsSection(m.termWidth - 8)
+	return content
 }
 
 // fitSettingsPane keeps the selected row visible when a narrow/short terminal
-// cannot show an entire pane, then pads the pane to its assigned height.
+// cannot show the whole pane, then pads the pane to its assigned height.
 func fitSettingsPane(content string, height, width, selectedLine int) []string {
 	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
 	if len(lines) == 1 && lines[0] == "" {
@@ -1756,47 +1711,17 @@ func fitSettingsPane(content string, height, width, selectedLine int) []string {
 	return lines
 }
 
-// buildSettingsContent renders Preferences and Sequencer as distinct bordered
-// panes. They sit side by side when space permits and stack on narrow terminals.
+// buildSettingsContent renders the settings rows into the tab's single pane.
 func (m model) buildSettingsContent(w, outerH int) string {
-	if outerH < 6 {
-		outerH = 6 // two panes need one content row plus two borders apiece
-	}
-	const gap = 4
-	wide := w >= settingsSideBySideMinWidth
-	preferencesW, sequencerW := w, w
-	if wide {
-		preferencesW = (w - gap) / 2
-		sequencerW = w - preferencesW - gap
-	}
-
-	preferences, sequencer := m.renderSettingsSections(preferencesW-2, sequencerW-2)
-	preferencesSelected := m.settingsPreferencesLine(m.settingsCursor)
-	sequencerSelected := settingRowIndex(settingsSequencer, m.settingsCursor)
-
-	preferencesH, sequencerH := outerH-2, outerH-2
-	if !wide {
-		contentH := outerH - 4
-		preferencesH = contentH / 2
-		sequencerH = contentH - preferencesH
-	}
-	preferencesLines := fitSettingsPane(preferences, preferencesH, preferencesW-2, preferencesSelected)
-	sequencerLines := fitSettingsPane(sequencer, sequencerH, sequencerW-2, sequencerSelected)
-
-	preferencesStyle, sequencerStyle := listPanelStyle, listPanelStyle
-	if preferencesSelected >= 0 {
-		preferencesStyle = listPanelFocusedStyle
-	} else {
-		sequencerStyle = listPanelFocusedStyle
-	}
-	preferencesPanel := preferencesStyle.Width(preferencesW).Render(strings.Join(preferencesLines, "\n"))
-	sequencerPanel := sequencerStyle.Width(sequencerW).Render(strings.Join(sequencerLines, "\n"))
-	preferencesPanel = withBorderTitle(preferencesPanel, tr("Preferences"), preferencesW, preferencesSelected >= 0)
-	sequencerPanel = withBorderTitle(sequencerPanel, tr("Sequencer"), sequencerW, sequencerSelected >= 0)
-	if wide {
-		return lipgloss.JoinHorizontal(lipgloss.Top, preferencesPanel, sequencerPanel)
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, preferencesPanel, sequencerPanel)
+	content, selected := m.renderSettingsSection(w - 2)
+	// panelContentHeight, not outerH-2: the panel's chrome is two borders and
+	// the padding row above the first line. Counting only the borders left the
+	// pane one row taller than it drew, so the last row — and, when the cursor
+	// was on it, the row the scroll had just been asked to reveal — fell off
+	// the bottom.
+	lines := fitSettingsPane(content, panelContentHeight(outerH), w-2, selected)
+	panel := listPanelFocusedStyle.Width(w).Render(strings.Join(lines, "\n"))
+	return withBorderTitle(panel, m.listPanelTitle(), w, true)
 }
 
 // settingsPreviewN is the number of ranked rows shown in the bias-knob preview.

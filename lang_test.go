@@ -91,9 +91,9 @@ func dynamicUIStrings() []string {
 	// makes them mean, so these reach tr() through hintLabelOverrides' map.
 	out = append(out, "stop", "reopen")
 	out = append(out, helpSectionOrder...)
-	// Settings group headings are held in English on settingsPreferenceGroups
-	// and translated at render time.
-	for _, g := range settingsPreferenceGroups {
+	// Settings group headings are held in English on settingsGroups and
+	// translated at render time.
+	for _, g := range settingsGroups {
 		out = append(out, g.title)
 	}
 	out = append(out, secDrill)

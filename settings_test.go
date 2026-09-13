@@ -201,41 +201,67 @@ func TestSettingsTopPreviewEmptyWhenNoTasks(t *testing.T) {
 	}
 }
 
-func TestSettingsRenderSeparatePreferencesAndSequencerPanes(t *testing.T) {
+// Settings is one pane. It was two, and the four ranking knobs did not earn a
+// second border, a second scroll position and half the width of the tab.
+func TestSettingsRendersOneGroupedPane(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Ranked task"))
 	m.tab = tabSettings
 	m.termHeight = 40
 	applyBiases(defaultBiases())
 	m.ensureCache()
-	preferences, sequencer := m.renderSettingsSections(50, 50)
-	preferences = ansi.Strip(preferences)
-	sequencer = ansi.Strip(sequencer)
-	if !strings.Contains(preferences, "Theme") || strings.Contains(preferences, "Deadline pressure") {
-		t.Fatalf("Preferences pane has the wrong setting group:\n%s", preferences)
+	content, _ := m.renderSettingsSection(50)
+	content = ansi.Strip(content)
+	for _, want := range []string{tr("Appearance"), "Theme", tr("Sequencer"), "Deadline pressure", tr("Sync")} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("the settings pane is missing %q:\n%s", want, content)
+		}
 	}
-	if !strings.Contains(sequencer, "Deadline pressure") || strings.Contains(sequencer, "Sync server") {
-		t.Fatalf("Sequencer pane has the wrong setting group:\n%s", sequencer)
+	// The Sequencer rows are a group inside the pane, under their heading —
+	// not a separate document beside it.
+	if strings.Index(content, tr("Sequencer")) > strings.Index(content, "Deadline pressure") {
+		t.Errorf("the Sequencer heading should lead its rows:\n%s", content)
 	}
 
-	for _, tc := range []struct {
-		name  string
-		width int
-	}{
-		{name: "side by side", width: 120},
-		{name: "stacked", width: 60},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			m.termWidth = tc.width
+	for _, width := range []int{60, 120} {
+		m.termWidth = width
+		out := ansi.Strip(m.View())
+		if strings.Contains(out, "╭─ "+tr("Sequencer")+" ") {
+			t.Errorf("width=%d: Settings should draw one pane, not a Sequencer pane:\n%s", width, out)
+		}
+		if !strings.Contains(out, "╭─ "+tr("Preferences")+" ") {
+			t.Errorf("width=%d: Settings should draw its single pane:\n%s", width, out)
+		}
+		if !strings.Contains(out, "Deadline pressure") || !strings.Contains(out, "Theme") {
+			t.Errorf("width=%d: both groups belong in the one pane:\n%s", width, out)
+		}
+	}
+}
+
+// The pane scrolls to the cursor, and "visible" has to mean visible in what
+// the panel actually draws: its chrome is two borders *and* the padding row
+// above the first line, so a height that counted only the borders pushed the
+// selected row off the bottom on a short terminal.
+func TestSettingsPaneKeepsTheSelectedRowOnScreen(t *testing.T) {
+	m := modelWithTasks(t, todo.New("Ranked task"))
+	m.tab = tabSettings
+	applyBiases(defaultBiases())
+	m.ensureCache()
+	for _, h := range []int{12, 16, 20, 24, 30} {
+		m.termWidth, m.termHeight = 70, h
+		for _, row := range m.settingsNavOrder() {
+			m.settingsCursor = row
 			out := ansi.Strip(m.View())
-			preferencesAt := strings.Index(out, "╭─ Preferences ")
-			sequencerAt := strings.Index(out, "╭─ Sequencer ")
-			if preferencesAt < 0 || sequencerAt < 0 {
-				t.Fatalf("Settings should render separate Preferences and Sequencer panes:\n%s", out)
+			found := false
+			for _, line := range strings.Split(out, "\n") {
+				if strings.Contains(line, cursorMark) {
+					found = true
+					break
+				}
 			}
-			if tc.width < settingsSideBySideMinWidth && sequencerAt < preferencesAt {
-				t.Fatalf("stacked Sequencer pane should follow Preferences:\n%s", out)
+			if !found {
+				t.Fatalf("height=%d row=%d: the selected row is not on screen:\n%s", h, row, out)
 			}
-		})
+		}
 	}
 }
 
@@ -339,7 +365,7 @@ func TestSettingsFooterWrapsTheSyncStatus(t *testing.T) {
 	m.syncStatus = "Last sync failed: sync server runs taskr v1.25.0, this device runs v1.33.1 — restart the sync server (it answered 500 Internal Server Error: merge failed: no such table: task_learnings)"
 
 	const paneW = 50
-	preferences, _ := m.renderSettingsSections(paneW, paneW)
+	preferences, _ := m.renderSettingsSection(paneW)
 	preferences = ansi.Strip(preferences)
 
 	// Only the footer's own lines: this function deliberately leaves the final

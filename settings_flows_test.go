@@ -369,20 +369,21 @@ func TestSettingsCursorSkipsTheVersionRow(t *testing.T) {
 	}
 }
 
-// settingsPreferencesLine is what scrolls the pane on a short terminal, and the
-// pane no longer draws one line per row — the headings and the blank line
-// between groups sit in between. Hunt the cursor mark in the rendered pane and
-// compare, the way the detail pane's estimate is pinned to its document.
-func TestSettingsPreferencesLineMatchesTheRenderedPane(t *testing.T) {
+// The selected line is what scrolls the pane on a short terminal, and the pane
+// does not draw one line per row — the headings, the blank line between groups
+// and the bias preview sit in between. The renderer hands that number back
+// with the content; hunt the cursor mark in what it drew and compare, the way
+// the detail pane's estimate is pinned to its document.
+func TestSettingsSelectedLineMatchesTheRenderedPane(t *testing.T) {
 	m := settingsModel(t)
-	for _, g := range settingsPreferenceGroups {
+	for _, g := range settingsGroups {
 		for _, row := range g.rows {
 			if !settingsSelectable(row) || !m.settingsRowVisible(row) {
 				continue
 			}
 			m.settingsCursor = row
-			preferences, _ := m.renderSettingsSections(60, 60)
-			lines := strings.Split(strings.TrimRight(ansi.Strip(preferences), "\n"), "\n")
+			content, selected := m.renderSettingsSection(60)
+			lines := strings.Split(strings.TrimRight(ansi.Strip(content), "\n"), "\n")
 			drawn := -1
 			for i, line := range lines {
 				if strings.HasPrefix(line, strings.TrimSpace(cursorMark)) || strings.HasPrefix(line, cursorMark) {
@@ -391,15 +392,17 @@ func TestSettingsPreferencesLineMatchesTheRenderedPane(t *testing.T) {
 				}
 			}
 			if drawn < 0 {
-				t.Fatalf("row %d: no cursor mark in the rendered pane:\n%s", row, preferences)
+				t.Fatalf("row %d: no cursor mark in the rendered pane:\n%s", row, content)
 			}
-			if got := m.settingsPreferencesLine(row); got != drawn {
-				t.Errorf("row %d: settingsPreferencesLine = %d, drawn on line %d", row, got, drawn)
+			if selected != drawn {
+				t.Errorf("row %d: selected line = %d, drawn on line %d", row, selected, drawn)
 			}
 		}
 	}
-	if got := m.settingsPreferencesLine(settingBiasDeadline); got != -1 {
-		t.Errorf("a Sequencer row should not report a Preferences line, got %d", got)
+	// A row the current state hides is on no line at all.
+	m.settingsCursor = settingServerToken
+	if _, selected := m.renderSettingsSection(60); selected != -1 {
+		t.Errorf("a hidden row should report no line, got %d", selected)
 	}
 }
 
@@ -408,8 +411,8 @@ func TestSettingsPreferencesLineMatchesTheRenderedPane(t *testing.T) {
 // only discoverable by pressing one.
 func TestSettingsMarksTheRowsThatOpenAnEditor(t *testing.T) {
 	m := settingsModel(t)
-	preferences, _ := m.renderSettingsSections(60, 60)
-	for _, line := range strings.Split(ansi.Strip(preferences), "\n") {
+	content, _ := m.renderSettingsSection(60)
+	for _, line := range strings.Split(ansi.Strip(content), "\n") {
 		marked := strings.Contains(line, strings.TrimSpace(settingsEditMark))
 		cycled := strings.Contains(line, "‹")
 		if marked && cycled {
@@ -460,11 +463,11 @@ func TestSettingsEnterAndRightAgreeOnEveryToggleRow(t *testing.T) {
 		byArrow.settingsCursor = row
 		byArrow = sendKey(t, byArrow, "right")
 
-		enterPane, enterSeq := byEnter.renderSettingsSections(60, 60)
-		arrowPane, arrowSeq := byArrow.renderSettingsSections(60, 60)
-		if enterPane != arrowPane || enterSeq != arrowSeq {
-			t.Errorf("row %d: enter and → left different values:\nenter:\n%s%s\nright:\n%s%s",
-				row, enterPane, enterSeq, arrowPane, arrowSeq)
+		enterPane, _ := byEnter.renderSettingsSection(60)
+		arrowPane, _ := byArrow.renderSettingsSection(60)
+		if enterPane != arrowPane {
+			t.Errorf("row %d: enter and → left different values:\nenter:\n%s\nright:\n%s",
+				row, enterPane, arrowPane)
 		}
 	}
 }
@@ -472,21 +475,21 @@ func TestSettingsEnterAndRightAgreeOnEveryToggleRow(t *testing.T) {
 // Theme and Language open the pane. They are the settings someone changes on
 // day one, and they sat six rows down behind the auto-close toggles.
 func TestSettingsOpensWithAppearance(t *testing.T) {
-	first := settingsPreferenceGroups[0]
+	first := settingsGroups[0]
 	// Appearance may grow more rows; what is pinned is that it leads the pane
 	// and opens on Theme, which is where the cursor starts.
 	if len(first.rows) < 2 || first.rows[0] != settingTheme || first.rows[1] != settingLanguage {
-		t.Fatalf("the first Preferences group is %q %v, want Theme then Language", first.title, first.rows)
+		t.Fatalf("the first settings group is %q %v, want Theme then Language", first.title, first.rows)
 	}
 	m := settingsModel(t)
-	if got := m.settingsPreferencesLine(settingTheme); got != 1 {
-		t.Errorf("Theme renders on pane line %d, want 1 (the line under the first heading)", got)
+	m.settingsCursor = settingTheme
+	content, selected := m.renderSettingsSection(60)
+	if selected != 1 {
+		t.Errorf("Theme renders on pane line %d, want 1 (the line under the first heading)", selected)
 	}
 	// And the pane's first heading is the one the cursor starts under, not a
 	// group the reader has to scroll past.
-	m.settingsCursor = settingTheme
-	preferences, _ := m.renderSettingsSections(60, 60)
-	lines := strings.Split(ansi.Strip(preferences), "\n")
+	lines := strings.Split(ansi.Strip(content), "\n")
 	if !strings.Contains(lines[0], tr("Appearance")) {
 		t.Errorf("first pane line is %q, want the Appearance heading", lines[0])
 	}

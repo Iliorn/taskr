@@ -51,7 +51,7 @@ func (m model) backgroundSync() tea.Cmd {
 func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		// The whole message, not a 60-column prefix of it: the footer wraps
-		// (renderSettingsSections), and what a failed sync has to say — which
+		// (renderSettingsSection), and what a failed sync has to say — which
 		// end is on an old build, which table the merge could not find — is
 		// all in the tail. Truncating here made Settings say "server returned
 		// 500 Internal Server Error" and nothing else.
