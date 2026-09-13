@@ -586,8 +586,8 @@ func TestSequenceSortIsDeterministicForIdenticalTasks(t *testing.T) {
 	}
 	forward := build([]string{"aaaa", "bbbb", "cccc"})
 	shuffled := build([]string{"cccc", "aaaa", "bbbb"})
-	sortTodoPtrsBySequence(forward, nil, sequenceScoreNow())
-	sortTodoPtrsBySequence(shuffled, nil, sequenceScoreNow())
+	sortTodoPtrsBySequence(forward, nil, nil, sequenceScoreNow())
+	sortTodoPtrsBySequence(shuffled, nil, nil, sequenceScoreNow())
 	for i := range forward {
 		if forward[i].ID != shuffled[i].ID {
 			t.Fatalf("same tasks in a different input order sorted differently: %s vs %s at %d",

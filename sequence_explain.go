@@ -126,7 +126,10 @@ func seqRanking(todos []*todo.Todo, score func(*todo.Todo) float64) ([]todo.Todo
 			rows = append(rows, *t)
 		}
 	}
-	sortTodosBySequenceWithRollupBy(rows, rollup, score)
+	// Same partition the live list applies, or `taskr top` and the explain
+	// view would rank a blocked task the list has already pushed to the bottom.
+	blocked, _ := dependencySets(todos)
+	sortTodosBySequenceWithRollupBy(rows, rollup, blocked, score)
 	eff := make(map[string]float64, len(rows))
 	for i := range rows {
 		eff[rows[i].ID] = rankScoreOf(&rows[i], rollup, score)

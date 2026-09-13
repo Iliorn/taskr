@@ -379,19 +379,31 @@ func sortTodoPtrs(todos []*todo.Todo, less func(a, b *todo.Todo) bool) {
 // chain. The score is computed once per task into the slice being sorted, so
 // the comparator reads a float field instead of hashing an ID into a score map
 // on every comparison.
-func sortTodoPtrsBySequence(todos []*todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) {
+//
+// blocked (nil when the caller has no dependency set on hand) partitions ahead
+// of the score: work waiting on an unfinished dependency sorts below work that
+// can be started, however urgent it is. A list whose top is always something
+// you can pick up right now is the whole point of the ranking — and it is what
+// lets the row drop its blocked marker from the status column, since position
+// now carries the fact. Within each half the ordering is unchanged, so a
+// blocker still outranks what it holds up.
+func sortTodoPtrsBySequence(todos []*todo.Todo, rollup map[string]float64, blocked map[string]bool, score func(*todo.Todo) float64) {
 	if len(todos) <= 1 {
 		return
 	}
 	type scored struct {
-		t     *todo.Todo
-		score float64
+		t       *todo.Todo
+		score   float64
+		blocked bool
 	}
 	rows := make([]scored, len(todos))
 	for i, t := range todos {
-		rows[i] = scored{t, rankScoreOf(t, rollup, score)}
+		rows[i] = scored{t, rankScoreOf(t, rollup, score), blocked[t.ID]}
 	}
 	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].blocked != rows[j].blocked {
+			return rows[j].blocked
+		}
 		if rows[i].score != rows[j].score {
 			return rows[i].score > rows[j].score
 		}
@@ -434,21 +446,21 @@ func sortTodoValues(todos []todo.Todo, less func(a, b *todo.Todo) bool) {
 // preserves the original behaviour (used by callers that don't have the
 // child set on hand, e.g. on-disk loads).
 func sortTodosBySequenceWithRollup(todos []todo.Todo, rollup map[string]float64) {
-	sortTodosBySequenceWithRollupBy(todos, rollup, sequenceScoreNow())
+	sortTodosBySequenceWithRollupBy(todos, rollup, nil, sequenceScoreNow())
 }
 
 // sortTodosBySequenceWithRollupBy is the parameterised form of
 // sortTodosBySequenceWithRollup: it accepts an arbitrary score function so
 // callers can sort with explicit biases/clock rather than the activeBiases /
 // activeHeat globals.
-func sortTodosBySequenceWithRollupBy(todos []todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) {
+func sortTodosBySequenceWithRollupBy(todos []todo.Todo, rollup map[string]float64, blocked map[string]bool, score func(*todo.Todo) float64) {
 	if len(todos) <= 1 {
 		return
 	}
 	// Sort the pointers, then permute the values once: the same ordering with
 	// 8-byte swaps instead of 416-byte ones.
 	ptrs := todoPtrs(todos)
-	sortTodoPtrsBySequence(ptrs, rollup, score)
+	sortTodoPtrsBySequence(ptrs, rollup, blocked, score)
 	sorted := make([]todo.Todo, len(todos))
 	for i, t := range ptrs {
 		sorted[i] = *t

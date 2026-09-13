@@ -121,33 +121,10 @@ func (m *model) refreshCaches() {
 }
 
 // rebuildDependencySets recomputes blockedSet/blockerSet from the full task set.
-// A task is "blocked" if any task it depends on is still pending (not Done); that
-// depended-on task is in turn a "blocker". Dependencies on a Done or deleted task
-// don't count — they're already cleared — so a dangling/finished dep never blocks.
+// The rule itself lives in dependencySets (selectors.go), so the sequence sort
+// and the rendered row agree on what "blocked" means.
 func (m *model) rebuildDependencySets(all []*todo.Todo) {
-	for k := range m.cache.blockedSet {
-		delete(m.cache.blockedSet, k)
-	}
-	for k := range m.cache.blockerSet {
-		delete(m.cache.blockerSet, k)
-	}
-	pending := make(map[string]bool, len(all))
-	for i := range all {
-		if all[i].Status != todo.Done {
-			pending[all[i].ID] = true
-		}
-	}
-	for i := range all {
-		if all[i].Status == todo.Done {
-			continue
-		}
-		for _, depID := range all[i].Dependencies {
-			if pending[depID] {
-				m.cache.blockedSet[all[i].ID] = true
-				m.cache.blockerSet[depID] = true
-			}
-		}
-	}
+	m.cache.blockedSet, m.cache.blockerSet = dependencySets(all)
 }
 
 // refreshUsageRecency records, per tag and per project, the latest ModifiedAt of

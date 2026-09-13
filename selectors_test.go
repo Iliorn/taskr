@@ -677,9 +677,11 @@ func TestRankedScoreShowsWhatTheSortRankedBy(t *testing.T) {
 	}
 }
 
-// The Score column must never read lower than the row beneath it: the column
-// and the position are two views of one number, and the sequence sort is the
-// only thing that orders the list.
+// The list is two blocks: work that can be started, then work waiting on an
+// unfinished dependency. Within each, the Score column must never read lower
+// than the row beneath it — the column and the position are two views of one
+// number. The break between the blocks is the one place the column may jump
+// back up, and the row's ↧ marker is what explains it.
 func TestScoreColumnNeverContradictsThePosition(t *testing.T) {
 	blocker := todo.New("get sign-off")
 	blocker.Size = todo.SizeLarge
@@ -694,11 +696,52 @@ func TestScoreColumnNeverContradictsThePosition(t *testing.T) {
 	m.refreshCaches()
 
 	prev := 101
+	seenBlocked := false
 	for i, row := range m.cache.active {
+		blocked := m.cache.blockedSet[row.ID]
+		if blocked && !seenBlocked {
+			seenBlocked, prev = true, 101 // the partition break: a fresh run
+		}
+		if !blocked && seenBlocked {
+			t.Fatalf("row %d (%q) is startable but sorts below blocked work", i, row.Title)
+		}
 		got := sequencePercent(m.rankedScore(m.get(row.ID)))
 		if got > prev {
 			t.Errorf("row %d (%q) reads %d%% under a row reading %d%%", i, row.Title, got, prev)
 		}
 		prev = got
+	}
+	if !seenBlocked {
+		t.Fatal("the fixture's dependent task was never seen as blocked")
+	}
+}
+
+// The partition itself: a task waiting on an unfinished dependency sorts below
+// every task that can be started, however urgent it is. This is what lets the
+// row drop its blocked glyph — position carries the fact.
+func TestBlockedWorkSinksBelowStartableWork(t *testing.T) {
+	blocker := todo.New("get sign-off")
+	urgent := todo.New("deploy release")
+	urgent.Priority = todo.PriorityHigh
+	urgent.DueDate = time.Now().Add(-48 * time.Hour) // overdue, so it would otherwise top the list
+	urgent.Dependencies = []string{blocker.ID}
+	calm := todo.New("write the docs")
+	calm.Priority = todo.PriorityLow
+
+	m := modelWithTasks(t, blocker, urgent, calm)
+	m.taskSort = taskSortSequence
+	m.refreshCaches()
+
+	if n := len(m.cache.active); n != 3 {
+		t.Fatalf("want 3 active rows, got %d", n)
+	}
+	if last := m.cache.active[2]; last.ID != urgent.ID {
+		t.Errorf("the blocked task should sort last, got %q", last.Title)
+	}
+	// And unblocking it puts it straight back on top.
+	m.get(blocker.ID).Status = todo.Done
+	m.refreshCaches()
+	if first := m.cache.active[0]; first.ID != urgent.ID {
+		t.Errorf("once unblocked the overdue task should lead, got %q", first.Title)
 	}
 }

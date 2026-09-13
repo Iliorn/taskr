@@ -229,6 +229,37 @@ func rankScoreOf(t *todo.Todo, rollup map[string]float64, score func(*todo.Todo)
 	return s
 }
 
+// dependencySets returns, from the full task set, the tasks waiting on an
+// unfinished dependency and the tasks holding others up. A task is "blocked" if
+// any task it depends on is still pending (not Done); that depended-on task is
+// in turn a "blocker". Dependencies on a Done or deleted task don't count —
+// they're already cleared — so a dangling/finished dep never blocks.
+//
+// One definition, two readers: the cache renders from it, and the sequence sort
+// sinks the blocked half below the work that can actually be started.
+func dependencySets(all []*todo.Todo) (blocked, blocker map[string]bool) {
+	blocked = make(map[string]bool)
+	blocker = make(map[string]bool)
+	pending := make(map[string]bool, len(all))
+	for i := range all {
+		if all[i].Status != todo.Done {
+			pending[all[i].ID] = true
+		}
+	}
+	for i := range all {
+		if all[i].Status == todo.Done {
+			continue
+		}
+		for _, depID := range all[i].Dependencies {
+			if pending[depID] {
+				blocked[all[i].ID] = true
+				blocker[depID] = true
+			}
+		}
+	}
+	return blocked, blocker
+}
+
 func selectActiveDone(todos []*todo.Todo, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
 	var rollup map[string]float64
 	if sortMode == taskSortSequence {
@@ -261,15 +292,20 @@ func selectActiveDoneRanked(todos []*todo.Todo, rollup map[string]float64, searc
 	}
 	// Active tasks rank by taskSort; the done list has its own history sort,
 	// since the active modes (score, size) carry no meaning once tasks close.
+	// Blocked work sinks below everything that can be started today (see
+	// sortTodoPtrsBySequence). Derived from the whole slice, not from activeP:
+	// the task holding one up may be a subtask, or filtered out of view.
 	switch sortMode {
 	case taskSortSequence:
-		sortTodoPtrsBySequence(activeP, rollup, sequenceScoreNow())
+		blocked, _ := dependencySets(todos)
+		sortTodoPtrsBySequence(activeP, rollup, blocked, sequenceScoreNow())
 	case taskSortDueDate:
 		sortTodoPtrs(activeP, lessByDueDate)
 	case taskSortSize:
 		sortTodoPtrs(activeP, lessBySize)
 	default:
-		sortTodoPtrsBySequence(activeP, nil, sequenceScoreNow())
+		blocked, _ := dependencySets(todos)
+		sortTodoPtrsBySequence(activeP, nil, blocked, sequenceScoreNow())
 	}
 	sortTodoPtrs(doneP, historyLess(historyMode))
 	return todoValues(activeP), todoValues(doneP)
