@@ -11,7 +11,7 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
-## [Unreleased]
+## [1.36.0] - 2026-09-13
 
 ### Changed
 
