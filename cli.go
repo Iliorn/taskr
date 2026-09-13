@@ -2669,6 +2669,11 @@ Sync (cross-device):
   taskr sync --accept-stale                  rejoin after being offline past the deletion-memory window
                                             (~6 months; BOTH auto-sync and a manual "taskr sync" refuse until
                                             then, so tasks deleted elsewhere can't resurrect)
+  taskr sync --adopt-local                   first sync only: keep this device's tasks and push them to the fleet
+  taskr sync --adopt-remote                  first sync only: back them up, clear them here, pull the fleet's list
+                                            (a device that has never synced and holds tasks of its own refuses to
+                                             sync until one of these is given, so its old tasks can't land on every
+                                             device by surprise; the backup is a normal export, taskr import undoes it)
   taskr sync --recover                       list dropped edits from ~/.taskr/sync.log (local only, no network)
   taskr sync --recover=<ref>                 reapply one dropped edit by id-prefix or title substring;
                                             stamps a fresh ModifiedAt so the fix propagates on the next sync

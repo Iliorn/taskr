@@ -26,6 +26,11 @@ type syncConfig struct {
 	// keep sync manual-only.
 	AutoSync *bool `json:"auto_sync,omitempty"`
 
+	// Adopted records that the one-time first-sync question has been answered
+	// on this device (syncadopt.go). It lives here rather than with the sync
+	// state because the answer must outlive a lost state directory.
+	Adopted bool `json:"adopted,omitempty"`
+
 	// Server side: this machine acting as a sync hub. ServerOn runs the endpoint
 	// in-process while the TUI is open (the always-on case still uses the
 	// headless `taskr serve`). ServerListen/ServerToken are its bind address and
@@ -58,6 +63,14 @@ func maybeAutoSyncCLI() {
 	// long-deleted tasks. Manual `taskr sync --accept-stale` is the way back in.
 	if gap, stale := staleSyncGap(time.Now()); stale {
 		fmt.Fprintf(os.Stderr, "taskr sync: auto-sync paused: %s; run `taskr sync --accept-stale` to rejoin\n", staleSyncNotice(gap))
+		return
+	}
+	// First-sync guard: nor may it be the thing that pushes a device's
+	// pre-fleet tasks to everyone. The choice is a person's, so this path can
+	// only decline and say where to make it.
+	if firstSyncNeedsChoice(cfg, db) {
+		n, _ := countLiveTasks(db)
+		fmt.Fprintf(os.Stderr, "taskr sync: auto-sync paused: %s; run `taskr sync` to choose\n", firstSyncNotice(n))
 		return
 	}
 	_, _ = runClientSync(db, cfg, 10*time.Second)
@@ -240,6 +253,8 @@ func cliSync(args []string) int {
 	quiet := fs.Bool("quiet", false, "print nothing on success")
 	status := fs.Bool("status", false, "print the last sync time/result and exit (local only, no network)")
 	acceptStale := fs.Bool("accept-stale", false, "sync even though this device has been offline longer than the deletion-memory window (tasks deleted elsewhere may resurrect)")
+	adoptLocal := fs.Bool("adopt-local", false, "first sync: keep this device's tasks and push them to the fleet")
+	adoptRemoteFlag := fs.Bool("adopt-remote", false, "first sync: back up this device's tasks, clear them here, and pull the fleet's list")
 	// recover is a string: empty = list dropped edits; non-empty = reapply that ref.
 	// Both forms are pure local operations — no network contact.
 	recoverRef := fs.String("recover", recoverAbsent, "list dropped edits (no value) or reapply one: --recover=<ref>")
@@ -299,6 +314,9 @@ Options:
   or reset this device to re-pull clean: back up, then rm ~/.taskr/tasks.db and sync again
 `, staleSyncNotice(gap))
 		return 2
+	}
+	if rc := resolveFirstSync(cfg, *adoptLocal, *adoptRemoteFlag); rc != 0 {
+		return rc
 	}
 	sum, err := runClientSync(db, cfg, 30*time.Second)
 	if err != nil {

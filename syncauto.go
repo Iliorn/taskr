@@ -37,6 +37,13 @@ func (m model) backgroundSync() tea.Cmd {
 		if gap, stale := staleSyncGap(time.Now()); stale {
 			return syncDoneMsg{err: fmt.Errorf("paused: no sync in %s — run `taskr sync --accept-stale` in a shell to rejoin", shortDur(gap))}
 		}
+		// First-sync guard — same shape, and for the same reason the stale one
+		// has it: the TUI syncs on launch and on its timer, so this is the path
+		// that uploads a device's pre-fleet tasks before anyone has been asked.
+		if firstSyncNeedsChoice(cfg, db) {
+			n, _ := countLiveTasks(db)
+			return syncDoneMsg{err: fmt.Errorf("paused: %s — run `taskr sync` in a shell to choose", firstSyncNotice(n))}
+		}
 		sum, err := runClientSync(db, cfg, 20*time.Second)
 		return syncDoneMsg{summary: sum, err: err}
 	}
