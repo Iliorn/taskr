@@ -177,6 +177,7 @@ func newAppSyncServer(token string) *tasksync.Server {
 	return &tasksync.Server{
 		Token:        token,
 		Store:        dbStore{db},
+		Board:        &boardStore{},
 		Version:      appVersion,
 		Hub:          tasksync.NewHub(),
 		OnClientSync: noteClientSync,

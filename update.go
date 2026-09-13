@@ -1518,6 +1518,14 @@ func (m *model) toggleAutoCloseSubtasks() {
 // standing on the Board would leave the cursor on a tab that no longer exists
 // in the bar, so the move off happens here rather than being discovered by the
 // next keystroke.
+// toggleSyncBoard turns sharing the column list with the fleet on or off.
+// Turning it on does not push anything by itself: this device's list only
+// wins if it was edited here more recently than the fleet's (boardsync.go).
+func (m *model) toggleSyncBoard() {
+	applySyncBoardColumns(!syncBoardColumns)
+	m.persistSettings()
+}
+
 func (m *model) toggleShowBoard() {
 	applyShowBoard(!showBoard)
 	if !showBoard && m.tab == tabBoard {
@@ -1557,6 +1565,8 @@ func (m *model) persistSettings() {
 		AutoCloseSubtasks: m.autoCloseSubtasks,
 		BoardDisabled:     !showBoard,
 		Stages:            activeStages,
+		StagesModifiedAt:  stagesModifiedAt,
+		SyncBoardDisabled: !syncBoardColumns,
 		Search:            m.persistedSearch(),
 		DetailPosition:    m.detailPos.String(),
 		Keys:              activeKeys,
@@ -1870,6 +1880,8 @@ func (m *model) settingsAdjust(dir int) tea.Cmd {
 		m.cycleDetailPos(dir)
 	case settingSyncAuto:
 		m.toggleSyncAuto()
+	case settingSyncBoard:
+		m.toggleSyncBoard()
 	case settingServerOn:
 		return m.startStopServer()
 	}

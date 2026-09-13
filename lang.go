@@ -580,8 +580,9 @@ var daTranslations = map[string]string{
 	"About":      "Om",
 
 	// Row labels that sit under a heading naming the same thing.
-	"Automatic": "Automatisk",
-	"Enabled":   "Aktiveret",
+	"Automatic":           "Automatisk",
+	"Enabled":             "Aktiveret",
+	"Share board columns": "Del tavlens kolonner",
 
 	// ── Sync + server (Settings rows, status line, toasts) ──
 	"Sync":                            "Synkronisering",
@@ -1184,8 +1185,9 @@ var deTranslations = map[string]string{
 	"About":      "Über",
 
 	// Row labels that sit under a heading naming the same thing.
-	"Automatic": "Automatisch",
-	"Enabled":   "Aktiviert",
+	"Automatic":           "Automatisch",
+	"Enabled":             "Aktiviert",
+	"Share board columns": "Board-Spalten teilen",
 
 	// ── Sync + server (Settings rows, status line, toasts) ──
 	"Sync":                            "Sync",

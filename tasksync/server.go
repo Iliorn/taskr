@@ -31,6 +31,10 @@ type Store interface {
 // set in one round trip.
 type Request struct {
 	Tasks []todo.Todo `json:"tasks"`
+	// Board is this device's kanban column list, when it is sharing one.
+	// Optional in both directions and absent on every older peer — see
+	// board.go for why that is the whole compatibility story.
+	Board *Board `json:"board,omitempty"`
 	// Protocol is the wire version the client was built against. Absent
 	// (zero) means a client from before versioning existed, which speaks
 	// v1 — see legacyProtocolVersion.
@@ -39,6 +43,9 @@ type Request struct {
 
 type Response struct {
 	Tasks []todo.Todo `json:"tasks"`
+	// Board is the fleet's column list after the merge, or nil when this
+	// server keeps none.
+	Board *Board `json:"board,omitempty"`
 	// Protocol is the wire version the server speaks, so a newer client can
 	// tell an older server apart from one that simply sent nothing. Zero
 	// from a server that predates the field.
@@ -69,6 +76,9 @@ type Server struct {
 	// than sent blank — a client must be able to tell "the server did not say"
 	// from "the server said something".
 	Version string
+	// Board, when non-nil, is where the fleet's shared kanban column list is
+	// kept. Nil leaves every client's columns to itself.
+	Board BoardStore
 	// Hub, when non-nil, is nudged after every merge that changed the store so
 	// connected clients pull immediately.
 	Hub *Hub
@@ -78,6 +88,10 @@ type Server struct {
 	OnClientSync func(time.Time)
 
 	mu sync.Mutex
+	// boardMu guards the column list's read-merge-write. Its own lock, not the
+	// sync lock: the board is folded outside Sync so a preference can never
+	// hold up (or fail) the task merge.
+	boardMu sync.Mutex
 }
 
 // Handler builds the route set. Shared by every entry point (headless serve,
@@ -156,6 +170,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(ProtocolHeader, fmt.Sprintf("%d-%d", MinProtocolVersion, ProtocolVersion))
 	if err := json.NewEncoder(w).Encode(Response{
 		Tasks:      merged,
+		Board:      s.syncBoard(req.Board),
 		ServerTime: time.Now().UTC(),
 		Protocol:   ProtocolVersion,
 	}); err != nil {
@@ -184,6 +199,38 @@ func (s *Server) Sync(clientTasks []todo.Todo) ([]todo.Todo, error) {
 		s.Hub.Broadcast()
 	}
 	return merged, nil
+}
+
+// syncBoard folds a client's column list into the stored one and returns the
+// winner, or nil when this server keeps no board.
+//
+// A failure here is logged and swallowed: the column names are a preference
+// riding along with the task sync, and the tasks are the part that must not be
+// lost to a missing or unreadable preferences file.
+func (s *Server) syncBoard(incoming *Board) *Board {
+	if s.Board == nil {
+		return nil
+	}
+	s.boardMu.Lock()
+	defer s.boardMu.Unlock()
+	stored, err := s.Board.LoadBoard()
+	if err != nil {
+		log.Printf("taskr serve: read board: %v", err)
+		return nil
+	}
+	winner := stored
+	if incoming != nil {
+		winner = MergeBoard(stored, *incoming)
+	}
+	if !SameBoard(winner, stored) || winner.ModifiedAt.After(stored.ModifiedAt) {
+		if err := s.Board.SaveBoard(winner); err != nil {
+			log.Printf("taskr serve: write board: %v", err)
+		}
+	}
+	if len(winner.Stages) == 0 {
+		return nil
+	}
+	return &winner
 }
 
 // handleEvents streams change notifications to a client as Server-Sent Events.

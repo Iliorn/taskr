@@ -850,6 +850,10 @@ func (m *model) applyStageEdit(next []string) {
 		}
 	}
 	applyStages(next)
+	// Stamped here and nowhere else: the timestamp is what wins the list a
+	// merge (boardsync.go), so it marks a deliberate edit, never a list that
+	// merely arrived from the fleet or was read back off disk.
+	applyStagesModifiedAt(time.Now().UTC())
 	ids := make([]string, 0, len(touched))
 	for _, t := range touched {
 		t.SetStage(remap[strings.ToLower(t.Stage)])

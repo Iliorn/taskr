@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Iliorn/taskr/todo"
 )
@@ -81,6 +82,20 @@ type appSettings struct {
 	// entry is the Done column: renameable like any other, but always the one
 	// holding the completed tasks (see board.go).
 	Stages []string `json:"stages,omitempty"`
+
+	// StagesModifiedAt is when the list above was last edited on this device,
+	// and the only thing that decides whose list a fleet keeps (boardsync.go).
+	// Absent means never edited here, which can never outrank a device that
+	// has — so a hand-edited settings.json should carry a timestamp if its
+	// list is meant to win.
+	StagesModifiedAt time.Time `json:"stages_modified_at,omitempty"`
+
+	// SyncBoardDisabled opts out of sharing the column list with the fleet.
+	// Negative like BoardDisabled and SeqAgingDisabled, so the zero value
+	// shares: the names are what make a synced Stage field mean the same thing
+	// on two machines, and a device that has never edited its columns cannot
+	// overwrite anyone's (see tasksync.MergeBoard).
+	SyncBoardDisabled bool `json:"sync_board_disabled,omitempty"`
 
 	// DetailPosition is where the detail pane sits on the tabs that have one:
 	// "right" (default), "left", or "bottom". Stored as the word rather than

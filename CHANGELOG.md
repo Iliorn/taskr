@@ -27,6 +27,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Settings groups Preferences into sections led by Theme and Language, and marks editable rows.
 - Settings is one pane again: the sequencer knobs are a group in it, and the tab opens on Theme.
 - A never-synced device now asks before pushing its own tasks to every other device.
+- Board column names now travel with sync, so a task keeps its column on every device.
 - The Settings server row reads Off when this machine is not a sync hub, instead of needs token.
 - Listen and Server token are hidden while the server is off; switching it on asks for the token.
 

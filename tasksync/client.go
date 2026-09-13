@@ -32,8 +32,10 @@ var syncTransport = &http.Transport{
 // clientVersion is this build's taskr version, used only to describe a
 // version gap in an error — pass "" from anywhere that has no version stamp
 // and the comparison is skipped rather than guessed at.
-func PostSync(serverURL, token, clientVersion string, tasks []todo.Todo, timeout time.Duration) (Response, error) {
-	body, err := json.Marshal(Request{Tasks: tasks, Protocol: ProtocolVersion})
+// board is this device's column list when it shares one, nil when it does not
+// — see board.go.
+func PostSync(serverURL, token, clientVersion string, tasks []todo.Todo, board *Board, timeout time.Duration) (Response, error) {
+	body, err := json.Marshal(Request{Tasks: tasks, Board: board, Protocol: ProtocolVersion})
 	if err != nil {
 		return Response{}, err
 	}

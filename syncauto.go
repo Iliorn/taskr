@@ -73,6 +73,12 @@ func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	}
 	m.lastSyncFailed = false
 	m.syncStatus = fmt.Sprintf(tr("Last sync: sent %d, received %d"), msg.summary.sent, msg.summary.received)
+	// The stage list is a package-level global the renderer reads, so a board
+	// that arrived on the sync goroutine is installed here, on the loop.
+	if applyBoardFromSync(msg.summary.board) {
+		m.markCacheDirty()
+		m.invalidateDetailCache()
+	}
 	// A version gap does not fail the sync — that is exactly why it needs
 	// saying. Two builds against one store agree until a migration lands, and
 	// then the older end starts dropping whatever it has no column for, with

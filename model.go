@@ -45,6 +45,7 @@ const (
 	settingDetailPos
 	settingStages
 	settingSyncAuto
+	settingSyncBoard
 	settingSyncServer
 	settingSyncToken
 	settingSyncNow
@@ -469,8 +470,7 @@ func initialModel(repo Repository) model {
 	applyTheme(th)
 	applyLang(settings.Language)
 	applyBiases(biasesFromSettings(settings))
-	applyStages(stagesFromSettings(settings))
-	applyShowBoard(!settings.BoardDisabled)
+	applyBoardSettings(settings)
 	// A rejected rebind must be visible: silently falling back to the default
 	// looks like the setting was ignored at random.
 	keys, keyProblems := sanitizeKeyOverrides(settings.Keys)

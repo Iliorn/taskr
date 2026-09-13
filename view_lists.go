@@ -1384,6 +1384,7 @@ var settingsGroups = []settingsGroup{
 	}},
 	{title: "Sync", rows: []int{
 		settingSyncAuto,
+		settingSyncBoard,
 		settingSyncServer,
 		settingSyncToken,
 		settingSyncNow,
@@ -1518,6 +1519,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingDetailPos:         tr("Detail pane"),
 		settingStages:            tr("Board columns"),
 		settingSyncAuto:          tr("Automatic"),
+		settingSyncBoard:         tr("Share board columns"),
 		settingSyncServer:        tr("Sync server"),
 		settingSyncToken:         tr("Sync token"),
 		settingSyncNow:           tr("Sync now"),
@@ -1550,6 +1552,10 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		} else {
 			syncAutoVal = "‹ " + tr("Off") + " ›"
 		}
+	}
+	syncBoardVal := tr("Off")
+	if syncBoardColumns {
+		syncBoardVal = tr("On")
 	}
 	syncServerVal := tr("not set")
 	if m.syncCfg.URL != "" {
@@ -1594,6 +1600,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingDetailPos:         "‹ " + trDetailPos(m.detailPos) + " ›",
 		settingStages:            stagesDisplay(),
 		settingSyncAuto:          syncAutoVal,
+		settingSyncBoard:         "‹ " + syncBoardVal + " ›",
 		settingSyncServer:        syncServerVal,
 		settingSyncToken:         syncTokenVal,
 		settingSyncNow:           tr("press enter to sync"),

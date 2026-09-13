@@ -83,6 +83,18 @@ var showBoard = true
 
 func applyShowBoard(v bool) { showBoard = v }
 
+// applyBoardSettings installs every board-shaped preference at once: the
+// column list, whether the surface is shown at all, when the list was last
+// edited here and whether it is shared with the fleet. One call because the
+// four are read together and were three call sites' worth of chances to add a
+// fifth and forget one of them.
+func applyBoardSettings(s appSettings) {
+	applyStages(stagesFromSettings(s))
+	applyShowBoard(!s.BoardDisabled)
+	applyStagesModifiedAt(s.StagesModifiedAt)
+	applySyncBoardColumns(!s.SyncBoardDisabled)
+}
+
 // stagesFromSettings sanitizes the persisted list: entries are trimmed, blanks
 // dropped, and duplicates (case-insensitive) collapsed onto their first
 // occurrence. An empty result falls back to the defaults so a broken hand-edit

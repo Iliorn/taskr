@@ -73,7 +73,10 @@ func maybeAutoSyncCLI() {
 		fmt.Fprintf(os.Stderr, "taskr sync: auto-sync paused: %s; run `taskr sync` to choose\n", firstSyncNotice(n))
 		return
 	}
-	_, _ = runClientSync(db, cfg, 10*time.Second)
+	sum, err := runClientSync(db, cfg, 10*time.Second)
+	if err == nil {
+		applyBoardFromSync(sum.board)
+	}
 }
 
 func syncConfigPath() string {
@@ -323,6 +326,9 @@ Options:
 		fmt.Fprintf(os.Stderr, "taskr sync: %v\n", err)
 		return 1
 	}
+	if applyBoardFromSync(sum.board) {
+		fmt.Fprintf(os.Stderr, "taskr sync: board columns updated from the fleet: %s\n", stagesDisplay())
+	}
 	if sum.versionGap != "" {
 		// stderr, and outside the --quiet gate: --quiet suppresses the
 		// routine "synced: sent 3, received 0" line, not a warning that the
@@ -347,6 +353,13 @@ type syncSummary struct {
 	// summary rather than being printed here so both callers can place it:
 	// the CLI on stderr, the TUI in the Settings footer.
 	versionGap string
+	// board is the fleet's column list as the server has it after this sync,
+	// or nil when neither end shares one. It rides back rather than being
+	// applied in here for the same reason versionGap does — and one better:
+	// runClientSync runs on a background goroutine, and the stage list is a
+	// package-level global the renderer reads, so the install has to happen on
+	// the loop that owns it (handleSyncDone).
+	board *tasksync.Board
 }
 
 // runClientSync pushes the local full task set (including tombstones) to the
@@ -358,7 +371,7 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummar
 	if err != nil {
 		return syncSummary{}, err
 	}
-	resp, err := tasksync.PostSync(cfg.URL, cfg.Token, appVersion, local, timeout)
+	resp, err := tasksync.PostSync(cfg.URL, cfg.Token, appVersion, local, localBoard(), timeout)
 	if err != nil {
 		return syncSummary{}, err
 	}
@@ -400,6 +413,7 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummar
 		received:   countLive(merged),
 		conflicts:  len(dropped),
 		versionGap: tasksync.VersionGapWarning(resp.ServerVersion, appVersion),
+		board:      resp.Board,
 	}
 	// Record status for `taskr sync --status`. Best-effort: a write failure here
 	// must not fail an otherwise-successful sync.

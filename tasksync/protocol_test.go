@@ -62,7 +62,7 @@ func TestPostSyncRoundTrip(t *testing.T) {
 	hs := testServer(t, srv)
 
 	local := newTask("from the client", now)
-	resp, err := PostSync(hs.URL, "s3cret", "", []todo.Todo{local}, 5*time.Second)
+	resp, err := PostSync(hs.URL, "s3cret", "", []todo.Todo{local}, nil, 5*time.Second)
 	if err != nil {
 		t.Fatalf("PostSync: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestPostSyncRoundTrip(t *testing.T) {
 
 	// A second, identical push must not report a change — that is what stops
 	// idle syncs from broadcasting each other in a loop.
-	if _, err := PostSync(hs.URL, "s3cret", "", []todo.Todo{local}, 5*time.Second); err != nil {
+	if _, err := PostSync(hs.URL, "s3cret", "", []todo.Todo{local}, nil, 5*time.Second); err != nil {
 		t.Fatalf("second PostSync: %v", err)
 	}
 	if store.changed {
@@ -99,7 +99,7 @@ func TestPostSyncRoundTrip(t *testing.T) {
 func TestPostSyncTrimsTrailingSlash(t *testing.T) {
 	store := &fakeStore{}
 	hs := testServer(t, &Server{Token: "t", Store: store})
-	if _, err := PostSync(hs.URL+"/", "t", "", nil, 5*time.Second); err != nil {
+	if _, err := PostSync(hs.URL+"/", "t", "", nil, nil, 5*time.Second); err != nil {
 		t.Fatalf("PostSync with a trailing slash: %v", err)
 	}
 	if store.calls != 1 {
@@ -143,7 +143,7 @@ func TestSyncRejectsBadAuth(t *testing.T) {
 	}
 
 	// And the client surfaces the rejection rather than reporting an empty sync.
-	if _, err := PostSync(hs.URL, "wrong", "", nil, 5*time.Second); err == nil {
+	if _, err := PostSync(hs.URL, "wrong", "", nil, nil, 5*time.Second); err == nil {
 		t.Error("PostSync with a bad token returned no error")
 	}
 }
@@ -185,7 +185,7 @@ func TestSyncStoreErrorSurfaces(t *testing.T) {
 	store := &fakeStore{err: fmt.Errorf("disk on fire")}
 	hs := testServer(t, &Server{Token: "t", Store: store})
 
-	_, err := PostSync(hs.URL, "t", "", []todo.Todo{newTask("x", time.Now())}, 5*time.Second)
+	_, err := PostSync(hs.URL, "t", "", []todo.Todo{newTask("x", time.Now())}, nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("a failing store returned no error to the client")
 	}
@@ -220,7 +220,7 @@ func TestOnClientSyncFires(t *testing.T) {
 	var got time.Time
 	srv := &Server{Token: "t", Store: &fakeStore{}, OnClientSync: func(at time.Time) { got = at }}
 	hs := testServer(t, srv)
-	if _, err := PostSync(hs.URL, "t", "", nil, 5*time.Second); err != nil {
+	if _, err := PostSync(hs.URL, "t", "", nil, nil, 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	if got.IsZero() {
@@ -292,7 +292,7 @@ func TestEventsStreamDeliversChanges(t *testing.T) {
 	if hub.SubscriberCount() != 1 {
 		t.Fatalf("hub has %d subscribers, want the connected client", hub.SubscriberCount())
 	}
-	if _, err := PostSync(hs.URL, "t", "", []todo.Todo{newTask("new work", time.Now().UTC())}, 5*time.Second); err != nil {
+	if _, err := PostSync(hs.URL, "t", "", []todo.Todo{newTask("new work", time.Now().UTC())}, nil, 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	if !readSSE(t, body, "event: changed", 3*time.Second) {
@@ -483,7 +483,7 @@ func TestPostSyncSendsAndReportsVersion(t *testing.T) {
 	}))
 	defer hs.Close()
 
-	if _, err := PostSync(hs.URL, "t", "", nil, 5*time.Second); err != nil {
+	if _, err := PostSync(hs.URL, "t", "", nil, nil, 5*time.Second); err != nil {
 		t.Fatalf("PostSync: %v", err)
 	}
 	if got.Protocol != ProtocolVersion {
@@ -500,7 +500,7 @@ func TestPostSyncRefusesNewerServerWire(t *testing.T) {
 	}))
 	defer hs.Close()
 
-	_, err := PostSync(hs.URL, "t", "", nil, 5*time.Second)
+	_, err := PostSync(hs.URL, "t", "", nil, nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("a newer server wire must be refused")
 	}
@@ -517,7 +517,7 @@ func TestPostSyncSurfacesMismatchMessagePlainly(t *testing.T) {
 	}))
 	defer hs.Close()
 
-	_, err := PostSync(hs.URL, "t", "", nil, 5*time.Second)
+	_, err := PostSync(hs.URL, "t", "", nil, nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -550,7 +550,7 @@ func TestSyncErrorNamesBothVersionsWhenTheyDiffer(t *testing.T) {
 	store := &fakeStore{err: fmt.Errorf("SQL logic error: no such table: task_learnings (1)")}
 	hs := testServer(t, &Server{Token: "t", Store: store, Version: "v1.25.0"})
 
-	_, err := PostSync(hs.URL, "t", "v1.33.1", nil, 5*time.Second)
+	_, err := PostSync(hs.URL, "t", "v1.33.1", nil, nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("a failed merge must surface as an error")
 	}
@@ -573,7 +573,7 @@ func TestSyncErrorLeadsWithTheServersOwnWords(t *testing.T) {
 	store := &fakeStore{err: fmt.Errorf("disk is full")}
 	hs := testServer(t, &Server{Token: "t", Store: store, Version: "v1.33.1"})
 
-	_, err := PostSync(hs.URL, "t", "v1.33.1", nil, 5*time.Second)
+	_, err := PostSync(hs.URL, "t", "v1.33.1", nil, nil, 5*time.Second)
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -631,7 +631,7 @@ func TestVersionHeaderOmittedWhenUnknown(t *testing.T) {
 
 func TestPostSyncReportsTheServersVersion(t *testing.T) {
 	hs := testServer(t, &Server{Token: "t", Store: &fakeStore{}, Version: "v1.25.0"})
-	resp, err := PostSync(hs.URL, "t", "v1.33.1", nil, 5*time.Second)
+	resp, err := PostSync(hs.URL, "t", "v1.33.1", nil, nil, 5*time.Second)
 	if err != nil {
 		t.Fatalf("PostSync: %v", err)
 	}

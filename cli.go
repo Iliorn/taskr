@@ -184,8 +184,7 @@ func cliAdd(args []string) int {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
 	applyBiases(biasesFromSettings(settings))
-	applyStages(stagesFromSettings(settings))
-	applyShowBoard(!settings.BoardDisabled)
+	applyBoardSettings(settings)
 	repo := newSQLiteRepo()
 
 	// Resolve everything that's shared across all created tasks exactly once
