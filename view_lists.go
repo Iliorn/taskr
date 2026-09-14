@@ -966,21 +966,31 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 //
 // refreshTaskColMetrics sizes the title column from this same function, so the
 // width it reserves and the width the row draws cannot drift.
+// taskRowLabel splits a row's title cell into the three pieces fitTaskRowLabel
+// lays out. What goes where follows what the eye asks and when: the prefix
+// answers "can I pick this up?" at the left edge, before the title is read;
+// the badges are detail you only want once the title has told you which task
+// this is.
+//
+// Priority has no glyph. It is already the largest term in the Score column,
+// so the "!" it used to own said a second time what the number said first —
+// and "!" reads as an alarm, which is what overdue needed (see the status box).
 func (m *model) taskRowLabel(t *todo.Todo) (prefix, text, badges string) {
+	var p strings.Builder
 	if t.IsTimerRunning() {
-		prefix = "⧗ "
+		p.WriteString("⧗ ")
 	}
+	// One arrow, not two: a task in the middle of a chain is both, and the
+	// half that decides whether you can start it is the one worth a cell.
+	switch {
+	case m.cache.blockedSet[t.ID]:
+		p.WriteString("↧ ") // waiting on an unfinished dependency — sorts last
+	case m.cache.blockerSet[t.ID]:
+		p.WriteString("↥ ") // others depend on this — clearing it unblocks them
+	}
+	prefix = p.String()
 	text = t.Title
 	var b strings.Builder
-	if t.Priority == todo.PriorityHigh {
-		b.WriteString(" !")
-	}
-	if m.cache.blockerSet[t.ID] {
-		b.WriteString(" ↥") // others depend on this — clearing it unblocks them
-	}
-	if m.cache.blockedSet[t.ID] {
-		b.WriteString(" ↧") // waiting on an unfinished dependency
-	}
 	if t.IsRecurring() {
 		b.WriteString(" ↻")
 	}
@@ -1102,13 +1112,18 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	if selected {
 		cursorStr = cursorMark
 	}
+	// The status box holds one fact: where this task stands. Overdue outranks
+	// started because it is the one that wants a decision — you already know
+	// you started it. Blocked is not in here any more: the sort puts blocked
+	// work at the bottom, and the ↧ before the title says why it is there.
 	checkbox := "[ ]"
-	if t.Status == todo.Done {
+	switch {
+	case t.Status == todo.Done:
 		checkbox = "[✓]"
-	} else if len(t.TimeEntries) > 0 {
-		checkbox = "[>]"
-	} else if m.cache.blockedSet[t.ID] {
-		checkbox = "[~]" // blocked: waiting on an unfinished dependency
+	case t.IsOverdue():
+		checkbox = "[!]"
+	case len(t.TimeEntries) > 0:
+		checkbox = "[>]" // in progress: time has been logged against it
 	}
 	// +/- rather than a triangle: the row already opens with the ▶ cursor, and
 	// a second triangle one cell later read as a second cursor — two arrows on

@@ -530,8 +530,9 @@ func cliList(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
+	blockedSet := buildBlockedSet(todos)
 	rows := filterTopLevel(todos, opts)
-	if err := sortTodosByCLIMode(rows, *sortBy); err != nil {
+	if err := sortTodosByCLIMode(rows, *sortBy, blockedSet); err != nil {
 		fmt.Fprintf(os.Stderr, "taskr list: %v\n", err)
 		return 2
 	}
@@ -552,7 +553,6 @@ func cliList(args []string) int {
 			return 0
 		}
 	}
-	blockedSet := buildBlockedSet(todos)
 	printTaskTableWide(rows, blockedSet, *wide)
 	return 0
 }
@@ -649,8 +649,9 @@ func cliSearch(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
+	blockedSet := buildBlockedSet(todos)
 	rows := filterTopLevel(todos, opts)
-	if err := sortTodosByCLIMode(rows, *sortBy); err != nil {
+	if err := sortTodosByCLIMode(rows, *sortBy, blockedSet); err != nil {
 		fmt.Fprintf(os.Stderr, "taskr search: %v\n", err)
 		return 2
 	}
@@ -660,7 +661,6 @@ func cliSearch(args []string) int {
 	if *asJSON {
 		return emitJSON(rows)
 	}
-	blockedSet := buildBlockedSet(todos)
 	printTaskTable(rows, blockedSet)
 	return 0
 }
@@ -2597,7 +2597,7 @@ Tasks:
   taskr add "title" [flags]            add a new task (--like <ref> clones, --depends <ref>|^ blocks on, --start tracks)
   taskr add -                          batch add: one task per stdin line (flags apply to all; --chain links each
                                        line as depending on the previous — a plan typed in execution order)
-  taskr list [flags]                   list pending top-level tasks (ST: [ ] ready, [~] blocked, [✓] done)
+  taskr list [flags]                   list pending top-level tasks (ST: [ ] ready, [>] in progress, [!] overdue, [✓] done)
                                        review filters: --stale=30d (untouched that long), --unblocked-since=14d
                                        (every blocker now done, the last one recently), --sort=seq|due|size|age|idle|pri,
                                        --wide (AGE + IDLE columns), --search-word / --search-re
@@ -2707,7 +2707,7 @@ Flags (list / search):
   --pending       exclude completed (search only; inverts default)
   --focus         only today + overdue (list only)
   --ready         only actionable tasks — ST [ ] (no unfinished dependencies; list only)
-  --blocked       only tasks waiting on an unfinished dependency — ST [~] (list only)
+  --blocked       only tasks waiting on an unfinished dependency (these sort last; list only)
   --tag=NAME      only tasks carrying this tag
   --project=NAME  only tasks in this project
   --search=TERM   only tasks whose title contains TERM (list; redundant with 'search' verb)
@@ -2835,11 +2835,11 @@ func priorityLetter(p todo.Priority) string {
 	}
 }
 
-// printTaskTable renders rows as a fixed-column table. blockedSet maps task IDs
-// to true when the task is waiting on at least one unfinished dependency; those
-// tasks receive the [~] glyph in the ST column instead of [ ].
-func printTaskTable(rows []todo.Todo, blockedSet map[string]bool) {
-	printTaskTableWide(rows, blockedSet, false)
+// printTaskTable renders rows as a fixed-column table. blocked marks the tasks
+// waiting on an unfinished dependency: they sort last, and carry a ↧ before the
+// title saying why they are down there.
+func printTaskTable(rows []todo.Todo, blocked map[string]bool) {
+	printTaskTableWide(rows, blocked, false)
 }
 
 // printTaskTableWide is printTaskTable with the two time columns --wide adds:
@@ -2847,7 +2847,7 @@ func printTaskTable(rows []todo.Todo, blockedSet map[string]bool) {
 // They are opt-in rather than always shown because they are review columns, not
 // working ones — a daily `taskr list` doesn't need them, and every column costs
 // width the title would otherwise have.
-func printTaskTableWide(rows []todo.Todo, blockedSet map[string]bool, wide bool) {
+func printTaskTableWide(rows []todo.Todo, blocked map[string]bool, wide bool) {
 	if len(rows) == 0 {
 		fmt.Println("(no tasks)")
 		return
@@ -2897,12 +2897,17 @@ func printTaskTableWide(rows []todo.Todo, blockedSet map[string]bool, wide bool)
 		fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s%s\n", "ID", "ST", "SIZE", "PRI", "DUE", timeHdr, "TITLE")
 	}
 	for _, t := range rows {
+		// Same four states as the TUI's status column, same precedence: one
+		// fact about where the task stands, with overdue ahead of started.
+		// Blocked is not among them — these rows are already sorted last.
 		st := "[ ]"
 		switch {
 		case t.Status == todo.Done:
 			st = "[✓]"
-		case blockedSet[t.ID]:
-			st = "[~]" // blocked: waiting on an unfinished dependency
+		case t.IsOverdue():
+			st = "[!]"
+		case len(t.TimeEntries) > 0:
+			st = "[>]"
 		}
 		due := ""
 		if !t.DueDate.IsZero() {
@@ -2911,16 +2916,22 @@ func printTaskTableWide(rows []todo.Todo, blockedSet map[string]bool, wide bool)
 		// Lowercase the size letter to match the TUI list column — uppercase
 		// "M" looked like a hotkey hint.
 		sz := strings.ToLower(t.Size.Letter())
+		// Before the title, as in the TUI: it answers "can I pick this up?",
+		// which is asked before the title has been read.
+		title := t.Title
+		if blocked[t.ID] {
+			title = "↧ " + title
+		}
 		times := ""
 		if wide {
 			times = fmt.Sprintf(timeFmt, days(t.CreatedAt), days(t.ModifiedAt))
 		}
 		if projW > 0 {
 			fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s%-*s  %s\n",
-				t.ID[:8], st, sz, priorityLetter(t.Priority), due, times, projW, truncate(t.Project, projW), t.Title)
+				t.ID[:8], st, sz, priorityLetter(t.Priority), due, times, projW, truncate(t.Project, projW), title)
 		} else {
 			fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s%s\n",
-				t.ID[:8], st, sz, priorityLetter(t.Priority), due, times, t.Title)
+				t.ID[:8], st, sz, priorityLetter(t.Priority), due, times, title)
 		}
 	}
 }

@@ -242,7 +242,9 @@ func dependencySets(all []*todo.Todo) (blocked, blocker map[string]bool) {
 	blocker = make(map[string]bool)
 	pending := make(map[string]bool, len(all))
 	for i := range all {
-		if all[i].Status != todo.Done {
+		// The TUI's store never holds deleted tasks; the CLI's load path can,
+		// so the guard is what lets both share this one rule.
+		if all[i].Status != todo.Done && !all[i].Deleted {
 			pending[all[i].ID] = true
 		}
 	}

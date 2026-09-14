@@ -269,29 +269,10 @@ func unblockedSet(todos []todo.Todo, within time.Duration, now time.Time) map[st
 	return out
 }
 
-// buildBlockedSet returns a set of task IDs that are "blocked": each task has
-// at least one dependency that is still pending (not done and not deleted).
-// Mirrors the same logic as model.rebuildDependencySets, but as a pure
-// function suitable for CLI use without a model/cache.
+// buildBlockedSet is the CLI's view of dependencySets: same rule, over the
+// value slice the CLI load path hands out.
 func buildBlockedSet(todos []todo.Todo) map[string]bool {
-	pending := make(map[string]bool, len(todos))
-	for i := range todos {
-		if todos[i].Status != todo.Done && !todos[i].Deleted {
-			pending[todos[i].ID] = true
-		}
-	}
-	blocked := make(map[string]bool)
-	for i := range todos {
-		if todos[i].Status == todo.Done {
-			continue
-		}
-		for _, depID := range todos[i].Dependencies {
-			if pending[depID] {
-				blocked[todos[i].ID] = true
-				break
-			}
-		}
-	}
+	blocked, _ := dependencySets(todoPtrs(todos))
 	return blocked
 }
 
@@ -432,10 +413,14 @@ func cliSortNames() []string {
 // sortTodosByCLIMode orders rows for a CLI listing. Every order ends at ID so
 // it is total and the output is reproducible between runs, matching the
 // house rule for the comparators in storage.go.
-func sortTodosByCLIMode(rows []todo.Todo, mode string) error {
+// blocked (nil when the caller has none on hand) sinks work waiting on an
+// unfinished dependency below work that can be started, in the sequence order
+// only — an explicit --sort=due or --sort=size is an instruction to order by
+// that key alone.
+func sortTodosByCLIMode(rows []todo.Todo, mode string, blocked map[string]bool) error {
 	switch mode {
 	case "", "seq":
-		sortTodosByMode(rows, taskSortSequence)
+		sortTodosBySequenceWithRollupBy(rows, nil, blocked, sequenceScoreNow())
 	case "due":
 		sortTodosByMode(rows, taskSortDueDate)
 	case "size":

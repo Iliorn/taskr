@@ -704,8 +704,12 @@ var daTranslations = map[string]string{
 	"anything else fuzzy-matches the title, or the notes as text": "alt andet fuzzy-matcher titlen, eller noterne som tekst",
 
 	// ── Help: row symbols and scroll hints ──
-	"Row symbols":                   "Rækkesymboler",
-	"high priority":                 "høj prioritet",
+	"Row symbols":                "Rækkesymboler",
+	"ready to start (ST column)": "klar til at gå i gang (ST-kolonnen)",
+	"in progress — time has been logged against it (ST column)": "i gang — der er logget tid på den (ST-kolonnen)",
+	"overdue (ST column)": "forfalden (ST-kolonnen)",
+	"done (ST column)":    "færdig (ST-kolonnen)",
+	"blocked — waiting on an unfinished dependency; sorts last": "blokeret — venter på en uafsluttet afhængighed; sorteres nederst",
 	"timer running":                 "tidtagning kører",
 	"recurring task":                "gentagende opgave",
 	"subtasks done / total":         "delopgaver færdige / i alt",
@@ -1309,8 +1313,12 @@ var deTranslations = map[string]string{
 	"anything else fuzzy-matches the title, or the notes as text": "alles andere trifft den Titel unscharf oder die Notizen als Text",
 
 	// ── Help: row symbols and scroll hints ──
-	"Row symbols":                   "Zeilensymbole",
-	"high priority":                 "hohe Priorität",
+	"Row symbols":                "Zeilensymbole",
+	"ready to start (ST column)": "bereit (Spalte ST)",
+	"in progress — time has been logged against it (ST column)": "in Arbeit — es wurde Zeit erfasst (Spalte ST)",
+	"overdue (ST column)": "überfällig (Spalte ST)",
+	"done (ST column)":    "erledigt (Spalte ST)",
+	"blocked — waiting on an unfinished dependency; sorts last": "blockiert — wartet auf offene Abhängigkeit; sortiert zuletzt",
 	"timer running":                 "Uhr läuft",
 	"recurring task":                "wiederkehrende Aufgabe",
 	"subtasks done / total":         "Teilaufgaben fertig / gesamt",

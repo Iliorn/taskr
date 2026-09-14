@@ -133,32 +133,37 @@ func TestNarrowNoWrapTranslated(t *testing.T) {
 	}
 }
 
-// A High-priority task carries a trailing "!" in the task list so cycling
-// priority (p) gives visible feedback; a lower-priority task does not.
-func TestHighPriorityShowsExclamationInList(t *testing.T) {
-	hi := todo.New("Finish the audit")
+// A passed due date reaches the row as "[!]" in the status column. It used to
+// reach it only as colour, which a screenshot, a dim theme or a reader who does
+// not see the difference all lose; "!" was free because priority gave it up —
+// priority is already the largest term in the Score column.
+//
+// High priority must therefore carry no "!" of its own, or the alarm would mean
+// two different things on two different rows.
+func TestOverdueShowsExclamationInStatusColumn(t *testing.T) {
+	late := todo.New("Finish the audit")
+	late.DueDate = time.Now().Add(-48 * time.Hour)
+	hi := todo.New("Water the plants")
 	hi.Priority = todo.PriorityHigh
-	lo := todo.New("Water the plants")
-	lo.Priority = todo.PriorityLow
-	m := modelWithTasks(t, hi, lo)
+	m := modelWithTasks(t, late, hi)
 
-	var hiLine, loLine string
+	var lateLine, hiLine string
 	for _, line := range strings.Split(m.View(), "\n") {
 		if strings.Contains(line, "Finish the audit") {
-			hiLine = line
+			lateLine = line
 		}
 		if strings.Contains(line, "Water the plants") {
-			loLine = line
+			hiLine = line
 		}
 	}
-	if hiLine == "" || loLine == "" {
-		t.Fatalf("both task rows should render; hi=%q lo=%q", hiLine, loLine)
+	if lateLine == "" || hiLine == "" {
+		t.Fatalf("both task rows should render; late=%q hi=%q", lateLine, hiLine)
 	}
-	if !strings.Contains(hiLine, "!") {
-		t.Errorf("high-priority row should carry a '!': %q", hiLine)
+	if !strings.Contains(lateLine, "[!]") {
+		t.Errorf("overdue row should carry [!]: %q", lateLine)
 	}
-	if strings.Contains(loLine, "!") {
-		t.Errorf("low-priority row should have no '!': %q", loLine)
+	if strings.Contains(hiLine, "!") {
+		t.Errorf("high priority no longer marks the row with '!': %q", hiLine)
 	}
 }
 
@@ -1247,13 +1252,13 @@ func TestEveryListMarksItsCursorTheSameWay(t *testing.T) {
 
 // ── Row label: badges outlive the title ──────────────────────────────────────
 
-// The badges are four cells that change a decision — high priority, blocked,
-// recurring, how many subtasks are left. Concatenating them onto the title made
-// them the last runes of the string and so the first ones a narrow title column
-// threw away. The title is what has slack in it.
+// The badges are the cells that change a decision — recurring, and how many
+// subtasks are left. Concatenating them onto the title made them the last runes
+// of the string and so the first ones a narrow title column threw away. The
+// title is what has slack in it.
 func TestTaskRowBadgesSurviveTitleTruncation(t *testing.T) {
 	task := todo.New("A title long enough that it cannot possibly fit the column")
-	task.Priority = todo.PriorityHigh
+	task.Recurrence = "weekly"
 	sub := todo.NewSubtask("step one", task.ID)
 	m := modelWithTasks(t, task, sub)
 	m.termWidth = 70
@@ -1272,8 +1277,8 @@ func TestTaskRowBadgesSurviveTitleTruncation(t *testing.T) {
 	if !strings.Contains(row, ellipsis) {
 		t.Fatalf("this title should be clipped at width 70, so the test proves nothing: %q", row)
 	}
-	if !strings.Contains(row, "!") {
-		t.Errorf("the priority badge should outlive the clipped title: %q", row)
+	if !strings.Contains(row, "↻") {
+		t.Errorf("the recurrence badge should outlive the clipped title: %q", row)
 	}
 	if !strings.Contains(row, "(0/1)") {
 		t.Errorf("the subtask badge should outlive the clipped title: %q", row)

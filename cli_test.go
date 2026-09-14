@@ -885,8 +885,9 @@ func TestBuildBlockedSet(t *testing.T) {
 	}
 }
 
-// TestFilterTopLevelReadyBlocked exercises the --ready and --blocked filters
-// added alongside the [~] glyph so a future refactor can't silently break them.
+// TestFilterTopLevelReadyBlocked exercises the --ready and --blocked filters.
+// They are the only way to select on blockedness now that the ST column has no
+// glyph for it, so a refactor must not silently break them.
 func TestFilterTopLevelReadyBlocked(t *testing.T) {
 	prereq := todo.New("Prerequisite step")
 	dependent := todo.New("Depends on step")
@@ -929,27 +930,54 @@ func TestFilterTopLevelReadyBlocked(t *testing.T) {
 	})
 }
 
-// TestPrintTaskTableBlockedGlyph confirms that printTaskTable renders [~] for
-// blocked tasks and [ ] for unblocked pending tasks, matching the ST column spec.
-func TestPrintTaskTableBlockedGlyph(t *testing.T) {
-	blocker := todo.New("Blocker task")
+// The ST column carries one fact — where the task stands — in the same four
+// states the TUI uses, with overdue ahead of started. Blockedness is not among
+// them: it is expressed by sort position, so a blocked task that is otherwise
+// untouched reads [ ] like any other task you have not started.
+func TestPrintTaskTableStatusGlyphs(t *testing.T) {
+	plain := todo.New("Plain task")
+	started := todo.New("Started task")
+	started.TimeEntries = []todo.TimeEntry{{StartedAt: time.Now().Add(-time.Hour), StoppedAt: time.Now()}}
+	late := todo.New("Late task")
+	late.DueDate = time.Now().Add(-48 * time.Hour)
+	lateAndStarted := todo.New("Late started task")
+	lateAndStarted.DueDate = late.DueDate
+	lateAndStarted.TimeEntries = started.TimeEntries
+	finished := todo.New("Finished task")
+	finished.Status = todo.Done
 	blocked := todo.New("Blocked task")
-	blocked.AddDependency(blocker.ID)
+	blocked.AddDependency(plain.ID)
 
-	bs := buildBlockedSet([]todo.Todo{blocker, blocked})
 	out := captureStdout(t, func() {
-		printTaskTable([]todo.Todo{blocker, blocked}, bs)
+		printTaskTable([]todo.Todo{plain, started, late, lateAndStarted, finished, blocked},
+			map[string]bool{blocked.ID: true})
 	})
 
-	if !strings.Contains(out, "[~]") {
-		t.Errorf("blocked task row should contain [~], got:\n%s", out)
+	want := map[string]string{
+		"Plain task":        "[ ]",
+		"Started task":      "[>]",
+		"Late task":         "[!]",
+		"Late started task": "[!]", // overdue outranks started
+		"Finished task":     "[✓]",
+		"Blocked task":      "[ ]", // position says it, not a glyph
 	}
-	// The blocker itself is pending but not blocked — it should show [ ].
 	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, "Blocker task") {
-			if !strings.Contains(line, "[ ]") {
-				t.Errorf("unblocked pending task should show [ ], got: %s", line)
+		for title, glyph := range want {
+			if !strings.Contains(line, title) {
+				continue
 			}
+			if !strings.Contains(line, glyph) {
+				t.Errorf("%q should show %s, got: %s", title, glyph, line)
+			}
+		}
+	}
+	if strings.Contains(out, "[~]") {
+		t.Errorf("the blocked glyph is gone from the status column; output still has one:\n%s", out)
+	}
+	// It moved in front of the title, where it explains the sort position.
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "Blocked task") && !strings.Contains(line, "↧ Blocked task") {
+			t.Errorf("blocked row should carry ↧ before the title: %s", line)
 		}
 	}
 }

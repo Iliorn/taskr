@@ -1330,7 +1330,6 @@ func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
 // renderer, and every badge added since had to be added to both.
 func TestTitleColumnReservesExactlyWhatTheRowDraws(t *testing.T) {
 	task := todo.New("Ship the release")
-	task.Priority = todo.PriorityHigh
 	task.Recurrence = "weekly"
 	sub := todo.NewSubtask("write notes", task.ID)
 	m := modelWithTasks(t, task, sub)
@@ -1351,7 +1350,7 @@ func TestTitleColumnReservesExactlyWhatTheRowDraws(t *testing.T) {
 	if text != task.Title {
 		t.Errorf("title text = %q, want the bare title %q", text, task.Title)
 	}
-	for _, badge := range []string{"!", "↻", "(0/1)"} {
+	for _, badge := range []string{"↻", "(0/1)"} {
 		if !strings.Contains(badges, badge) {
 			t.Errorf("badges %q should carry %q", badges, badge)
 		}
