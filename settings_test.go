@@ -420,3 +420,65 @@ func TestClampLinesMarksTheCut(t *testing.T) {
 		t.Error("clampLines with no room should return nothing")
 	}
 }
+
+// The pane is one border with two columns of groups inside it — not one tall
+// column that runs off the bottom of a laptop screen, which is what collapsing
+// the old second pane into the first one first produced.
+func TestSettingsPaneSplitsIntoTwoColumns(t *testing.T) {
+	m := modelWithTasks(t, todo.New("Ranked task"))
+	m.tab = tabSettings
+	m.termHeight = 40
+	applyBiases(defaultBiases())
+	m.ensureCache()
+
+	wide, _ := m.renderSettingsSection(settingsTwoColMinWidth + 20)
+	paired := false
+	for _, line := range strings.Split(ansi.Strip(wide), "\n") {
+		if strings.Contains(line, "Theme") && strings.Contains(line, tr("Automatic")) {
+			paired = true
+		}
+	}
+	if !paired {
+		t.Errorf("a wide pane should put Appearance and Sync side by side:\n%s", ansi.Strip(wide))
+	}
+
+	// Too narrow for two columns: the groups stack instead of being clipped
+	// into each other.
+	narrow, _ := m.renderSettingsSection(settingsTwoColMinWidth - 1)
+	for _, line := range strings.Split(ansi.Strip(narrow), "\n") {
+		if strings.Contains(line, "Theme") && strings.Contains(line, tr("Automatic")) {
+			t.Errorf("a narrow pane should stack the groups:\n%s", ansi.Strip(narrow))
+		}
+	}
+}
+
+// The scroll is driven by the line number the renderer reports, so it has to
+// hold for a cursor in the right-hand column too — there the row is drawn
+// after the left column's text, not at the start of the line.
+func TestSettingsTwoColumnPaneReportsTheCursorLine(t *testing.T) {
+	m := settingsModel(t)
+	const w = settingsTwoColMinWidth + 20
+	for _, g := range settingsGroups {
+		for _, row := range g.rows {
+			if !settingsSelectable(row) || !m.settingsRowVisible(row) {
+				continue
+			}
+			m.settingsCursor = row
+			content, selected := m.renderSettingsSection(w)
+			lines := strings.Split(strings.TrimRight(ansi.Strip(content), "\n"), "\n")
+			drawn := -1
+			for i, line := range lines {
+				if strings.Contains(line, strings.TrimSpace(cursorMark)) {
+					drawn = i
+					break
+				}
+			}
+			if drawn < 0 {
+				t.Fatalf("row %d: no cursor mark in the rendered pane:\n%s", row, ansi.Strip(content))
+			}
+			if selected != drawn {
+				t.Errorf("row %d: selected line = %d, drawn on line %d:\n%s", row, selected, drawn, ansi.Strip(content))
+			}
+		}
+	}
+}

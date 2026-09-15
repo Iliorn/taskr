@@ -1358,11 +1358,13 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 
 // ── Settings list ─────────────────────────────────────────────────────────────
 
-// Settings is one pane of grouped rows. It used to be two — Preferences beside
-// Sequencer — which spent a second border, a second scroll position and half
-// the width of the tab on four ranking knobs, and asked the reader to notice
-// that the cursor had crossed from one document into another. The knobs are a
-// group like Sync or Server.
+// Settings is one pane of grouped rows, laid out in two columns when the
+// terminal is wide enough. It used to be two *panes* — Preferences beside
+// Sequencer — which spent a second border and a second scroll position on four
+// ranking knobs, and asked the reader to notice that the cursor had crossed
+// from one document into another. One border, two columns: the knobs are a
+// group like Sync or Server, and the pane still fits on a laptop screen
+// instead of running off the bottom as one tall column.
 //
 // The grouping is the part that was load-bearing: fifteen rows in one flat
 // column left "Listen" and "Server token" reading as loose app settings
@@ -1414,6 +1416,20 @@ var settingsGroups = []settingsGroup{
 		settingCheckUpdate,
 	}},
 }
+
+// The pane is drawn as two columns of groups: the first settingsColumnSplit
+// groups on the left, the rest on the right. The split is a group boundary, so
+// the column-major reading order is exactly settingsNavOrder's order — up/down
+// walks the left column, then continues at the top of the right one, and no
+// navigation code has to know about columns at all.
+//
+// Below settingsTwoColMinWidth a column would be too narrow for a label and
+// its value, so the pane falls back to the single column.
+const (
+	settingsColumnSplit    = 3
+	settingsTwoColMinWidth = 96
+	settingsColGap         = 3
+)
 
 // settingsSelectable reports whether the cursor may land on a row. Version is
 // a fact, not a control: enter on it did nothing, so stopping there was a dead
@@ -1652,31 +1668,49 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		return cursor + labelStyle.Render(padRight(labels[id], labelW)) + helpStyle.Render(value)
 	}
 
+	// renderColumn draws one column's worth of groups and reports the line the
+	// cursor row landed on (-1 when the cursor is not in this column). colW is
+	// the column's own width, so the bias preview sizes its titles to the
+	// column it sits in rather than to the whole pane.
+	renderColumn := func(groups []settingsGroup, colW int) ([]string, int) {
+		var lines []string
+		selected := -1
+		for _, g := range groups {
+			rows := m.visibleGroupRows(g)
+			if len(rows) == 0 {
+				continue
+			}
+			if len(lines) > 0 {
+				lines = append(lines, "")
+			}
+			lines = append(lines, cursorGap+headerStyle.Render(tr(g.title)))
+			for _, id := range rows {
+				if id == m.settingsCursor {
+					selected = len(lines)
+				}
+				lines = append(lines, renderRow(id))
+			}
+			// Live preview: the top-N tasks ranked with the current knob values is
+			// the whole account the pane gives of a bias change — a prose tagline
+			// for the mix said less than the five rows that actually move.
+			if g.preview {
+				if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, colW); preview != "" {
+					lines = append(lines, strings.Split(strings.TrimRight(preview, "\n"), "\n")...)
+				}
+			}
+		}
+		return lines, selected
+	}
+
 	var lines []string
 	selected := -1
-	for _, g := range settingsGroups {
-		rows := m.visibleGroupRows(g)
-		if len(rows) == 0 {
-			continue
-		}
-		if len(lines) > 0 {
-			lines = append(lines, "")
-		}
-		lines = append(lines, cursorGap+headerStyle.Render(tr(g.title)))
-		for _, id := range rows {
-			if id == m.settingsCursor {
-				selected = len(lines)
-			}
-			lines = append(lines, renderRow(id))
-		}
-		// Live preview: the top-N tasks ranked with the current knob values is
-		// the whole account the pane gives of a bias change — a prose tagline
-		// for the mix said less than the five rows that actually move.
-		if g.preview {
-			if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, w); preview != "" {
-				lines = append(lines, strings.Split(strings.TrimRight(preview, "\n"), "\n")...)
-			}
-		}
+	if w >= settingsTwoColMinWidth {
+		colW := (w - settingsColGap) / 2
+		left, leftSel := renderColumn(settingsGroups[:settingsColumnSplit], colW)
+		right, rightSel := renderColumn(settingsGroups[settingsColumnSplit:], colW)
+		lines, selected = joinSettingsColumns(left, leftSel, right, rightSel, colW)
+	} else {
+		lines, selected = renderColumn(settingsGroups, w)
 	}
 
 	if m.updateStatus != "" {
@@ -1694,6 +1728,52 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		}
 	}
 	return strings.Join(lines, "\n") + "\n", selected
+}
+
+// joinSettingsColumns lays the two columns of groups side by side inside the
+// one pane. The columns are top-aligned, so a row's line number in the joined
+// block is its index in its own column — which is exactly what the pane's
+// scroll (fitSettingsPane) is given, with no second coordinate system to keep
+// in step. Lines are padded to the column width with ansi.StringWidth, not
+// len(): every row carries styling, and byte length would indent the right
+// column by the width of the escape sequences.
+func joinSettingsColumns(left []string, leftSel int, right []string, rightSel, colW int) ([]string, int) {
+	n := len(left)
+	if len(right) > n {
+		n = len(right)
+	}
+	out := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		var l, r string
+		if i < len(left) {
+			l = left[i]
+		}
+		if i < len(right) {
+			r = right[i]
+		}
+		if r == "" {
+			// Nothing to the right of this line, so a value wider than its
+			// column share may run on into the empty lane — which is how
+			// "Board columns" keeps showing its whole list of columns.
+			out = append(out, l)
+			continue
+		}
+		// With a row to the right, the left line is clipped to its share
+		// instead: the right column has to start at the same x on every line
+		// or it stops reading as a column, and a long value shoving its
+		// neighbour sideways is worse than an ellipsis.
+		l = ansi.Truncate(l, colW, ellipsis)
+		pad := colW + settingsColGap - ansi.StringWidth(l)
+		if pad < settingsColGap {
+			pad = settingsColGap
+		}
+		out = append(out, l+strings.Repeat(" ", pad)+r)
+	}
+	selected := leftSel
+	if selected < 0 {
+		selected = rightSel
+	}
+	return out, selected
 }
 
 // renderSettingsList preserves a plain, unboxed rendering for focused unit
