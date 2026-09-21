@@ -144,3 +144,46 @@ func stopOtherRunningTimers(todos []todo.Todo, exceptID string) []*todo.Todo {
 	}
 	return stopped
 }
+
+// Priority is a statement about a whole subtree: a task the user has marked
+// low is low including everything it is made of, so a subtask must never
+// outrank its parent. Unlike deadlines — where a child that slips pushes its
+// ancestors out (extendAncestorsDue) — priority is clamped *downward* only.
+// Raising a subtask never lifts the parent the user deliberately parked; the
+// child is capped instead, and a parent moved down takes its subtree with it.
+// Both directions are enforced on every edit, on both surfaces, so the
+// invariant holds no matter which end of the tree the user touched.
+
+// clampPriorityToParent caps t at its parent's priority, reporting whether it
+// had to. A missing or tombstoned parent leaves t alone: an orphan has no cap.
+func clampPriorityToParent(get func(string) *todo.Todo, t *todo.Todo) bool {
+	if t == nil || t.ParentID == "" {
+		return false
+	}
+	parent := get(t.ParentID)
+	if parent == nil || parent.Deleted || t.Priority <= parent.Priority {
+		return false
+	}
+	t.SetPriority(parent.Priority)
+	return true
+}
+
+// clampDescendantsPriority caps every live descendant of parent at parent's
+// priority and returns the ones it changed, for dirty tracking / the save set.
+// Capping the whole subtree against the root is enough: the parent's priority
+// is the subtree's ceiling, and deeper caps already hold among themselves.
+func clampDescendantsPriority(children func(string) []string, get func(string) *todo.Todo, parent *todo.Todo) []*todo.Todo {
+	if parent == nil {
+		return nil
+	}
+	var changed []*todo.Todo
+	for _, id := range descendantIDsFrom(children, parent.ID)[1:] {
+		child := get(id)
+		if child == nil || child.Deleted || child.Priority <= parent.Priority {
+			continue
+		}
+		child.SetPriority(parent.Priority)
+		changed = append(changed, child)
+	}
+	return changed
+}

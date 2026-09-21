@@ -1344,6 +1344,37 @@ func (m *model) extendParentDueIfNeeded(subID string) []string {
 	return ids
 }
 
+// cyclePriority steps t through Low → Medium → High → Low and keeps the task
+// tree legal around it: the step is capped at the parent's priority, and
+// whatever value survives is pushed down over any subtask that outranks it.
+// Reports whether the cap clawed the step back, so the caller can say why the
+// keypress moved nothing. Shared by the list pane's `p` and the detail pane's
+// Priority row — one rule, however the user reaches it.
+func (m *model) cyclePriority(t *todo.Todo) bool {
+	// The cap can touch a parent or a whole subtree, so undo captures the
+	// full tree unless this task stands alone.
+	if t.ParentID != "" || m.subtaskCount(t.ID) > 0 {
+		m.pushUndo("cycle priority")
+	} else {
+		m.pushUndo("cycle priority", t.ID)
+	}
+	switch t.Priority {
+	case todo.PriorityLow:
+		t.SetPriority(todo.PriorityMedium)
+	case todo.PriorityMedium:
+		t.SetPriority(todo.PriorityHigh)
+	default:
+		t.SetPriority(todo.PriorityLow)
+	}
+	capped := clampPriorityToParent(m.get, t)
+	ids := []string{t.ID}
+	for _, child := range clampDescendantsPriority(m.subtaskIDs, m.get, t) {
+		ids = append(ids, child.ID)
+	}
+	m.markModified(ids...)
+	return capped
+}
+
 // propagateDueToSubtasks copies parentID's due date (including a cleared zero
 // date) to every descendant and returns the changed IDs for dirty tracking.
 func (m *model) propagateDueToSubtasks(parentID string) []string {

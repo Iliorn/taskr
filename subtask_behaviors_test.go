@@ -119,6 +119,95 @@ func TestClearingParentDueClearsDescendants(t *testing.T) {
 	}
 }
 
+// ── Priority never outranks the parent ──────────────────────────────────────
+
+func TestParentDowngradeTakesTheSubtreeDown(t *testing.T) {
+	parent := makeSub("p", "parent", "", 0)
+	parent.Priority = todo.PriorityHigh
+	child := makeSub("c", "child", "p", time.Second)
+	child.Priority = todo.PriorityHigh
+	grandchild := makeSub("g", "grandchild", "c", 2*time.Second)
+	grandchild.Priority = todo.PriorityMedium // already below the new cap
+	unrelated := makeSub("u", "unrelated", "", 3*time.Second)
+	unrelated.Priority = todo.PriorityHigh
+
+	m := modelWithTasks(t, parent, child, grandchild, unrelated)
+	m.cyclePriority(m.get("p")) // High → Low
+
+	if got := m.get("p").Priority; got != todo.PriorityLow {
+		t.Fatalf("parent priority = %v, want low", got)
+	}
+	if got := m.get("c").Priority; got != todo.PriorityLow {
+		t.Errorf("child priority = %v, want low (followed the parent down)", got)
+	}
+	if got := m.get("g").Priority; got != todo.PriorityLow {
+		t.Errorf("grandchild priority = %v, want low (the cap is transitive)", got)
+	}
+	if got := m.get("u").Priority; got != todo.PriorityHigh {
+		t.Errorf("unrelated priority = %v, want high (untouched)", got)
+	}
+}
+
+func TestSubtaskCannotOutrankItsParent(t *testing.T) {
+	parent := makeSub("p", "parent", "", 0)
+	parent.Priority = todo.PriorityLow
+	child := makeSub("c", "child", "p", time.Second)
+	child.Priority = todo.PriorityLow
+
+	m := modelWithTasks(t, parent, child)
+	if !m.cyclePriority(m.get("c")) { // Low → Medium, capped back to Low
+		t.Fatal("cycling a subtask past its parent should report the cap")
+	}
+	if got := m.get("c").Priority; got != todo.PriorityLow {
+		t.Errorf("child priority = %v, want low (capped at the parent)", got)
+	}
+	if got := m.get("p").Priority; got != todo.PriorityLow {
+		t.Errorf("parent priority = %v, want low — a subtask never lifts its parent", got)
+	}
+}
+
+func TestPriorityCycleIsUncappedBelowTheParent(t *testing.T) {
+	parent := makeSub("p", "parent", "", 0)
+	parent.Priority = todo.PriorityHigh
+	child := makeSub("c", "child", "p", time.Second)
+	child.Priority = todo.PriorityLow
+
+	m := modelWithTasks(t, parent, child)
+	if m.cyclePriority(m.get("c")) { // Low → Medium, under the cap
+		t.Error("a step that stays below the parent should not report a cap")
+	}
+	if got := m.get("c").Priority; got != todo.PriorityMedium {
+		t.Errorf("child priority = %v, want medium", got)
+	}
+}
+
+func TestAnOrphanedSubtaskHasNoCap(t *testing.T) {
+	// The parent is gone (tombstoned or never loaded): nothing to clamp
+	// against, so the user keeps full control of the task that is left.
+	orphan := makeSub("o", "orphan", "missing", 0)
+	orphan.Priority = todo.PriorityMedium
+
+	m := modelWithTasks(t, orphan)
+	if m.cyclePriority(m.get("o")) {
+		t.Error("orphan reported a cap it has no parent for")
+	}
+	if got := m.get("o").Priority; got != todo.PriorityHigh {
+		t.Errorf("orphan priority = %v, want high", got)
+	}
+}
+
+func TestNewSubtaskInheritsTheParentCap(t *testing.T) {
+	parent := todo.New("parent")
+	parent.ID = "p"
+	parent.Priority = todo.PriorityLow
+
+	sub := todo.NewSubtask("child", parent.ID) // defaults to medium
+	sub.InheritContextFrom(&parent)
+	if got := sub.Priority; got != todo.PriorityLow {
+		t.Errorf("new subtask priority = %v, want low (capped at the parent)", got)
+	}
+}
+
 // ── Auto-close parent ───────────────────────────────────────────────────────
 
 func TestAutoCloseOffDoesNothing(t *testing.T) {

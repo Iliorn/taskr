@@ -540,16 +540,12 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		m.markModified(t.ID)
 		return m, nil
 	case fieldPriority:
-		m.pushUndo("cycle priority", t.ID)
-		switch t.Priority {
-		case todo.PriorityLow:
-			t.SetPriority(todo.PriorityMedium)
-		case todo.PriorityMedium:
-			t.SetPriority(todo.PriorityHigh)
-		default:
-			t.SetPriority(todo.PriorityLow)
+		if m.cyclePriority(t) {
+			// Without this the keypress looks dead: the cycle ran, the cap put
+			// the value straight back, and nothing on screen moved.
+			m.flashInfo(tr("A subtask can't outrank its parent"))
+			return m, clearErrAfter()
 		}
-		m.markModified(t.ID)
 		return m, nil
 	case fieldSize:
 		// Cycle Medium → Small → Large → Medium. Starts at Medium so the first

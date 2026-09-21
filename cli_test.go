@@ -1246,6 +1246,65 @@ func TestCliEditParentDuePropagatesAndClearsSubtree(t *testing.T) {
 	}
 }
 
+func TestCliEditParentPriorityClampsTheSubtree(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	if code := cliAdd([]string{"CLI priority clamp parent", "--p", "h"}); code != 0 {
+		t.Fatalf("add parent: exit %d", code)
+	}
+	_, tasks, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load parent: %v", err)
+	}
+	parent, err := findTaskByRef(todoPtrs(tasks), "CLI priority clamp parent")
+	if err != nil {
+		t.Fatalf("find parent: %v", err)
+	}
+	if code := cliSubtask([]string{parent.ID[:8], "CLI priority clamp child"}); code != 0 {
+		t.Fatalf("add child: exit %d", code)
+	}
+	_, tasks, _ = loadForCLI()
+	child, err := findTaskByRef(todoPtrs(tasks), "CLI priority clamp child")
+	if err != nil {
+		t.Fatalf("find child: %v", err)
+	}
+	if code := cliSubtask([]string{child.ID[:8], "CLI priority clamp grandchild"}); code != 0 {
+		t.Fatalf("add grandchild: exit %d", code)
+	}
+	// The whole subtree is high, then the parent is parked at low.
+	for _, ref := range []string{child.ID[:8], "CLI priority clamp grandchild"} {
+		if code := cliEdit([]string{ref, "--p", "h"}); code != 0 {
+			t.Fatalf("raise %s: exit %d", ref, code)
+		}
+	}
+	if code := cliEdit([]string{parent.ID[:8], "--p", "l"}); code != 0 {
+		t.Fatalf("lower parent: exit %d", code)
+	}
+	_, tasks, _ = loadForCLI()
+	for _, title := range []string{"CLI priority clamp parent", "CLI priority clamp child", "CLI priority clamp grandchild"} {
+		task, findErr := findTaskByRef(todoPtrs(tasks), title)
+		if findErr != nil {
+			t.Fatalf("find %q: %v", title, findErr)
+		}
+		if task.Priority != todo.PriorityLow {
+			t.Errorf("%s priority = %v after the parent went low, want low", task.Title, task.Priority)
+		}
+	}
+
+	// And a subtask raised above the parent is capped, not granted.
+	if code := cliEdit([]string{child.ID[:8], "--p", "h"}); code != 0 {
+		t.Fatalf("raise child: exit %d", code)
+	}
+	_, tasks, _ = loadForCLI()
+	child, _ = findTaskByRef(todoPtrs(tasks), "CLI priority clamp child")
+	parent, _ = findTaskByRef(todoPtrs(tasks), "CLI priority clamp parent")
+	if child.Priority != todo.PriorityLow {
+		t.Errorf("child priority = %v, want low (capped at the parent)", child.Priority)
+	}
+	if parent.Priority != todo.PriorityLow {
+		t.Errorf("parent priority = %v, want low — a subtask never lifts its parent", parent.Priority)
+	}
+}
+
 // An explicit flag overrides the matching token in the title.
 func TestCliAddFlagOverridesToken(t *testing.T) {
 	setTestHome(t, t.TempDir())

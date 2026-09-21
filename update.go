@@ -725,6 +725,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// task here, and put the cursor back on it below unless the key was a
 	// navigation key that moved the cursor on purpose.
 	anchorID, anchorCursor := "", m.cursor
+	// Set by a key that raises a toast but must not skip the anchor/clamp
+	// bookkeeping below; returned with the model at the end.
+	var flashCmd tea.Cmd
 	if _, drilled := m.drillTaskList(); drilled {
 		if t := m.currentTodo(); t != nil {
 			anchorID = t.ID
@@ -1017,17 +1020,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "p":
 			if (m.tab == tabTasks && !m.showHistory) || m.drilledIntoTasks() {
-				if t := m.currentTodo(); t != nil {
-					m.pushUndo("cycle priority", t.ID)
-					switch t.Priority {
-					case todo.PriorityLow:
-						t.SetPriority(todo.PriorityMedium)
-					case todo.PriorityMedium:
-						t.SetPriority(todo.PriorityHigh)
-					default:
-						t.SetPriority(todo.PriorityLow)
-					}
-					m.markModified(t.ID)
+				if t := m.currentTodo(); t != nil && m.cyclePriority(t) {
+					m.flashInfo(tr("A subtask can't outrank its parent"))
+					flashCmd = clearErrAfter()
 				}
 			}
 		}
@@ -1055,7 +1050,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tabTags:
 		m.clampListOffsetFor(m.tagTabCursor, len(m.getFilteredTagsForTab()))
 	}
-	return m, nil
+	return m, flashCmd
 }
 
 // ── List helper methods ───────────────────────────────────────────────────────

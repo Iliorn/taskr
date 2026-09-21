@@ -1411,7 +1411,7 @@ func cliEdit(args []string) int {
 	}
 	var saveSet []*todo.Todo
 	var edited []*todo.Todo
-	var allPropagated, allBumped []*todo.Todo
+	var allPropagated, allBumped, allCapped []*todo.Todo
 	for _, t := range targets {
 		changed, code := editOneTask(t, todos, editFields{
 			title: *title, priority: *priority, size: *size, stage: *stage,
@@ -1420,7 +1420,7 @@ func cliEdit(args []string) int {
 			addTag: *addTag, removeTag: *removeTag,
 			addDep: *addDep, removeDep: *removeDep,
 			note: noteText, appendNote: appendText, clearNote: *clearNote,
-		}, &saveSet, &allPropagated, &allBumped)
+		}, &saveSet, &allPropagated, &allBumped, &allCapped)
 		if code != 0 {
 			return code
 		}
@@ -1451,6 +1451,9 @@ func cliEdit(args []string) int {
 	for _, a := range allBumped {
 		fmt.Fprintf(os.Stderr, "bumped  %s  %s  due → %s\n", a.ID[:8], a.Title, a.DueDate.Format("02-01-06"))
 	}
+	for _, c := range allCapped {
+		fmt.Fprintf(os.Stderr, "capped  %s  %s  priority → %s\n", c.ID[:8], c.Title, c.Priority.String())
+	}
 	return 0
 }
 
@@ -1472,8 +1475,9 @@ type editFields struct {
 // (and any due-date propagation to the two side-effect lists). It returns a
 // non-zero exit code on a usage error, having reported it — the caller returns
 // before any Save, so a failure on the third ref leaves nothing persisted.
-func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propagatedOut, bumpedOut *[]*todo.Todo) (bool, int) {
+func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propagatedOut, bumpedOut, cappedOut *[]*todo.Todo) (bool, int) {
 	changed := false
+	priorityEdited := false
 	title, priority, size, stage := &f.title, &f.priority, &f.size, &f.stage
 	due, start, project := &f.due, &f.start, &f.project
 	clearDue, clearStart, clearProject := &f.clearDue, &f.clearStart, &f.clearProject
@@ -1487,6 +1491,7 @@ func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propaga
 	if *priority != "" {
 		t.SetPriority(parsePriorityFlag(*priority))
 		changed = true
+		priorityEdited = true
 	}
 	if *size != "" {
 		t.SetSize(parseSizeFlag(*size))
@@ -1596,6 +1601,19 @@ func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propaga
 		return changed, 0
 	}
 	*saveSet = append(*saveSet, t)
+	if priorityEdited {
+		children, get := sliceTaskLookups(todos)
+		// Cap the task itself against its parent first — a subtask never lifts
+		// the parent (see the note in taskops.go) — then push the value that
+		// survived down the subtree, so a parent moved to low takes its
+		// children with it. In that order each task is clamped once.
+		if clampPriorityToParent(get, t) {
+			*cappedOut = append(*cappedOut, t) // already in saveSet
+		}
+		capped := clampDescendantsPriority(children, get, t)
+		*saveSet = append(*saveSet, capped...)
+		*cappedOut = append(*cappedOut, capped...)
+	}
 	if *clearDue || *due != "" {
 		children, get := sliceTaskLookups(todos)
 		// A parent deadline applies to the full subtree, including clearing it.
