@@ -200,7 +200,10 @@ func TestDetailPanePlacement(t *testing.T) {
 	// Column order: the two panels are the same two boxes either way, so the
 	// assertion is which border title comes first on the row that holds both.
 	// The detail panel titles itself with the task, so the selected task's
-	// title is what marks that column.
+	// title is what marks that column. Which task is selected is asked, not
+	// assumed: the two are created back to back, and on Windows' coarse clock
+	// they share a CreatedAt, so the order falls through to the random ID.
+	selected := m.currentTodo().Title
 	titleRow := func(m model) string {
 		for _, line := range strings.Split(ansi.Strip(m.View()), "\n") {
 			if strings.Contains(line, "╭─ ") && strings.Count(line, "╭─ ") == 2 {
@@ -215,7 +218,7 @@ func TestDetailPanePlacement(t *testing.T) {
 	if row == "" {
 		t.Fatal("right: no row carries both panel titles")
 	}
-	if strings.Index(row, tr("Overview")) > strings.Index(row, "Pay rent") {
+	if strings.Index(row, tr("Overview")) > strings.Index(row, selected) {
 		t.Errorf("right: the list should come first:\n%s", row)
 	}
 
@@ -224,7 +227,7 @@ func TestDetailPanePlacement(t *testing.T) {
 	if row == "" {
 		t.Fatal("left: no row carries both panel titles")
 	}
-	if strings.Index(row, tr("Overview")) < strings.Index(row, "Pay rent") {
+	if strings.Index(row, tr("Overview")) < strings.Index(row, selected) {
 		t.Errorf("left: the detail should come first:\n%s", row)
 	}
 
