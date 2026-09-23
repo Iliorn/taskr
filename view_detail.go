@@ -772,17 +772,20 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 		if titleTrunc < 5 {
 			titleTrunc = 5
 		}
-		label := checkbox + " " + padRight(truncate(t.Title, titleTrunc), titleTrunc) + " |"
+		// No "|" frame around the bar: the ruler above already marks where the
+		// chart starts and ends, and on a task with no dates the frame was all
+		// the row drew — two stray bars around an empty span.
+		label := checkbox + " " + padRight(truncate(t.Title, titleTrunc), titleTrunc) + "  "
 
 		kind, at := fillGanttBar(t, minDate, totalDays, chartW, todayPos, barRunes, barColors)
-		datesSuffix := "|"
+		datesSuffix := ""
 		switch kind {
 		case ganttSpan:
-			datesSuffix = fmt.Sprintf("| %s→%s", t.StartDate.Format("02-01"), t.DueDate.Format("02-01"))
+			datesSuffix = fmt.Sprintf("  %s→%s", t.StartDate.Format("02-01"), t.DueDate.Format("02-01"))
 		case ganttPoint:
 			// One date, so one date is what the suffix says — writing it as a
 			// span would invent the end the task does not have.
-			datesSuffix = fmt.Sprintf("| %c %s", ganttMarkerRune(t), at.Format("02-01"))
+			datesSuffix = fmt.Sprintf("  %c %s", ganttMarkerRune(t), at.Format("02-01"))
 		}
 
 		if isSelected {

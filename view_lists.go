@@ -1261,10 +1261,16 @@ func (m model) renderProjectListContent(projects []string) string {
 	// or the "Project" / "Active" headers butt up against each other.
 	projW := contentFitWidth(m.termWidth, nameMax, 4, len([]rune(projHdr))+4)
 
+	// The counts are bare numbers right-aligned under their headings. Each
+	// used to repeat its heading ("2 active   0 done   1 overdue"), which
+	// tripled the words on the row without adding a fact.
+	activeHdr, doneHdr, overdueHdr := tr("Active"), tr("Done"), tr("Overdue")
+	gap := strings.Repeat(" ", listColGap)
+	countCol := func(v, hdr string) string { return padLeft(v, len([]rune(hdr))) }
+
 	const prefix = "  "
 	headerLeft := prefix + padRight(projHdr, projW) +
-		padRight(tr("Active"), projCountColWidth) +
-		padRight(tr("Done"), projDoneColWidth) + tr("Overdue")
+		activeHdr + gap + doneHdr + gap + overdueHdr
 	padW := w - len([]rune(headerLeft))
 	if padW < 1 {
 		padW = 1
@@ -1306,11 +1312,11 @@ func (m model) renderProjectListContent(projects []string) string {
 		// 1 trailing space before the Active column — same rule as the title col
 		// on the Tasks tab.
 		nameCol := padRight(truncate(p, projW-1), projW)
-		activeStr := padRight(fmt.Sprintf(tr("%d active"), activeCnt), projCountColWidth)
-		doneStr := padRight(fmt.Sprintf(tr("%d done"), doneCnt), projDoneColWidth)
-		overdueStr := "─"
+		activeStr := countCol(fmt.Sprint(activeCnt), activeHdr) + gap
+		doneStr := countCol(fmt.Sprint(doneCnt), doneHdr) + gap
+		overdueStr := countCol("─", overdueHdr)
 		if overdueCnt > 0 {
-			overdueStr = fmt.Sprintf(tr("%d overdue"), overdueCnt)
+			overdueStr = countCol(fmt.Sprint(overdueCnt), overdueHdr)
 		}
 		switch {
 		case i == m.projectCursor:

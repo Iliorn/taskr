@@ -85,13 +85,6 @@ const (
 	ganttSuffixWidth  = 16
 	ganttChartPadding = 8
 
-	// Projects tab count columns. Sized so the typical 1-2-digit count leaves a
-	// ~5-char visible gap before the next column, matching the Tasks tab's
-	// score→due→size rhythm. Active column holds "N active" (max 10 chars for
-	// "999 active"); Done column holds "N done" (max 8 chars for "999 done").
-	projCountColWidth = 13
-	projDoneColWidth  = 11
-
 	commentPrefixLen    = 22
 	detailLabelColWidth = 14
 
