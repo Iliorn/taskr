@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +21,14 @@ import (
 // sync on it for the first time.
 func firstSyncHome(t *testing.T, titles ...string) {
 	t.Helper()
-	setTestHome(t, t.TempDir())
+	// A space in the home on purpose: macOS keeps state under "Application
+	// Support", and the adopt-remote notice prints a path meant to be pasted.
+	// Testing only space-free Linux paths is how that notice shipped unquoted.
+	home := filepath.Join(t.TempDir(), "with space")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	setTestHome(t, home)
 	if err := openStore(); err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -137,13 +147,19 @@ func TestCLISyncAdoptRemote(t *testing.T) {
 	if len(live) != 1 || live[0].Title != "The fleet's task" {
 		t.Fatalf("after adopt-remote the store should hold the fleet's list, got %+v", live)
 	}
-	// The backup is real, is an export, and the message says where it is.
-	idx := strings.Index(out, "pre-sync-backup-")
-	if idx < 0 {
-		t.Fatalf("the notice should name the backup file:\n%s", out)
+	// The backup is real, is an export, and the message says where it is —
+	// as a command that survives being pasted. The file is found on disk
+	// rather than cut out of the sentence: on macOS the state directory is
+	// "Application Support", and splitting the notice on spaces is exactly
+	// the mistake a user's shell would make with an unquoted path.
+	matches, err := filepath.Glob(pathFor(pathState, "pre-sync-backup-*.json"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("want exactly one backup in the state dir, got %v (err %v)", matches, err)
 	}
-	path := out[strings.LastIndex(out[:idx], " ")+1:]
-	path = path[:strings.Index(path, ".json")+len(".json")]
+	path := matches[0]
+	if want := "taskr import " + shellArg(path, runtime.GOOS); !strings.Contains(out, want) {
+		t.Errorf("the notice should carry a pasteable %q:\n%s", want, out)
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read backup: %v", err)
@@ -214,5 +230,39 @@ func TestAutoSyncPausesOnAnUnansweredFirstSync(t *testing.T) {
 	}
 	if pushed != 0 {
 		t.Errorf("TUI auto-sync uploaded on an unanswered first sync (%d request(s))", pushed)
+	}
+}
+
+// The recovery command is printed to be pasted, so a path with a space must
+// come out as one argument. POSIX is checked by actually running sh, which is
+// the only honest test of a quoting rule.
+func TestShellArgQuotesWhatAShellWouldSplit(t *testing.T) {
+	cases := []struct{ in, goos, want string }{
+		{"/home/u/.local/state/taskr/b.json", "linux", "/home/u/.local/state/taskr/b.json"},
+		{"/Users/u/Library/Application Support/taskr/b.json", "darwin", "'/Users/u/Library/Application Support/taskr/b.json'"},
+		{"/tmp/it's/b.json", "linux", `'/tmp/it'\''s/b.json'`},
+		{`C:\Users\u\AppData\Local\taskr\b.json`, "windows", `"C:\Users\u\AppData\Local\taskr\b.json"`},
+		{"", "linux", "''"},
+	}
+	for _, c := range cases {
+		if got := shellArg(c.in, c.goos); got != c.want {
+			t.Errorf("shellArg(%q, %s) = %s, want %s", c.in, c.goos, got, c.want)
+		}
+	}
+	if runtime.GOOS == "windows" {
+		return
+	}
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh on PATH")
+	}
+	for _, in := range []string{"/a b/c.json", "/it's/$HOME/`x`/b.json", "/plain/b.json"} {
+		out, err := exec.Command(sh, "-c", `printf %s `+shellArg(in, runtime.GOOS)).Output()
+		if err != nil {
+			t.Fatalf("sh: %v", err)
+		}
+		if string(out) != in {
+			t.Errorf("sh read %q back as %q", in, out)
+		}
 	}
 }
