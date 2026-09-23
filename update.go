@@ -1459,8 +1459,8 @@ func (m *model) isBiasSettingRow(row int) bool {
 // cycleBias rotates the named bias by `direction` (+1 next, -1 prev), updates
 // the activeBiases global, invalidates the sort cache so the new ranking takes
 // effect on the next render, persists the change, and resyncs the persisted
-// `sequence` column so any SQL consumer (TopBySequence, future sync) sees the
-// new weights immediately rather than waiting for the next mutation.
+// `sequence` column so anything reading the database directly sees the new
+// weights immediately rather than waiting for the next mutation.
 func (m *model) cycleBias(row, direction int) {
 	switch row {
 	case settingBiasDeadline:

@@ -820,33 +820,6 @@ func resyncSequenceColumn(h *sql.DB) error {
 	return tx.Commit()
 }
 
-// TopBySequence returns the top n highest-scoring open tasks (status=Pending),
-// backed by the (deleted, status, sequence DESC) index. O(log N + n) at any
-// scale — the foundation for "what should I do next?" / auto-planning
-// features that want to skip loading the whole task set.
-func (r *sqliteRepo) TopBySequence(n int) ([]string, error) {
-	if err := openStore(); err != nil {
-		return nil, err
-	}
-	rows, err := db.Query(`SELECT id FROM todos
-		WHERE deleted = 0 AND status = 0
-		ORDER BY sequence DESC, due_date ASC
-		LIMIT ?`, n)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	ids := make([]string, 0, n)
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
-}
-
 // Save writes dirty tasks to the normalized schema and tombstones the explicit
 // ID set, all in one transaction. Differential: untouched rows are not
 // rewritten; vanished rows must be in tombstones.
