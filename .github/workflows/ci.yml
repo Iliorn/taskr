@@ -132,9 +132,13 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      # Pinned, not @latest: govulncheck's own go.mod tracks the newest Go,
+      # and with GOTOOLCHAIN=local an @latest install stops compiling the day
+      # it moves past the Go in go.mod — v1.8.0 needs 1.26, and the job went
+      # red on a release nobody here made. Bump this with the go directive.
       - name: govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           govulncheck ./...
 
   # Coverage floors, not a coverage target. The point is not to chase a number
