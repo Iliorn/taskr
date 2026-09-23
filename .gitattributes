@@ -2,3 +2,8 @@
 # the contract. Without this a Windows checkout rewrites them to CRLF and every
 # key differs from itself.
 testdata/** text eol=lf
+
+# Shell scripts run under sh, including Git for Windows' sh for the hook; a
+# CRLF checkout turns every line into a command ending in \r.
+scripts/*.sh text eol=lf
+.githooks/* text eol=lf
