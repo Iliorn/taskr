@@ -188,7 +188,7 @@ func InsecureURLWarning(rawURL string) string {
 			return ""
 		}
 	}
-	return fmt.Sprintf("warning: %s is plain http to a public host — the sync token and your tasks travel unencrypted; prefer a Tailscale IP or an https reverse proxy", rawURL)
+	return fmt.Sprintf("warning: %s is plain http to a public host — the sync token and your tasks travel unencrypted; prefer a Tailscale IP, or https (taskr serve --tls-cert)", rawURL)
 }
 
 // DroppedLocalEdits returns the local versions of tasks whose scalar fields

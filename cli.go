@@ -287,6 +287,7 @@ Reporting / backup:
 
 Sync (cross-device):
   taskr serve [--listen=ADDR] [--token=T]   run the sync server (self-hosted; binds 127.0.0.1:8765 by default)
+    [--tls-cert=F --tls-key=F]              serve https with this PEM pair (re-read when the files are renewed)
   taskr sync [--url=U] [--token=T] [--save]  push/pull once against a sync server (--save stores config)
                                             auto-sync runs on its own once configured (set "auto_sync":false in
                                             ~/.taskr/sync.json to disable); conflicts log to ~/.taskr/sync.log

@@ -462,9 +462,18 @@ taskr serve --listen 100.x.y.z:8765 --token "$(openssl rand -hex 32)"
 ```
 
 A token is **mandatory** — taskr refuses to run unauthenticated. `--listen`
-defaults to `127.0.0.1:8765`; bind to a Tailscale/LAN address (or put it behind a
-reverse proxy for TLS) to reach it from other devices. The server persists to its
-own `tasks.db` and exposes:
+defaults to `127.0.0.1:8765`; bind to a Tailscale/LAN address to reach it from
+other devices. Tailscale already encrypts the link; anywhere else, give the
+server a certificate and it serves https itself:
+
+```sh
+taskr serve --listen 0.0.0.0:8765 --tls-cert cert.pem --tls-key key.pem
+taskr sync --url https://tasks.example.com:8765 --save
+```
+
+The pair is re-read when the files change, so a certificate renewed in place
+(`tailscale cert`, Let's Encrypt) is picked up without a restart. The server
+persists to its own `tasks.db` and exposes:
 
 - `POST /v1/sync` — full-snapshot sync (Bearer token)
 - `GET  /v1/health` — liveness check

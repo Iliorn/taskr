@@ -39,12 +39,13 @@ that is not true:
 
 ## What is not in scope
 
-- **Plain HTTP between client and server.** taskr does not terminate TLS. The
-  bearer token travels in the clear unless you put it behind a tunnel, and it
+- **Plain HTTP between client and server.** `taskr serve` speaks plain http
+  unless it is given a certificate (`--tls-cert`/`--tls-key`). Without one, the
+  bearer token travels in the clear unless you put it behind a tunnel, and taskr
   warns you about that in Settings and in `taskr doctor`. Run the sync server
-  over Tailscale, a VPN, or a reverse proxy that terminates TLS. A report that
-  the token is readable on an unencrypted link is documented behaviour, not a
-  vulnerability.
+  with a certificate, or over Tailscale, a VPN, or a reverse proxy that
+  terminates TLS. A report that the token is readable on an unencrypted link you
+  chose is documented behaviour, not a vulnerability.
 - **A single shared token with full access.** The sync server is single-owner
   by design: one token, no multi-tenancy, no per-device revocation. Anyone
   holding the token can read and write every task.

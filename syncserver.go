@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -161,12 +162,38 @@ func (m model) probeServer() tea.Cmd {
 		if h, p, err := net.SplitHostPort(addr); err == nil && (h == "" || h == "0.0.0.0" || h == "::") {
 			probeAddr = net.JoinHostPort("127.0.0.1", p)
 		}
-		client := &http.Client{Timeout: 1500 * time.Millisecond}
-		resp, err := client.Get("http://" + probeAddr + "/v1/health")
-		if err != nil {
-			return serverProbeMsg{reachable: false}
-		}
-		defer resp.Body.Close()
-		return serverProbeMsg{reachable: resp.StatusCode == http.StatusOK}
+		return serverProbeMsg{reachable: healthAnswers(probeAddr)}
 	}
+}
+
+// healthAnswers reports whether a taskr server answers /v1/health at addr, in
+// plain http or — for a headless `taskr serve --tls-cert` — https. Plain goes
+// first, and https is tried only when something answered it without a 200: a
+// TLS server replies to plain http with a 400 of its own, and a closed port
+// needs no second attempt. The https probe skips certificate checks on
+// purpose: it asks this machine's own port whether it is alive, sends no
+// token, and a certificate issued for a public name will never match the
+// 127.0.0.1 it is reached on here.
+func healthAnswers(addr string) bool {
+	client := &http.Client{Timeout: 1500 * time.Millisecond}
+	resp, err := client.Get("http://" + addr + "/v1/health")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		return true
+	}
+	tlsClient := &http.Client{
+		Timeout: 1500 * time.Millisecond,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // liveness probe of this machine's own port; no credentials are sent
+		},
+	}
+	resp, err = tlsClient.Get("https://" + addr + "/v1/health")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }

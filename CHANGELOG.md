@@ -13,6 +13,10 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+### Added
+
+- `taskr serve --tls-cert/--tls-key` serves https itself, and picks up a renewed certificate.
+
 ### Changed
 
 - A subtask can't outrank its parent, and a parent moved down takes its subtasks with it.
