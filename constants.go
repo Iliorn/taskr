@@ -181,6 +181,8 @@ const (
 
 	statsBarWidth   = 30
 	statsLabelWidth = 22
+	// unsetMark stands in for an empty detail-pane field or section.
+	unsetMark = "—"
 	// minClippedTitleW is the narrowest a title may be clipped to so that the
 	// facts after it on the same line (due date, project) stay whole.
 	minClippedTitleW = 8

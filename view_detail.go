@@ -43,27 +43,38 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		}
 		return cur + paddedLabel + v
 	}
+	// An unset field is a dim dash until the cursor reaches it, and only then
+	// says what it is missing and how to fill it. Spelling out "not set" on
+	// every empty row made a new task's pane mostly placeholders, with the
+	// fields that do say something lost among them. The row stays either way:
+	// it is where the cursor goes to set the value.
+	unsetVal := func(hint string, field detailField) string {
+		if isDetailFocused && m.detail.field == field {
+			return hint
+		}
+		return dimStyle.Render(unsetMark)
+	}
 
-	startVal := tr("not set")
+	startVal := unsetVal(tr("not set"), fieldStartDate)
 	if !t.StartDate.IsZero() {
 		startVal = formatStartDate(t.StartDate)
 	}
-	dueVal := tr("not set")
+	dueVal := unsetVal(tr("not set"), fieldDueDate)
 	if !t.DueDate.IsZero() {
 		dueVal = t.DueDate.Format("02-01-06")
 		if t.IsOverdue() {
 			dueVal += tr(" ! overdue")
 		}
 	}
-	recurVal := tr("not set")
+	recurVal := unsetVal(tr("not set"), fieldRecurrence)
 	if t.Recurrence != "" {
 		recurVal = "↻ " + trRecurrence(t.Recurrence)
 	}
-	projectVal := tr("not set")
+	projectVal := unsetVal(tr("not set"), fieldProject)
 	if t.Project != "" {
 		projectVal = t.Project
 	}
-	notesVal := tr("none (press enter or 'n' to edit)")
+	notesVal := unsetVal(tr("none (press enter or 'n' to edit)"), fieldNotes)
 	if t.Notes != "" {
 		lines := strings.SplitN(t.Notes, "\n", 2)
 		// Reserve room for the " (…)" multi-line marker (5 cells) so the
@@ -195,7 +206,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	}
 	b.WriteString(tagCur + detailLabelStyle.Render(tr("Tags:")) + "\n")
 	if len(t.Tags) == 0 {
-		b.WriteString("  " + detailValueStyle.Render(tr("No tags. Press 'a' to add one.")) + "\n")
+		b.WriteString("  " + emptySection(isDetailFocused && m.detail.field == fieldTags, tr("No tags. Press 'a' to add one.")) + "\n")
 	} else {
 		for i, tag := range t.Tags {
 			pfx := cursorGap
@@ -237,7 +248,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	}
 	subB.WriteString(subtaskCur + detailLabelStyle.Render(tr("Subtasks:")) + "\n")
 	if m.subtaskCount(t.ID) == 0 {
-		subB.WriteString("  " + detailValueStyle.Render(tr("No subtasks. Press 'a' to add one.")) + "\n")
+		subB.WriteString("  " + emptySection(isDetailFocused && m.detail.field == fieldSubtasks, tr("No subtasks. Press 'a' to add one.")) + "\n")
 	} else {
 		for i, subID := range m.subtaskIDs(t.ID) {
 			sub := m.findTodoByID(subID)
@@ -279,7 +290,7 @@ func (m model) renderDetailPage2(t *todo.Todo) string {
 	depB.WriteString(depCur + detailLabelStyle.Render(tr("Dependencies:")) + "\n")
 	if len(t.Dependencies) == 0 {
 		if len(inbound) == 0 {
-			depB.WriteString("  " + detailValueStyle.Render(tr("No dependencies. Press 'a' to add one.")) + "\n")
+			depB.WriteString("  " + emptySection(isDetailFocused && m.detail.field == fieldDependencies, tr("No dependencies. Press 'a' to add one.")) + "\n")
 		}
 	} else {
 		for i, depID := range t.Dependencies {
@@ -356,7 +367,7 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 	}
 	b.WriteString(entryCur + detailLabelStyle.Render(tr("Time entries:")) + "\n")
 	if len(t.TimeEntries) == 0 {
-		b.WriteString("  " + detailValueStyle.Render(tr("No time entries. Press 'T' to add one.")) + "\n")
+		b.WriteString("  " + emptySection(isDetailFocused && m.detail.field == fieldTimeEntries, tr("No time entries. Press 'T' to add one.")) + "\n")
 	} else {
 		// Per-entry format: "HH:MM–HH:MM (duration)" mirroring the calendar
 		// timeline's range style so the two surfaces look consistent.
@@ -407,7 +418,7 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 	}
 	b.WriteString(commentCur + detailLabelStyle.Render(tr("Comments:")) + "\n")
 	if len(t.Comments) == 0 {
-		b.WriteString("  " + detailValueStyle.Render(tr("No comments yet. Press 'a' to add one.")) + "\n")
+		b.WriteString("  " + emptySection(isDetailFocused && m.detail.field == fieldComments, tr("No comments yet. Press 'a' to add one.")) + "\n")
 	} else {
 		available := innerW - commentPrefixLen
 		if available < 10 {
@@ -909,4 +920,14 @@ func (m model) renderGanttAxis(minDate, maxDate, today time.Time, chartW, todayP
 		}
 	}
 	return b.String()
+}
+
+// emptySection is the line under a section heading that has nothing in it: a
+// dim dash, or — once the cursor is on the heading — the hint naming the key
+// that adds the first entry. See unsetVal in renderDetailPage1.
+func emptySection(current bool, hint string) string {
+	if current {
+		return detailValueStyle.Render(hint)
+	}
+	return dimStyle.Render(unsetMark)
 }

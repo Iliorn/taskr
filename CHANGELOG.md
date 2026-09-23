@@ -19,6 +19,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - The Tags tab header no longer clips its last column to "Tim…".
 - Danish and German get short tab labels that fit an 80-column window.
 - Stats and the Tags side pane show whole values and hints instead of cutting them off mid-word.
+- Empty detail-pane fields show a dim dash; the how-to hint appears on the selected row.
 
 ## [1.37.0] - 2026-09-23
 
