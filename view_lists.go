@@ -389,23 +389,28 @@ func (m model) renderStatsList() string {
 	gradLen := len(statsGradient)
 
 	// Lay sections out in up to three columns when there's room, so the page
-	// stays short enough to fit a not-very-tall screen. minColW guarantees each
-	// column is wide enough to show the longest stat line ("vs …" trend) without
-	// truncation, so colW >= minColW always holds in multi-column mode.
+	// stays short enough to fit a not-very-tall screen. minColW is only where
+	// the search starts: the sections are built as thunks over colW/valW, and
+	// the layout below takes the most columns whose lines all fit. A fixed
+	// floor used to promise the longest line fitted, and the first value
+	// longer than it ("7 pending, no pace") was cut mid-word with space to
+	// spare on the page.
 	const gap = 4
 	const minColW = 37
-	cols := (availW + gap) / (minColW + gap)
-	if cols < 1 {
-		cols = 1
+	maxCols := (availW + gap) / (minColW + gap)
+	if maxCols < 1 {
+		maxCols = 1
 	}
-	if cols > 3 {
-		cols = 3
+	if maxCols > 3 {
+		maxCols = 3
 	}
-	colW := availW
-	valW := statsValueWidth
-	if cols > 1 {
-		colW = (availW - (cols-1)*gap) / cols
-		valW = 5
+	var cols, colW, valW int
+	setCols := func(n int) {
+		cols, colW, valW = n, availW, statsValueWidth
+		if n > 1 {
+			colW = (availW - (n-1)*gap) / n
+			valW = 5
+		}
 	}
 
 	// stat writes one row sized to colW into sb (bar only if it fits).
@@ -448,10 +453,12 @@ func (m model) renderStatsList() string {
 			bar.String() + dimStyle.Render(fmt.Sprintf(" %3d%%", int(pct*100))) + "\n")
 	}
 
-	section := func(build func(*strings.Builder)) string {
-		var sb strings.Builder
-		build(&sb)
-		return strings.TrimRight(sb.String(), "\n")
+	section := func(build func(*strings.Builder)) func() string {
+		return func() string {
+			var sb strings.Builder
+			build(&sb)
+			return strings.TrimRight(sb.String(), "\n")
+		}
 	}
 
 	workload := section(func(sb *strings.Builder) {
@@ -475,7 +482,7 @@ func (m model) renderStatsList() string {
 
 	// flowSection renders a created/completed/net-backlog block with a trend
 	// comparison against the previous equal-length period.
-	flowSection := func(title, vsLabel string, created, completed, prevCompleted int) string {
+	flowSection := func(title, vsLabel string, created, completed, prevCompleted int) func() string {
 		return section(func(sb *strings.Builder) {
 			sb.WriteString(statsHeaderStyle.Render("  "+title) + "\n")
 			stat(sb, tr("Created"), created, 0, false)
@@ -515,17 +522,22 @@ func (m model) renderStatsList() string {
 		if len(activeAges) > 0 {
 			sb.WriteString(detailLabelStyle.Render(padRight(tr("  Median active age"), statsLabelWidth)) +
 				normalStyle.Render(formatDaysCompact(medianDuration(activeAges))) + "\n")
-			oldestW := colW - statsLabelWidth - 12
-			if oldestW < 8 {
-				oldestW = 8
+			// The title takes what the column has left after its age. In a
+			// multi-column layout it asks for at least statsOldestMinW, which
+			// overflows a column too narrow to say which task it is — and an
+			// overflowing line is what sends the layout down a column.
+			age := " (" + formatDaysCompact(oldestAge) + ")"
+			oldestW := colW - statsLabelWidth - len([]rune(age))
+			if want := min(len([]rune(oldestTitle)), statsOldestMinW); cols > 1 && oldestW < want {
+				oldestW = want
 			}
 			sb.WriteString(detailLabelStyle.Render(padRight(tr("  Oldest active"), statsLabelWidth)) +
 				normalStyle.Render(truncate(oldestTitle, oldestW)) +
-				dimStyle.Render(" ("+formatDaysCompact(oldestAge)+")") + "\n")
+				dimStyle.Render(age) + "\n")
 		}
 	})
 
-	var priority string
+	priority := func() string { return "" }
 	if activeTasks > 0 {
 		priority = section(func(sb *strings.Builder) {
 			sb.WriteString(statsHeaderStyle.Render(tr("  Active by priority")) + "\n")
@@ -603,32 +615,54 @@ func (m model) renderStatsList() string {
 		}
 	})
 
-	switch cols {
-	case 3:
-		// Keep the two Flow windows together in the middle column.
-		b.WriteString(zipColumns(colW, gap,
-			stackSections(workload, throughput, cycleTime),
-			stackSections(flow, flow30, projection),
-			stackSections(priority, velocity)))
-	case 2:
-		b.WriteString(zipColumns(colW, gap,
-			stackSections(workload, flow, flow30, cycleTime),
-			stackSections(throughput, priority, velocity, projection)))
-	default:
-		first := true
-		for _, s := range []string{workload, flow, flow30, throughput, cycleTime, priority, velocity, projection} {
-			if strings.TrimSpace(s) == "" {
-				continue
+	for n := maxCols; n > 1; n-- {
+		setCols(n)
+		var columns [][]string
+		if n == 3 {
+			// Keep the two Flow windows together in the middle column.
+			columns = [][]string{
+				stackSections(workload(), throughput(), cycleTime()),
+				stackSections(flow(), flow30(), projection()),
+				stackSections(priority(), velocity()),
 			}
-			if !first {
-				b.WriteString("\n")
+		} else {
+			columns = [][]string{
+				stackSections(workload(), flow(), flow30(), cycleTime()),
+				stackSections(throughput(), priority(), velocity(), projection()),
 			}
-			b.WriteString(s + "\n")
-			first = false
 		}
+		if linesFit(colW, columns...) {
+			b.WriteString(zipColumns(colW, gap, columns...))
+			return b.String()
+		}
+	}
+	setCols(1)
+	first := true
+	for _, sec := range []func() string{workload, flow, flow30, throughput, cycleTime, priority, velocity, projection} {
+		s := sec()
+		if strings.TrimSpace(s) == "" {
+			continue
+		}
+		if !first {
+			b.WriteString("\n")
+		}
+		b.WriteString(s + "\n")
+		first = false
 	}
 
 	return b.String()
+}
+
+// linesFit reports whether every line of every column is at most w cells wide.
+func linesFit(w int, columns ...[]string) bool {
+	for _, col := range columns {
+		for _, line := range col {
+			if ansi.StringWidth(line) > w {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // stackSections concatenates non-empty section blocks into a line slice with a

@@ -1977,7 +1977,11 @@ func (m model) buildTagDetailLines() []string {
 	default:
 		hint += tr(" · enter: open · f: filter · r: rename)")
 	}
-	b.WriteString(dimStyle.Render(truncate(hint, availW)) + "\n")
+	// The hint breaks between its " · " items rather than being clipped: the
+	// item a narrow pane lost was the last key, the one it existed to name.
+	for _, line := range wrapAtSep(hint, " · ", "   ", availW) {
+		b.WriteString(dimStyle.Render(truncate(line, availW)) + "\n")
+	}
 
 	summary := fmt.Sprintf(tr("  %d active · %d done · %d overdue"), active, done, overdue)
 	b.WriteString(normalStyle.Render(truncate(summary, availW)) + "\n")
@@ -2090,7 +2094,14 @@ func (m model) buildTagDetailLines() []string {
 		if i == sel {
 			lead = cursorMark
 		}
-		line := truncate(fmt.Sprintf("%s%s %s%s%s", lead, status, t.Title, dueStr, projStr), availW)
+		// Clip the title, not the facts after it: a row cut through its due
+		// date ("due: 22-09-2…") says less than one cut through its title.
+		fixed := lead + status + " "
+		titleW := availW - len([]rune(fixed)) - len([]rune(dueStr)) - len([]rune(projStr))
+		line := truncate(fixed+t.Title+dueStr+projStr, availW)
+		if titleW >= minClippedTitleW {
+			line = fixed + truncate(t.Title, titleW) + dueStr + projStr
+		}
 		switch {
 		case i == sel:
 			b.WriteString(selectedStyle.Render(line) + "\n")

@@ -18,6 +18,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - At 80 columns the tab bar keeps its short labels on every tab instead of collapsing to digits.
 - The Tags tab header no longer clips its last column to "Tim…".
 - Danish and German get short tab labels that fit an 80-column window.
+- Stats and the Tags side pane show whole values and hints instead of cutting them off mid-word.
 
 ## [1.37.0] - 2026-09-23
 

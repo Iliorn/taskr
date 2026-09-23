@@ -181,6 +181,12 @@ const (
 
 	statsBarWidth   = 30
 	statsLabelWidth = 22
+	// minClippedTitleW is the narrowest a title may be clipped to so that the
+	// facts after it on the same line (due date, project) stay whole.
+	minClippedTitleW = 8
+	// statsOldestMinW is the fewest title runes the Stats "Oldest active" row
+	// accepts before the page drops to fewer columns to show more of it.
+	statsOldestMinW = 12
 	statsValueWidth = 12
 
 	calPanelWidth = 22

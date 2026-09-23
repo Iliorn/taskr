@@ -55,6 +55,23 @@ func truncate(s string, max int) string {
 	return string(r[:max-1]) + ellipsis
 }
 
+// wrapAtSep splits a plain sep-joined list into lines of at most width runes,
+// breaking only between items; continuation lines start with indent. An item
+// wider than a line on its own is left for the caller's truncate.
+func wrapAtSep(s, sep, indent string, width int) []string {
+	items := strings.Split(s, sep)
+	lines := []string{items[0]}
+	for _, it := range items[1:] {
+		last := &lines[len(lines)-1]
+		if len([]rune(*last))+len([]rune(sep))+len([]rune(it)) <= width {
+			*last += sep + it
+			continue
+		}
+		lines = append(lines, indent+it)
+	}
+	return lines
+}
+
 // truncateStyled is truncate for a string that has already been through a
 // lipgloss .Render. truncate counts runes, and an SGR sequence is a dozen of
 // them, so it cuts *inside* the escape: the terminal then reads the ellipsis
