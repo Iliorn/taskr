@@ -16,6 +16,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 ### Changed
 
 - A subtask can't outrank its parent, and a parent moved down takes its subtasks with it.
+- Sync traffic is gzip-compressed, about 87% smaller; mixed server and client versions still sync.
 
 ### Fixed
 

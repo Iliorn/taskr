@@ -1,10 +1,12 @@
 package tasksync
 
 import (
+	"compress/gzip"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sort"
@@ -143,12 +145,20 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	// On every answer, errors included: this is how a client learns it may
+	// compress its next request (see compress.go).
+	w.Header().Set("Accept-Encoding", "gzip")
 	if !s.authorized(r) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	body, closeBody, ok := syncRequestBody(w, r)
+	if !ok {
+		return
+	}
+	defer closeBody()
 	var req Request
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<20)).Decode(&req); err != nil {
+	if err := json.NewDecoder(body).Decode(&req); err != nil {
 		http.Error(w, "bad request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -168,7 +178,19 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set(ProtocolHeader, fmt.Sprintf("%d-%d", MinProtocolVersion, ProtocolVersion))
-	if err := json.NewEncoder(w).Encode(Response{
+	w.Header().Add("Vary", "Accept-Encoding")
+	var out io.Writer = w
+	if acceptsGzip(r) {
+		w.Header().Set("Content-Encoding", "gzip")
+		zw := gzip.NewWriter(w)
+		defer func() {
+			if err := zw.Close(); err != nil {
+				log.Printf("taskr serve: finish gzip response: %v", err)
+			}
+		}()
+		out = zw
+	}
+	if err := json.NewEncoder(out).Encode(Response{
 		Tasks:      merged,
 		Board:      s.syncBoard(req.Board),
 		ServerTime: time.Now().UTC(),

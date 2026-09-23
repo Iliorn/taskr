@@ -470,6 +470,9 @@ own `tasks.db` and exposes:
 - `GET  /v1/health` — liveness check
 - `GET  /v1/events` — Server-Sent Events "doorbell" so clients pull in real time
 
+Sync bodies are gzip-compressed (about 87% smaller), negotiated per server so
+clients and servers of different versions keep working together.
+
 To keep it running, wrap it in a `systemd --user` unit with the token in an
 `EnvironmentFile` (mode 600) and enable lingering.
 
