@@ -40,16 +40,25 @@ func PostSync(serverURL, token, clientVersion string, tasks []todo.Todo, board *
 		return Response{}, err
 	}
 	endpoint := strings.TrimRight(serverURL, "/") + "/v1/sync"
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	client := &http.Client{Timeout: timeout, Transport: syncTransport}
+	compressed := serverAcceptsGzip(endpoint)
+	resp, err := postSyncBody(client, endpoint, token, body, compressed)
 	if err != nil {
 		return Response{}, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := (&http.Client{Timeout: timeout, Transport: syncTransport}).Do(req)
-	if err != nil {
-		return Response{}, err
+	noteRequestEncodings(endpoint, resp)
+	// The server behind this URL said it takes gzip and now refuses it —
+	// rolled back to an older build, or a proxy swapped in front. Forget the
+	// capability and send the same request plain, once; the answer to that
+	// one is the answer.
+	if compressed && (resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnsupportedMediaType) {
+		resp.Body.Close()
+		gzipAcceptingURLs.Delete(endpoint)
+		resp, err = postSyncBody(client, endpoint, token, body, false)
+		if err != nil {
+			return Response{}, err
+		}
+		noteRequestEncodings(endpoint, resp)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -75,6 +84,29 @@ func PostSync(serverURL, token, clientVersion string, tasks []todo.Todo, board *
 		return Response{}, err
 	}
 	return out, nil
+}
+
+// postSyncBody sends one /v1/sync request, gzipping the body when compress is
+// set. Accept-Encoding is left to the transport, which asks for gzip itself
+// and undoes it transparently — setting it here would switch that off.
+func postSyncBody(client *http.Client, endpoint, token string, body []byte, compress bool) (*http.Response, error) {
+	if compress {
+		z, err := gzipBytes(body)
+		if err != nil {
+			return nil, err
+		}
+		body = z
+	}
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	if compress {
+		req.Header.Set("Content-Encoding", "gzip")
+	}
+	return client.Do(req)
 }
 
 // serverError turns a non-OK sync response into the sentence the user reads.
