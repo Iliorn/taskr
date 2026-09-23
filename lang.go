@@ -110,6 +110,20 @@ var weekdayInitials = map[language][7]rune{
 	langDE: {'S', 'M', 'D', 'M', 'D', 'F', 'S'},
 }
 
+// Short tab labels, used when the full ones do not fit the tab bar. A table
+// and not tr() keys: tr maps one English string to one translation, and in
+// English several tabs are short already ("1 Tasks" is its own abbreviation)
+// while their Danish and German names are not, so the two tiers need separate
+// entries. Each row is sized to fit an 80-column window, the width most
+// terminals open at — TestTabBarKeepsItsLabelsAcrossTabsAt80Columns checks
+// every language, so a longer word here fails the build instead of turning
+// the bar into bare digits.
+var tabShortLabels = map[language][numTabs]string{
+	langEN: {"1 Tasks", "2 Cal", "3 Proj", "4 Tags", "5 Board", "6 Stats", "7 Setup"},
+	langDA: {"1 Opgaver", "2 Kal", "3 Proj", "4 Mærk", "5 Tavle", "6 Stat", "7 Indst"},
+	langDE: {"1 Aufg.", "2 Kal", "3 Proj", "4 Tags", "5 Board", "6 Stat.", "7 Einst."},
+}
+
 // Monday-first two-letter column header for the month grid.
 var weekdayHeader = map[language]string{
 	langEN: "Mo Tu We Th Fr Sa Su",
@@ -226,9 +240,6 @@ var daTranslations = map[string]string{
 	"5 Board":    "5 Tavle",
 	"6 Stats":    "6 Statistik",
 	"7 Settings": "7 Indstillinger",
-	"2 Cal":      "2 Kal",
-	"3 Proj":     "3 Proj",
-	"7 Setup":    "7 Indst.",
 
 	// Key hints (footer)
 
@@ -836,9 +847,6 @@ var deTranslations = map[string]string{
 	"5 Board":    "5 Board",
 	"6 Stats":    "6 Statistik",
 	"7 Settings": "7 Einstell.",
-	"2 Cal":      "2 Kal",
-	"3 Proj":     "3 Proj",
-	"7 Setup":    "7 Einstell.",
 
 	// Key hints (footer)
 

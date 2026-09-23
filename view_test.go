@@ -942,10 +942,7 @@ func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 				tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"),
 				tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings"),
 			}[tc.tb]
-			shortLabel := [numTabs]string{
-				tr("1 Tasks"), tr("2 Cal"), tr("3 Proj"),
-				tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Setup"),
-			}[tc.tb]
+			shortLabel := tabShortLabels[langEN][tc.tb]
 
 			for _, width := range []int{40, 50, 60, 70, 80, 100, 120} {
 				m := newTestModel()
@@ -1141,25 +1138,31 @@ func TestTabBarFitsTheWidthItIsGiven(t *testing.T) {
 // On a window that fits the short labels, the bar reads the same whichever
 // tab is selected. It used to keep the selected tab's full label at any cost,
 // so at 80 columns switching to Calendar, Projects or Settings collapsed every
-// other tab to a bare digit and the bar changed shape on every switch.
-// English only: the Danish and German short labels do not fit 80 columns, so
-// there every tab gets the same digits-and-one-name bar.
+// other tab to a bare digit and the bar changed shape on every switch. Every
+// language is checked, which is what holds tabShortLabels to 80 columns.
 func TestTabBarKeepsItsLabelsAcrossTabsAt80Columns(t *testing.T) {
-	m := modelWithTasks(t, todo.New("alpha"))
-	m.termWidth, m.termHeight = 80, 24
-	want := ""
-	for tb := tab(0); tb < numTabs; tb++ {
-		if !tabVisible(tb) {
-			continue
+	t.Cleanup(func() { applyLang(string(langEN)) })
+	for _, lang := range availableLanguages {
+		m := modelWithTasks(t, todo.New("alpha"))
+		applyLang(string(lang)) // after the model: initialModel re-applies the stored language
+		m.termWidth, m.termHeight = 80, 24
+		want := ""
+		for tb := tab(0); tb < numTabs; tb++ {
+			if !tabVisible(tb) {
+				continue
+			}
+			m.tab = tb
+			bar := strings.SplitN(ansi.Strip(m.View()), "\n", 2)[0]
+			if want == "" {
+				want = bar
+				continue
+			}
+			if bar != want {
+				t.Errorf("lang=%s: the bar changed on tab %d\n got: %q\nwant: %q", lang, tb, bar, want)
+			}
 		}
-		m.tab = tb
-		bar := strings.SplitN(ansi.Strip(m.View()), "\n", 2)[0]
-		if want == "" {
-			want = bar
-			continue
-		}
-		if bar != want {
-			t.Errorf("the bar changed on tab %d\n got: %q\nwant: %q", tb, bar, want)
+		if !strings.Contains(want, tabShortLabels[lang][1]) {
+			t.Errorf("lang=%s: the short labels do not fit 80 columns: %q", lang, want)
 		}
 	}
 }

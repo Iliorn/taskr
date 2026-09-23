@@ -2143,9 +2143,14 @@ func (m model) renderTabs(avail int) string {
 	// three tabs whose short forms say nothing and two that are nearly the same
 	// word — and it degrades worse in translation, where a German "7 Ein" is
 	// left of "Einstellungen". A tab that is already short keeps its full label
-	// here, which is why several entries repeat it: shortening a five-letter
-	// word to buy two cells costs more than the cells are worth.
-	abbr := [numTabs]string{tr("1 Tasks"), tr("2 Cal"), tr("3 Proj"), tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Setup")}
+	// here, which is why several English entries repeat it: shortening a
+	// five-letter word to buy two cells costs more than the cells are worth.
+	// The labels live in tabShortLabels (lang.go); a language without a row
+	// falls back to English.
+	abbr, ok := tabShortLabels[activeLang]
+	if !ok {
+		abbr = tabShortLabels[langEN]
+	}
 
 	// No overdue badge here. A count pinned to the Tasks label ("1 Tasks !3")
 	// puts two numbers on one tab, and the leading one is the key you press —
