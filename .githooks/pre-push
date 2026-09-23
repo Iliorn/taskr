@@ -1,0 +1,5 @@
+#!/bin/sh
+# Runs scripts/check.sh before every push. Enable with:
+#   git config core.hooksPath .githooks
+# Skip once with `git push --no-verify` when you mean to.
+exec "$(git rev-parse --show-toplevel)/scripts/check.sh"

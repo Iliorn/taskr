@@ -13,7 +13,15 @@ golangci-lint run ./...
 ```
 
 Those four are what CI runs, on Linux, Windows and macOS, plus `go test -race`.
-Run at least `go test ./...` and `go vet ./...` before opening a pull request.
+`scripts/check.sh` runs them together (gofmt, vet, golangci-lint, the shuffled
+suite; `--race` adds the race run), and it can run before every push:
+
+```sh
+git config core.hooksPath .githooks   # once per clone
+```
+
+A lint finding costs one line to fix locally and a red `main` for everyone
+after it once it is pushed, so the hook is worth the few seconds.
 
 Tests must never touch your real task store. `TestMain` redirects the home
 directory for the whole test binary; `TestStorageStaysInsideTheTestHome` fails
