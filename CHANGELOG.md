@@ -21,6 +21,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Stats and the Tags side pane show whole values and hints instead of cutting them off mid-word.
 - Empty detail-pane fields show a dim dash; the how-to hint appears on the selected row.
 - Projects rows show plain counts, and timeline rows lose their stray `|` marks.
+- The Tags tab shows its sort order in the box title, like the Tasks tab.
 
 ## [1.37.0] - 2026-09-23
 

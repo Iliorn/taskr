@@ -217,7 +217,9 @@ func (m model) listPanelTitle() string {
 		}
 		return title + " [" + tr("sort:") + " " + m.sortLabel() + "]"
 	case tabTags:
-		return tr("Overview")
+		// Same place the Tasks tab says it: on the box whose order it names,
+		// not in the status line above the tab where it read as a stray label.
+		return tr("Overview") + " [" + tr("sort:") + " " + m.tagSortLabel() + "]"
 	case tabBoard:
 		title := tr("Workflow")
 		if cols := m.boardColumns(); len(cols) > 0 {
@@ -461,9 +463,6 @@ func (m model) renderStatusLine() string {
 	left := strings.Join(chips, " ")
 
 	var right []string
-	if m.tab == tabTags {
-		right = append(right, statusSortStyle.Render(tr("sort:")+" "+m.tagSortLabel()))
-	}
 	if g := m.syncGlyph(); g != "" {
 		right = append(right, g)
 	}

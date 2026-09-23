@@ -177,11 +177,10 @@ var (
 	toastSuccessStyle lipgloss.Style
 	toastInfoStyle    lipgloss.Style
 
-	// Fixed status-line pieces: filter chips on the left, the Tags-tab sort
-	// label and sync-health glyph on the right. See renderStatusLine.
+	// Fixed status-line pieces: filter chips on the left, the sync-health
+	// glyph on the right. See renderStatusLine.
 	focusChipStyle  lipgloss.Style
 	searchChipStyle lipgloss.Style
-	statusSortStyle lipgloss.Style
 	syncFailStyle   lipgloss.Style
 
 	listPanelStyle   lipgloss.Style
@@ -273,7 +272,6 @@ func applyTheme(t theme) {
 
 	focusChipStyle = lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(t.orange).Padding(0, 1)
 	searchChipStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
-	statusSortStyle = lipgloss.NewStyle().Foreground(t.dim)
 	syncFailStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
 
 	// Leave one quiet row below the border title before the pane's first
