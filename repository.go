@@ -25,6 +25,6 @@ type Repository interface {
 	// row at the current activeBiases. Without this, a bias change or
 	// passage of time (Age drift) leaves the column stale relative to the
 	// in-memory formula — invisible to the TUI (which sorts in memory) but
-	// a trap for any SQL consumer like TopBySequence or future sync.
+	// a trap for anything reading the database directly.
 	ResyncScores() error
 }
