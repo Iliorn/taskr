@@ -2153,24 +2153,36 @@ func (m model) renderTabs(avail int) string {
 	// where it can be acted on: the red Due cells in the list, the Tasks-tab
 	// counter, and Stats.
 
-	// The selected tab always shows its full label so it is never truncated
-	// away. Unselected tabs degrade uniformly (full → abbr → nums) to fit
-	// the remaining budget. tabsWidthMixed measures the mixed arrangement
-	// where the selected tab is fixed at selLabel and unselected tabs use
-	// the given candidates array.
-	selLabel := full[m.tab]
-	selRunes := []rune(selLabel)
-	if avail > 0 && len(selRunes) > avail {
+	// The bar degrades a level at a time, most verbose first: everything full;
+	// the selected tab full and the rest abbreviated; everything abbreviated;
+	// the selected tab full and the rest bare numbers. The third level is what
+	// an 80-column window needs on the tabs with long names — without it,
+	// switching to Calendar, Projects or Settings kept "2 Calendar" and paid
+	// for it by collapsing every other tab to a digit, so the bar changed shape
+	// under the user on every tab switch. The selected tab is a solid pill, so
+	// its short label identifies it as well as the long one does.
+	// tabsWidthMixed measures an arrangement where the selected tab is fixed at
+	// selLabel and the others use the given candidates array.
+	selFull := full[m.tab]
+	if selRunes := []rune(selFull); avail > 0 && len(selRunes) > avail {
 		// Degenerate: selected title alone exceeds avail — clip it rather than
 		// overflow; unselected tabs collapse to bare numbers.
-		selLabel = string(selRunes[:avail])
+		selFull = string(selRunes[:avail])
 	}
 
-	// Pick the most-verbose unselected level that fits.
-	unselNames := nums // fallback: bare numbers always fit (single rune each)
-	for _, candidates := range [][numTabs]string{full, abbr, nums} {
-		if tabsWidthMixed(candidates, m.tab, selLabel) <= avail {
-			unselNames = candidates
+	levels := []struct {
+		unsel [numTabs]string
+		sel   string
+	}{
+		{full, selFull},
+		{abbr, selFull},
+		{abbr, abbr[m.tab]},
+	}
+	// Fallback: bare numbers always fit (single rune each).
+	unselNames, selLabel := nums, selFull
+	for _, l := range levels {
+		if tabsWidthMixed(l.unsel, m.tab, l.sel) <= avail {
+			unselNames, selLabel = l.unsel, l.sel
 			break
 		}
 	}

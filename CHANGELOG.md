@@ -11,6 +11,13 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Fixed
+
+- At 80 columns the tab bar keeps its short labels on every tab instead of collapsing to digits.
+- The Tags tab header no longer clips its last column to "Tim…".
+
 ## [1.37.0] - 2026-09-23
 
 ### Added

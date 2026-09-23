@@ -130,9 +130,12 @@ func (m model) renderTagList() string {
 	if showTime {
 		headerLeft += strings.Repeat(" ", colGap) + padLeft(timeHdr, timeW)
 	}
-	padW := m.termWidth - 6 - len([]rune(headerLeft))
-	if padW < 1 {
-		padW = 1
+	// Padded to the pane's inner width (avail), not past it: two cells over
+	// meant that a header whose columns filled the pane exactly was clipped by
+	// the pane, and the clip took the last letter of "Time" for its ellipsis.
+	padW := avail - len([]rune(headerLeft))
+	if padW < 0 {
+		padW = 0
 	}
 	b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
 

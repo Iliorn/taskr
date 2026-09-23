@@ -871,56 +871,44 @@ func TestEnterOnInboundDependentJumps(t *testing.T) {
 	}
 }
 
-// TestSelectedTabNeverTruncated asserts that the selected tab's full title
-// always appears in the rendered header, even at widths where the old uniform
-// truncation scheme would have abbreviated it along with every other tab.
+// TestSelectedTabNeverTruncated asserts that the selected tab keeps its full
+// title while the bar can afford it by abbreviating the others, and that when
+// it cannot, it falls back to its curated short label — never to a mechanical
+// cut of the long one.
 //
-// Specifically, at termWidth=80 the available budget (≈58 rune-width units)
-// sits between tabsWidth(full)=67 (doesn't fit) and tabsWidth(abbr)=41 (fits).
-// Under the old scheme every tab — including the selected one — got its 3-letter
-// abbreviation. Under the new scheme the selected tab keeps its full label while
-// unselected tabs use the abbreviated form.
-//
-// Two different selected tabs are exercised: tabCalendar ("2 Calendar", the
-// longest label) and tabSettings ("7 Settings").
+// At termWidth=86 the full-label bar does not fit but the mixed arrangement
+// (selected full, others abbreviated) does. At termWidth=80 only the all-short
+// bar fits: the selected tab takes its short label rather than collapsing every
+// other tab to a bare digit, which is what it used to do.
 func TestSelectedTabNeverTruncated(t *testing.T) {
 	applyLang(string(langEN))
 
 	cases := []struct {
 		selectedTab tab
-		fullLabel   string
-		abbrLabel   string
+		width       int
+		want        string
 	}{
-		{tabCalendar, "2 Calendar", "2 Cal"},
-		{tabSettings, "7 Settings", "7 Set"},
+		{tabCalendar, 86, "2 Calendar"},
+		{tabSettings, 86, "7 Settings"},
+		{tabCalendar, 80, "2 Cal "},
+		{tabSettings, 80, "7 Setup"},
 	}
 
-	// termWidth=80 gives avail≈58: full labels (width 67) don't fit as a set,
-	// but the mixed arrangement (selected=full, others=abbr, width≈47) does.
 	for _, tc := range cases {
-		t.Run(tc.fullLabel, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s@%d", strings.TrimSpace(tc.want), tc.width), func(t *testing.T) {
 			m := newTestModel()
-			m.termWidth = 80
+			m.termWidth = tc.width
 			m.termHeight = 30
 			m.tab = tc.selectedTab
 			m.refreshCaches()
 
-			out := m.View()
-			header := strings.Split(out, "\n")[0]
-
-			if !strings.Contains(header, tc.fullLabel) {
-				t.Errorf("selected tab %q: full label %q missing from header: %q",
-					tc.fullLabel, tc.fullLabel, header)
+			header := ansi.Strip(strings.Split(m.View(), "\n")[0])
+			if !strings.Contains(header, tc.want) {
+				t.Errorf("width %d: selected label %q missing from header: %q", tc.width, tc.want, header)
 			}
-			// The abbreviated form of the selected tab must NOT appear — if it
-			// does, the label was truncated despite being selected.
-			// Guard: make sure abbrLabel is not a prefix of fullLabel so the
-			// check is meaningful (it isn't: "8 Lea" ≠ prefix of "8 Learnings"
-			// but the latter contains it; only flag if it's the exact token not
-			// followed by more word characters, so we use HasPrefix test below).
-			if strings.Contains(header, tc.abbrLabel) && !strings.Contains(header, tc.fullLabel) {
-				t.Errorf("selected tab %q: got abbreviated %q instead of full label",
-					tc.fullLabel, tc.abbrLabel)
+			// The other tabs keep a word, not a bare digit.
+			if !strings.Contains(header, "1 Tasks") {
+				t.Errorf("width %d: the other tabs collapsed: %q", tc.width, header)
 			}
 		})
 	}
@@ -954,6 +942,10 @@ func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 				tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"),
 				tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings"),
 			}[tc.tb]
+			shortLabel := [numTabs]string{
+				tr("1 Tasks"), tr("2 Cal"), tr("3 Proj"),
+				tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Setup"),
+			}[tc.tb]
 
 			for _, width := range []int{40, 50, 60, 70, 80, 100, 120} {
 				m := newTestModel()
@@ -975,18 +967,18 @@ func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 					}
 				}
 
-				// Selected-tab guarantee: full label must appear in the header
-				// when there is room for it — i.e. the selected tab's full label
-				// plus the minimum-width unselected tabs (bare numbers) plus
-				// separators all fit in avail.
+				// Selected-tab guarantee: the full label or the curated short
+				// one must appear in the header when there is room for it — i.e.
+				// the selected tab's full label plus the minimum-width unselected
+				// tabs (bare numbers) plus separators all fit in avail.
 				// avail ≈ termWidth − titleW(5) − 2 − hintW(11) − 4 = termWidth − 22.
 				// Minimum unselected contribution: (numTabs−1) separators + (numTabs−1)×1.
 				approxMinWidth := len([]rune(fullLabel)) + (numTabs - 1) + (numTabs - 1)
 				if width-22 >= approxMinWidth {
 					header := lines[0]
-					if !strings.Contains(header, fullLabel) {
-						t.Errorf("tab=%d width=%d: selected tab full label %q missing from header: %q",
-							tc.tb, width, fullLabel, header)
+					if !strings.Contains(header, fullLabel) && !strings.Contains(header, shortLabel) {
+						t.Errorf("tab=%d width=%d: selected tab label %q/%q missing from header: %q",
+							tc.tb, width, fullLabel, shortLabel, header)
 					}
 				}
 			}
@@ -1142,6 +1134,32 @@ func TestTabBarFitsTheWidthItIsGiven(t *testing.T) {
 					t.Fatalf("lang=%s tab=%v: renderTabs(%d) rendered %d cells", lang, tb, avail, got)
 				}
 			}
+		}
+	}
+}
+
+// On a window that fits the short labels, the bar reads the same whichever
+// tab is selected. It used to keep the selected tab's full label at any cost,
+// so at 80 columns switching to Calendar, Projects or Settings collapsed every
+// other tab to a bare digit and the bar changed shape on every switch.
+// English only: the Danish and German short labels do not fit 80 columns, so
+// there every tab gets the same digits-and-one-name bar.
+func TestTabBarKeepsItsLabelsAcrossTabsAt80Columns(t *testing.T) {
+	m := modelWithTasks(t, todo.New("alpha"))
+	m.termWidth, m.termHeight = 80, 24
+	want := ""
+	for tb := tab(0); tb < numTabs; tb++ {
+		if !tabVisible(tb) {
+			continue
+		}
+		m.tab = tb
+		bar := strings.SplitN(ansi.Strip(m.View()), "\n", 2)[0]
+		if want == "" {
+			want = bar
+			continue
+		}
+		if bar != want {
+			t.Errorf("the bar changed on tab %d\n got: %q\nwant: %q", tb, bar, want)
 		}
 	}
 }

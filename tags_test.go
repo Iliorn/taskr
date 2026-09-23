@@ -376,3 +376,20 @@ func TestTagTaskListOrder(t *testing.T) {
 		t.Errorf("untagged list = %v, want just the untagged top-level task", untagged)
 	}
 }
+
+// The Tags header is padded to the pane's inner width. It used to be padded
+// two cells past it, so whenever the columns filled the pane exactly the pane
+// clipped the header and its ellipsis took the last letter: "Tim…".
+func TestTagHeaderIsNeverClipped(t *testing.T) {
+	a := todo.New("alpha")
+	a.Tags = []string{"code"}
+	m := modelWithTasks(t, a)
+	m.tab = tabTags
+	for w := 40; w <= 160; w++ {
+		m.termWidth, m.termHeight = w, 24
+		header := strings.SplitN(ansi.Strip(m.renderTagList()), "\n", 2)[0]
+		if got := ansi.StringWidth(header); got > w-8 {
+			t.Fatalf("width %d: header is %d cells, pane holds %d: %q", w, got, w-8, header)
+		}
+	}
+}
