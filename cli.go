@@ -1918,8 +1918,9 @@ func cliUndo(args []string) int {
 }
 
 // stdinIsTTY reports whether stdin is an interactive terminal — the gate for
-// asking a y/N question at all.
-func stdinIsTTY() bool {
+// asking a y/N question at all. A variable so a test can drive the prompting
+// paths (suggest's link loop) with scripted answers on a pipe.
+var stdinIsTTY = func() bool {
 	fi, err := os.Stdin.Stat()
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
