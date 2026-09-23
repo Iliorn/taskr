@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"flag"
@@ -70,7 +71,8 @@ func startSyncServer(listen, token string) (*http.Server, func(), error) {
 //
 // It is single-owner by design: one shared bearer token, not multi-tenant.
 // Anyone can run their own instance; the transport (Tailscale IP, localhost
-// behind a reverse proxy, LAN) is a deployment choice via --listen.
+// behind a reverse proxy, LAN) is a deployment choice via --listen, and
+// https is --tls-cert/--tls-key (servetls.go).
 
 func cliServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
@@ -80,6 +82,9 @@ func cliServe(args []string) int {
 		"shared bearer token clients must present (or set TASKR_SYNC_TOKEN)")
 	newToken := fs.Bool("new-token", false,
 		"mint a strong token, store it as this machine's server token, print it, and exit")
+	tlsCert := fs.String("tls-cert", "",
+		"serve https with this PEM certificate (e.g. from `tailscale cert` or Let's Encrypt; re-read when renewed)")
+	tlsKey := fs.String("tls-key", "", "the PEM private key for --tls-cert")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -96,6 +101,21 @@ func cliServe(args []string) int {
 	// better placed to judge it than a length check is.
 	if why := weakSyncToken(*token); why != "" {
 		fmt.Fprintf(os.Stderr, "taskr serve: warning: the token is %s\n", why)
+	}
+	if (*tlsCert == "") != (*tlsKey == "") {
+		fmt.Fprintln(os.Stderr, "taskr serve: --tls-cert and --tls-key go together; pass both, or neither for plain http")
+		return 2
+	}
+	// Loaded before the store is opened or the port bound, so a wrong path is
+	// the first thing the operator sees rather than a client's failed handshake.
+	var tlsConfig *tls.Config
+	if *tlsCert != "" {
+		certs, err := newCertReloader(*tlsCert, *tlsKey, log.Printf)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "taskr serve: %v\n", err)
+			return 1
+		}
+		tlsConfig = serveTLSConfig(certs)
 	}
 	if err := openStore(); err != nil {
 		fmt.Fprintf(os.Stderr, "taskr serve: open store: %v\n", err)
@@ -114,23 +134,43 @@ func cliServe(args []string) int {
 		Addr:              *listen,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		TLSConfig:         tlsConfig,
+	}
+	ln, err := net.Listen("tcp", *listen)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "taskr serve: %v\n", err)
+		return 1
 	}
 	// Graceful stop: SIGINT/SIGTERM (^C, systemctl stop) closes the listener
-	// so ListenAndServe returns cleanly and the WAL gets checkpointed on the
-	// way out instead of surviving as a multi-megabyte sidecar.
+	// so Serve returns cleanly and the WAL gets checkpointed on the way out
+	// instead of surviving as a multi-megabyte sidecar.
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigc
 		_ = httpServer.Close()
 	}()
-	fmt.Fprintf(os.Stderr, "taskr serve: listening on %s (POST /v1/sync)\n", *listen)
-	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	scheme := "http"
+	if tlsConfig != nil {
+		scheme = "https"
+	}
+	fmt.Fprintf(os.Stderr, "taskr serve: listening on %s://%s (POST /v1/sync)\n", scheme, *listen)
+	if err := serveOn(httpServer, ln); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "taskr serve: %v\n", err)
 		return 1
 	}
 	checkpointStore()
 	return 0
+}
+
+// serveOn serves s on ln, over TLS when s carries a TLS configuration. The
+// certificate comes from TLSConfig.GetCertificate, which is why ServeTLS gets
+// no file names: the reloader owns them.
+func serveOn(s *http.Server, ln net.Listener) error {
+	if s.TLSConfig != nil {
+		return s.ServeTLS(ln, "", "")
+	}
+	return s.Serve(ln)
 }
 
 // cliNewServerToken mints a server token, stores it, and prints it. Rotating
