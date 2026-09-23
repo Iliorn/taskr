@@ -7,38 +7,7 @@ import (
 	"time"
 
 	"github.com/Iliorn/taskr/todo"
-	"github.com/charmbracelet/x/ansi"
 )
-
-// joinColumns merges two pre-rendered column streams into one block. Each left
-// line is padded to leftW cells (counting ANSI escapes correctly via
-// ansi.StringWidth) before a `gap`-wide spacer and the matching right line.
-// Short columns are padded with blank lines so the join stays aligned.
-func joinColumns(left, right string, leftW, gap int) string {
-	leftLines := strings.Split(strings.TrimRight(left, "\n"), "\n")
-	rightLines := strings.Split(strings.TrimRight(right, "\n"), "\n")
-	n := len(leftLines)
-	if len(rightLines) > n {
-		n = len(rightLines)
-	}
-	sep := strings.Repeat(" ", gap)
-	var b strings.Builder
-	for i := 0; i < n; i++ {
-		var l, r string
-		if i < len(leftLines) {
-			l = leftLines[i]
-		}
-		if i < len(rightLines) {
-			r = rightLines[i]
-		}
-		pad := leftW - ansi.StringWidth(l)
-		if pad < 0 {
-			pad = 0
-		}
-		b.WriteString(l + strings.Repeat(" ", pad) + sep + r + "\n")
-	}
-	return b.String()
-}
 
 // ── Detail pages ──────────────────────────────────────────────────────────────
 

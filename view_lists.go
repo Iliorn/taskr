@@ -1703,7 +1703,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 	}
 
 	var lines []string
-	selected := -1
+	var selected int
 	if w >= settingsTwoColMinWidth {
 		colW := (w - settingsColGap) / 2
 		left, leftSel := renderColumn(settingsGroups[:settingsColumnSplit], colW)
