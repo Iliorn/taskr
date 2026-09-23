@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
+	"strings"
 	"time"
 )
 
@@ -167,8 +169,11 @@ func resolveFirstSync(cfg syncConfig, adoptLocalFlag, adoptRemoteFlag bool) int 
 		// On stderr and outside --quiet: this is where the user's tasks went.
 		// The import hint is the recovery for the one bad moment this ordering
 		// allows — the store is already cleared when the pull runs, so a sync
-		// that fails here leaves an empty list and a file to put back.
-		fmt.Fprintf(os.Stderr, "taskr sync: backed up %d task(s) to %s and cleared them here; pulling the fleet's list (taskr import %s puts them back)\n", n, backup, backup)
+		// that fails here leaves an empty list and a file to put back. The
+		// command is quoted because it is meant to be pasted: on macOS the
+		// state directory is under "Application Support", and an unquoted
+		// path split there hands `taskr import` a file that does not exist.
+		fmt.Fprintf(os.Stderr, "taskr sync: backed up %d task(s) to %s and cleared them here; pulling the fleet's list (taskr import %s puts them back)\n", n, backup, shellArg(backup, runtime.GOOS))
 	case adoptLocalFlag:
 		// Nothing to do: pushing the local set is the adoption.
 	default:
@@ -184,6 +189,21 @@ func resolveFirstSync(cfg syncConfig, adoptLocalFlag, adoptRemoteFlag bool) int 
 		fmt.Fprintf(os.Stderr, "taskr sync: warning: could not record the first-sync choice: %v\n", err)
 	}
 	return 0
+}
+
+// shellArg quotes s for pasting into the shell a user on goos is likely to be
+// running, and leaves it bare when nothing in it needs quoting — a path in a
+// sentence reads better without quotes it does not need. POSIX shells get
+// single quotes, which nothing inside expands; Windows gets double quotes,
+// the one form cmd and PowerShell both take for a path with spaces.
+func shellArg(s, goos string) string {
+	if s != "" && !strings.ContainsAny(s, " \t\n'\"$`\\!*?[]{}()<>|&;#~%^") {
+		return s
+	}
+	if goos == "windows" {
+		return `"` + s + `"`
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // adoptRemote is the answer that had no implementation: take the fleet's list

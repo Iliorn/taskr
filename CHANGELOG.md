@@ -17,6 +17,10 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 - A subtask can't outrank its parent, and a parent moved down takes its subtasks with it.
 
+### Fixed
+
+- `taskr sync --adopt-remote` prints its `taskr import` undo command quoted, so it pastes on macOS.
+
 ## [1.36.0] - 2026-09-13
 
 ### Changed
