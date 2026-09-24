@@ -1,14 +1,6 @@
-package paths
-
-import (
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
-)
-
-// Package paths decides where taskr keeps its files. There are four kinds and they
-// belong in four places, because that is what the platform conventions say:
+// Package paths decides where taskr keeps its files. There are four kinds and
+// they belong in four places, because that is what the platform conventions
+// say:
 //
 //	config  settings.json, sync.json          — yours to edit, worth backing up
 //	data    tasks.db (+ WAL sidecars)         — the tasks themselves
@@ -27,6 +19,14 @@ import (
 //
 // Rule 3 only ever applies to a fresh install, which is why rule 2 has no
 // migration step and no prompt: nothing moves, nothing needs to be told.
+package paths
+
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+)
 
 // AppDirName is the directory taskr adds under each platform base.
 const AppDirName = "taskr"
