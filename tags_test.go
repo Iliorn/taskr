@@ -256,8 +256,11 @@ func TestTagsTabNarrowNoWrap(t *testing.T) {
 // TestTagBarExpandsWithWidth verifies that the progress bar grows as the
 // terminal widens and never overflows the available content area.
 func TestTagBarExpandsWithWidth(t *testing.T) {
+	// Done, so the bar is all fill: the unfilled track is blank cells on a
+	// background tint, which leaves nothing to count once styles are stripped.
 	task := todo.New("some task")
 	task.Tags = []string{"work"}
+	task.Toggle()
 
 	widths := []int{80, 120, 200}
 	prevBarW := 0
@@ -268,7 +271,7 @@ func TestTagBarExpandsWithWidth(t *testing.T) {
 		m.refreshCaches()
 
 		out := m.renderTagList()
-		// Measure bar width by counting █ and ─ on the data row (the header
+		// Measure bar width by counting █ on the data row (the header
 		// row won't have them). A partial-block glyph (▏▎▍▌▋▊▉) occupies one
 		// cell and one Unicode code-point; ansi.StringWidth counts it correctly.
 		barW := 0
@@ -277,7 +280,7 @@ func TestTagBarExpandsWithWidth(t *testing.T) {
 			cellW := 0
 			for _, ch := range plain {
 				switch ch {
-				case '█', '─':
+				case '█':
 					cellW++
 				case '▏', '▎', '▍', '▌', '▋', '▊', '▉':
 					cellW++

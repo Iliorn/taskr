@@ -1,6 +1,10 @@
 package main
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"fmt"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // ── Theme ───────────────────────────────────────────────────────────────────
 //
@@ -166,6 +170,9 @@ var (
 	confirmStyle lipgloss.Style
 	searchStyle  lipgloss.Style
 	dimStyle     lipgloss.Style
+	// barTrackStyle paints the unfilled part of a progress bar: a background
+	// a small step from the base towards dim — see barTrack.
+	barTrackStyle lipgloss.Style
 	// selectedDimRowStyle is the dim tone carrying the selection background, so
 	// a selected row's secondary columns stay secondary instead of jumping to
 	// full strength the moment the cursor lands on them.
@@ -268,6 +275,7 @@ func applyTheme(t theme) {
 	toastInfoStyle = lipgloss.NewStyle().Foreground(t.blue).Bold(true)
 	searchStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.green).Padding(0, 1).MarginLeft(2)
 	dimStyle = lipgloss.NewStyle().Foreground(t.dim)
+	barTrackStyle = lipgloss.NewStyle().Background(mixHex(t.bg, t.dim, 0.3))
 	selectedDimRowStyle = dimStyle.Background(t.sel)
 
 	focusChipStyle = lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(t.orange).Padding(0, 1)
@@ -389,4 +397,19 @@ var statsGradient = []lipgloss.Style{
 	lipgloss.NewStyle().Foreground(lipgloss.Color("#63b2db")),
 	lipgloss.NewStyle().Foreground(lipgloss.Color("#6ec3ed")),
 	lipgloss.NewStyle().Foreground(lipgloss.Color("#78d4ff")),
+}
+
+// mixHex mixes two #rrggbb colours, f=0 giving a and f=1 giving b. A colour
+// that is not six-digit hex (a theme using ANSI numbers) is returned as b
+// rather than guessed at.
+func mixHex(a, b lipgloss.Color, f float64) lipgloss.Color {
+	var ar, ag, ab, br, bg, bb int
+	if _, err := fmt.Sscanf(string(a), "#%02x%02x%02x", &ar, &ag, &ab); err != nil {
+		return b
+	}
+	if _, err := fmt.Sscanf(string(b), "#%02x%02x%02x", &br, &bg, &bb); err != nil {
+		return b
+	}
+	mix := func(x, y int) int { return x + int(float64(y-x)*f+0.5) }
+	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", mix(ar, br), mix(ag, bg), mix(ab, bb)))
 }

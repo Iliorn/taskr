@@ -213,14 +213,16 @@ func (m model) renderTagList() string {
 			if gradIdx >= gradLen {
 				gradIdx = gradLen - 1
 			}
-			barStr.WriteString(tagProgressGradient[gradIdx].Render(tagBarEighths[partialEighths]))
+			// The partial glyph's unfilled part is its background, so it takes
+			// the track's tint and the fill runs straight into it.
+			barStr.WriteString(tagProgressGradient[gradIdx].Inherit(barTrackStyle).Render(tagBarEighths[partialEighths]))
 			// Remaining empty cells: one fewer because the partial cell occupies a slot.
 			empty := barW - filled - 1
 			if empty > 0 {
-				barStr.WriteString(dimStyle.Render(strings.Repeat(barTrack, empty)))
+				barStr.WriteString(barTrackStyle.Render(strings.Repeat(barTrack, empty)))
 			}
 		} else if filled < barW {
-			barStr.WriteString(dimStyle.Render(strings.Repeat(barTrack, barW-filled)))
+			barStr.WriteString(barTrackStyle.Render(strings.Repeat(barTrack, barW-filled)))
 		}
 
 		if m.mode == modeEditTag && m.editingTagName == tag {
@@ -447,7 +449,7 @@ func (m model) renderStatsList() string {
 		// call rather than one per cell (ARCHITECTURE.md, "Group same-style
 		// runs") — this loop used to emit an escape pair per empty column.
 		if empty := barW - filled; empty > 0 {
-			bar.WriteString(dimStyle.Render(strings.Repeat(barTrack, empty)))
+			bar.WriteString(barTrackStyle.Render(strings.Repeat(barTrack, empty)))
 		}
 		sb.WriteString(detailLabelStyle.Render(labelStr) + normalStyle.Render(padRight(valStr, valW)) +
 			bar.String() + dimStyle.Render(fmt.Sprintf(" %3d%%", int(pct*100))) + "\n")

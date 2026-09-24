@@ -147,9 +147,11 @@ const (
 	// It used to be "░", a half-density shade block: on the Tags tab, where
 	// most rows sit at 0%, that meant twenty-odd shaded cells per row and a
 	// solid wall of texture down the pane in which no row could be told from
-	// any other. A rule reads better than a texture — the fill is a block, the
-	// track is a line — and the bar's extent is still visible.
-	barTrack = "─"
+	// any other. Then it was "─", a rule, which still drew a line through every
+	// row. It is now blank cells on a faint background tint (barTrackStyle):
+	// the bar's extent is still there to see, but as a shade rather than as
+	// marks, so an empty bar reads as empty.
+	barTrack = " "
 
 	// tagsReservePct caps how much of the pane the Tags column may hold back
 	// from the task titles when the title column grows into spare width.
