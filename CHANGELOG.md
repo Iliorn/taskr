@@ -11,6 +11,19 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Changed
+
+- Tags and Projects rows show open count, last activity and the next task, not progress bars.
+- Tags and Projects hide finished groups, and the done tasks inside one, until you press `h`.
+- Inside a tag or project, open tasks come first, ranked, with their subtasks indented under them.
+- The project timeline appears only when an open task has a date, and always reaches today.
+
+### Added
+
+- Projects: `s` changes the sort order and `f` shows the project's tasks on the Tasks tab.
+
 ## [1.38.0] - 2026-09-24
 
 ### Added

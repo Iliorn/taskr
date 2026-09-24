@@ -219,7 +219,8 @@ func (m model) listPanelTitle() string {
 	case tabTags:
 		// Same place the Tasks tab says it: on the box whose order it names,
 		// not in the status line above the tab where it read as a stray label.
-		return tr("Overview") + " [" + tr("sort:") + " " + m.tagSortLabel() + "]"
+		hidden := hiddenFinishedGroups(m.cache.tagGroups, m.showFinishedGroups, tagFilterMatch(strings.ToLower(m.tagTabSearchQuery)))
+		return groupListTitle(m.tagOrder, hidden)
 	case tabBoard:
 		if m.mode == modeBoardCard {
 			return tr("Card")
@@ -241,6 +242,12 @@ func (m model) listPanelTitle() string {
 		return tr("Preferences")
 	}
 	return tr("Overview")
+}
+
+// projectListTitle is groupListTitle for the Projects list.
+func (m model) projectListTitle() string {
+	hidden := hiddenFinishedGroups(m.cache.projectGroups, m.showFinishedGroups, projectFilterMatch(m.searchQuery))
+	return groupListTitle(m.projectOrder, hidden)
 }
 
 func projectTimelineTitle(project string) string {
@@ -507,18 +514,15 @@ func (m model) sortLabel() string {
 	}
 }
 
-// tagSortLabel names the ordering currently applied to the Tags-tab list.
-func (m model) tagSortLabel() string {
-	switch m.tagSort {
-	case tagSortCount:
-		return tr("count")
-	case tagSortProgress:
-		return tr("progress")
-	case tagSortRecent:
-		return tr("recent")
-	default:
-		return tr("alpha")
+// groupListTitle names a Tags or Projects list box: its order, and how many
+// finished groups it is leaving out, so a short list reads as filtered rather
+// than as everything there is.
+func groupListTitle(order groupSort, hidden int) string {
+	title := tr("Overview") + " [" + tr("sort:") + " " + order.label() + "]"
+	if hidden > 0 {
+		title += " " + fmt.Sprintf(tr("[+%d finished]"), hidden)
 	}
+	return title
 }
 
 // syncGlyph reports background-sync health for the status line: a red mark
@@ -1054,10 +1058,9 @@ func (m model) buildSideBySide(w, outerH int) string {
 func (m model) buildProjectListContent(w, listH int) string {
 	projects := m.allProjectsForList()
 	if len(projects) == 0 {
-		empty := normalStyle.Render(tr("  No projects yet. Add a project to a task first.")) + "\n" +
-			dimStyle.Render(tr("  A project groups its tasks into a timeline on this tab."))
-		if m.searchQuery != "" {
-			empty = normalStyle.Render(tr("  No projects match your search."))
+		empty := m.renderProjectListContent(nil)
+		if m.searchQuery == "" && len(m.cache.projectGroups) == 0 {
+			empty += "\n" + dimStyle.Render(tr("  A project groups its tasks into a timeline on this tab."))
 		}
 		innerH := panelContentHeight(listH)
 		emptyLines := strings.Split(empty, "\n")
@@ -1068,7 +1071,7 @@ func (m model) buildProjectListContent(w, listH int) string {
 			emptyLines = emptyLines[:innerH]
 		}
 		panel := listPanelStyle.Width(w).Render(strings.Join(emptyLines, "\n"))
-		return withBorderTitle(panel, tr("Overview"), w, false)
+		return withBorderTitle(panel, m.projectListTitle(), w, false)
 	}
 
 	// ── Drilled-in view: task list (left) + right column (right) ────────────
@@ -1100,7 +1103,7 @@ func (m model) buildProjectListContent(w, listH int) string {
 	}
 	truncateLines(projLines, w-2)
 	projRendered := listPanelStyle.Width(w).Render(strings.Join(projLines, "\n"))
-	projRendered = withBorderTitle(projRendered, tr("Overview"), w, false)
+	projRendered = withBorderTitle(projRendered, m.projectListTitle(), w, false)
 
 	projRenderedLines := strings.Split(projRendered, "\n")
 	ganttOuterH := listH - len(projRenderedLines)
@@ -1109,17 +1112,28 @@ func (m model) buildProjectListContent(w, listH int) string {
 	}
 	ganttInnerH := panelContentHeight(ganttOuterH)
 
-	var ganttLines []string
+	// The pane under the list previews the selected project: its timeline
+	// when it has open work with dates to put on one, and otherwise what the
+	// Tags tab shows under a tag — its counts and the tasks enter opens.
+	project := ""
+	var tasks []todo.Todo
 	if m.projectCursor < len(projects) {
-		tasks := m.getProjectTasks(projects[m.projectCursor])
-		ganttContent := m.renderGantt(tasks)
-		ganttLines = strings.Split(ganttContent, "\n")
-		ganttEnd := len(ganttLines)
-		for ganttEnd > 0 && strings.TrimSpace(ganttLines[ganttEnd-1]) == "" {
-			ganttEnd--
-		}
-		ganttLines = ganttLines[:ganttEnd]
+		project = projects[m.projectCursor]
+		tasks = m.getProjectTasks(project)
 	}
+	var ganttLines []string
+	paneTitle := projectTimelineTitle(project)
+	if hasDatedOpenTask(tasks) {
+		ganttLines = strings.Split(m.renderGantt(tasks), "\n")
+	} else if project != "" {
+		ganttLines = m.groupPaneLines(m.cache.projectGroups[project], tasks, -1, nil, ganttInnerH, false)
+		paneTitle = "@" + project
+	}
+	ganttEnd := len(ganttLines)
+	for ganttEnd > 0 && strings.TrimSpace(ganttLines[ganttEnd-1]) == "" {
+		ganttEnd--
+	}
+	ganttLines = ganttLines[:ganttEnd]
 	if len(ganttLines) > ganttInnerH {
 		ganttLines = ganttLines[:ganttInnerH]
 	}
@@ -1128,11 +1142,7 @@ func (m model) buildProjectListContent(w, listH int) string {
 	}
 	truncateLines(ganttLines, w-2)
 	ganttRendered := listPanelStyle.Width(w).Render(strings.Join(ganttLines, "\n"))
-	project := ""
-	if m.projectCursor < len(projects) {
-		project = projects[m.projectCursor]
-	}
-	ganttRendered = withBorderTitle(ganttRendered, projectTimelineTitle(project), w, false)
+	ganttRendered = withBorderTitle(ganttRendered, paneTitle, w, false)
 
 	b := getBuilder()
 	defer putBuilder(b)
@@ -1169,10 +1179,12 @@ func (m model) buildProjectDrillNarrow(projects []string, w, innerH int) string 
 		title = cm.detailPanelTitle()
 	} else {
 		var tasks []todo.Todo
+		var sum *groupSummary
 		if m.projectCursor < len(projects) {
 			tasks = m.getProjectTasks(projects[m.projectCursor])
+			sum = m.cache.projectGroups[projects[m.projectCursor]]
 		}
-		lines = cm.renderProjectDrillTaskList(tasks)
+		lines = cm.renderProjectDrillTaskList(tasks, sum)
 	}
 	if len(lines) > innerH {
 		lines = lines[:innerH]
@@ -1187,7 +1199,18 @@ func (m model) buildProjectDrillNarrow(projects []string, w, innerH int) string 
 
 func (m model) buildProjectDrillContent(projects []string, w, outerH int) string {
 	innerH := panelContentHeight(outerH)
-	if w < projDrillMinWidth {
+	var tasks []todo.Todo
+	var sum *groupSummary
+	project := ""
+	if m.projectCursor < len(projects) {
+		project = projects[m.projectCursor]
+		tasks = m.getProjectTasks(project)
+		sum = m.cache.projectGroups[project]
+	}
+	// Without dated open work the timeline strip has nothing ahead of it to
+	// draw, so the list takes the whole width instead of sharing it with an
+	// empty column. An opened task still gets the right column for its detail.
+	if w < projDrillMinWidth || (m.pane != paneDetail && !hasDatedOpenTask(tasks)) {
 		return m.buildProjectDrillNarrow(projects, w, innerH)
 	}
 
@@ -1210,11 +1233,7 @@ func (m model) buildProjectDrillContent(projects []string, w, outerH int) string
 	// taskListCols and renderTaskLineWithSet see the correct terminal width.
 	lm := m
 	lm.termWidth = listW + 6 // View hands buildListContent w = termWidth-6
-	var tasks []todo.Todo
-	if m.projectCursor < len(projects) {
-		tasks = m.getProjectTasks(projects[m.projectCursor])
-	}
-	listLines := lm.renderProjectDrillTaskList(tasks)
+	listLines := lm.renderProjectDrillTaskList(tasks, sum)
 
 	// Right column: task detail when the user has opened a task (pane ==
 	// paneDetail), Gantt chart otherwise (pane == paneList, always-on preview).
@@ -1258,10 +1277,6 @@ func (m model) buildProjectDrillContent(projects []string, w, outerH int) string
 
 	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
 	rightPanel := ganttStyle.Width(ganttW).Render(strings.Join(rightLines, "\n"))
-	project := ""
-	if m.projectCursor < len(projects) {
-		project = projects[m.projectCursor]
-	}
 	listPanel = withBorderTitle(listPanel, projectTasksTitle(project), listW, m.pane == paneList)
 	// The right border names either the opened task or the selected project's
 	// timeline, matching the contextual title on the left task pane.
@@ -1920,203 +1935,117 @@ func (m model) buildTagDetailLines() []string {
 	if len(tags) == 0 || m.tagTabCursor >= len(tags) {
 		return strings.Split(dimStyle.Render("  No tag selected."), "\n")
 	}
-
 	tag := tags[m.tagTabCursor]
-	b := getBuilder()
-	defer putBuilder(b)
 
 	// availW is the panel's inner text width (see View: w = termWidth-6, minus
-	// the panel's horizontal padding). Every line is truncated to it so the
-	// pane never wraps on a slim window.
-	availW := m.termWidth - 8
-	if availW < 12 {
-		availW = 12
-	}
-
-	untagged := tag == untaggedKey
+	// the panel's horizontal padding).
+	availW := max(m.termWidth-8, 12)
 
 	// The task list comes from tagTaskList — the same ordered slice the drill
 	// cursor walks, so the row highlighted here is the row the keys act on.
-	// Counts and co-occurring tags are tallied off it.
 	tasks := m.tagTaskList(tag)
-	matches := make([]string, 0, len(tasks))
-	active, done, overdue := 0, 0, 0
+	var extra []string
+	if line := m.cooccurringTagsLine(tag, tasks, availW); line != "" {
+		extra = append(extra, line)
+	}
+	sel := -1
+	if m.tagTaskMode {
+		sel = m.cursor
+	}
+	// The detail pane is height-capped (see applyDetailScroll), so the list is
+	// windowed here, around the cursor, rather than left to the generic scroll.
+	maxLines := max(m.termHeight*detailMaxHeightPct/100-2, 3)
+	return m.groupPaneLines(m.cache.tagGroups[tag], tasks, sel, extra, maxLines, true)
+}
+
+// cooccurringTagsLine names the tags most often found beside tag on its open
+// tasks, as many as fit on one line.
+func (m model) cooccurringTagsLine(tag string, tasks []todo.Todo, availW int) string {
 	cooccur := make(map[string]int)
 	for i := range tasks {
-		t := tasks[i]
-		matches = append(matches, t.ID)
-		if t.Status == todo.Done {
-			done++
-		} else {
-			active++
-		}
-		if t.IsOverdue() {
-			overdue++
-		}
-		for _, tt := range t.Tags {
+		for _, tt := range tasks[i].Tags {
 			if tt != tag {
 				cooccur[tt]++
 			}
 		}
 	}
-
-	count := len(matches)
-	countWord := tr("%d task")
-	if count != 1 {
-		countWord = tr("%d tasks")
+	if len(cooccur) == 0 {
+		return ""
 	}
-	hint := "  (" + fmt.Sprintf(countWord, count)
-	switch {
-	case m.tagTaskMode:
-		hint += tr(" · d: done · t: track · enter: details · esc: back)")
-	case untagged:
-		hint += tr(" · enter: open · f: filter)")
-	default:
-		hint += tr(" · enter: open · f: filter · r: rename)")
+	type coTag struct {
+		name string
+		n    int
 	}
-	// The hint breaks between its " · " items rather than being clipped: the
-	// item a narrow pane lost was the last key, the one it existed to name.
-	for _, line := range wrapAtSep(hint, " · ", "   ", availW) {
-		b.WriteString(dimStyle.Render(truncate(line, availW)) + "\n")
+	co := make([]coTag, 0, len(cooccur))
+	for name, n := range cooccur {
+		co = append(co, coTag{name, n})
 	}
-
-	summary := fmt.Sprintf(tr("  %d active · %d done · %d overdue"), active, done, overdue)
-	b.WriteString(normalStyle.Render(truncate(summary, availW)) + "\n")
-
-	// Co-occurring tags, most frequent first. Only emit chips that fit so the
-	// line can't wrap (no mid-string truncation of styled text).
-	if len(cooccur) > 0 {
-		type coTag struct {
-			name string
-			n    int
+	sort.Slice(co, func(i, j int) bool {
+		if co[i].n != co[j].n {
+			return co[i].n > co[j].n
 		}
-		co := make([]coTag, 0, len(cooccur))
-		for name, n := range cooccur {
-			co = append(co, coTag{name, n})
-		}
-		sort.Slice(co, func(i, j int) bool {
-			if co[i].n != co[j].n {
-				return co[i].n > co[j].n
-			}
-			return co[i].name < co[j].name
-		})
-		label := tr("  often with: ")
-		budget := availW - len([]rune(label))
-		var chips []string
-		used := 0
-		for _, c := range co {
-			chip := "#" + c.name
-			w := len([]rune(chip))
-			if len(chips) > 0 {
-				w++ // separating space
-			}
-			if used+w > budget {
-				break
-			}
-			chips = append(chips, chip)
-			used += w
-		}
+		return co[i].name < co[j].name
+	})
+	label := tr("  often with: ")
+	budget := availW - len([]rune(label))
+	var chips []string
+	used := 0
+	for _, c := range co {
+		chip := "#" + c.name
+		w := len([]rune(chip))
 		if len(chips) > 0 {
-			b.WriteString(dimStyle.Render(label) + tagStyle.Render(strings.Join(chips, " ")) + "\n")
+			w++ // separating space
 		}
-	}
-	b.WriteString("\n")
-
-	if len(matches) == 0 {
-		b.WriteString(dimStyle.Render(tr("  No tasks carry this tag.")) + "\n")
-		return strings.Split(b.String(), "\n")
-	}
-
-	// The detail pane is height-capped (see applyDetailScroll). Rather than let
-	// the generic scroll indicator hide the overflow, cap the list ourselves and
-	// state how many are hidden.
-	maxVisible := m.termHeight*detailMaxHeightPct/100 - 2
-	if maxVisible < 3 {
-		maxVisible = 3
-	}
-	taskBudget := maxVisible - strings.Count(b.String(), "\n")
-	if taskBudget < 1 {
-		taskBudget = 1
-	}
-	hidden := 0
-	sel := -1
-	if m.tagTaskMode {
-		sel = m.cursor
-	}
-	if len(matches) > taskBudget {
-		shown := taskBudget - 1 // reserve a line for the "and N more" notice
-		if shown < 0 {
-			shown = 0
+		if used+w > budget {
+			break
 		}
-		hidden = len(matches) - shown
-		// Window the capped list around the cursor, so drilling past the
-		// budget scrolls instead of parking the selection out of sight.
-		start := 0
+		chips = append(chips, chip)
+		used += w
+	}
+	if len(chips) == 0 {
+		return ""
+	}
+	return dimStyle.Render(label) + tagStyle.Render(strings.Join(chips, " "))
+}
+
+// groupPaneLines is the pane under a Tags or Projects list, and the Tags tab's
+// drilled-in list: the group's counts, any extra lines the tab adds, then its
+// tasks in the order enter walks them, windowed to maxLines around sel (-1
+// when nothing is selected), and the done tasks' fold line.
+func (m model) groupPaneLines(s *groupSummary, tasks []todo.Todo, sel int, extra []string, maxLines int, showProject bool) []string {
+	lines := append(m.groupPaneHead(s, m.termWidth-8), extra...)
+	lines = append(lines, "")
+	fold := m.groupFoldNote(s)
+	if len(tasks) == 0 {
+		lines = append(lines, dimStyle.Render(tr("  Nothing open here.")))
+		if fold != "" {
+			lines = append(lines, fold)
+		}
+		return lines
+	}
+
+	budget := max(maxLines-len(lines)-1, 1) // -1: the column header
+	if fold != "" && len(tasks) < budget {
+		budget-- // room for the fold line under a list that fits
+	}
+	start, shown := 0, min(len(tasks), budget)
+	more := 0
+	if len(tasks) > budget {
+		shown = max(budget-1, 1) // a line for the "and N more" notice
 		if sel >= shown {
 			start = sel - shown + 1
 		}
-		if start+shown > len(matches) {
-			start = len(matches) - shown
-		}
-		if start < 0 {
-			start = 0
-		}
-		matches = matches[start : start+shown]
-		if sel >= 0 {
-			sel -= start
-		}
+		start = max(min(start, len(tasks)-shown), 0)
+		more = len(tasks) - start - shown
 	}
-
-	for i, id := range matches {
-		t := m.get(id)
-		if t == nil {
-			continue
-		}
-		status := "[ ]"
-		if t.Status == todo.Done {
-			status = "[✓]"
-		}
-		dueStr := ""
-		if !t.DueDate.IsZero() {
-			dueStr = tr("  due: ") + t.DueDate.Format("02-01-06")
-			if t.IsOverdue() {
-				dueStr += " !"
-			}
-		}
-		projStr := ""
-		if t.Project != "" {
-			projStr = "  [" + t.Project + "]"
-		}
-		lead := cursorGap
-		if i == sel {
-			lead = cursorMark
-		}
-		// Clip the title, not the facts after it: a row cut through its due
-		// date ("due: 22-09-2…") says less than one cut through its title.
-		fixed := lead + status + " "
-		titleW := availW - len([]rune(fixed)) - len([]rune(dueStr)) - len([]rune(projStr))
-		line := truncate(fixed+t.Title+dueStr+projStr, availW)
-		if titleW >= minClippedTitleW {
-			line = fixed + truncate(t.Title, titleW) + dueStr + projStr
-		}
-		switch {
-		case i == sel:
-			b.WriteString(selectedStyle.Render(line) + "\n")
-			continue
-		case t.IsOverdue():
-			b.WriteString(overdueStyle.Render(line) + "\n")
-		case t.Status == todo.Done:
-			b.WriteString(doneCountStyle.Render(line) + "\n")
-		default:
-			b.WriteString(normalStyle.Render(line) + "\n")
-		}
+	lines = append(lines, m.renderGroupTaskRows(tasks, start, shown, sel, showProject)...)
+	switch {
+	case more > 0:
+		lines = append(lines, dimStyle.Render(fmt.Sprintf(tr("  … and %d more"), more)))
+	case fold != "":
+		lines = append(lines, fold)
 	}
-
-	if hidden > 0 {
-		b.WriteString(dimStyle.Render(truncate(fmt.Sprintf(tr("  … and %d more"), hidden), availW)) + "\n")
-	}
-
-	return strings.Split(b.String(), "\n")
+	return lines
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────

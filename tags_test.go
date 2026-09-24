@@ -84,8 +84,8 @@ func TestUntaggedRowAndFilter(t *testing.T) {
 	tagged.Tags = []string{"x"}
 	m := newTagModel(tagged, todo.New("bare one"), todo.New("bare two"))
 
-	if m.cache.untaggedTotal != 2 {
-		t.Fatalf("untaggedTotal = %d, want 2", m.cache.untaggedTotal)
+	if g := m.cache.tagGroups[untaggedKey]; g == nil || g.open != 2 {
+		t.Fatalf("untagged group = %+v, want 2 open", g)
 	}
 
 	tags := m.getFilteredTagsForTab()
@@ -118,24 +118,18 @@ func TestUntaggedRowHiddenWhenAllTagged(t *testing.T) {
 }
 
 // TestTagDetailCapsAndOrders verifies the detail pane stays within its height
-// cap (no opaque overflow) and surfaces overdue/active tasks before done ones.
+// cap (no opaque overflow), puts the most urgent open task first, and keeps
+// done tasks out of the list until finished work is shown.
 func TestTagDetailCapsAndOrders(t *testing.T) {
-	mk := func(title string, overdue, done bool) todo.Todo {
-		td := todo.New(title)
-		switch {
-		case done:
-			td.Status = todo.Done
-		case overdue:
-			td.DueDate = time.Now().AddDate(0, 0, -3)
-		}
-		return td
-	}
 	var todos []todo.Todo
 	for i := 0; i < 30; i++ {
-		todos = append(todos, mk(fmt.Sprintf("done-%02d", i), false, true))
+		todos = append(todos, todo.New(fmt.Sprintf("active-%02d", i)))
 	}
-	todos = append(todos, mk("zeta-active", false, false))
-	todos = append(todos, mk("alpha-overdue", true, false))
+	late := todo.New("alpha-overdue")
+	late.DueDate = time.Now().AddDate(0, 0, -3)
+	finished := todo.New("finished-one")
+	finished.Status = todo.Done
+	todos = append(todos, late, finished)
 
 	m := newTagModel(todos...)
 	m.tab = tabTags
@@ -143,8 +137,7 @@ func TestTagDetailCapsAndOrders(t *testing.T) {
 	m.refreshCaches()
 	m.tagTabCursor = 0 // the untagged row
 
-	lines := m.buildTagDetailLines()
-	content := strings.TrimRight(strings.Join(lines, "\n"), "\n")
+	content := strings.TrimRight(strings.Join(m.buildTagDetailLines(), "\n"), "\n")
 	got := len(strings.Split(content, "\n"))
 	maxVisible := m.termHeight*detailMaxHeightPct/100 - 2
 	if got > maxVisible {
@@ -153,77 +146,67 @@ func TestTagDetailCapsAndOrders(t *testing.T) {
 	if !strings.Contains(content, "more") {
 		t.Errorf("expected an 'and N more' notice, got:\n%s", content)
 	}
-	// Overdue/active come first; with a tight budget the done-NN tasks must not
-	// crowd them out.
 	if !strings.Contains(content, "Alpha-overdue") {
-		t.Errorf("overdue task should be shown, missing from:\n%s", content)
+		t.Errorf("the overdue task ranks first and should be shown, missing from:\n%s", content)
 	}
-	if strings.Contains(content, "Done-00") {
-		t.Errorf("done tasks should sort after overdue/active, but a done task displaced them:\n%s", content)
+	if strings.Contains(content, "Finished-one") {
+		t.Errorf("done tasks stay folded until h, but one is listed:\n%s", content)
+	}
+	if !strings.Contains(content, "1 done") {
+		t.Errorf("the counts line should still count the done task:\n%s", content)
 	}
 }
 
-func TestTagStatsAgeAndTracked(t *testing.T) {
-	a := todo.New("old open")
-	a.Tags = []string{"work"}
-	a.CreatedAt = time.Now().AddDate(0, 0, -12)
-	a.TimeEntries = []todo.TimeEntry{{
-		StartedAt: time.Now().Add(-90 * time.Minute),
-		StoppedAt: time.Now(),
-	}}
-	b := todo.New("recent open")
-	b.Tags = []string{"work"}
-	b.CreatedAt = time.Now().AddDate(0, 0, -2)
-	c := todo.New("done")
-	c.Tags = []string{"work"}
-	c.Status = todo.Done
-	c.CreatedAt = time.Now().AddDate(0, 0, -100) // done → excluded from avg age
+// A row says how much is open in the tag and what to do next in it; a tag with
+// nothing open is left out until finished work is shown.
+func TestTagRowSaysWhatIsOpen(t *testing.T) {
+	low := todo.New("routine chore")
+	low.Tags = []string{"home"}
+	high := todo.New("fix the boiler")
+	high.Tags = []string{"home"}
+	high.Priority = todo.PriorityHigh
+	old := todo.New("paint the fence")
+	old.Tags = []string{"home"}
+	old.Status = todo.Done
+	gone := todo.New("archived thing")
+	gone.Tags = []string{"attic"}
+	gone.Status = todo.Done
 
-	stats := computeTagStats(todoPtrs([]todo.Todo{a, b, c}))
-	s := stats["work"]
-	if s.openCount != 2 {
-		t.Fatalf("openCount = %d, want 2 (done task excluded)", s.openCount)
-	}
-	avgDays := (s.ageSum / time.Duration(s.openCount)).Hours() / 24
-	if avgDays < 6.5 || avgDays > 7.5 {
-		t.Errorf("avg open age = %.2f days, want ~7 (12+2)/2", avgDays)
-	}
-	if s.tracked < 89*time.Minute || s.tracked > 91*time.Minute {
-		t.Errorf("tracked = %v, want ~90m", s.tracked)
-	}
-
-	m := newTagModel(a, b, c)
+	m := newTagModel(low, high, old, gone)
 	m.termWidth = 120
 	m.tab = tabTags
 	m.refreshCaches()
-	out := m.renderTagList()
-	// Header columns plus the formatted values: done/total, avg age of the two
-	// open tasks (~7d), and the tracked 90m.
-	for _, want := range []string{"Done", "Age", "Time", "1/3", "7.0d", "1h30m"} {
+
+	out := ansi.Strip(m.renderTagList())
+	for _, want := range []string{"Open", "Next up", "#home", "Fix the boiler"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in tag list, got:\n%s", want, out)
 		}
 	}
+	if strings.Contains(out, "#attic") {
+		t.Errorf("a finished tag should be hidden by default:\n%s", out)
+	}
+	if !strings.Contains(m.listPanelTitle(), "+1") {
+		t.Errorf("title should count the hidden tag, got %q", m.listPanelTitle())
+	}
+
+	m.showFinishedGroups = true
+	if out := ansi.Strip(m.renderTagList()); !strings.Contains(out, "#attic") {
+		t.Errorf("h should bring the finished tag back:\n%s", out)
+	}
 }
 
-// TestTagListDropsColumnsWhenNarrow asserts the numeric columns disappear
-// whole on a narrow terminal instead of being clipped mid-value by the panel.
-func TestTagListDropsColumnsWhenNarrow(t *testing.T) {
-	a := todo.New("open with time")
+// TestTagListDropsNextUpWhenNarrow asserts the next-up column disappears whole
+// on a narrow terminal instead of leaving a clipped stub of a title.
+func TestTagListDropsNextUpWhenNarrow(t *testing.T) {
+	a := todo.New("open task with a title")
 	a.Tags = []string{"work"}
-	a.CreatedAt = time.Now().AddDate(0, 0, -12)
-	a.TimeEntries = []todo.TimeEntry{{
-		StartedAt: time.Now().Add(-90 * time.Minute),
-		StoppedAt: time.Now(),
-	}}
-
 	m := newTagModel(a)
-	m.termWidth = 44
+	m.termWidth = 30
 	m.tab = tabTags
 	m.refreshCaches()
-	out := m.renderTagList()
-	if strings.Contains(out, "Time") || strings.Contains(out, "1h30m") {
-		t.Errorf("narrow tag list should drop the Time column whole, got:\n%s", out)
+	if out := ansi.Strip(m.renderTagList()); strings.Contains(out, "Next") || strings.Contains(out, "Open task") {
+		t.Errorf("narrow tag list should drop Next up whole, got:\n%s", out)
 	}
 }
 
@@ -253,130 +236,49 @@ func TestTagsTabNarrowNoWrap(t *testing.T) {
 	}
 }
 
-// TestTagBarExpandsWithWidth verifies that the progress bar grows as the
-// terminal widens and never overflows the available content area.
-func TestTagBarExpandsWithWidth(t *testing.T) {
-	// Done, so the bar is all fill: the unfilled track is blank cells on a
-	// background tint, which leaves nothing to count once styles are stripped.
-	task := todo.New("some task")
-	task.Tags = []string{"work"}
-	task.Toggle()
-
-	widths := []int{80, 120, 200}
-	prevBarW := 0
-	for _, width := range widths {
-		m := newTagModel(task)
-		m.termWidth = width
-		m.tab = tabTags
-		m.refreshCaches()
-
-		out := m.renderTagList()
-		// Measure bar width by counting █ on the data row (the header
-		// row won't have them). A partial-block glyph (▏▎▍▌▋▊▉) occupies one
-		// cell and one Unicode code-point; ansi.StringWidth counts it correctly.
-		barW := 0
-		for _, line := range strings.Split(out, "\n") {
-			plain := ansi.Strip(line)
-			cellW := 0
-			for _, ch := range plain {
-				switch ch {
-				case '█':
-					cellW++
-				case '▏', '▎', '▍', '▌', '▋', '▊', '▉':
-					cellW++
-				}
-			}
-			if cellW > barW {
-				barW = cellW
-			}
-		}
-
-		avail := width - 8
-		if barW > avail {
-			t.Errorf("width=%d: bar width %d exceeds avail %d", width, barW, avail)
-		}
-		if barW < minTagBarWidth {
-			t.Errorf("width=%d: bar width %d below minimum %d", width, barW, minTagBarWidth)
-		}
-		if barW <= prevBarW && prevBarW > 0 {
-			t.Errorf("width=%d: bar width %d did not grow from previous %d", width, barW, prevBarW)
-		}
-		prevBarW = barW
-	}
-}
-
-// TestTagBarPartialFillGlyphs verifies that a partially-complete tag shows a
-// sub-cell eighth-block glyph when the progress is not on a full-cell boundary.
-func TestTagBarPartialFillGlyphs(t *testing.T) {
-	// 2 done out of 5 total = 2/5 = 0.4. At the computed barW for termWidth=120
-	// (barW=84) this gives filledEighths = round(0.4*84*8) = round(268.8) = 269,
-	// which has partial = 269 % 8 = 5, so a ▋ should appear.
-	var todos []todo.Todo
-	for i := 0; i < 5; i++ {
-		td := todo.New(fmt.Sprintf("task-%d", i))
-		td.Tags = []string{"x"}
-		if i < 2 {
-			td.Status = todo.Done
-		}
-		todos = append(todos, td)
-	}
-
-	m := newTagModel(todos...)
-	m.termWidth = 120
-	m.tab = tabTags
-	m.refreshCaches()
-
-	out := m.renderTagList()
-	plain := ansi.Strip(out)
-
-	partialChars := "▏▎▍▌▋▊▉"
-	found := false
-	for _, ch := range plain {
-		if strings.ContainsRune(partialChars, ch) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected a partial-block glyph (▏▎▍▌▋▊▉) in the tag bar output, got:\n%s", plain)
-	}
-}
-
 // tagTaskList is what both the tag pane and the drill cursor read, so its
-// order is a contract: overdue first, then active, then done, alphabetical
-// inside each group, and never a subtask (the tab counts top-level only).
+// order is a contract: open tasks ranked highest first, an open subtask in the
+// tag right under its open parent, and the done tasks only when shown, last.
 func TestTagTaskListOrder(t *testing.T) {
-	overdue := todo.New("Zulu overdue")
-	overdue.AddTag("home")
-	overdue.DueDate = time.Now().Add(-48 * time.Hour)
-	active := todo.New("alpha active") // todo.New capitalizes: "Alpha active"
-	active.AddTag("home")
-	other := todo.New("Beta active")
-	other.AddTag("home")
+	beta := todo.New("Beta urgent")
+	beta.AddTag("home")
+	beta.Priority = todo.PriorityHigh
+	alpha := todo.New("alpha routine") // todo.New capitalizes: "Alpha routine"
+	alpha.AddTag("home")
 	finished := todo.New("Aardvark done")
 	finished.AddTag("home")
 	finished.Status = todo.Done
 	elsewhere := todo.New("Not tagged")
-	sub := todo.NewSubtask("Subtask", active.ID)
+	sub := todo.NewSubtask("Subtask", alpha.ID)
 	sub.AddTag("home")
+	bareSub := todo.NewSubtask("Bare subtask", elsewhere.ID)
 
-	m := modelWithTasks(t, overdue, active, other, finished, elsewhere, sub)
+	m := modelWithTasks(t, beta, alpha, finished, elsewhere, sub, bareSub)
 
-	var got []string
-	for _, task := range m.tagTaskList("home") {
-		got = append(got, task.Title)
+	titles := func(tasks []todo.Todo) []string {
+		var out []string
+		for _, task := range tasks {
+			out = append(out, task.Title)
+		}
+		return out
 	}
-	want := []string{"Zulu overdue", "Alpha active", "Beta active", "Aardvark done"}
-	if !reflect.DeepEqual(got, want) {
+	want := []string{"Beta urgent", "Alpha routine", "Subtask"}
+	if got := titles(m.tagTaskList("home")); !reflect.DeepEqual(got, want) {
 		t.Errorf("tagTaskList = %v, want %v", got, want)
 	}
-
-	var untagged []string
-	for _, task := range m.tagTaskList(untaggedKey) {
-		untagged = append(untagged, task.Title)
+	if nested := groupNestedRows(m.tagTaskList("home")); !reflect.DeepEqual(nested, []bool{false, false, true}) {
+		t.Errorf("nesting = %v, want only the subtask indented", nested)
 	}
-	if !reflect.DeepEqual(untagged, []string{"Not tagged"}) {
-		t.Errorf("untagged list = %v, want just the untagged top-level task", untagged)
+
+	m.showFinishedGroups = true
+	want = append(want, "Aardvark done")
+	if got := titles(m.tagTaskList("home")); !reflect.DeepEqual(got, want) {
+		t.Errorf("with finished shown, tagTaskList = %v, want %v", got, want)
+	}
+
+	// An untagged subtask belongs to its parent, not to the triage row.
+	if got := titles(m.tagTaskList(untaggedKey)); !reflect.DeepEqual(got, []string{"Not tagged"}) {
+		t.Errorf("untagged list = %v, want just the untagged top-level task", got)
 	}
 }
 

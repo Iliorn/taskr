@@ -14,20 +14,20 @@ import (
 // set changes. Structural indexes (subtaskOf, runningTimers) live on the Store
 // and are maintained incrementally — they're not rebuilt here.
 type cacheState struct {
-	dirty         bool
-	filterDirty   bool
-	overdueSet    map[string]bool
-	blockedSet    map[string]bool // tasks waiting on an unfinished dependency
-	blockerSet    map[string]bool // tasks an unfinished task depends on
-	active        []todo.Todo
-	done          []todo.Todo
-	tags          map[string]tagStats
-	tagsSorted    []string
-	tagsSortMode  tagSortMode
-	untaggedTotal int
-	untaggedDone  int
-	projects      []string
-	projectTasks  map[string][]todo.Todo
+	dirty       bool
+	filterDirty bool
+	overdueSet  map[string]bool
+	blockedSet  map[string]bool // tasks waiting on an unfinished dependency
+	blockerSet  map[string]bool // tasks an unfinished task depends on
+	active      []todo.Todo
+	done        []todo.Todo
+	// tagGroups and projectGroups summarize every tag and project for their
+	// tabs (see groups.go); tagNames and projectNames are the same keys,
+	// alphabetical, for the pickers and completions.
+	tagGroups     map[string]*groupSummary
+	projectGroups map[string]*groupSummary
+	tagNames      []string
+	projectNames  []string
 	tagLastUsed   map[string]time.Time   // tag → latest ModifiedAt of a task using it
 	subProgress   map[string]subProgress // parentID → subtask done/total; see refreshSubtaskProgress
 	rankScore     map[string]float64     // taskID → the lift the sequence ranking sorts (and shows) it by; see rankScores
@@ -40,8 +40,6 @@ type cacheState struct {
 	// than scanned per frame for the reason the row metrics are: View runs on
 	// every keystroke, and the done list is the one that only ever grows.
 	closedToday []todo.Todo
-
-	projectSearch string
 
 	// Tasks-tab column-sizing metrics for the active list: the widest rendered
 	// row content and the widest tag cell. Derived from the active set + overdue
@@ -85,29 +83,11 @@ func (m *model) refreshCaches() {
 
 	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 
-	m.cache.tags = computeTagStats(all)
-	// Recency feeds the Tags-tab recent sort, so refresh it before the sorted
-	// tag list is rebuilt from it.
 	m.refreshUsageRecency(all)
-	m.rebuildSortedTagsFrom(all)
+	m.refreshGroups(all)
 
 	// subtaskOf is maintained incrementally by Store.add / Store.remove, so
 	// no rebuild is needed here.
-
-	for k := range m.cache.projectTasks {
-		delete(m.cache.projectTasks, k)
-	}
-	for i := range all {
-		if p := all[i].Project; p != "" {
-			m.cache.projectTasks[p] = append(m.cache.projectTasks[p], *all[i])
-		}
-	}
-	for p, tasks := range m.cache.projectTasks {
-		m.cache.projectTasks[p] = sortTodosByStartDate(tasks)
-	}
-
-	m.cache.projects = nil
-	m.cache.projectSearch = "\x00"
 
 	m.refreshSubtaskProgress(all)
 
@@ -233,54 +213,28 @@ func (m *model) refreshFilteredCaches() {
 	m.cache.filterDirty = false
 }
 
-// rebuildSortedTagsFrom refreshes the cached unique, sorted tag list. The list
-// is the expensive part of the Tags tab (a full scan + sort), so it is cached
-// alongside tagStats and invalidated the same way (on data change, and on sort-mode toggle via sortCachedTags).
-func (m *model) rebuildSortedTagsFrom(todos []*todo.Todo) {
-	m.cache.tagsSorted, m.cache.untaggedTotal, m.cache.untaggedDone =
-		selectSortedTags(todos, m.tagSort, m.cache.tags, m.cache.tagLastUsed)
-	m.cache.tagsSortMode = m.tagSort
+// refreshGroups rebuilds the Tags and Projects summaries. Next-up is ranked by
+// the score the Tasks list shows, lift included, against one frozen instant.
+func (m *model) refreshGroups(all []*todo.Todo) {
+	frozen := sequenceScoreNow()
+	score := func(t *todo.Todo) float64 { return rankScoreOf(t, m.cache.rankScore, frozen) }
+	m.cache.tagGroups = summarizeGroups(all, tagGroupKeys, score, m.frameTime)
+	m.cache.projectGroups = summarizeGroups(all, projectGroupKeys, score, m.frameTime)
+	m.cache.tagNames = sortedGroupNames(m.cache.tagGroups)
+	m.cache.projectNames = sortedGroupNames(m.cache.projectGroups)
 }
 
-// sortCachedTags re-sorts the cached tag list in place for the current sort
-// mode without rescanning todos — used when only the sort mode changes.
-func (m *model) sortCachedTags() {
-	sortTags(m.cache.tagsSorted, m.tagSort, m.cache.tags, m.cache.tagLastUsed)
-	m.cache.tagsSortMode = m.tagSort
-}
-
-func sortTags(tags []string, mode tagSortMode, stats map[string]tagStats, lastUsed map[string]time.Time) {
-	switch mode {
-	case tagSortCount:
-		sort.Slice(tags, func(i, j int) bool {
-			ci := stats[tags[i]].total
-			cj := stats[tags[j]].total
-			if ci != cj {
-				return ci > cj
-			}
-			return tags[i] < tags[j]
-		})
-	case tagSortProgress:
-		// Least-finished first: the tags still needing attention float to the
-		// top, fully-done tags sink to the bottom. Ties break alphabetically.
-		pct := func(s tagStats) float64 {
-			if s.total == 0 {
-				return 0
-			}
-			return float64(s.done) / float64(s.total)
+// sortedGroupNames lists a summary map's real group names alphabetically,
+// leaving out the virtual (untagged) row.
+func sortedGroupNames(sums map[string]*groupSummary) []string {
+	names := make([]string, 0, len(sums))
+	for key := range sums {
+		if key != untaggedKey {
+			names = append(names, key)
 		}
-		sort.Slice(tags, func(i, j int) bool {
-			pi, pj := pct(stats[tags[i]]), pct(stats[tags[j]])
-			if pi != pj {
-				return pi < pj
-			}
-			return tags[i] < tags[j]
-		})
-	case tagSortRecent:
-		sortByRecency(tags, lastUsed)
-	default:
-		sort.Strings(tags)
 	}
+	sort.Strings(names)
+	return names
 }
 
 func (m *model) refreshTagRenderCache() {
@@ -334,14 +288,6 @@ func (m *model) refreshSubtaskProgress(all []*todo.Todo) {
 	}
 }
 
-func (m *model) refreshProjects() {
-	if m.cache.projectSearch == m.searchQuery {
-		return
-	}
-	m.cache.projects = selectProjects(m.allTodos(), m.searchQuery)
-	m.cache.projectSearch = m.searchQuery
-}
-
 // ── Cache accessors ───────────────────────────────────────────────────────────
 
 func (m *model) ensureCache() {
@@ -359,18 +305,6 @@ func (m model) activeTodos() []todo.Todo {
 
 func (m model) completedTodos() []todo.Todo {
 	return m.cache.done
-}
-
-func (m *model) allProjectsForList() []string {
-	m.refreshProjects()
-	return m.cache.projects
-}
-
-func (m model) getProjectTasks(project string) []todo.Todo {
-	if tasks, ok := m.cache.projectTasks[project]; ok {
-		return tasks
-	}
-	return nil
 }
 
 // renderRowTags draws a task's Tags cell for a list row, taking the whole-set

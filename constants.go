@@ -62,7 +62,6 @@ const (
 	minChartWidth      = 10
 	minOverlayWidth    = 50
 	minTitleColWidth   = 20
-	minTagBarWidth     = 10
 	minInnerWidth      = 20
 
 	// List-tab side-by-side layout (Tasks/Tags): at or above
@@ -172,9 +171,6 @@ const (
 	statsLabelWidth = 22
 	// unsetMark stands in for an empty detail-pane field or section.
 	unsetMark = "—"
-	// minClippedTitleW is the narrowest a title may be clipped to so that the
-	// facts after it on the same line (due date, project) stay whole.
-	minClippedTitleW = 8
 	// statsOldestMinW is the fewest title runes the Stats "Oldest active" row
 	// accepts before the page drops to fewer columns to show more of it.
 	statsOldestMinW = 12

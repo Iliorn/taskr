@@ -1121,10 +1121,14 @@ func TestScriptQuickAddTabIsInertWithoutSuggestions(t *testing.T) {
 func TestScriptTagDrillActsOnTasks(t *testing.T) {
 	a := todo.New("Alpha")
 	a.AddTag("home")
+	a.Priority = todo.PriorityHigh // ranks first
 	b := todo.New("Beta")
 	b.AddTag("home")
 	m := modelWithTasks(t, a, b)
 	m.tab = tabTags
+	// With finished work shown the completed task stays in the list, so the
+	// cursor has somewhere to follow it to.
+	m.showFinishedGroups = true
 
 	m = sendKey(t, m, "enter")
 	if !m.tagTaskMode {
@@ -1149,7 +1153,7 @@ func TestScriptTagDrillActsOnTasks(t *testing.T) {
 
 	// p cycles priority on the same row.
 	m = sendKey(t, m, "p")
-	if got := m.get(a.ID); got.Priority == todo.PriorityMedium {
+	if got := m.get(a.ID); got.Priority == todo.PriorityHigh {
 		t.Error("p in the drill did not change the priority")
 	}
 
@@ -1301,8 +1305,10 @@ func TestScriptProjectDrillKeepsCursorAfterMutation(t *testing.T) {
 	second := todo.New("Beta")
 	second.Project = "House"
 	second.CreatedAt = base.Add(time.Minute)
+	second.Priority = todo.PriorityLow // ranks below Alpha
 	m := modelWithTasks(t, first, second)
 	m.tab = tabProjects
+	m.showFinishedGroups = true // the completed task stays listed
 
 	m = script(t, m, "enter", "down")
 	target := m.currentTodo()
@@ -1319,8 +1325,103 @@ func TestScriptProjectDrillKeepsCursorAfterMutation(t *testing.T) {
 	}
 	// …and the next key still lands on that task rather than on nothing.
 	m = sendKey(t, m, "p")
-	if got := m.get(second.ID); got.Priority == todo.PriorityMedium {
+	if got := m.get(second.ID); got.Priority == todo.PriorityLow {
 		t.Error("the follow-up key did not reach the task under the cursor")
+	}
+}
+
+// While finished work is hidden, a task completed inside a group folds away
+// like one completed on the Tasks tab, and the cursor lands on an open task.
+// The group itself stays put even when that was its last open task: it is the
+// one the cursor is inside, and it leaves the list only once you back out.
+func TestScriptDrillFoldsCompletedTaskAndKeepsTheGroup(t *testing.T) {
+	a := todo.New("Alpha")
+	a.Project = "Garden"
+	a.Priority = todo.PriorityHigh
+	b := todo.New("Beta")
+	b.Project = "Garden"
+	other := todo.New("Other")
+	other.Project = "Attic"
+	other.Priority = todo.PriorityHigh
+	other.DueDate = time.Now().Add(-48 * time.Hour) // Attic sorts first by nothing but its name
+	m := modelWithTasks(t, a, b, other)
+	m.tab = tabProjects
+	m.projectOrder = groupSortName
+
+	m = script(t, m, "down", "enter") // Garden
+	if got := m.currentTodo(); got == nil || got.ID != a.ID {
+		t.Fatalf("cursor on %v, want Alpha", got)
+	}
+	m = sendKey(t, m, "d")
+	if got := m.currentTodo(); got == nil || got.ID != b.ID {
+		t.Fatalf("after completing Alpha the cursor is on %v, want Beta", got)
+	}
+	m = sendKey(t, m, "d") // Garden's last open task
+	projects := m.allProjectsForList()
+	if m.projectCursor >= len(projects) || projects[m.projectCursor] != "Garden" {
+		t.Fatalf("drilled into %v, want to stay inside Garden", projects)
+	}
+	m = sendKey(t, m, "u") // undo reopens Beta; still Garden
+	if projects := m.allProjectsForList(); projects[m.projectCursor] != "Garden" {
+		t.Fatalf("after undo the drill is on %q, want Garden", projects[m.projectCursor])
+	}
+	m = script(t, m, "d", "esc")
+	if got := m.allProjectsForList(); len(got) != 1 || got[0] != "Attic" {
+		t.Errorf("after backing out, projects = %v, want the finished Garden hidden", got)
+	}
+	m = sendKey(t, m, "h")
+	if got := m.allProjectsForList(); len(got) != 2 {
+		t.Errorf("h should show the finished project again, got %v", got)
+	}
+}
+
+// s re-orders the list and h hides or shows the finished groups, and neither
+// moves the cursor off the group it was on.
+func TestScriptGroupListKeysKeepTheSelection(t *testing.T) {
+	busy1 := todo.New("one")
+	busy1.AddTag("zeta")
+	busy2 := todo.New("two")
+	busy2.AddTag("zeta")
+	quiet := todo.New("three")
+	quiet.AddTag("alpha")
+	done := todo.New("four")
+	done.AddTag("beta")
+	done.Status = todo.Done
+	m := modelWithTasks(t, busy1, busy2, quiet, done)
+	m.tab = tabTags
+
+	if tags := m.getFilteredTagsForTab(); len(tags) != 2 || tags[0] != "zeta" {
+		t.Fatalf("by open work: %v, want zeta (2 open) first and beta hidden", tags)
+	}
+	m = sendKey(t, m, "down") // alpha
+	for _, key := range []string{"s", "s", "h", "s", "h"} {
+		m = sendKey(t, m, key)
+		if tags := m.getFilteredTagsForTab(); tags[m.tagTabCursor] != "alpha" {
+			t.Fatalf("after %q the cursor is on %q, want alpha (list %v)", key, tags[m.tagTabCursor], tags)
+		}
+	}
+}
+
+// f on a project row opens the Tasks tab filtered to that project, as f on a
+// tag row does for the tag.
+func TestScriptProjectFilterJumpsToTasks(t *testing.T) {
+	in := todo.New("inside")
+	in.Project = "House"
+	out := todo.New("outside")
+	m := modelWithTasks(t, in, out)
+	m.tab = tabProjects
+
+	m = sendKey(t, m, "f")
+	if m.tab != tabTasks || m.searchQuery != "@House" {
+		t.Fatalf("tab %v query %q, want the Tasks tab filtered to @House", m.tab, m.searchQuery)
+	}
+	m.ensureCache()
+	if n := m.visibleActiveLen(); n != 1 {
+		t.Errorf("filtered list has %d tasks, want 1", n)
+	}
+	m = sendKey(t, m, "3")
+	if got := m.allProjectsForList(); len(got) != 1 || got[0] != "House" {
+		t.Errorf("the @House query should still find House on the Projects tab, got %v", got)
 	}
 }
 

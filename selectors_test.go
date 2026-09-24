@@ -267,92 +267,6 @@ func TestSelectActiveDoneFocusFilter(t *testing.T) {
 	}
 }
 
-func TestSelectSortedTags(t *testing.T) {
-	t1 := mkTodo("a", "x", todo.Pending)
-	t1.Tags = []string{"work", "urgent"}
-	t2 := mkTodo("b", "y", todo.Pending)
-	t2.Tags = []string{"work"}
-	t3 := mkTodo("c", "z", todo.Done) // untagged + done
-	todos := []todo.Todo{t1, t2, t3}
-	stats := computeTagStats(todoPtrs(todos))
-
-	sorted, ut, ud := selectSortedTags(todoPtrs(todos), tagSortAlpha, stats, nil)
-	if len(sorted) != 2 || sorted[0] != "urgent" || sorted[1] != "work" {
-		t.Fatalf("alpha tags = %v, want [urgent work]", sorted)
-	}
-	if ut != 1 || ud != 1 {
-		t.Fatalf("untagged total=%d done=%d, want 1/1", ut, ud)
-	}
-
-	byCount, _, _ := selectSortedTags(todoPtrs(todos), tagSortCount, stats, nil)
-	if byCount[0] != "work" {
-		t.Fatalf("count tags = %v, want work first (2 > 1)", byCount)
-	}
-}
-
-func TestSelectSortedTagsProgressAndRecent(t *testing.T) {
-	halfDone := mkTodo("a", "open half", todo.Pending)
-	halfDone.Tags = []string{"half"}
-	halfDone2 := mkTodo("b", "done half", todo.Done)
-	halfDone2.Tags = []string{"half"}
-	allDone := mkTodo("c", "done", todo.Done)
-	allDone.Tags = []string{"finished"}
-	noneDone := mkTodo("d", "open", todo.Pending)
-	noneDone.Tags = []string{"untouched"}
-	todos := []todo.Todo{halfDone, halfDone2, allDone, noneDone}
-	stats := computeTagStats(todoPtrs(todos))
-
-	byProgress, _, _ := selectSortedTags(todoPtrs(todos), tagSortProgress, stats, nil)
-	if len(byProgress) != 3 || byProgress[0] != "untouched" ||
-		byProgress[1] != "half" || byProgress[2] != "finished" {
-		t.Fatalf("progress tags = %v, want [untouched half finished]", byProgress)
-	}
-
-	now := time.Now()
-	lastUsed := map[string]time.Time{
-		"half":      now.Add(-2 * time.Hour),
-		"finished":  now,
-		"untouched": now.Add(-1 * time.Hour),
-	}
-	byRecent, _, _ := selectSortedTags(todoPtrs(todos), tagSortRecent, stats, lastUsed)
-	if len(byRecent) != 3 || byRecent[0] != "finished" ||
-		byRecent[1] != "untouched" || byRecent[2] != "half" {
-		t.Fatalf("recent tags = %v, want [finished untouched half]", byRecent)
-	}
-}
-
-// Regression: subtasks must not feed Tags-tab counts, because pressing Enter
-// on a row switches to the Tasks tab whose list (selectActiveDone) excludes
-// subtasks — counting them would leave rows pointing at empty results.
-func TestSelectSortedTagsSkipsSubtasks(t *testing.T) {
-	parent := mkTodo("p", "parent", todo.Pending)
-	parent.Tags = []string{"work"}
-	untaggedSub := mkTodo("s1", "untagged sub", todo.Pending)
-	untaggedSub.ParentID = "p"
-	subOnlyTag := mkTodo("s2", "sub-only tag", todo.Pending)
-	subOnlyTag.ParentID = "p"
-	subOnlyTag.Tags = []string{"orphan"}
-
-	sorted, ut, ud := selectSortedTags(
-		todoPtrs([]todo.Todo{parent, untaggedSub, subOnlyTag}), tagSortAlpha, nil, nil)
-	if ut != 0 || ud != 0 {
-		t.Fatalf("untagged total=%d done=%d, want 0/0 (subtask must not count)", ut, ud)
-	}
-	for _, tg := range sorted {
-		if tg == "orphan" {
-			t.Fatalf("subtask-only tag surfaced in Tags tab: %v", sorted)
-		}
-	}
-
-	stats := computeTagStats(todoPtrs([]todo.Todo{parent, untaggedSub, subOnlyTag}))
-	if _, ok := stats["orphan"]; ok {
-		t.Errorf("computeTagStats included subtask-only tag: %v", stats)
-	}
-	if stats["work"].total != 1 {
-		t.Errorf("work total = %d, want 1 (subtask must not count)", stats["work"].total)
-	}
-}
-
 func TestSelectProjects(t *testing.T) {
 	a := mkTodo("a", "x", todo.Pending)
 	a.Project = "zeta"
@@ -363,12 +277,21 @@ func TestSelectProjects(t *testing.T) {
 	d := mkTodo("d", "w", todo.Pending)
 	todos := []todo.Todo{a, b, c, d}
 
-	got := selectProjects(todoPtrs(todos), "")
-	if len(got) != 2 || got[0] != "alpha" || got[1] != "zeta" {
+	m := newTestModel()
+	for _, t := range todos {
+		m.add(t)
+	}
+	m.projectOrder = groupSortName
+	m.refreshCaches()
+	if got := m.allProjectsForList(); len(got) != 2 || got[0] != "alpha" || got[1] != "zeta" {
 		t.Fatalf("projects = %v, want [alpha zeta]", got)
 	}
-	if f := selectProjects(todoPtrs(todos), "alph"); len(f) != 1 || f[0] != "alpha" {
-		t.Fatalf("search projects = %v, want [alpha]", f)
+	// The query is shared with the Tasks tab, where a project is typed @name.
+	for _, q := range []string{"alph", "@alph"} {
+		m.searchQuery = q
+		if f := m.allProjectsForList(); len(f) != 1 || f[0] != "alpha" {
+			t.Fatalf("search %q projects = %v, want [alpha]", q, f)
+		}
 	}
 }
 

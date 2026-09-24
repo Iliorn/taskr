@@ -364,36 +364,3 @@ func TestSequenceTieBreakChain(t *testing.T) {
 		}
 	})
 }
-
-// ── sortTodosByStartDate ──────────────────────────────────────────────────────
-
-func TestSortTodosByStartDate(t *testing.T) {
-	now := time.Now()
-	todos := []todo.Todo{
-		{ID: "a", StartDate: now.AddDate(0, 0, 5), CreatedAt: now},
-		{ID: "b", CreatedAt: now.Add(-1 * time.Hour)}, // no start date
-		{ID: "c", StartDate: now.AddDate(0, 0, 1), CreatedAt: now},
-	}
-
-	result := sortTodosByStartDate(todos)
-
-	if result[0].ID != "c" {
-		t.Errorf("first should be 'c' (earliest start), got %s", result[0].ID)
-	}
-	if result[1].ID != "a" {
-		t.Errorf("second should be 'a' (later start), got %s", result[1].ID)
-	}
-	if result[2].ID != "b" {
-		t.Errorf("third should be 'b' (no start date), got %s", result[2].ID)
-	}
-
-	// Verify original slice is unchanged
-	if todos[0].ID != "a" {
-		t.Error("original slice should not be modified")
-	}
-}
-
-// Coverage for projects/tasks-per-project now lives in selectors_test.go
-// (TestSelectProjects) and cache.go (refreshCaches builds the per-project
-// task map via sortTodosByStartDate). The old getProjects /
-// getTasksForProject helpers were removed as dead code.

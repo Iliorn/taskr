@@ -918,49 +918,6 @@ func TestTagsColumnNoWrapContractWithTags(t *testing.T) {
 	}
 }
 
-// ── computeTagStats ───────────────────────────────────────────────────────────
-
-func TestComputeTagStats(t *testing.T) {
-	todos := []todo.Todo{
-		{Tags: []string{"work", "urgent"}, Status: todo.Pending},
-		{Tags: []string{"work"}, Status: todo.Done},
-		{Tags: []string{"personal"}, Status: todo.Pending},
-	}
-
-	stats := computeTagStats(todoPtrs(todos))
-
-	if stats["work"].total != 2 {
-		t.Errorf("work total = %d, want 2", stats["work"].total)
-	}
-	if stats["work"].done != 1 {
-		t.Errorf("work done = %d, want 1", stats["work"].done)
-	}
-	if stats["urgent"].total != 1 {
-		t.Errorf("urgent total = %d, want 1", stats["urgent"].total)
-	}
-	if stats["urgent"].done != 0 {
-		t.Errorf("urgent done = %d, want 0", stats["urgent"].done)
-	}
-	if stats["personal"].total != 1 {
-		t.Errorf("personal total = %d, want 1", stats["personal"].total)
-	}
-	if stats["personal"].done != 0 {
-		t.Errorf("personal done = %d, want 0", stats["personal"].done)
-	}
-
-	// Empty list
-	empty := computeTagStats(todoPtrs([]todo.Todo{}))
-	if len(empty) != 0 {
-		t.Errorf("expected empty stats, got %d entries", len(empty))
-	}
-
-	// No tags
-	noTags := computeTagStats(todoPtrs([]todo.Todo{{Title: "No tags"}}))
-	if len(noTags) != 0 {
-		t.Errorf("expected empty stats for tagless todos, got %d", len(noTags))
-	}
-}
-
 // ── copyTodos ─────────────────────────────────────────────────────────────────
 
 func TestCopyTodos(t *testing.T) {

@@ -141,15 +141,6 @@ const (
 	modeBoardCard
 )
 
-type tagSortMode int
-
-const (
-	tagSortAlpha tagSortMode = iota
-	tagSortCount
-	tagSortProgress
-	tagSortRecent
-)
-
 // untaggedKey is a sentinel used both as the Tags-tab virtual row for tasks
 // with no tags and as the Tasks-tab search token that filters to them. The
 // NUL prefix guarantees it can never collide with a real (normalized) tag.
@@ -378,11 +369,20 @@ type model struct {
 	// pendingProjectName is the project the x confirm on the Projects tab is
 	// about to clear off its tasks.
 	pendingProjectName string
-	tagSort            tagSortMode
-	taskSort           taskSortMode
-	historySort        historySortMode
-	statsRange         statsRangeMode
-	themeName          string
+	tagOrder           groupSort
+	projectOrder       groupSort
+	// showFinishedGroups brings back what the Tags and Projects tabs hide by
+	// default: groups with nothing open, and the done tasks inside a group.
+	showFinishedGroups bool
+	// tagPinned and projectPinned name the group the cursor drilled into.
+	// While drilled in, the list keeps that group visible and the cursor on
+	// it, however a change inside it re-sorts the list (see groups.go).
+	tagPinned     string
+	projectPinned string
+	taskSort      taskSortMode
+	historySort   historySortMode
+	statsRange    statsRangeMode
+	themeName     string
 	// detailPos is which side of the list the detail pane takes (right, left,
 	// or stacked at the bottom). Read by sideBySide, so it decides the layout
 	// for every height helper at once rather than per renderer.
@@ -525,7 +525,8 @@ func initialModel(repo Repository) model {
 		termWidth:         80,
 		termHeight:        24,
 		err:               errMsg,
-		tagSort:           settings.TagSort,
+		tagOrder:          settings.TagOrder,
+		projectOrder:      settings.ProjectOrder,
 		taskSort:          settings.TaskSort,
 		historySort:       settings.HistorySort,
 		autoCloseParent:   settings.AutoCloseParent,
@@ -548,7 +549,6 @@ func initialModel(repo Repository) model {
 			blockerSet:    make(map[string]bool),
 			tagRender:     make(map[string]string, 32),
 			taskTagRender: make(map[string]string, 64),
-			projectTasks:  make(map[string][]todo.Todo),
 			tagLastUsed:   make(map[string]time.Time),
 			projLastUsed:  make(map[string]time.Time),
 		},
@@ -1504,97 +1504,59 @@ func (m model) depSearchResults() []todo.Todo {
 	return result
 }
 
+// getAllTagsSorted is every tag in use, alphabetical. The pickers and the
+// quick-add completion re-sort it by recency themselves.
 func (m model) getAllTagsSorted() []string {
-	if m.cache.tagsSorted != nil && m.cache.tagsSortMode == m.tagSort {
-		return m.cache.tagsSorted
-	}
-	// Fallback: cache absent or stale for the current sort mode (e.g. tests
-	// that mutate tagSort without a refresh). Rebuild without touching cache.
-	seen := make(map[string]struct{}, 16)
-	tags := make([]string, 0, 16)
-	for _, t := range m.tasks {
-		for _, tag := range t.Tags {
-			if _, ok := seen[tag]; !ok {
-				seen[tag] = struct{}{}
-				tags = append(tags, tag)
-			}
-		}
-	}
-	sortTags(tags, m.tagSort, m.cache.tags, m.cache.tagLastUsed)
-	return tags
+	return m.cache.tagNames
 }
 
+// getFilteredTagsForTab is the Tags tab's list: the tags matching its own
+// filter, in the tab's order, with finished tags left out unless shown (see
+// visibleGroups). The virtual (untagged) row leads when it has anything to
+// show and matches the filter text.
 func (m model) getFilteredTagsForTab() []string {
-	all := m.getAllTagsSorted()
 	q := strings.ToLower(m.tagTabSearchQuery)
-
-	result := all
-	if q != "" {
-		result = make([]string, 0, len(all))
-		for _, tag := range all {
-			if strings.Contains(strings.ToLower(tag), q) {
-				result = append(result, tag)
-			}
-		}
+	pinned := ""
+	if m.tagTaskMode {
+		pinned = m.tagPinned
 	}
-
-	// Surface a virtual "(untagged)" row at the top so tasks with no tags are
-	// reachable for triage. Only when such tasks exist and the row matches the
-	// filter text.
-	if m.cache.untaggedTotal > 0 && (q == "" || strings.Contains("untagged", q)) {
-		return append([]string{untaggedKey}, result...)
-	}
-	return result
+	return visibleGroups(m.cache.tagGroups, m.tagOrder, m.showFinishedGroups, pinned, tagFilterMatch(q))
 }
 
-// tagTaskList returns the tasks carrying tag — or the untagged set for the
-// virtual (untagged) row — in the order the Tags tab presents them: overdue
-// first, then active, then done, alphabetical within each group. Subtasks are
-// excluded, mirroring selectActiveDone, so the tab counts and the list agree.
-//
-// One list feeds both the detail pane and the drill cursor, which is the whole
-// point: the row you see highlighted is the row the keys act on.
+func tagFilterMatch(q string) func(string) bool {
+	return func(key string) bool {
+		if key == untaggedKey {
+			return q == "" || strings.Contains("untagged", q)
+		}
+		return q == "" || strings.Contains(strings.ToLower(key), q)
+	}
+}
+
+// allProjectsForList is the Projects tab's list. It shares the Tasks-list
+// search, matched against project names.
+func (m model) allProjectsForList() []string {
+	pinned := ""
+	if m.projectTaskMode {
+		pinned = m.projectPinned
+	}
+	return visibleGroups(m.cache.projectGroups, m.projectOrder, m.showFinishedGroups, pinned, projectFilterMatch(m.searchQuery))
+}
+
+func projectFilterMatch(search string) func(string) bool {
+	// The query is shared with the Tasks tab, where a project is asked for
+	// as @name; here the list is already projects, so the sigil is noise.
+	q := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(search), "@"))
+	return func(key string) bool { return q == "" || strings.Contains(strings.ToLower(key), q) }
+}
+
+// tagTaskList and getProjectTasks are groupTaskList for one tag or project:
+// the list a row's enter opens, which the pane under the list previews.
 func (m model) tagTaskList(tag string) []todo.Todo {
-	untagged := tag == untaggedKey
-	out := make([]todo.Todo, 0, 16)
-	for _, t := range m.tasks {
-		if t.ParentID != "" {
-			continue
-		}
-		match := len(t.Tags) == 0
-		if !untagged {
-			match = false
-			for _, tt := range t.Tags {
-				if tt == tag {
-					match = true
-					break
-				}
-			}
-		}
-		if match {
-			out = append(out, *t)
-		}
-	}
-	cat := func(t todo.Todo) int {
-		switch {
-		case t.Status == todo.Done:
-			return 2
-		case t.IsOverdue():
-			return 0
-		default:
-			return 1
-		}
-	}
-	sort.Slice(out, func(a, b int) bool {
-		if ca, cb := cat(out[a]), cat(out[b]); ca != cb {
-			return ca < cb
-		}
-		if la, lb := strings.ToLower(out[a].Title), strings.ToLower(out[b].Title); la != lb {
-			return la < lb
-		}
-		return out[a].ID < out[b].ID // stable across redraws; map order is not
-	})
-	return out
+	return m.groupTaskList(func(t *todo.Todo) bool { return inTagGroup(t, tag) })
+}
+
+func (m model) getProjectTasks(project string) []todo.Todo {
+	return m.groupTaskList(func(t *todo.Todo) bool { return inProjectGroup(t, project) })
 }
 
 // currentTagTasks is tagTaskList for the tag under the Tags-tab cursor.
@@ -1653,8 +1615,8 @@ func (m model) tagSearchResults() []string {
 
 func (m model) projSearchResults() []string {
 	q := strings.ToLower(m.projSearch.query)
-	result := make([]string, 0, len(m.cache.projectTasks))
-	for p := range m.cache.projectTasks {
+	result := make([]string, 0, len(m.cache.projectNames))
+	for _, p := range m.cache.projectNames {
 		if q == "" || strings.Contains(strings.ToLower(p), q) {
 			result = append(result, p)
 		}

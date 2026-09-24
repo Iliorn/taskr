@@ -126,11 +126,12 @@ var keymap = []binding{
 	// ── Tags & Projects ──────────────────────────────────────────────────
 	{ctxProjects | ctxTags, "enter", "detail", "open the tasks in it", secTagsProjects, true, true},
 	{ctxProjects | ctxTags, "a", "add", "new task in it", secTagsProjects, true, false},
-	{ctxTags, "f", "tagfilter", "show its tasks on the Tasks tab", secTagsProjects, true, false},
+	{ctxProjects | ctxTags, "h", "history", "show / hide finished", secTagsProjects, true, true},
+	{ctxProjects | ctxTags, "f", "tagfilter", "show its tasks on the Tasks tab", secTagsProjects, true, false},
+	{ctxProjects | ctxTags, "s", "sort", "cycle sort order", secTagsProjects, true, false},
 	{ctxProjects | ctxTags, "r", "edit", "rename globally", secTagsProjects, true, false},
 	{ctxTags, "m", "merge", "merge tags (Tags tab)", secTagsProjects, true, false},
 	{ctxProjects | ctxTags, "x", "delete", "delete globally", secTagsProjects, true, false},
-	{ctxTags, "s", "sort", "cycle sort order", secTagsProjects, true, false},
 	{ctxProjects | ctxTags, "/", "search", "filter", secTagsProjects, true, true},
 
 	// ── Inside a tag / project (the drilled-in task list) ────────────────
@@ -142,6 +143,7 @@ var keymap = []binding{
 	{ctxDrill, "D", "setdue", "set / clear due date", secDrill, false, false},
 	{ctxDrill, "a", "add", "new task in it", secDrill, true, false},
 	{ctxDrill, "w", "why", "why this rank", secDrill, false, false},
+	{ctxDrill, "h", "history", "show / hide done tasks", secDrill, true, false},
 	{ctxDrill, "r", "edit", "rename task", secDrill, true, false},
 	{ctxDrill, "x", "delete", "delete task", secDrill, true, true},
 	{ctxDrill, "esc", "back", "back to the list", secDrill, true, false},

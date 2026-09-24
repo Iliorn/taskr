@@ -36,11 +36,12 @@ type appSettings struct {
 	// the current version.
 	Version int `json:"version"`
 
-	TaskSort    taskSortMode    `json:"task_sort"`
-	HistorySort historySortMode `json:"history_sort"`
-	TagSort     tagSortMode     `json:"tag_sort"`
-	Theme       string          `json:"theme"`
-	Language    string          `json:"language"`
+	TaskSort     taskSortMode    `json:"task_sort"`
+	HistorySort  historySortMode `json:"history_sort"`
+	TagOrder     groupSort       `json:"tag_order"`
+	ProjectOrder groupSort       `json:"project_order"`
+	Theme        string          `json:"theme"`
+	Language     string          `json:"language"`
 
 	// Sequencing biases: ints 0/1/2 mapping to biasBalanced/Relaxed/Intense.
 	// Stored as ints (not enum names) to match the existing convention used by
@@ -493,39 +494,4 @@ func historyLess(mode historySortMode) func(a, b *todo.Todo) bool {
 		return lessByTitle
 	}
 	return lessByCompletedAt
-}
-
-func sortTodosByStartDate(todos []todo.Todo) []todo.Todo {
-	result := make([]todo.Todo, len(todos))
-	copy(result, todos)
-	sortTodoValues(result, lessByStartDate)
-	return result
-}
-
-// lessByStartDate orders a project's tasks along the Gantt: dated tasks first
-// in start order, undated last in entry order. Ties end at ID, both so the sort
-// is a total order (sort.Slice, no stable merge) and because the stable form was
-// only ever preserving the order tasks came out of the store's map in — which
-// reshuffled between refreshes.
-func lessByStartDate(a, b *todo.Todo) bool {
-	aZero, bZero := a.StartDate.IsZero(), b.StartDate.IsZero()
-	if aZero && bZero {
-		if !a.CreatedAt.Equal(b.CreatedAt) {
-			return a.CreatedAt.Before(b.CreatedAt)
-		}
-		return a.ID < b.ID
-	}
-	if aZero {
-		return false
-	}
-	if bZero {
-		return true
-	}
-	if !a.StartDate.Equal(b.StartDate) {
-		return a.StartDate.Before(b.StartDate)
-	}
-	if !a.CreatedAt.Equal(b.CreatedAt) {
-		return a.CreatedAt.Before(b.CreatedAt)
-	}
-	return a.ID < b.ID
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -765,6 +766,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.switchTab(nextTab(m.tab, -1))
 
 		case "h":
+			if m.tab == tabTags || m.tab == tabProjects {
+				m.regroup(func() { m.showFinishedGroups = !m.showFinishedGroups })
+			}
 			if m.tab == tabTasks {
 				m.showHistory = !m.showHistory
 				if m.showHistory {
@@ -779,6 +783,10 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f":
 			if m.tab == tabTags {
 				m.filterTasksByCurrentTag()
+				return m, nil
+			}
+			if m.tab == tabProjects {
+				m.filterTasksByCurrentProject()
 				return m, nil
 			}
 			if m.tab == tabTasks && !m.showHistory {
@@ -1172,6 +1180,7 @@ func (m *model) clampCursors() {
 	// cached lookups, so clamp them regardless of the live tab. The calendar's
 	// entry cursor needs an uncached scan, so it is only clamped where it is
 	// actually in use.
+	m.followPinnedGroups()
 	clamp(&m.tagTabCursor, len(m.getFilteredTagsForTab()))
 	clamp(&m.projectCursor, len(m.allProjectsForList()))
 	// Before the drill's early return: the drilled-in project view shows the
@@ -1272,6 +1281,24 @@ func (m *model) filterTasksByCurrentTag() {
 	}
 	// switchTab already moved us to Tasks, so the entry lands on the tab the
 	// search filters.
+	m.pushFocus(stateSearch)
+	m.cursor = 0
+	m.listOffset = 0
+	m.markFilterDirty()
+	m.persistSettings()
+}
+
+// filterTasksByCurrentProject is f on the Projects tab: the Tasks tab, filtered
+// to the project under the cursor. The search grammar splits on spaces, so a
+// project named with several words is found by its first one.
+func (m *model) filterTasksByCurrentProject() {
+	projects := m.allProjectsForList()
+	if m.projectCursor >= len(projects) {
+		return
+	}
+	project := strings.Fields(projects[m.projectCursor])[0]
+	m.switchTab(tabTasks)
+	m.searchQuery = "@" + project
 	m.pushFocus(stateSearch)
 	m.cursor = 0
 	m.listOffset = 0
@@ -1442,19 +1469,15 @@ func (m model) startSearch() (tea.Model, tea.Cmd) {
 func (m *model) cycleSortMode() {
 	switch m.tab {
 	case tabTags:
-		// Four-state cycle: Alpha → Count → Progress → Recent → Alpha.
-		switch m.tagSort {
-		case tagSortAlpha:
-			m.tagSort = tagSortCount
-		case tagSortCount:
-			m.tagSort = tagSortProgress
-		case tagSortProgress:
-			m.tagSort = tagSortRecent
-		default:
-			m.tagSort = tagSortAlpha
+		if m.tagTaskMode {
+			return
 		}
-		m.tagTabCursor = 0
-		m.sortCachedTags()
+		m.regroup(func() { m.tagOrder = m.tagOrder.next() })
+	case tabProjects:
+		if m.projectTaskMode {
+			return
+		}
+		m.regroup(func() { m.projectOrder = m.projectOrder.next() })
 	case tabTasks:
 		if m.showHistory {
 			// History has its own two-state cycle: Completed → Alpha.
@@ -1479,6 +1502,43 @@ func (m *model) cycleSortMode() {
 		m.markCacheDirty()
 	}
 	m.persistSettings()
+}
+
+// regroup applies a change to how the Tags and Projects lists are drawn — a new
+// order, finished groups shown or hidden — and keeps both cursors on the group
+// they were on, which a new order has usually moved.
+func (m *model) regroup(change func()) {
+	tags, projects := m.getFilteredTagsForTab(), m.allProjectsForList()
+	tag, project := "", ""
+	if m.tagTabCursor < len(tags) {
+		tag = tags[m.tagTabCursor]
+	}
+	if m.projectCursor < len(projects) {
+		project = projects[m.projectCursor]
+	}
+	change()
+	if i := slices.Index(m.getFilteredTagsForTab(), tag); i >= 0 {
+		m.tagTabCursor = i
+	}
+	if i := slices.Index(m.allProjectsForList(), project); i >= 0 {
+		m.projectCursor = i
+	}
+}
+
+// followPinnedGroups keeps a drilled-in cursor on the group it drilled into.
+// The list re-sorts under it whenever a task inside changes its counts, and
+// the index alone would then open a different group.
+func (m *model) followPinnedGroups() {
+	if m.tagTaskMode {
+		if i := slices.Index(m.getFilteredTagsForTab(), m.tagPinned); i >= 0 {
+			m.tagTabCursor = i
+		}
+	}
+	if m.projectTaskMode {
+		if i := slices.Index(m.allProjectsForList(), m.projectPinned); i >= 0 {
+			m.projectCursor = i
+		}
+	}
 }
 
 // isBiasSettingRow reports whether the given Settings cursor row is one of
@@ -1581,7 +1641,8 @@ func (m *model) persistSettings() {
 	if err := saveSettings(appSettings{
 		TaskSort:          m.taskSort,
 		HistorySort:       m.historySort,
-		TagSort:           m.tagSort,
+		TagOrder:          m.tagOrder,
+		ProjectOrder:      m.projectOrder,
 		Theme:             m.themeName,
 		Language:          string(activeLang),
 		SeqBiasDeadline:   activeBiases.Deadline,
@@ -1778,6 +1839,7 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 	case tabProjects:
 		if !m.projectTaskMode {
 			if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
+				m.projectPinned = projects[m.projectCursor]
 				m.projectTaskMode = true
 				m.cursor = 0
 				m.pushFocus(stateProjectDrill)
@@ -1805,6 +1867,7 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 		// tab by this tag is f.
 		if !m.tagTaskMode {
 			if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
+				m.tagPinned = tags[m.tagTabCursor]
 				m.tagTaskMode = true
 				m.cursor = 0
 				m.pushFocus(stateTagDrill)

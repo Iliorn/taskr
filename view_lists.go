@@ -2,259 +2,251 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
 
 // ── Tags list ─────────────────────────────────────────────────────────────────
 
-// tagBarEighths maps a sub-cell fill index (0–7) to the corresponding Unicode
-// block element. Index 0 = empty (not used at the fill boundary), 1 = ▏ (1/8),
-// …, 7 = ▉ (7/8). A full cell (index 8) uses █ in the main fill loop.
-var tagBarEighths = [8]string{"", "▏", "▎", "▍", "▌", "▋", "▊", "▉"}
-
 func (m model) renderTagList() string {
 	tags := m.getFilteredTagsForTab()
 
 	if len(tags) == 0 {
-		if m.tagTabSearchQuery != "" {
+		switch {
+		case m.tagTabSearchQuery != "":
 			return normalStyle.Render(tr("  No tags match your filter."))
+		case len(m.cache.tagGroups) > 0:
+			return m.nothingOpenNote(tr("  Every tag is finished."))
 		}
 		return strings.Join([]string{
 			normalStyle.Render(tr("  No tags yet. Add tags to tasks in the detail view.")),
-			dimStyle.Render(tr("  Tags group related tasks; this tab shows progress per tag.")),
+			dimStyle.Render(tr("  Tags group related tasks; this tab shows what is open in each.")),
 		}, "\n")
 	}
 
+	return m.renderGroupRows(groupRows{
+		nameHdr:    tr("Tag"),
+		keys:       tags,
+		sums:       m.cache.tagGroups,
+		labelStyle: tagStyle,
+		cursor:     m.tagTabCursor,
+		start:      m.listOffset,
+		count:      m.estimateListHeight(),
+		label: func(key string) string {
+			if key == untaggedKey {
+				return tr("(untagged)")
+			}
+			return "#" + key
+		},
+		editing: func(key, lead, label string) (string, bool) {
+			if m.mode != modeEditTag || m.editingTagName != key {
+				return "", false
+			}
+			return tagSelectedStyle.Render(lead+label+" ") + m.textInput.View(), true
+		},
+	})
+}
+
+// nothingOpenNote is what a Tags or Projects list says when hiding the
+// finished groups has left it empty — which reads as an empty store unless it
+// says where the rest went.
+func (m model) nothingOpenNote(headline string) string {
+	return normalStyle.Render(headline) + "\n" +
+		dimStyle.Render(fmt.Sprintf(tr("  %s shows the finished ones."), effectiveKey("history", "h")))
+}
+
+// groupRows is one Tags or Projects list to draw.
+type groupRows struct {
+	nameHdr    string
+	keys       []string
+	sums       map[string]*groupSummary
+	label      func(key string) string
+	labelStyle lipgloss.Style
+	// cursor is the selected row; start and count window the list.
+	cursor, start, count int
+	// editing draws the row being renamed in place, when it is this one.
+	editing func(key, lead, label string) (string, bool)
+}
+
+// renderGroupRows draws a Tags or Projects list: the group, how much is open
+// in it (and late, when anything anywhere is), when it last moved, and the task
+// to do next in it. The next-up title takes whatever width is left, which is
+// most of it, and drops out whole on a window too narrow to say anything with.
+// A finished group — shown only after h — is drawn dim throughout.
+func (m model) renderGroupRows(g groupRows) string {
 	b := getBuilder()
 	defer putBuilder(b)
 
-	gradLen := len(tagProgressGradient)
-	stats := m.cache.tags
-	if stats == nil {
-		stats = computeTagStats(m.allTodos())
+	gap := strings.Repeat(" ", listColGap)
+	openHdr, lateHdr, lastHdr, nextHdr := tr("Open"), tr("Overdue"), tr("Last"), tr("Next up")
+	labelMax, openW, lateW, lastW := 0, runeLen(openHdr), runeLen(lateHdr), runeLen(lastHdr)
+	anyLate := false
+	for _, key := range g.keys {
+		s := g.sums[key]
+		labelMax = max(labelMax, runeLen(g.label(key)))
+		openW = max(openW, len(strconv.Itoa(s.open)))
+		lastW = max(lastW, runeLen(formatSince(s.last, m.frameTime)))
+		anyLate = anyLate || s.overdue > 0
 	}
-
-	// Size the tag column to the widest tag so Progress sits close behind it.
-	// gap 4 = the 2-space cursor lead-in baked into this column + a 2-space gap.
-	labelW := 0
-	for _, tag := range tags {
-		w := len([]rune(tag)) + 1 // leading '#'
-		if tag == untaggedKey {
-			w = len([]rune(tr("(untagged)")))
-		}
-		if w > labelW {
-			labelW = w
-		}
-	}
-	tagHdr := tr("  Tag")
-	nameW := contentFitWidth(m.termWidth, labelW, 4, len([]rune(tagHdr)))
-
-	// Right-aligned numeric columns after the bar: Done (done/total), Age (avg
-	// age of open tasks), Time (total tracked). Values are formatted for every
-	// filtered tag — not just the visible window — so column widths hold steady
-	// while scrolling. On narrow terminals whole columns are dropped right to
-	// left: a missing column reads better than a value chopped mid-word.
-	type tagRow struct {
-		s                tagStats
-		label            string
-		done, age, spent string
-	}
-	rows := make([]tagRow, len(tags))
-	doneHdr, ageHdr, timeHdr := tr("Done"), tr("Age"), tr("Time")
-	doneW := len([]rune(doneHdr))
-	ageW := len([]rune(ageHdr))
-	timeW := len([]rune(timeHdr))
-	for i, tag := range tags {
-		r := tagRow{label: "#" + tag}
-		if tag == untaggedKey {
-			// The virtual row only triages counts; age/time stay blank.
-			r.s = tagStats{total: m.cache.untaggedTotal, done: m.cache.untaggedDone}
-			r.label = tr("(untagged)")
-		} else {
-			r.s = stats[tag]
-			r.age, r.spent = "—", "—"
-			if r.s.openCount > 0 {
-				r.age = formatDaysCompact(r.s.ageSum / time.Duration(r.s.openCount))
-			}
-			if r.s.tracked > 0 {
-				r.spent = formatDurationCompact(r.s.tracked)
-			}
-		}
-		r.done = fmt.Sprintf("%d/%d", r.s.done, r.s.total)
-		doneW = max(doneW, len([]rune(r.done)))
-		ageW = max(ageW, len([]rune(r.age)))
-		timeW = max(timeW, len([]rune(r.spent)))
-		rows[i] = r
-	}
-
-	const pctW = 5 // " 100%"
-	const colGap = 2
+	nameW := contentFitWidth(m.termWidth, labelMax, listColGap, runeLen(g.nameHdr)+listColGap)
 	avail := m.termWidth - 8
+	used := len(cursorGap) + nameW + openW + listColGap + lastW + listColGap
+	if anyLate {
+		used += lateW + listColGap
+	}
+	nextW := avail - used
+	showNext := nextW >= runeLen(nextHdr)
 
-	// Determine which optional data columns fit using the minimum bar width,
-	// then expand the bar to claim whatever space is left over so the bar
-	// fills the full available pane width instead of leaving dead space.
-	usedMin := nameW + minTagBarWidth + pctW
-	showDone := usedMin+colGap+doneW <= avail
-	if showDone {
-		usedMin += colGap + doneW
+	header := cursorGap + padRight(g.nameHdr, nameW) + padLeft(openHdr, openW) + gap
+	if anyLate {
+		header += padLeft(lateHdr, lateW) + gap
 	}
-	showAge := showDone && usedMin+colGap+ageW <= avail
-	if showAge {
-		usedMin += colGap + ageW
+	header += padLeft(lastHdr, lastW) + gap
+	if showNext {
+		header += nextHdr
 	}
-	showTime := showAge && usedMin+colGap+timeW <= avail
-	if showTime {
-		usedMin += colGap + timeW
-	}
-	// barW = all remaining space after fixed and shown columns; floor at minimum.
-	barW := avail - (usedMin - minTagBarWidth)
-	if barW < minTagBarWidth {
-		barW = minTagBarWidth
-	}
+	b.WriteString(headerStyle.Render(padRight(header, avail)) + "\n")
 
-	headerLeft := padRight(tagHdr, nameW) + padRight(tr("Progress"), barW+pctW)
-	if showDone {
-		headerLeft += strings.Repeat(" ", colGap) + padLeft(doneHdr, doneW)
-	}
-	if showAge {
-		headerLeft += strings.Repeat(" ", colGap) + padLeft(ageHdr, ageW)
-	}
-	if showTime {
-		headerLeft += strings.Repeat(" ", colGap) + padLeft(timeHdr, timeW)
-	}
-	// Padded to the pane's inner width (avail), not past it: two cells over
-	// meant that a header whose columns filled the pane exactly was clipped by
-	// the pane, and the clip took the last letter of "Time" for its ellipsis.
-	padW := avail - len([]rune(headerLeft))
-	if padW < 0 {
-		padW = 0
-	}
-	b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
-
-	maxVisible := m.estimateListHeight()
-	startIdx := m.listOffset
-	endIdx := startIdx + maxVisible
-	if endIdx > len(tags) {
-		endIdx = len(tags)
-	}
-	if startIdx > len(tags) {
-		startIdx = 0
-	}
-
-	var barStr strings.Builder
-	barStr.Grow(barW * 6) // extra headroom for partial-block glyph (3 bytes)
-
-	for i := startIdx; i < endIdx; i++ {
-		tag := tags[i]
-		r := rows[i]
-		total, done := r.s.total, r.s.done
-
-		pct := 0.0
-		if total > 0 {
-			pct = float64(done) / float64(total)
+	end := min(g.start+g.count, len(g.keys))
+	for i := max(g.start, 0); i < end; i++ {
+		key := g.keys[i]
+		s := g.sums[key]
+		lead := cursorGap
+		if i == g.cursor {
+			lead = cursorMark
 		}
-		// Compute fill at 1/8-cell resolution: filledEighths counts total
-		// eighth-block steps, so filled full cells = filledEighths/8 and the
-		// partial-boundary cell uses tagBarEighths[filledEighths%8].
-		filledEighths := int(math.Round(pct * float64(barW) * 8))
-		if filledEighths > barW*8 {
-			filledEighths = barW * 8
-		}
-		filled := filledEighths / 8
-		partialEighths := filledEighths % 8
-		cur := cursorGap
-		if i == m.tagTabCursor {
-			cur = cursorMark
-		}
-		tagLabel := padRight(truncate(r.label, nameW-4), nameW-2)
-
-		barStr.Reset()
-		// Group consecutive full cells that share a gradient color into a single
-		// styled Render call (≤gradLen calls instead of one per column).
-		prevIdx := -1
-		runLen := 0
-		for j := 0; j < filled; j++ {
-			pos := 0.0
-			if filled > 1 {
-				pos = float64(j) / float64(filled-1)
-			}
-			gradIdx := int(pos * float64(gradLen-1))
-			if gradIdx >= gradLen {
-				gradIdx = gradLen - 1
-			}
-			if gradIdx != prevIdx {
-				if runLen > 0 {
-					barStr.WriteString(tagProgressGradient[prevIdx].Render(strings.Repeat("█", runLen)))
-				}
-				prevIdx = gradIdx
-				runLen = 0
-			}
-			runLen++
-		}
-		if runLen > 0 {
-			barStr.WriteString(tagProgressGradient[prevIdx].Render(strings.Repeat("█", runLen)))
-		}
-		// Partial-fill boundary cell: use the gradient color at the filled
-		// position so the sub-cell glyph blends with the full cells beside it.
-		if partialEighths > 0 && filled < barW {
-			pos := 0.0
-			if filled > 0 {
-				pos = float64(filled) / float64(barW)
-			}
-			gradIdx := int(pos * float64(gradLen-1))
-			if gradIdx >= gradLen {
-				gradIdx = gradLen - 1
-			}
-			// The partial glyph's unfilled part is its background, so it takes
-			// the track's tint and the fill runs straight into it.
-			barStr.WriteString(tagProgressGradient[gradIdx].Inherit(barTrackStyle).Render(tagBarEighths[partialEighths]))
-			// Remaining empty cells: one fewer because the partial cell occupies a slot.
-			empty := barW - filled - 1
-			if empty > 0 {
-				barStr.WriteString(barTrackStyle.Render(strings.Repeat(barTrack, empty)))
-			}
-		} else if filled < barW {
-			barStr.WriteString(barTrackStyle.Render(strings.Repeat(barTrack, barW-filled)))
-		}
-
-		if m.mode == modeEditTag && m.editingTagName == tag {
-			b.WriteString(tagSelectedStyle.Render(cur+tagLabel) + m.textInput.View() + "\n")
+		label := g.label(key)
+		if row, ok := g.editing(key, lead, label); ok {
+			b.WriteString(row + "\n")
 			continue
 		}
+		name := padRight(truncate(label, nameW-1), nameW)
+		open, late, next := strconv.Itoa(s.open), "─", s.nextTitle
+		if s.overdue > 0 {
+			late = strconv.Itoa(s.overdue)
+		}
+		if s.finished() {
+			open, next = "─", ""
+		}
+		openCell := padLeft(open, openW) + gap
+		lateCell := ""
+		if anyLate {
+			lateCell = padLeft(late, lateW) + gap
+		}
+		lastCell := padLeft(formatSince(s.last, m.frameTime), lastW) + gap
+		nextCell := ""
+		if showNext {
+			nextCell = truncate(next, nextW)
+		}
 
-		right := fmt.Sprintf(" %3d%%", int(pct*100))
-		if showDone {
-			right += strings.Repeat(" ", colGap) + padLeft(r.done, doneW)
-		}
-		if showAge {
-			right += strings.Repeat(" ", colGap) + padLeft(r.age, ageW)
-		}
-		if showTime {
-			right += strings.Repeat(" ", colGap) + padLeft(r.spent, timeW)
-		}
-		if i == m.tagTabCursor {
-			b.WriteString(
-				tagSelectedStyle.Render(cur+tagLabel) +
-					barStr.String() +
-					selectedStyle.Render(right) + "\n",
-			)
-		} else {
-			b.WriteString(
-				tagStyle.Render(cur+tagLabel) +
-					barStr.String() +
-					normalStyle.Render(right) + "\n",
-			)
+		switch {
+		case i == g.cursor:
+			b.WriteString(selectedStyle.Render(padRight(lead+name+openCell+lateCell+lastCell+nextCell, avail)) + "\n")
+		case s.finished():
+			b.WriteString(doneCountStyle.Render(lead+name+openCell+lateCell+lastCell) + "\n")
+		default:
+			lateStyle := dimStyle
+			if s.overdue > 0 {
+				lateStyle = overdueCountStyle
+			}
+			b.WriteString(g.labelStyle.Render(lead+name) +
+				activeCountStyle.Render(openCell) +
+				lateStyle.Render(lateCell) +
+				dimStyle.Render(lastCell) +
+				normalStyle.Render(nextCell) + "\n")
 		}
 	}
 	return b.String()
+}
+
+func runeLen(s string) int { return len([]rune(s)) }
+
+// renderGroupTaskRows draws rows from..from+count of a group's task list
+// (groupTaskList) with the Tasks tab's own row renderer, so a task reads the
+// same wherever you meet it. An open subtask listed under its open parent is
+// drawn as the Tasks tab draws an unfolded one. sel is the drill cursor, or -1
+// when the list is only a preview. The Project column is left out where every
+// row would repeat the same name.
+func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, showProject bool) []string {
+	b := getBuilder()
+	defer putBuilder(b)
+
+	contentMax, tagsMax, projectMax := 0, 0, 0
+	hasDue := false
+	for i := range tasks {
+		contentMax = max(contentMax, runeLen(tasks[i].Title))
+		tagsMax = max(tagsMax, tagsRenderWidth(tasks[i].Tags))
+		hasDue = hasDue || !tasks[i].DueDate.IsZero()
+		if showProject {
+			projectMax = max(projectMax, runeLen(tasks[i].Project))
+		}
+	}
+	cols := taskListCols(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax)
+	pos := ""
+	if sel >= 0 {
+		pos = listPosLabel(sel, len(tasks))
+	}
+	renderListHeader(b, m.termWidth, false, cols, pos)
+
+	nested := groupNestedRows(tasks)
+	siblings := make(map[string]int)
+	for i := range tasks {
+		if nested[i] {
+			siblings[tasks[i].ParentID]++
+		}
+	}
+	seen := make(map[string]int)
+	end := min(from+count, len(tasks))
+	for i := range tasks[:end] {
+		t := tasks[i]
+		if nested[i] {
+			idx := seen[t.ParentID]
+			seen[t.ParentID]++
+			if i >= from {
+				b.WriteString(m.renderSubtaskLine(&t, idx, siblings[t.ParentID], cols, i, sel, sel >= 0))
+			}
+			continue
+		}
+		if i >= from {
+			b.WriteString(m.renderTaskLineWithSet(&t, i, sel, sel >= 0, m.cache.overdueSet, cols))
+		}
+	}
+	return strings.Split(strings.TrimRight(b.String(), "\n"), "\n")
+}
+
+// groupFoldNote is the line the done tasks of a group fold into while
+// finished work is hidden, or "" when there is nothing folded.
+func (m model) groupFoldNote(s *groupSummary) string {
+	if m.showFinishedGroups || s == nil || s.done == 0 {
+		return ""
+	}
+	return dimStyle.Render(fmt.Sprintf(tr("  ✓ %d done · %s shows them"), s.done, effectiveKey("history", "h")))
+}
+
+// groupPaneHead is the top of the pane under a Tags or Projects list: the
+// group's counts and, when it has finished anything lately, one block per week
+// of how much.
+func (m model) groupPaneHead(s *groupSummary, availW int) []string {
+	if s == nil {
+		return nil
+	}
+	lines := []string{normalStyle.Render(truncate(fmt.Sprintf(tr("  %d open · %d overdue · %d done"), s.open, s.overdue, s.done), availW))}
+	recent := 0
+	for _, n := range s.weekly {
+		recent += n
+	}
+	if recent > 0 {
+		label := fmt.Sprintf(tr("  done per week, last %d: "), groupWeeks)
+		lines = append(lines, dimStyle.Render(label)+activeCountStyle.Render(weeklySparkline(s.weekly))+
+			dimStyle.Render(fmt.Sprintf(tr("  (%d this week)"), s.weekly[groupWeeks-1])))
+	}
+	return lines
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
@@ -1222,165 +1214,52 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 
 func (m model) renderProjectListContent(projects []string) string {
 	if len(projects) == 0 {
-		if m.searchQuery != "" {
+		switch {
+		case m.searchQuery != "":
 			return normalStyle.Render(tr("  No projects match your search."))
+		case len(m.cache.projectGroups) > 0:
+			return m.nothingOpenNote(tr("  Every project is finished."))
 		}
 		return normalStyle.Render(tr("  No projects yet. Add a project to a task first."))
 	}
-
-	b := getBuilder()
-	defer putBuilder(b)
-
-	w := m.termWidth - 8
-	nameMax := 0
-	for _, p := range projects {
-		if pw := len([]rune(p)); pw > nameMax {
-			nameMax = pw
-		}
-	}
-	projHdr := tr("Project")
-	// gap=4 matches the Tasks tab title column so non-truncated names leave a
-	// 4-char visible gap before the Active column, mirroring the title→score gap.
-	// Floor bakes the gap into the header label too — Tasks tab gets away with a
-	// bare-header floor because real titles dwarf the "Task" label, but project
-	// names are often as short as "Project", so the floor has to enforce the gap
-	// or the "Project" / "Active" headers butt up against each other.
-	projW := contentFitWidth(m.termWidth, nameMax, 4, len([]rune(projHdr))+4)
-
-	// The counts are bare numbers right-aligned under their headings.
-	activeHdr, doneHdr, overdueHdr := tr("Active"), tr("Done"), tr("Overdue")
-	gap := strings.Repeat(" ", listColGap)
-	countCol := func(v, hdr string) string { return padLeft(v, len([]rune(hdr))) }
-
-	const prefix = "  "
-	headerLeft := prefix + padRight(projHdr, projW) +
-		activeHdr + gap + doneHdr + gap + overdueHdr
-	padW := w - len([]rune(headerLeft))
-	if padW < 1 {
-		padW = 1
-	}
-	b.WriteString(headerStyle.Render(headerLeft+strings.Repeat(" ", padW)) + "\n")
-
-	maxVisible := m.projectListVisibleRows()
-	startIdx := m.listOffset
-	if startIdx > len(projects) {
-		startIdx = 0
-	}
-	endIdx := startIdx + maxVisible
-	if endIdx > len(projects) {
-		endIdx = len(projects)
-	}
-	for i := startIdx; i < endIdx; i++ {
-		p := projects[i]
-		tasks := m.getProjectTasks(p)
-		var activeCnt, doneCnt, overdueCnt int
-		for _, t := range tasks {
-			if t.Status == todo.Done {
-				doneCnt++
-			} else {
-				activeCnt++
-				if t.IsOverdue() {
-					overdueCnt++
-				}
+	return m.renderGroupRows(groupRows{
+		nameHdr:    tr("Project"),
+		keys:       projects,
+		sums:       m.cache.projectGroups,
+		labelStyle: normalStyle,
+		cursor:     m.projectCursor,
+		start:      m.listOffset,
+		count:      m.projectListVisibleRows(),
+		label:      func(key string) string { return key },
+		editing: func(key, lead, _ string) (string, bool) {
+			if m.mode != modeEditProjectInline || key != m.editingProjectName {
+				return "", false
 			}
-		}
-		cursorStr := cursorGap
-		if i == m.projectCursor {
-			cursorStr = cursorMark
-		}
-		if m.mode == modeEditProjectInline && i == m.projectCursor {
-			b.WriteString(normalStyle.Render(cursorStr) + m.textInput.View() + "\n")
-			continue
-		}
-		// truncate at projW-1 so a truncated name (ending in "(…)") still leaves
-		// 1 trailing space before the Active column — same rule as the title col
-		// on the Tasks tab.
-		nameCol := padRight(truncate(p, projW-1), projW)
-		activeStr := countCol(fmt.Sprint(activeCnt), activeHdr) + gap
-		doneStr := countCol(fmt.Sprint(doneCnt), doneHdr) + gap
-		overdueStr := countCol("─", overdueHdr)
-		if overdueCnt > 0 {
-			overdueStr = countCol(fmt.Sprint(overdueCnt), overdueHdr)
-		}
-		switch {
-		case i == m.projectCursor:
-			line := selectedStyle.Render(cursorStr + nameCol + activeStr + doneStr)
-			if overdueCnt > 0 {
-				b.WriteString(line + overdueStyle.Render(overdueStr) + "\n")
-			} else {
-				b.WriteString(line + selectedStyle.Render(overdueStr) + "\n")
-			}
-		case activeCnt == 0:
-			b.WriteString(doneCountStyle.Render(cursorStr+nameCol+activeStr+doneStr+overdueStr) + "\n")
-		default:
-			ovdRendered := dimStyle.Render(overdueStr)
-			if overdueCnt > 0 {
-				ovdRendered = overdueCountStyle.Render(overdueStr)
-			}
-			b.WriteString(
-				normalStyle.Render(cursorStr+nameCol) +
-					activeCountStyle.Render(activeStr) +
-					doneCountStyle.Render(doneStr) +
-					ovdRendered + "\n")
-		}
-	}
-	return b.String()
+			return normalStyle.Render(lead) + m.textInput.View(), true
+		},
+	})
 }
 
-// renderProjectDrillTaskList renders the task-list panel shown in the left
-// column of the drilled-in Projects view. It reuses renderTaskLineWithSet so
-// rows look identical to the Tasks tab: same checkbox, priority glyphs, status
-// colours, and cursor marker. m.termWidth is already narrowed to the column's
-// share by the caller so taskListCols and no-wrap math apply per column.
-func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
+// renderProjectDrillTaskList renders the task list of the drilled-in Projects
+// view, windowed to the rows the clamp keeps the cursor in, with the done
+// tasks' fold line under the last row when there is room for it. m.termWidth
+// is already narrowed to the column's share by the caller.
+func (m model) renderProjectDrillTaskList(tasks []todo.Todo, s *groupSummary) []string {
+	fold := m.groupFoldNote(s)
 	if len(tasks) == 0 {
-		return []string{dimStyle.Render(tr("  No tasks in this project."))}
-	}
-
-	b := getBuilder()
-	defer putBuilder(b)
-
-	overdueSet := m.cache.overdueSet
-
-	// Compute column widths from this project's tasks, not the full active set.
-	contentMax, tagsMax, projectMax := 0, 0, 0
-	hasDue := false
-	for i := range tasks {
-		if w := len([]rune(tasks[i].Title)); w > contentMax {
-			contentMax = w
+		lines := []string{dimStyle.Render(tr("  Nothing open in this project."))}
+		if fold != "" {
+			lines = append(lines, fold)
 		}
-		if tw := tagsRenderWidth(tasks[i].Tags); tw > tagsMax {
-			tagsMax = tw
-		}
-		if !tasks[i].DueDate.IsZero() {
-			hasDue = true
-		}
-		if pw := len([]rune(tasks[i].Project)); pw > projectMax {
-			projectMax = pw
-		}
+		return lines
 	}
-	cols := taskListCols(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax)
-	renderListHeader(b, m.termWidth, false, cols, listPosLabel(m.cursor, len(tasks)))
-
-	// Use projectDrillTaskVisibleRows (= listVisible()-1) to match the clamp
-	// window exactly. Both sides read the same helper so an off-by-one is
-	// impossible: the header row is already accounted for in the helper.
-	maxVisible := m.projectDrillTaskVisibleRows()
-	startIdx := m.listOffset
-	if startIdx > len(tasks) {
-		startIdx = 0
+	visible := m.projectDrillTaskVisibleRows()
+	start := min(m.listOffset, len(tasks))
+	lines := m.renderGroupTaskRows(tasks, start, visible, m.cursor, false)
+	if fold != "" && start+visible >= len(tasks) && len(tasks)-start < visible {
+		lines = append(lines, fold)
 	}
-	endIdx := startIdx + maxVisible
-	if endIdx > len(tasks) {
-		endIdx = len(tasks)
-	}
-
-	for i := startIdx; i < endIdx; i++ {
-		t := tasks[i]
-		b.WriteString(m.renderTaskLineWithSet(&t, i, m.cursor, true, overdueSet, cols))
-	}
-
-	return strings.Split(strings.TrimRight(b.String(), "\n"), "\n")
+	return lines
 }
 
 // ── Settings list ─────────────────────────────────────────────────────────────

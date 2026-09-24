@@ -1,9 +1,7 @@
 package main
 
 import (
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/Iliorn/taskr/todo"
 )
@@ -467,66 +465,4 @@ func dependencyScoreRollupWith(todos []*todo.Todo, base map[string]float64, scor
 		}
 	}
 	return out
-}
-
-// selectSortedTags returns the unique tags across all tasks (sorted by mode)
-// plus the count of untagged tasks (total and done) shown as a virtual row.
-func selectSortedTags(todos []*todo.Todo, mode tagSortMode, stats map[string]tagStats, lastUsed map[string]time.Time) (sorted []string, untaggedTotal, untaggedDone int) {
-	seen := make(map[string]struct{}, len(stats))
-	for i := range todos {
-		// The Tasks tab list excludes subtasks, so counting them here
-		// would inflate row counts (or surface a tag only present on
-		// subtasks) and leave pressing Enter on the row showing an
-		// empty list.
-		if todos[i].ParentID != "" {
-			continue
-		}
-		if len(todos[i].Tags) == 0 {
-			untaggedTotal++
-			if todos[i].Status == todo.Done {
-				untaggedDone++
-			}
-			continue
-		}
-		for _, tag := range todos[i].Tags {
-			if _, ok := seen[tag]; ok {
-				continue
-			}
-			seen[tag] = struct{}{}
-			sorted = append(sorted, tag)
-		}
-	}
-	sortTags(sorted, mode, stats, lastUsed)
-	return sorted, untaggedTotal, untaggedDone
-}
-
-// selectProjects returns the distinct non-empty project names (sorted), filtered
-// by the search query.
-func selectProjects(todos []*todo.Todo, search string) []string {
-	seen := make(map[string]struct{})
-	var projects []string
-	for i := range todos {
-		p := todos[i].Project
-		if p == "" {
-			continue
-		}
-		if _, ok := seen[p]; ok {
-			continue
-		}
-		seen[p] = struct{}{}
-		projects = append(projects, p)
-	}
-	sort.Strings(projects)
-
-	if search != "" {
-		q := strings.ToLower(search)
-		filtered := projects[:0]
-		for _, p := range projects {
-			if strings.Contains(strings.ToLower(p), q) {
-				filtered = append(filtered, p)
-			}
-		}
-		projects = filtered
-	}
-	return projects
 }

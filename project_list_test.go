@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
@@ -18,13 +19,14 @@ func TestProjectListWindowFollowsCursor(t *testing.T) {
 	const n = 40
 	var tasks []todo.Todo
 	for i := 0; i < n; i++ {
-		p := fmt.Sprintf("p%02d", i) // selectProjects sorts these p00..p39
+		p := fmt.Sprintf("p%02d", i) // by name: p00..p39
 		tk := mkTodo(p, "task "+p, todo.Pending)
 		tk.Project = p
 		tasks = append(tasks, tk)
 	}
 	m := modelWithTasks(t, tasks...)
 	m.tab = tabProjects
+	m.projectOrder = groupSortName
 
 	visible := m.projectListVisibleRows()
 	if visible < 1 || visible >= n {
@@ -52,10 +54,11 @@ func TestProjectListWindowFollowsCursor(t *testing.T) {
 	}
 }
 
-// TestProjectDrillUsesTaskRenderer guards the new drilled-in Projects view:
+// TestProjectDrillUsesTaskRenderer guards the drilled-in Projects view:
 // pressing Enter on a project must switch to a task-list view that uses the
 // same row renderer as the Tasks tab (checkbox, cursor marker, task title),
-// with the Gantt chart in the right column as an always-on preview.
+// with the done tasks folded into one line until h, and the timeline strip in
+// the right column when an open task has a date to put on it.
 func TestProjectDrillUsesTaskRenderer(t *testing.T) {
 	tasks := []todo.Todo{
 		mkTodo("t1", "Alpha task", todo.Pending),
@@ -65,6 +68,7 @@ func TestProjectDrillUsesTaskRenderer(t *testing.T) {
 	for i := range tasks {
 		tasks[i].Project = "myproject"
 	}
+	tasks[0].DueDate = startOfDay(time.Now()).AddDate(0, 0, 5)
 	m := modelWithTasks(t, tasks...)
 	m.tab = tabProjects
 
@@ -86,8 +90,12 @@ func TestProjectDrillUsesTaskRenderer(t *testing.T) {
 	if !strings.Contains(out, "Beta task") {
 		t.Errorf("drilled-in view missing 'Beta task':\n%s", out)
 	}
-	if !strings.Contains(out, "Gamma task") {
-		t.Errorf("drilled-in view missing 'Gamma task':\n%s", out)
+	if strings.Contains(out, "Gamma task") || !strings.Contains(out, "1 done") {
+		t.Errorf("the done task should fold into a count until h:\n%s", out)
+	}
+	m = sendKey(t, m, "h")
+	if out := m.buildProjectListContent(w, outerH); !strings.Contains(out, "Gamma task") {
+		t.Errorf("h should list the done task:\n%s", out)
 	}
 
 	// The cursor marker must appear (cursor starts at 0 = Alpha task).
@@ -107,6 +115,26 @@ func TestProjectDrillUsesTaskRenderer(t *testing.T) {
 		if lw := ansi.StringWidth(line); lw > m.termWidth {
 			t.Errorf("View() line %d cells exceeds termWidth %d: %q", lw, m.termWidth, line)
 		}
+	}
+}
+
+// Without an open task that has a date, a timeline has nothing ahead of it to
+// draw: the drilled-in list takes the whole width, and the pane under the
+// project list shows the project's tasks instead of an empty chart.
+func TestProjectWithoutDatesSkipsTheTimeline(t *testing.T) {
+	a := mkTodo("t1", "Undated task", todo.Pending)
+	a.Project = "plain"
+	m := modelWithTasks(t, a)
+	m.tab = tabProjects
+	m.termWidth, m.termHeight = 120, 30
+	w, outerH := m.termWidth-6, m.termHeight-4
+
+	if out := m.buildProjectListContent(w, outerH); strings.Contains(out, "Timeline") || !strings.Contains(out, "Undated task") {
+		t.Errorf("overview pane should list the tasks, not a timeline:\n%s", out)
+	}
+	m = sendKey(t, m, "enter")
+	if out := m.buildProjectListContent(w, outerH); strings.Contains(out, "Timeline") {
+		t.Errorf("drilled-in view should not carry an empty timeline strip:\n%s", out)
 	}
 }
 
@@ -159,7 +187,7 @@ func TestProjectDrillCursorScrolls(t *testing.T) {
 	// The Gantt preview (right column) legitimately shows all task labels
 	// regardless of scroll position, so we check only the left column directly.
 	projects := m.allProjectsForList()
-	taskListLines := m.renderProjectDrillTaskList(m.getProjectTasks(projects[m.projectCursor]))
+	taskListLines := m.renderProjectDrillTaskList(m.getProjectTasks(projects[m.projectCursor]), nil)
 	leftCol := strings.Join(taskListLines, "\n")
 	if strings.Contains(leftCol, "Task 00") {
 		t.Errorf("first task 'Task 00' should have scrolled out of the task-list column, but it's still visible:\n%s", leftCol)

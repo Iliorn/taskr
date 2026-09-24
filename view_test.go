@@ -291,6 +291,7 @@ func TestPersistentPanelsUseContextualBorderTitles(t *testing.T) {
 
 	projectTask := todo.New("Project task")
 	projectTask.Project = "alpha"
+	projectTask.DueDate = time.Now().AddDate(0, 0, 3) // something to put on a timeline
 	projects := modelWithTasks(t, projectTask)
 	projects.tab = tabProjects
 	assertTitle("projects", plainView(projects), "Overview")
@@ -394,7 +395,7 @@ func TestTagsSideBySide(t *testing.T) {
 	m.tab = tabTags
 	m.termHeight = 40
 
-	summary := strings.TrimSpace(fmt.Sprintf(tr("  %d active · %d done · %d overdue"), 1, 0, 0))
+	summary := strings.TrimSpace(fmt.Sprintf(tr("  %d open · %d overdue · %d done"), 1, 0, 0))
 
 	m.termWidth = sideBySideMinWidth + 10
 	if !strings.Contains(m.View(), summary) {

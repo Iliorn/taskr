@@ -52,23 +52,6 @@ func truncate(s string, max int) string {
 	return string(r[:max-1]) + ellipsis
 }
 
-// wrapAtSep splits a plain sep-joined list into lines of at most width runes,
-// breaking only between items; continuation lines start with indent. An item
-// wider than a line on its own is left for the caller's truncate.
-func wrapAtSep(s, sep, indent string, width int) []string {
-	items := strings.Split(s, sep)
-	lines := []string{items[0]}
-	for _, it := range items[1:] {
-		last := &lines[len(lines)-1]
-		if len([]rune(*last))+len([]rune(sep))+len([]rune(it)) <= width {
-			*last += sep + it
-			continue
-		}
-		lines = append(lines, indent+it)
-	}
-	return lines
-}
-
 // truncateStyled is truncate for a string that has already been through a
 // lipgloss .Render. truncate counts runes, and an SGR sequence is a dozen of
 // them, so it cuts *inside* the escape: the terminal then reads the ellipsis
@@ -684,48 +667,6 @@ func readNotesFile(taskID string) (string, error) {
 
 func cleanupNotesFile(taskID string) {
 	_ = os.Remove(notesFilePath(taskID))
-}
-
-// ── tagStats ──────────────────────────────────────────────────────────────────
-
-type tagStats struct {
-	total     int
-	done      int
-	openCount int           // open (non-done) tasks, denominator for avg age
-	ageSum    time.Duration // Σ(now - CreatedAt) over open tasks
-	tracked   time.Duration // Σ time-entry durations across all tasks
-}
-
-func computeTagStats(todos []*todo.Todo) map[string]tagStats {
-	now := time.Now()
-	stats := make(map[string]tagStats, 16)
-	for _, t := range todos {
-		// The Tasks tab list is top-level only, so counting subtasks
-		// here would inflate a tag row past what pressing Enter shows.
-		if t.ParentID != "" {
-			continue
-		}
-		var tracked time.Duration
-		for _, te := range t.TimeEntries {
-			tracked += te.Duration()
-		}
-		open := t.Status != todo.Done
-		age := now.Sub(t.CreatedAt)
-		for _, tag := range t.Tags {
-			s := stats[tag]
-			s.total++
-			if t.Status == todo.Done {
-				s.done++
-			}
-			if open {
-				s.openCount++
-				s.ageSum += age
-			}
-			s.tracked += tracked
-			stats[tag] = s
-		}
-	}
-	return stats
 }
 
 // ── Quick-add parsing ─────────────────────────────────────────────────────────

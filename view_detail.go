@@ -541,6 +541,14 @@ func ganttDateWindow(tasks []todo.Todo, today time.Time) (minDate, maxDate time.
 	if maxDate.IsZero() {
 		maxDate = today.AddDate(0, 1, 0)
 	}
+	// Today is on every timeline: the chart is read against it, and a window
+	// that ended before it hid how late the last dates already were.
+	if today.Before(minDate) {
+		minDate = startOfDay(today)
+	}
+	if today.After(maxDate) {
+		maxDate = today
+	}
 	if !maxDate.After(minDate) {
 		maxDate = minDate.AddDate(0, 0, 14)
 	}

@@ -65,7 +65,7 @@ func (m model) quickAddSuggestions(value string, pos int) (sigil string, matches
 	var pool []string
 	switch sigil {
 	case "#":
-		pool = m.getAllTagsSorted()
+		pool = append([]string(nil), m.getAllTagsSorted()...)
 		sortByRecency(pool, m.cache.tagLastUsed)
 		// A tag already spelled out elsewhere on the line is noise — but the
 		// token being typed parses as a tag too, so it must not exclude itself.
@@ -106,9 +106,9 @@ func (m model) quickAddSuggestions(value string, pos int) (sigil string, matches
 // — offering one would splice in a token that parses as project "Home" plus a
 // stray title word. Those stay an affair for the detail pane's '@' picker.
 func (m model) quickAddProjectPool() []string {
-	out := make([]string, 0, len(m.cache.projectTasks))
-	for p := range m.cache.projectTasks {
-		if p == "" || strings.ContainsFunc(p, unicode.IsSpace) {
+	out := make([]string, 0, len(m.cache.projectNames))
+	for _, p := range m.cache.projectNames {
+		if strings.ContainsFunc(p, unicode.IsSpace) {
 			continue
 		}
 		out = append(out, p)
