@@ -361,6 +361,7 @@ func TestBoardHeadingsLineUpWithTheirCards(t *testing.T) {
 func TestBoardCardsAreBoxesWhileTheyFit(t *testing.T) {
 	long := todo.New("Draft the quarterly budget proposal for the board meeting")
 	short := todo.New("Buy filters")
+	short.Priority = todo.PriorityLow // ranks below: equal scores would sort by random ID
 	m := newTagModel(long, short)
 	m.tab = tabBoard
 	m.termWidth, m.termHeight = 80, 30

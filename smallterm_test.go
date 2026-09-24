@@ -140,6 +140,12 @@ func TestSmallTerminalSurvivesKeys(t *testing.T) {
 	// order), and $HOME is shared by the whole test binary — so put
 	// settings.json back exactly as it was, file or no file.
 	restoreSettingsFile(t)
+	// The same sweep presses enter and → on the Settings tab's Language row,
+	// which switches the process-wide language, and a later test reading an
+	// English hint then fails for no reason of its own — the order -shuffle
+	// happened to pick. Put it back.
+	lang := activeLang
+	t.Cleanup(func() { applyLang(string(lang)) })
 	keys := []string{"down", "enter", "right", "left", "d", "t", "p", "a", "esc",
 		"end", "pgdown", "s", "h", "f", "/", "?", "T", "m", "r", "x", "tab"}
 	for _, tb := range smallTermTabs {

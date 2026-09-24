@@ -232,7 +232,8 @@ func TestChangelogEntriesAreOneLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read CHANGELOG.md: %v", err)
 	}
-	lines := strings.Split(string(data), "\n")
+	// A Windows checkout ends every line in \r, which is not part of the entry.
+	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
 	inEntries := false
 	for i, line := range lines {
 		if strings.HasPrefix(line, "## ") {
