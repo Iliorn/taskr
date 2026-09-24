@@ -77,14 +77,14 @@ var smallTermStates = []struct {
 		m.mode = modeConfirm
 		m.confirmMsg = "Delete 'Fix the boiler in the basement'? (y/n)"
 	}},
-	{"stage editor", func(m *model) { m.mode = modeEditStages; m.textInput.SetValue(stagesDisplay()) }},
+	{"stage editor", func(m *model) { m.mode = modeEditStages; m.textInput.SetValue(m.boardCfg.stagesDisplay()) }},
 	{"tag picker", func(m *model) { m.mode = modeSearchTag; m.tagSearchInput.SetValue("h") }},
 	{"project picker", func(m *model) { m.mode = modeSearchProject; m.projSearchInput.SetValue("h") }},
 	{"dep picker", func(m *model) { m.mode = modeSearchDep; m.depSearchInput.SetValue("b") }},
 	{"board carry", func(m *model) {
 		if m.tab == tabBoard {
 			m.startBoardCarry()
-			m.board.carryCol = doneColumn()
+			m.board.carryCol = m.boardCfg.doneColumn()
 		}
 	}},
 	{"board card view", func(m *model) {

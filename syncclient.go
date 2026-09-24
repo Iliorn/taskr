@@ -73,9 +73,10 @@ func maybeAutoSyncCLI() {
 		fmt.Fprintf(os.Stderr, "taskr sync: auto-sync paused: %s; run `taskr sync` to choose\n", firstSyncNotice(n))
 		return
 	}
-	sum, err := runClientSync(db, cfg, 10*time.Second, storedBiases())
+	board := storedBoard()
+	sum, err := runClientSync(db, cfg, 10*time.Second, storedBiases(), board.wire())
 	if err == nil {
-		applyBoardFromSync(sum.board)
+		board.adoptFromSync(sum.board)
 	}
 }
 
@@ -321,13 +322,14 @@ Options:
 	if rc := resolveFirstSync(cfg, *adoptLocal, *adoptRemoteFlag); rc != 0 {
 		return rc
 	}
-	sum, err := runClientSync(db, cfg, 30*time.Second, storedBiases())
+	board := storedBoard()
+	sum, err := runClientSync(db, cfg, 30*time.Second, storedBiases(), board.wire())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "taskr sync: %v\n", err)
 		return 1
 	}
-	if applyBoardFromSync(sum.board) {
-		fmt.Fprintf(os.Stderr, "taskr sync: board columns updated from the fleet: %s\n", stagesDisplay())
+	if board.adoptFromSync(sum.board) {
+		fmt.Fprintf(os.Stderr, "taskr sync: board columns updated from the fleet: %s\n", board.stagesDisplay())
 	}
 	if sum.versionGap != "" {
 		// stderr, and outside the --quiet gate: --quiet suppresses the
@@ -366,12 +368,14 @@ type syncSummary struct {
 // server, persists the merged set it returns, and logs any local edit that lost
 // a conflict. On error nothing is applied locally, so the local store is left
 // untouched.
-func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b biases) (syncSummary, error) {
+// b scores the rows the merge writes; board is this device's column list as
+// offered to the fleet (boardConfig.wire), nil to leave the fleet's alone.
+func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b biases, board *tasksync.Board) (syncSummary, error) {
 	local, err := loadTodosForSync(h)
 	if err != nil {
 		return syncSummary{}, err
 	}
-	resp, err := tasksync.PostSync(cfg.URL, cfg.Token, appVersion, local, localBoard(), timeout)
+	resp, err := tasksync.PostSync(cfg.URL, cfg.Token, appVersion, local, board, timeout)
 	if err != nil {
 		return syncSummary{}, err
 	}

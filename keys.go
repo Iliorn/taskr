@@ -27,7 +27,7 @@ import (
 // once. That is the whole reason the registry carries action ids.
 
 // activeKeys maps action id → the key the user bound it to. Package-level and
-// set by applyKeys at startup, mirroring applyTheme / applyLang / applyStages.
+// set by applyKeys at startup, mirroring applyTheme / applyLang.
 // Empty means "defaults everywhere", which is the normal case.
 var activeKeys = map[string]string{}
 

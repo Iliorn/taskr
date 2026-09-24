@@ -14,13 +14,9 @@ import (
 // usable: a column window that scrolls, a Stage field in the detail pane, and
 // a switch that removes the whole surface for people who never use it.
 
-// manyStages installs a board of n columns — n-1 working ones plus the Done
-// column that always ends the list — and restores the previous list. It must
-// be called *after* the model is built: initialModel re-applies settings.json,
-// which would reset activeStages to the defaults underneath it.
-func manyStages(t *testing.T, n int) func() {
-	t.Helper()
-	prev := activeStages
+// manyStages gives m a board of n columns — n-1 working ones plus the Done
+// column that always ends the list.
+func manyStages(m *model, n int) {
 	stages := make([]string, 0, n)
 	for _, name := range []string{"Active", "On hold", "Awaiting", "Review", "Blocked",
 		"Cancelled", "Later", "Icebox", "Triage", "Ready"} {
@@ -29,8 +25,7 @@ func manyStages(t *testing.T, n int) func() {
 		}
 		stages = append(stages, name)
 	}
-	applyStages(append(stages, "Done"))
-	return func() { applyStages(prev) }
+	m.boardCfg.setStages(append(stages, "Done"))
 }
 
 // ── The column window ─────────────────────────────────────────────────────────
@@ -67,7 +62,7 @@ func TestBoardWindowShowsWhatFitsAndScrolls(t *testing.T) {
 // That is what makes it scroll a column at a time rather than jump.
 func TestBoardWindowFollowsTheFocusedColumn(t *testing.T) {
 	m := modelWithTasks(t, todo.New("a card"))
-	defer manyStages(t, 11)()
+	manyStages(&m, 11)
 	m.termWidth, m.termHeight = 120, 30
 	m.switchTab(tabBoard)
 	m.markCacheDirty()
@@ -103,7 +98,7 @@ func TestBoardWindowFollowsTheFocusedColumn(t *testing.T) {
 // A scrolled board must say so, or it just looks like a board missing columns.
 func TestBoardTitleNamesTheVisibleSlice(t *testing.T) {
 	m := modelWithTasks(t, todo.New("a card"))
-	defer manyStages(t, 11)()
+	manyStages(&m, 11)
 	m.termWidth, m.termHeight = 120, 30
 	m.switchTab(tabBoard)
 	m.markCacheDirty()
@@ -131,22 +126,22 @@ func stageFieldModel(t *testing.T) model {
 func TestStageFieldCyclesWithTheArrows(t *testing.T) {
 	m := stageFieldModel(t)
 	task := m.currentTodo()
-	if !stageFieldVisible(task) {
+	if !m.boardCfg.stageFieldVisible(task) {
 		t.Fatal("a pending top-level task has no Stage field")
 	}
-	start := stageIndex(task.Stage)
+	start := m.boardCfg.stageIndex(task.Stage)
 
 	m = sendKey(t, m, "right")
-	if got := stageIndex(m.get(task.ID).Stage); got != (start+1)%len(pendingStages()) {
-		t.Errorf("→ moved to stage %d, want %d", got, (start+1)%len(pendingStages()))
+	if got := m.boardCfg.stageIndex(m.get(task.ID).Stage); got != (start+1)%len(m.boardCfg.pending()) {
+		t.Errorf("→ moved to stage %d, want %d", got, (start+1)%len(m.boardCfg.pending()))
 	}
 	m = sendKey(t, m, "left")
-	if got := stageIndex(m.get(task.ID).Stage); got != start {
+	if got := m.boardCfg.stageIndex(m.get(task.ID).Stage); got != start {
 		t.Errorf("← did not undo →: stage %d, want %d", got, start)
 	}
 	// It wraps rather than stopping at the ends, and never reaches the last
 	// column — completing a task has one path, and it is not this one.
-	for i := 0; i < len(activeStages)+2; i++ {
+	for i := 0; i < len(m.boardCfg.stages)+2; i++ {
 		m = sendKey(t, m, "right")
 		if m.get(task.ID).Status != todo.Pending {
 			t.Fatal("cycling the stage completed the task")
@@ -176,13 +171,13 @@ func TestStageFieldHidesWhereItWouldLie(t *testing.T) {
 	done.Status = todo.Done
 	m := modelWithTasks(t, parent, sub, done)
 
-	if !stageFieldVisible(m.get("p")) {
+	if !m.boardCfg.stageFieldVisible(m.get("p")) {
 		t.Error("a pending top-level task should have the field")
 	}
-	if stageFieldVisible(m.get("s")) {
+	if m.boardCfg.stageFieldVisible(m.get("s")) {
 		t.Error("a subtask has no stage — it never reaches the board")
 	}
-	if stageFieldVisible(m.get("d")) {
+	if m.boardCfg.stageFieldVisible(m.get("d")) {
 		t.Error("a done task has no stage — Done is a status")
 	}
 }
@@ -190,9 +185,8 @@ func TestStageFieldHidesWhereItWouldLie(t *testing.T) {
 // Up/down must step over the row when it is not there, or the cursor lands on
 // a field the pane is not drawing.
 func TestDetailNavigationSkipsAHiddenStageRow(t *testing.T) {
-	defer applyShowBoard(true)
 	m := stageFieldModel(t)
-	applyShowBoard(false)
+	m.boardCfg.shown = false
 
 	m.detail.field = fieldSize
 	m = sendKey(t, m, "down")
@@ -211,7 +205,6 @@ func TestDetailNavigationSkipsAHiddenStageRow(t *testing.T) {
 // Off means gone: out of the bar, out of tab cycling, off its digit, and not
 // somewhere the cursor can be left standing.
 func TestTurningTheBoardOffRemovesTheWholeSurface(t *testing.T) {
-	defer applyShowBoard(true)
 	// toggleShowBoard persists, so this needs its own home — writing the shared
 	// one would leave every later model in the binary loading a settings.json
 	// with the board off.
@@ -224,23 +217,23 @@ func TestTurningTheBoardOffRemovesTheWholeSurface(t *testing.T) {
 	m.switchTab(tabBoard)
 
 	m.toggleShowBoard()
-	if showBoard {
+	if m.boardCfg.shown {
 		t.Fatal("the toggle did not turn the board off")
 	}
 	if m.tab == tabBoard {
 		t.Error("the cursor was left standing on a tab that is no longer shown")
 	}
-	if tabVisible(tabBoard) {
+	if m.boardCfg.tabVisible(tabBoard) {
 		t.Error("tabVisible still reports the board")
 	}
-	if _, ok := tabForNumberKey("5"); ok {
+	if _, ok := m.tabForNumberKey("5"); ok {
 		t.Error("5 still lands on the hidden board")
 	}
 	// Cycling must step over it rather than stopping there.
 	seen := map[tab]bool{}
 	cur := tabTasks
 	for i := 0; i < numTabs*2; i++ {
-		cur = nextTab(cur, 1)
+		cur = m.boardCfg.nextTab(cur, 1)
 		seen[cur] = true
 	}
 	if seen[tabBoard] {
@@ -250,19 +243,18 @@ func TestTurningTheBoardOffRemovesTheWholeSurface(t *testing.T) {
 		t.Errorf("the tab bar still shows the board: %q", bar)
 	}
 	// The numbers do not renumber — Stats stays 6 whether or not the board is on.
-	if got, ok := tabForNumberKey("6"); !ok || got != tabStats {
+	if got, ok := m.tabForNumberKey("6"); !ok || got != tabStats {
 		t.Error("hiding the board renumbered the other tabs")
 	}
 }
 
 // The setting has to survive a restart, or the tab comes back on next launch.
 func TestBoardVisibilityPersists(t *testing.T) {
-	defer applyShowBoard(true)
 	m := settingsModel(t)
 	m.settingsCursor = settingShowBoard
 	m = sendKey(t, m, "enter")
 
-	if showBoard {
+	if m.boardCfg.shown {
 		t.Fatal("enter on the row did not toggle it")
 	}
 	got, err := loadSettings()
@@ -273,8 +265,7 @@ func TestBoardVisibilityPersists(t *testing.T) {
 		t.Error("settings.json did not record that the board is off")
 	}
 	// And the flag is negative, so an untouched file leaves the board on.
-	applyShowBoard(!appSettings{}.BoardDisabled)
-	if !showBoard {
+	if !boardConfigFromSettings(appSettings{}).shown {
 		t.Error("a settings file with no board key should leave the board on")
 	}
 }

@@ -9,7 +9,7 @@ import (
 )
 
 // withKeys applies a keybinding overlay for one test, restoring the previous
-// one after — the applyTheme/applyStages global pattern.
+// one after — the applyTheme/applyLang global pattern.
 func withKeys(t *testing.T, overrides map[string]string) {
 	t.Helper()
 	prev := activeKeys
@@ -80,7 +80,7 @@ func TestRebindingShowsUpEverywhere(t *testing.T) {
 		t.Errorf("the help overlay still shows the default key")
 	}
 	var found bool
-	for _, c := range paletteCommands() {
+	for _, c := range paletteModel().paletteCommands() {
 		if c.label == "toggle done" && c.tab == tabTasks {
 			found = true
 			if c.key != "E" {
@@ -100,7 +100,7 @@ func TestPaletteRunsRebound(t *testing.T) {
 	m := modelWithTasks(t, task)
 	withKeys(t, map[string]string{"done": "E"})
 
-	for _, c := range paletteCommands() {
+	for _, c := range paletteModel().paletteCommands() {
 		if c.label == "toggle done" && c.tab == tabTasks {
 			next, _ := m.runPaletteCommand(c)
 			m = next.(model)

@@ -820,7 +820,7 @@ func (m model) renderPalette(w int) string {
 	defer putBuilder(b)
 	b.WriteString(searchStyle.Width(w).Render(m.paletteInput.View()))
 
-	results := paletteResults(m.paletteInput.Value())
+	results := m.paletteResults(m.paletteInput.Value())
 	sel := m.paletteSelection(len(results))
 	if len(results) == 0 {
 		b.WriteString("\n" + dimStyle.Render("    "+tr("No command matches that.")))
@@ -2123,7 +2123,7 @@ func (m model) renderTabs(avail int) string {
 	// Fallback: bare numbers always fit (single rune each).
 	unselNames, selLabel := nums, selFull
 	for _, l := range levels {
-		if tabsWidthMixed(l.unsel, m.tab, l.sel) <= avail {
+		if m.tabsWidthMixed(l.unsel, m.tab, l.sel) <= avail {
 			unselNames, selLabel = l.unsel, l.sel
 			break
 		}
@@ -2139,7 +2139,7 @@ func (m model) renderTabs(avail int) string {
 	// A gap reads as "something is off", which is exactly true.
 	parts := make([]string, 0, numTabs)
 	for i := range names {
-		if !tabVisible(tab(i)) {
+		if !m.boardCfg.tabVisible(tab(i)) {
 			continue
 		}
 		if tab(i) == m.tab {
@@ -2160,12 +2160,12 @@ func (m model) renderTabs(avail int) string {
 // measured within budget and rendered fourteen cells past it, which the header
 // paid for by truncating whatever sat to the right of the bar — the shortcut
 // hint, mid-word.
-func tabsWidthMixed(names [numTabs]string, sel tab, selLabel string) int {
-	visible := visibleTabCount()
+func (m model) tabsWidthMixed(names [numTabs]string, sel tab, selLabel string) int {
+	visible := m.boardCfg.visibleTabCount()
 	w := visible - 1 // single-space separators
 	w += visible * 2 // the per-tab Padding(0, 1)
 	for i, n := range names {
-		if !tabVisible(tab(i)) {
+		if !m.boardCfg.tabVisible(tab(i)) {
 			continue
 		}
 		if tab(i) == sel {

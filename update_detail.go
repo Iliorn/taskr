@@ -52,16 +52,16 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.popFocus()
 
 	case "tab":
-		m.switchTab(nextTab(m.tab, 1))
+		m.switchTab(m.boardCfg.nextTab(m.tab, 1))
 		return m, nil
 	case "shift+tab":
-		m.switchTab(nextTab(m.tab, -1))
+		m.switchTab(m.boardCfg.nextTab(m.tab, -1))
 		return m, nil
 
 	case "1", "2", "3", "4", "5", "6", "7":
 		// The digits are advertised as global navigation, so they must leave
 		// the detail pane too — without this they silently did nothing here.
-		if t, ok := tabForNumberKey(key.String()); ok {
+		if t, ok := m.tabForNumberKey(key.String()); ok {
 			m.switchTab(t)
 		}
 		return m, nil
@@ -75,9 +75,9 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.String() == "left" {
 			dir = -1
 		}
-		if t := m.currentTodo(); m.detail.field == fieldStage && stageFieldVisible(t) {
+		if t := m.currentTodo(); m.detail.field == fieldStage && m.boardCfg.stageFieldVisible(t) {
 			m.pushUndo("move stage", t.ID)
-			t.SetStage(cycleStage(t.Stage, dir))
+			t.SetStage(m.boardCfg.cycleStage(t.Stage, dir))
 			m.markModified(t.ID)
 			return m, nil
 		}
@@ -244,7 +244,7 @@ func (m *model) detailCursorUp() {
 		m.detail.field = fieldSize
 	case fieldProject:
 		m.detail.field = fieldSize
-		if stageFieldVisible(t) {
+		if m.boardCfg.stageFieldVisible(t) {
 			m.detail.field = fieldStage
 		}
 	case fieldNotes:
@@ -312,7 +312,7 @@ func (m *model) detailCursorDown() {
 		m.detail.field = fieldSize
 	case fieldSize:
 		m.detail.field = fieldProject
-		if stageFieldVisible(t) {
+		if m.boardCfg.stageFieldVisible(t) {
 			m.detail.field = fieldStage
 		}
 	case fieldStage:

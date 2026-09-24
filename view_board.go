@@ -34,18 +34,19 @@ const (
 )
 
 // buildBoardColumns splits the filtered active/done lists into per-column
-// card lists: one column per entry of activeStages, with the last one holding
+// card lists: one column per configured stage, with the last one holding
 // the done tasks (capped at boardDoneCards) rather than a stage. Pure so
 // refreshCaches can derive it and tests can drive it directly.
-func buildBoardColumns(active, done []todo.Todo) [][]todo.Todo {
-	cols := make([][]todo.Todo, len(activeStages))
+func buildBoardColumns(c boardConfig, active, done []todo.Todo) [][]todo.Todo {
+	cols := make([][]todo.Todo, len(c.stages))
 	for i := range active {
-		cols[stageIndex(active[i].Stage)] = append(cols[stageIndex(active[i].Stage)], active[i])
+		col := c.stageIndex(active[i].Stage)
+		cols[col] = append(cols[col], active[i])
 	}
 	if len(done) > boardDoneCards {
 		done = done[:boardDoneCards]
 	}
-	cols[doneColumn()] = append([]todo.Todo(nil), done...)
+	cols[c.doneColumn()] = append([]todo.Todo(nil), done...)
 	return cols
 }
 
@@ -58,14 +59,14 @@ func (m model) boardColumns() [][]todo.Todo {
 	if m.cache.boardCols != nil {
 		return m.cache.boardCols
 	}
-	return buildBoardColumns(m.cache.active, m.cache.done)
+	return buildBoardColumns(m.boardCfg, m.cache.active, m.cache.done)
 }
 
 // boardColTitles returns the column headers — the configured names verbatim,
 // the last of which heads the Done column. They are user text, so they are not
 // translated: a board whose columns you named is shown the way you named them.
-func boardColTitles() []string {
-	return append([]string(nil), activeStages...)
+func (m model) boardColTitles() []string {
+	return append([]string(nil), m.boardCfg.stages...)
 }
 
 // boardSelection clamps the stored board cursor against the current columns,
@@ -173,7 +174,7 @@ func (m model) renderBoardList() string {
 		return m.renderBoardCardView()
 	}
 	cols := m.boardColumnsForView()
-	titles := boardColTitles()
+	titles := m.boardColTitles()
 	n := len(cols)
 	g := m.boardGeometry(cols)
 	if g.count == 0 {
@@ -699,7 +700,7 @@ func (m model) renderBoardCardView() string {
 		lines = append(lines, label(name)+style.Render(truncate(value, valW)))
 	}
 	col, _ := m.boardSelection(m.boardColumns())
-	field("Stage", boardColTitles()[col], normalStyle)
+	field("Stage", m.boardColTitles()[col], normalStyle)
 	if !t.DueDate.IsZero() {
 		due := t.DueDate.Format("02-01-06") + "  (" + formatDueShort(t.DueDate, time.Now()) + ")"
 		style := normalStyle

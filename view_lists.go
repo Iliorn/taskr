@@ -1506,7 +1506,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		autoCloseVal = tr("On")
 	}
 	showBoardVal := tr("Off")
-	if showBoard {
+	if m.boardCfg.shown {
 		showBoardVal = tr("On")
 	}
 	autoCloseSubsVal := tr("Off")
@@ -1522,7 +1522,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		}
 	}
 	syncBoardVal := tr("Off")
-	if syncBoardColumns {
+	if m.boardCfg.sync {
 		syncBoardVal = tr("On")
 	}
 	syncServerVal := tr("not set")
@@ -1563,7 +1563,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingTheme:             "‹ " + m.themeName + " ›",
 		settingLanguage:          "‹ " + activeLang.displayName() + " ›",
 		settingDetailPos:         "‹ " + trDetailPos(m.detailPos) + " ›",
-		settingStages:            stagesDisplay(),
+		settingStages:            m.boardCfg.stagesDisplay(),
 		settingSyncAuto:          syncAutoVal,
 		settingSyncBoard:         "‹ " + syncBoardVal + " ›",
 		settingSyncServer:        syncServerVal,

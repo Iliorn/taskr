@@ -20,7 +20,6 @@ func loadForCLI() (*sqliteRepo, []todo.Todo, error) {
 	if sErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
-	applyBoardSettings(settings)
 	// The CLI has no keys of its own, but it persists settings on some paths;
 	// applying the overlay keeps a round trip from dropping it.
 	keys, _ := sanitizeKeyOverrides(settings.Keys)

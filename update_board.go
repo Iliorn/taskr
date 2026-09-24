@@ -137,7 +137,7 @@ func (m *model) boardMoveCard(dir int) {
 	if t == nil {
 		return
 	}
-	doneCol := doneColumn()
+	doneCol := m.boardCfg.doneColumn()
 	target := col + dir
 	if target < 0 || target > doneCol {
 		return
@@ -152,7 +152,7 @@ func (m *model) boardMoveCard(dir int) {
 // boardPlaceCard puts a pending card into column target: a stage edit
 // (undoable) for a working column, the shared close path for Done.
 func (m *model) boardPlaceCard(t *todo.Todo, target int) {
-	doneCol := doneColumn()
+	doneCol := m.boardCfg.doneColumn()
 	if target == doneCol {
 		if m.closePendingTask(t) {
 			m.boardFollow(doneCol, t.ID)
@@ -160,7 +160,7 @@ func (m *model) boardPlaceCard(t *todo.Todo, target int) {
 		return
 	}
 	m.pushUndo("move stage", t.ID)
-	t.SetStage(pendingStages()[target])
+	t.SetStage(m.boardCfg.pending()[target])
 	m.markModified(t.ID)
 	m.boardFollow(target, t.ID)
 }
@@ -209,7 +209,7 @@ func (m model) updateBoardCarry(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.board.carryCol--
 		}
 	case "right", "l", "L", "shift+right":
-		if m.board.carryCol < doneColumn() {
+		if m.board.carryCol < m.boardCfg.doneColumn() {
 			m.board.carryCol++
 		}
 	case "enter", "esc":

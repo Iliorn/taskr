@@ -95,7 +95,7 @@ func (m *model) refreshCaches() {
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
 	m.refreshClosedToday()
-	m.cache.boardCols = buildBoardColumns(m.cache.active, m.cache.done)
+	m.cache.boardCols = buildBoardColumns(m.boardCfg, m.cache.active, m.cache.done)
 
 	m.cache.dirty = false
 	m.cache.filterDirty = false
@@ -210,7 +210,7 @@ func (m *model) refreshFilteredCaches() {
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
 	m.refreshClosedToday()
-	m.cache.boardCols = buildBoardColumns(m.cache.active, m.cache.done)
+	m.cache.boardCols = buildBoardColumns(m.boardCfg, m.cache.active, m.cache.done)
 	m.cache.filterDirty = false
 }
 

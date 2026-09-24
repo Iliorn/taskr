@@ -172,9 +172,10 @@ func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propaga
 		changed = true
 	}
 	if *stage != "" {
-		name, ok := canonicalStage(*stage)
+		board := storedBoard()
+		name, ok := board.canonicalStage(*stage)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "taskr edit: unknown stage %q (configured: %s)\n", *stage, strings.Join(pendingStages(), ", "))
+			fmt.Fprintf(os.Stderr, "taskr edit: unknown stage %q (configured: %s)\n", *stage, strings.Join(board.pending(), ", "))
 			return false, 2
 		}
 		t.SetStage(name)

@@ -10,7 +10,7 @@ import (
 
 // carryGlowDone reports whether the held card is over the Done column.
 func (m model) carryGlowDone() bool {
-	return m.mode == modeBoardCarry && m.board.carryCol == doneColumn()
+	return m.mode == modeBoardCarry && m.board.carryCol == m.boardCfg.doneColumn()
 }
 
 func (m model) carryColor() lipgloss.Color {

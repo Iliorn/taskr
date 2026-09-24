@@ -438,13 +438,12 @@ func TestSettingsMarksTheRowsThatOpenAnEditor(t *testing.T) {
 // → and enter are one table now. They were two hand-kept chains, and a toggle
 // that answered one key but not the other is what that cost.
 func TestSettingsEnterAndRightAgreeOnEveryToggleRow(t *testing.T) {
-	// Half of these rows write package-level globals; put them back so the
+	// A few of these rows write package-level globals; put them back so the
 	// rest of the suite sees the state it started with.
 	base := settingsModel(t)
-	lang, board, themeBefore := activeLang, showBoard, base.themeName
+	lang, themeBefore := activeLang, base.themeName
 	t.Cleanup(func() {
 		applyLang(string(lang))
-		applyShowBoard(board)
 		applyTheme(themeByName(themeBefore))
 	})
 

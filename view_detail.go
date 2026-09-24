@@ -101,14 +101,14 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	left.WriteString(renderField(tr("Recurrence"), recurVal, fieldRecurrence) + "\n")
 	left.WriteString(renderField(tr("Priority"), t.Priority.Icon()+" "+trPriority(t.Priority), fieldPriority) + "\n")
 	left.WriteString(renderField(tr("Size"), trSize(t.Size), fieldSize) + "\n")
-	if stageFieldVisible(t) {
+	if m.boardCfg.stageFieldVisible(t) {
 		// ←/→ change the value here rather than jumping section, and this is
 		// the only field in the pane where they mean that — so the value wears
 		// the same ‹ … › brackets the Settings rows use. The shape of the field
 		// says it is a picker; a hint tacked on after it said the same thing in
 		// words, in a place the eye reads as part of the value. The brackets are
 		// decoration: too narrow for both and they go whole, leaving the name.
-		stageVal := stageDisplay(t.Stage)
+		stageVal := m.boardCfg.stageDisplay(t.Stage)
 		if bracketed := "‹ " + stageVal + " ›"; len([]rune(bracketed)) <= valW {
 			stageVal = bracketed
 		}

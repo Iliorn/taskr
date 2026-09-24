@@ -10,14 +10,11 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// withStages runs fn with the active stage list swapped, restoring the
-// original after — the applyTheme/applyLang test pattern for globals.
-func withStages(t *testing.T, stages []string, fn func()) {
-	t.Helper()
-	prev := activeStages
-	applyStages(stages)
-	defer applyStages(prev)
-	fn()
+// testBoard is a board config with the given column list.
+func testBoard(stages []string) boardConfig {
+	c := defaultBoardConfig()
+	c.setStages(stages)
+	return c
 }
 
 func TestStagesFromSettings(t *testing.T) {
@@ -43,7 +40,8 @@ func TestStagesFromSettings(t *testing.T) {
 }
 
 func TestStageIndexAndCanonical(t *testing.T) {
-	withStages(t, []string{"Todo", "Doing", "Waiting", "Shipped"}, func() {
+	c := testBoard([]string{"Todo", "Doing", "Waiting", "Shipped"})
+	{
 		for stage, want := range map[string]int{
 			"":        0, // fresh task → first column
 			"Todo":    0,
@@ -55,23 +53,23 @@ func TestStageIndexAndCanonical(t *testing.T) {
 			// completed work.
 			"Shipped": 0,
 		} {
-			if got := stageIndex(stage); got != want {
+			if got := c.stageIndex(stage); got != want {
 				t.Errorf("stageIndex(%q) = %d, want %d", stage, got, want)
 			}
 		}
 
-		if name, ok := canonicalStage(" doing "); !ok || name != "Doing" {
+		if name, ok := c.canonicalStage(" doing "); !ok || name != "Doing" {
 			t.Errorf("canonicalStage(' doing ') = %q/%v, want Doing/true", name, ok)
 		}
-		if _, ok := canonicalStage("nope"); ok {
+		if _, ok := c.canonicalStage("nope"); ok {
 			t.Error("canonicalStage('nope') should not resolve")
 		}
 		// --stage <the Done column> would be a second way to complete a task,
 		// which is exactly what the one-close-path rule forbids.
-		if _, ok := canonicalStage("Shipped"); ok {
+		if _, ok := c.canonicalStage("Shipped"); ok {
 			t.Error("canonicalStage resolved the Done column — --stage would complete a task")
 		}
-	})
+	}
 }
 
 // The last configured column *is* Done: renaming it renames the heading the
@@ -85,17 +83,18 @@ func TestLastColumnIsDoneWhateverItIsCalled(t *testing.T) {
 	finished.CompletedAt = time.Now()
 
 	m := newTagModel(pending, finished)
-	withStages(t, []string{"Backlog", "In progress", "Review", "Shipped"}, func() {
+	m.boardCfg.setStages([]string{"Backlog", "In progress", "Review", "Shipped"})
+	{
 		m.markCacheDirty()
 		m.ensureCache()
 		cols := m.boardColumns()
 		if len(cols) != 4 {
 			t.Fatalf("columns = %d, want the 4 configured ones", len(cols))
 		}
-		if titles := boardColTitles(); titles[len(titles)-1] != "Shipped" {
+		if titles := m.boardColTitles(); titles[len(titles)-1] != "Shipped" {
 			t.Errorf("last column heading = %q, want the configured name", titles[len(titles)-1])
 		}
-		if got := cols[doneColumn()]; len(got) != 1 || got[0].Title != "Shipped" {
+		if got := cols[m.boardCfg.doneColumn()]; len(got) != 1 || got[0].Title != "Shipped" {
 			t.Errorf("Done column = %v, want the completed task", got)
 		}
 		if got := cols[2]; len(got) != 1 || got[0].Title != "Still going" {
@@ -104,17 +103,17 @@ func TestLastColumnIsDoneWhateverItIsCalled(t *testing.T) {
 		// And the arrows in the detail pane still cannot walk a task into it.
 		seen := map[string]bool{}
 		stage := ""
-		for i := 0; i < len(activeStages)+2; i++ {
-			stage = cycleStage(stage, 1)
+		for i := 0; i < len(m.boardCfg.stages)+2; i++ {
+			stage = m.boardCfg.cycleStage(stage, 1)
 			seen[stage] = true
 		}
 		if seen["Shipped"] {
 			t.Error("cycleStage reached the Done column")
 		}
-		if len(seen) != len(pendingStages()) {
-			t.Errorf("cycleStage visited %d columns, want the %d working ones", len(seen), len(pendingStages()))
+		if len(seen) != len(m.boardCfg.pending()) {
+			t.Errorf("cycleStage visited %d columns, want the %d working ones", len(seen), len(m.boardCfg.pending()))
 		}
-	})
+	}
 }
 
 func TestBoardColumnsSplitByStage(t *testing.T) {

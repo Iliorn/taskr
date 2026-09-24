@@ -756,14 +756,14 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "1", "2", "3", "4", "5", "6", "7":
-			if t, ok := tabForNumberKey(key.String()); ok {
+			if t, ok := m.tabForNumberKey(key.String()); ok {
 				m.switchTab(t)
 			}
 
 		case "tab":
-			m.switchTab(nextTab(m.tab, 1))
+			m.switchTab(m.boardCfg.nextTab(m.tab, 1))
 		case "shift+tab":
-			m.switchTab(nextTab(m.tab, -1))
+			m.switchTab(m.boardCfg.nextTab(m.tab, -1))
 
 		case "h":
 			if m.tab == tabTags || m.tab == tabProjects {
@@ -1031,7 +1031,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 					if m.closePendingTask(t) {
-						m.boardFollow(doneColumn(), t.ID)
+						m.boardFollow(m.boardCfg.doneColumn(), t.ID)
 					}
 				}
 			}
@@ -1312,9 +1312,9 @@ func (m *model) filterTasksByCurrentProject() {
 // tabForNumberKey maps a digit to its tab. The digits never renumber when a
 // tab is hidden — 6 is Stats whether or not the board is on — so a hidden
 // tab's digit simply does nothing rather than silently meaning something else.
-func tabForNumberKey(key string) (tab, bool) {
+func (m model) tabForNumberKey(key string) (tab, bool) {
 	if t, ok := tabForNumberKeyRaw(key); ok {
-		return t, tabVisible(t)
+		return t, m.boardCfg.tabVisible(t)
 	}
 	return 0, false
 }
@@ -1345,14 +1345,14 @@ func tabForNumberKeyRaw(key string) (tab, bool) {
 // (Settings → "Kanban board"), and hiding it takes it out of the bar, out of
 // tab/shift+tab, and off its digit — a tab you cannot see must not be one you
 // can land on by accident.
-func tabVisible(t tab) bool {
-	return t != tabBoard || showBoard
+func (c boardConfig) tabVisible(t tab) bool {
+	return t != tabBoard || c.shown
 }
 
-func visibleTabCount() int {
+func (c boardConfig) visibleTabCount() int {
 	n := 0
 	for i := 0; i < numTabs; i++ {
-		if tabVisible(tab(i)) {
+		if c.tabVisible(tab(i)) {
 			n++
 		}
 	}
@@ -1361,7 +1361,7 @@ func visibleTabCount() int {
 
 // nextTab steps to the next visible tab, so cycling never stops on a hidden
 // one. At least Tasks is always visible, so the walk terminates.
-func nextTab(cur tab, delta int) tab {
+func (c boardConfig) nextTab(cur tab, delta int) tab {
 	if delta == 0 {
 		return cur
 	}
@@ -1372,7 +1372,7 @@ func nextTab(cur tab, delta int) tab {
 	next := cur
 	for i := 0; i < numTabs; i++ {
 		next = tab((int(next) + step + numTabs) % numTabs)
-		if tabVisible(next) {
+		if c.tabVisible(next) {
 			return next
 		}
 	}
@@ -1380,7 +1380,7 @@ func nextTab(cur tab, delta int) tab {
 }
 
 func (m *model) switchTab(t tab) {
-	if t == m.tab || !tabVisible(t) {
+	if t == m.tab || !m.boardCfg.tabVisible(t) {
 		return
 	}
 	// Snapshot the leaving tab's shared UI state and restore the entering
@@ -1605,7 +1605,7 @@ func (m *model) toggleAutoCloseSubtasks() {
 // Turning it on does not push anything by itself: this device's list only
 // wins if it was edited here more recently than the fleet's (boardsync.go).
 func (m *model) toggleSyncBoard() {
-	applySyncBoardColumns(!syncBoardColumns)
+	m.boardCfg.sync = !m.boardCfg.sync
 	m.persistSettings()
 }
 
@@ -1614,8 +1614,8 @@ func (m *model) toggleSyncBoard() {
 // in the bar, so the move off happens here rather than being discovered by the
 // next keystroke.
 func (m *model) toggleShowBoard() {
-	applyShowBoard(!showBoard)
-	if !showBoard && m.tab == tabBoard {
+	m.boardCfg.shown = !m.boardCfg.shown
+	if !m.boardCfg.shown && m.tab == tabBoard {
 		m.switchTab(tabTasks)
 	}
 	// The Stage row appears and disappears with it, and the detail pane caches
@@ -1653,10 +1653,10 @@ func (m *model) persistSettings() {
 		SeqAgingDisabled:  !m.rank.biases.Aging,
 		AutoCloseParent:   m.autoCloseParent,
 		AutoCloseSubtasks: m.autoCloseSubtasks,
-		BoardDisabled:     !showBoard,
-		Stages:            activeStages,
-		StagesModifiedAt:  stagesModifiedAt,
-		SyncBoardDisabled: !syncBoardColumns,
+		BoardDisabled:     !m.boardCfg.shown,
+		Stages:            m.boardCfg.stages,
+		StagesModifiedAt:  m.boardCfg.modifiedAt,
+		SyncBoardDisabled: !m.boardCfg.sync,
 		Search:            m.persistedSearch(),
 		DetailPosition:    m.detailPos.String(),
 		Keys:              activeKeys,
@@ -1896,7 +1896,7 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	switch m.settingsCursor {
 	case settingStages:
 		m.mode = modeEditStages
-		m.textInput.SetValue(stagesDisplay())
+		m.textInput.SetValue(m.boardCfg.stagesDisplay())
 		m.textInput.Placeholder = tr("Board columns, comma-separated")
 		m.textInput.Focus()
 		return m, textinput.Blink

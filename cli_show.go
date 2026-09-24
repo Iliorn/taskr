@@ -147,7 +147,7 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo, rk ranke
 	}
 	fmt.Printf("Status:   %s\n", status)
 	if t.Status == todo.Pending && t.ParentID == "" {
-		fmt.Printf("Stage:    %s\n", stageDisplay(t.Stage))
+		fmt.Printf("Stage:    %s\n", storedBoard().stageDisplay(t.Stage))
 	}
 	fmt.Printf("Priority: %s\n", t.Priority.String())
 	fmt.Printf("Size:     %s\n", t.Size.String())

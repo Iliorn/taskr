@@ -30,7 +30,7 @@ func TestBoardCarryOverDoneShowsACheck(t *testing.T) {
 
 	m, id := boardWithOneCard(t)
 	keys := []string{"enter"}
-	for i := 0; i < doneColumn(); i++ {
+	for i := 0; i < m.boardCfg.doneColumn(); i++ {
 		keys = append(keys, "right")
 	}
 	m = script(t, m, keys...)

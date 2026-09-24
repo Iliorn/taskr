@@ -247,7 +247,7 @@ type calendarState struct {
 }
 
 // boardState is the Board tab's cursor: which column is focused and which
-// card within it. col indexes activeStages, whose last entry (doneColumn) is
+// card within it. col indexes boardConfig.stages, whose last entry (doneColumn) is
 // the Done column. Both are clamped at render/move time, so stale values after
 // a stage-list edit or task completion degrade to the nearest valid card.
 type boardState struct {
@@ -279,6 +279,9 @@ type model struct {
 	tab    tab
 	pane   pane
 	mode   appMode
+
+	// boardCfg is the board's columns and switches; see boardConfig.
+	boardCfg boardConfig
 
 	// detail render cache
 	detailRC detailRenderCache
@@ -485,7 +488,6 @@ func initialModel(repo Repository) model {
 	th := themeByName(settings.Theme)
 	applyTheme(th)
 	applyLang(settings.Language)
-	applyBoardSettings(settings)
 	// A rejected rebind must be visible: silently falling back to the default
 	// looks like the setting was ignored at random.
 	keys, keyProblems := sanitizeKeyOverrides(settings.Keys)
@@ -513,6 +515,7 @@ func initialModel(repo Repository) model {
 		Store:             store,
 		repo:              repo,
 		rank:              ranker{biases: biasesFromSettings(settings)},
+		boardCfg:          boardConfigFromSettings(settings),
 		textInput:         ti,
 		searchInput:       si,
 		depSearchInput:    di,

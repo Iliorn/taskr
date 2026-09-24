@@ -32,6 +32,7 @@ func syncTick() tea.Cmd {
 func (m model) backgroundSync() tea.Cmd {
 	cfg := m.syncCfg
 	b := m.rank.biases
+	board := m.boardCfg.wire()
 	return func() tea.Msg {
 		// Stale-device guard — same rule as the CLI path; the Settings footer
 		// carries the pointer to the manual override.
@@ -45,7 +46,7 @@ func (m model) backgroundSync() tea.Cmd {
 			n, _ := countLiveTasks(db)
 			return syncDoneMsg{err: fmt.Errorf("paused: %s — run `taskr sync` in a shell to choose", firstSyncNotice(n))}
 		}
-		sum, err := runClientSync(db, cfg, 20*time.Second, b)
+		sum, err := runClientSync(db, cfg, 20*time.Second, b, board)
 		return syncDoneMsg{summary: sum, err: err}
 	}
 }
@@ -74,9 +75,9 @@ func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	}
 	m.lastSyncFailed = false
 	m.syncStatus = fmt.Sprintf(tr("Last sync: sent %d, received %d"), msg.summary.sent, msg.summary.received)
-	// The stage list is a package-level global the renderer reads, so a board
-	// that arrived on the sync goroutine is installed here, on the loop.
-	if applyBoardFromSync(msg.summary.board) {
+	// A board that arrived on the sync goroutine is installed here, on the
+	// loop that owns m.boardCfg.
+	if m.boardCfg.adoptFromSync(msg.summary.board) {
 		m.markCacheDirty()
 		m.invalidateDetailCache()
 	}

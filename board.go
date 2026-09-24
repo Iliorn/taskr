@@ -2,6 +2,7 @@ package main
 
 import (
 	"strings"
+	"time"
 
 	"github.com/Iliorn/taskr/todo"
 )
@@ -12,10 +13,10 @@ import (
 // than a stored stage name, so completion still has exactly one source of
 // truth, but its heading is a name like any other and can be renamed.
 //
-// Everything downstream reads the list through pendingStages / doneStage /
-// doneColumn rather than slicing it by hand, which is what keeps "the last one
-// is Done" a single decision instead of a convention every call site has to
-// remember.
+// Everything downstream reads the list through boardConfig.pending and
+// boardConfig.doneColumn rather than slicing it by hand, which is what keeps
+// "the last one is Done" a single decision instead of a convention every call
+// site has to remember.
 
 // defaultDoneStage is the shipped name of the final column. Only a default —
 // once the list is user-edited it is whatever they last named it.
@@ -28,17 +29,63 @@ func defaultStages() []string {
 	return []string{"Backlog", "In progress", "Review", defaultDoneStage}
 }
 
-// activeStages is the package-level stage list the board reads, following the
-// applyTheme/applyLang/applyBiases pattern: set from settings at startup
-// (initialModel, loadForCLI) and persisted back verbatim by persistSettings,
-// so a hand-edited settings.json "stages" array survives the round trip.
-var activeStages = defaultStages()
+// boardConfig is every board-shaped preference, read together: the column
+// list, whether the surface is shown at all, when the list was last edited on
+// this device, and whether it is shared with the fleet. It is a value — the
+// model holds one (m.boardCfg), the CLI reads one from settings.json
+// (storedBoard), and a sync is handed a copy — so the background sync never
+// reads a list the Update loop is replacing.
+type boardConfig struct {
+	// stages is the column list; the last entry is the Done column. Set it
+	// through setStages, which keeps that invariant.
+	stages []string
+	// modifiedAt is when this device last edited its column list, and the
+	// only thing that decides whether its list beats another's. Zero means
+	// never edited here — the shipped defaults — and a zero stamp never wins,
+	// so a fresh install joining a fleet takes the fleet's columns instead of
+	// resetting them. Stamped only by applyStageEdit.
+	modifiedAt time.Time
+	// shown gates the whole kanban surface: the Board tab and the detail
+	// pane's Stage row. Stages are a workflow some people run their tasks
+	// through and others never touch, and for the second group the tab is a
+	// permanent wrong turn and the field a row to skip past. Defaults on: a
+	// fresh install should show what the README describes.
+	shown bool
+	// sync shares the column list with the fleet. Negative in settings.json
+	// (`sync_board_disabled`) like the other opt-outs, so the zero value
+	// shares: a device that has never edited its columns cannot overwrite
+	// anyone, and one that has is the one whose names the fleet wants.
+	sync bool
+}
 
-// applyStages installs a stage list, normalizing it first so the board's one
+// defaultBoardConfig is the board before settings.json is read.
+func defaultBoardConfig() boardConfig {
+	return boardConfig{stages: defaultStages(), shown: true, sync: true}
+}
+
+// boardConfigFromSettings reads the board preferences out of settings.json,
+// sanitizing the column list on the way in.
+func boardConfigFromSettings(s appSettings) boardConfig {
+	return boardConfig{
+		stages:     stagesFromSettings(s),
+		modifiedAt: s.StagesModifiedAt,
+		shown:      !s.BoardDisabled,
+		sync:       !s.SyncBoardDisabled,
+	}
+}
+
+// storedBoard reads the board preferences from settings.json, for the CLI,
+// which has no model to hold them. An unreadable file reads as the defaults.
+func storedBoard() boardConfig {
+	s, _ := loadSettings()
+	return boardConfigFromSettings(s)
+}
+
+// setStages installs a stage list, normalizing it first so the board's one
 // structural invariant — a Done column at the end, with at least one working
 // column before it — holds no matter which entry point set the list (settings,
-// the Settings editor, a test).
-func applyStages(stages []string) { activeStages = ensureDoneColumn(stages) }
+// the Settings editor, a sync, a test).
+func (c *boardConfig) setStages(stages []string) { c.stages = ensureDoneColumn(stages) }
 
 // ensureDoneColumn upholds "the last column is Done" for a list that may not
 // have enough columns to say so. An empty list is the defaults. A single name
@@ -58,42 +105,14 @@ func ensureDoneColumn(stages []string) []string {
 	return stages
 }
 
-// pendingStages is the list without its Done column: the columns a *pending*
+// pending is the list without its Done column: the columns a *pending*
 // task's Stage can name. Every lookup of a stored stage goes through this, so
 // no pending task can ever be filed under the Done heading.
-func pendingStages() []string {
-	if len(activeStages) < 2 {
-		return nil
-	}
-	return activeStages[:len(activeStages)-1]
-}
+func (c boardConfig) pending() []string { return pendingOf(c.stages) }
 
 // doneColumn is the index of the final column — the one holding the completed
 // tasks, whatever it has been named.
-func doneColumn() int { return len(activeStages) - 1 }
-
-// showBoard gates the whole kanban surface: the Board tab and the detail
-// pane's Stage row. Stages are a workflow some people run their tasks through
-// and others never touch, and for the second group the tab is a permanent
-// wrong turn in the tab order and the field a row to skip past. Package-level
-// and set by applySettings, following applyTheme / applyLang / applyStages.
-// Defaults on: the board is the documented behaviour, and a fresh install
-// should show what the README describes.
-var showBoard = true
-
-func applyShowBoard(v bool) { showBoard = v }
-
-// applyBoardSettings installs every board-shaped preference at once: the
-// column list, whether the surface is shown at all, when the list was last
-// edited here and whether it is shared with the fleet. One call because the
-// four are read together and were three call sites' worth of chances to add a
-// fifth and forget one of them.
-func applyBoardSettings(s appSettings) {
-	applyStages(stagesFromSettings(s))
-	applyShowBoard(!s.BoardDisabled)
-	applyStagesModifiedAt(s.StagesModifiedAt)
-	applySyncBoardColumns(!s.SyncBoardDisabled)
-}
+func (c boardConfig) doneColumn() int { return len(c.stages) - 1 }
 
 // stagesFromSettings sanitizes the persisted list: entries are trimmed, blanks
 // dropped, and duplicates (case-insensitive) collapsed onto their first
@@ -121,11 +140,11 @@ func stagesFromSettings(s appSettings) []string {
 // because of a name it happens to carry. Empty or unknown names — a fresh
 // task, or a stage later renamed in settings — land in the first column, where
 // a stranded task is visible rather than hidden.
-func stageIndex(stage string) int {
+func (c boardConfig) stageIndex(stage string) int {
 	if stage == "" {
 		return 0
 	}
-	for i, s := range pendingStages() {
+	for i, s := range c.pending() {
 		if strings.EqualFold(s, stage) {
 			return i
 		}
@@ -136,12 +155,12 @@ func stageIndex(stage string) int {
 // stageDisplay is the column heading a pending task's stored stage belongs
 // under — the detail pane's Stage row and `taskr show`. Empty only on a board
 // with no working columns at all, which ensureDoneColumn prevents.
-func stageDisplay(stage string) string {
-	p := pendingStages()
+func (c boardConfig) stageDisplay(stage string) string {
+	p := c.pending()
 	if len(p) == 0 {
 		return ""
 	}
-	return p[stageIndex(stage)]
+	return p[c.stageIndex(stage)]
 }
 
 // canonicalStage resolves user input (CLI --stage, board moves) to the
@@ -149,8 +168,8 @@ func stageDisplay(stage string) string {
 // settings list letter-for-letter. ok=false when the name isn't configured.
 // The Done column is deliberately not resolvable: --stage Done would be a
 // second way to complete a task, bypassing everything closePendingTask does.
-func canonicalStage(input string) (string, bool) {
-	return canonicalStageIn(pendingStages(), input)
+func (c boardConfig) canonicalStage(input string) (string, bool) {
+	return canonicalStageIn(c.pending(), input)
 }
 
 // canonicalStageIn is canonicalStage against an arbitrary list — used while
@@ -168,8 +187,8 @@ func canonicalStageIn(stages []string, input string) (string, bool) {
 // stagesDisplay is the Settings-row rendering (and the pre-fill of its editor)
 // of the active stage list: the same comma-separated form the editor parses.
 // The Done column is in it — that is how renaming it is discoverable.
-func stagesDisplay() string {
-	return strings.Join(activeStages, ", ")
+func (c boardConfig) stagesDisplay() string {
+	return strings.Join(c.stages, ", ")
 }
 
 // parseStagesInput turns the Settings editor's comma-separated line into a
@@ -215,8 +234,8 @@ func stageRemap(oldStages, newStages []string) map[string]string {
 	return out
 }
 
-// pendingOf is pendingStages for an arbitrary list — used while editing the
-// stage list, where the new list isn't live yet.
+// pendingOf is boardConfig.pending for an arbitrary list — used while editing
+// the stage list, where the new list isn't live yet.
 func pendingOf(stages []string) []string {
 	if len(stages) < 2 {
 		return nil
@@ -231,8 +250,8 @@ func pendingOf(stages []string) []string {
 // stage — offering to move either between columns would describe something the
 // board does not do. The Settings toggle turns the row off for anyone not
 // using the board at all.
-func stageFieldVisible(t *todo.Todo) bool {
-	return showBoard && t != nil && t.Status == todo.Pending && t.ParentID == ""
+func (c boardConfig) stageFieldVisible(t *todo.Todo) bool {
+	return c.shown && t != nil && t.Status == todo.Pending && t.ParentID == ""
 }
 
 // cycleStage moves a task one column along the configured stages, wrapping at
@@ -240,11 +259,11 @@ func stageFieldVisible(t *todo.Todo) bool {
 // Status==Done, and completing a task from a field labelled "Stage" would be a
 // second, hidden path into the one transition that carries timer, subtask and
 // recurrence semantics (closePendingTask). Done stays a d away.
-func cycleStage(current string, dir int) string {
-	p := pendingStages()
+func (c boardConfig) cycleStage(current string, dir int) string {
+	p := c.pending()
 	if len(p) == 0 {
 		return current
 	}
-	next := (stageIndex(current) + dir + len(p)) % len(p)
+	next := (c.stageIndex(current) + dir + len(p)) % len(p)
 	return p[next]
 }

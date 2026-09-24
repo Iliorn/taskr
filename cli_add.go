@@ -54,7 +54,7 @@ func cliAdd(args []string) int {
 	if sErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
-	applyBoardSettings(settings)
+	board := boardConfigFromSettings(settings)
 	repo := newSQLiteRepo()
 	repo.SetRanker(ranker{biases: biasesFromSettings(settings)})
 
@@ -113,9 +113,9 @@ func cliAdd(args []string) int {
 	// Resolve --stage once; an unknown name fails before anything is written.
 	var stageName string
 	if *stage != "" {
-		name, ok := canonicalStage(*stage)
+		name, ok := board.canonicalStage(*stage)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "taskr add: unknown stage %q (configured: %s)\n", *stage, strings.Join(pendingStages(), ", "))
+			fmt.Fprintf(os.Stderr, "taskr add: unknown stage %q (configured: %s)\n", *stage, strings.Join(board.pending(), ", "))
 			return 2
 		}
 		stageName = name

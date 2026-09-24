@@ -54,8 +54,8 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// there it lands in the first column.
 					onBoard := m.tab == tabBoard
 					if onBoard {
-						if col := m.board.addCol; col > 0 && col < doneColumn() {
-							t.SetStage(pendingStages()[col])
+						if col := m.board.addCol; col > 0 && col < m.boardCfg.doneColumn() {
+							t.SetStage(m.boardCfg.pending()[col])
 						}
 					}
 					m.pushUndo("add task", t.ID)
@@ -63,7 +63,7 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.markModified(t.ID)
 					saveLastAddedID(t.ID)
 					if onBoard {
-						m.boardFollow(stageIndex(t.Stage), t.ID)
+						m.boardFollow(m.boardCfg.stageIndex(t.Stage), t.ID)
 						if depErr != nil {
 							m.flashError(fmt.Sprintf("%s: %v", tr("Dependency not linked"), depErr))
 							return m, clearErrAfter()
@@ -704,7 +704,7 @@ func (m *model) confirmReopen() tea.Cmd {
 			}
 			// A board-staged reopen follows the card back to its stage column.
 			if m.tab == tabBoard {
-				m.boardFollow(stageIndex(t.Stage), t.ID)
+				m.boardFollow(m.boardCfg.stageIndex(t.Stage), t.ID)
 			}
 		}
 	}
@@ -839,7 +839,7 @@ func (m model) updateEditStages(msg tea.Msg) (tea.Model, tea.Cmd) {
 // renaming QA back to Review carries the same cards back, because stageRemap
 // is positional.
 func (m *model) applyStageEdit(next []string) {
-	prev := activeStages
+	prev := m.boardCfg.stages
 	if len(prev) == len(next) {
 		same := true
 		for i := range prev {
@@ -866,11 +866,11 @@ func (m *model) applyStageEdit(next []string) {
 			}
 		}
 	}
-	applyStages(next)
+	m.boardCfg.setStages(next)
 	// Stamped here and nowhere else: the timestamp is what wins the list a
 	// merge (boardsync.go), so it marks a deliberate edit, never a list that
 	// merely arrived from the fleet or was read back off disk.
-	applyStagesModifiedAt(time.Now().UTC())
+	m.boardCfg.modifiedAt = time.Now().UTC()
 	ids := make([]string, 0, len(touched))
 	for _, t := range touched {
 		t.SetStage(remap[strings.ToLower(t.Stage)])

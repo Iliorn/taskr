@@ -628,7 +628,7 @@ func TestDetailValuesTruncateWithoutBreakingEscapes(t *testing.T) {
 	}()
 
 	task := todo.New("Create dashboard for solution teams")
-	task.Stage = activeStages[0]
+	task.Stage = defaultStages()[0]
 	m := modelWithTasks(t, task)
 	m.termHeight = 40
 	m.pane = paneDetail
@@ -661,7 +661,7 @@ func TestDetailValuesTruncateWithoutBreakingEscapes(t *testing.T) {
 		if strings.Contains(stage, "‹") != strings.Contains(stage, "›") {
 			t.Errorf("width %d: the picker brackets should go whole rather than be clipped: %q", w, stage)
 		}
-		if !strings.Contains(stage, activeStages[0]) {
+		if !strings.Contains(stage, defaultStages()[0]) {
 			t.Errorf("width %d: the stage name itself must survive: %q", w, stage)
 		}
 	}
@@ -1024,7 +1024,7 @@ func TestFooterBoxesLineUpWithThePaneAbove(t *testing.T) {
 		{"tag picker", func(m *model) { m.mode = modeSearchTag; m.tagSearchInput.SetValue("h") }},
 		{"project picker", func(m *model) { m.mode = modeSearchProject }},
 		{"palette", func(m *model) { m.mode = modePalette; m.paletteInput.SetValue("bo") }},
-		{"stage editor", func(m *model) { m.mode = modeEditStages; m.textInput.SetValue(stagesDisplay()) }},
+		{"stage editor", func(m *model) { m.mode = modeEditStages; m.textInput.SetValue(m.boardCfg.stagesDisplay()) }},
 	} {
 		// Both layouts: stacked (one box per line) and side-by-side, where the
 		// list area is two boxes and only the leftmost edge is comparable.
@@ -1149,7 +1149,7 @@ func TestTabBarKeepsItsLabelsAcrossTabsAt80Columns(t *testing.T) {
 		m.termWidth, m.termHeight = 80, 24
 		want := ""
 		for tb := tab(0); tb < numTabs; tb++ {
-			if !tabVisible(tb) {
+			if !m.boardCfg.tabVisible(tb) {
 				continue
 			}
 			m.tab = tb
@@ -1199,7 +1199,7 @@ func TestTheHelpAndThePaletteFindEachOther(t *testing.T) {
 	if body := strings.Join(m.helpBodyLines(), "\n"); !strings.Contains(ansi.Strip(body), "ctrl+k") {
 		t.Error("the help overlay does not mention the command palette")
 	}
-	if len(paletteResults("help")) == 0 {
+	if len(m.paletteResults("help")) == 0 {
 		t.Error("the palette cannot find the help")
 	}
 	// And the entry works: the palette presses the key rather than calling the

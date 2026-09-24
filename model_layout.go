@@ -22,7 +22,7 @@ func (m model) estimateDetailCursorLine() int {
 	// row is conditional, so the rows below it shift — walk the render order
 	// rather than hard-coding an offset per field.
 	rows := []detailField{fieldStartDate, fieldDueDate, fieldRecurrence, fieldPriority, fieldSize}
-	if stageFieldVisible(t) {
+	if m.boardCfg.stageFieldVisible(t) {
 		rows = append(rows, fieldStage)
 	}
 	rows = append(rows, fieldProject, fieldNotes)
@@ -400,7 +400,7 @@ func (m model) detailTagsRows(t *todo.Todo) int {
 func (m model) detailMainHeight(t *todo.Todo) int {
 	h := 0 // title is on the border now; content starts at the first field
 	h += 9 // start, due, recurrence, priority, size, project, notes, created, id
-	if stageFieldVisible(t) {
+	if m.boardCfg.stageFieldVisible(t) {
 		h++
 	}
 	// Modified is drawn only when it differs from Created (see

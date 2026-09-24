@@ -112,11 +112,11 @@ func TestKeymapDigitRangeMatchesTabCount(t *testing.T) {
 		t.Errorf("tabs binding key = %q, want it to advertise shift+tab", key)
 	}
 	for d := 1; d <= numTabs; d++ {
-		if _, ok := tabForNumberKey(strconv.Itoa(d)); !ok {
+		if _, ok := paletteModel().tabForNumberKey(strconv.Itoa(d)); !ok {
 			t.Errorf("digit %d is advertised but not handled by tabForNumberKey", d)
 		}
 	}
-	if _, ok := tabForNumberKey(strconv.Itoa(numTabs + 1)); ok {
+	if _, ok := paletteModel().tabForNumberKey(strconv.Itoa(numTabs + 1)); ok {
 		t.Errorf("digit %d is handled but there are only %d tabs", numTabs+1, numTabs)
 	}
 }

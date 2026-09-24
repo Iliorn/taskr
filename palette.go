@@ -81,7 +81,7 @@ func paletteSendable(key string) bool {
 // paletteCommands is the full entry list, in a stable order: the tab jumps
 // first (the most common reason to reach for a palette), then each tab's own
 // actions in registry order, then the global ones.
-func paletteCommands() []paletteCmd {
+func (m model) paletteCommands() []paletteCmd {
 	out := make([]paletteCmd, 0, 48)
 	for _, t := range []struct {
 		label string
@@ -98,7 +98,7 @@ func paletteCommands() []paletteCmd {
 	} {
 		// A hidden tab is not somewhere the palette can send you — its digit
 		// does nothing, so the entry would be a command that silently fails.
-		if !tabVisible(t.tb) {
+		if !m.boardCfg.tabVisible(t.tb) {
 			continue
 		}
 		out = append(out, paletteCmd{label: t.label, key: t.key, section: tr(secNavigation), anyTab: true})
@@ -107,7 +107,7 @@ func paletteCommands() []paletteCmd {
 	// Per-tab actions, tab by tab so the list reads in tab order rather than
 	// registry order (which interleaves the sections a binding belongs to).
 	for _, tb := range []tab{tabTasks, tabCalendar, tabProjects, tabTags, tabBoard, tabStats, tabSettings} {
-		if !tabVisible(tb) {
+		if !m.boardCfg.tabVisible(tb) {
 			continue // its keys are unreachable, so they are not commands
 		}
 		for ctx, mapped := range paletteTabs {
@@ -130,7 +130,7 @@ func paletteCommands() []paletteCmd {
 	}
 
 	for _, extra := range paletteExtras {
-		if !tabVisible(extra.tab) {
+		if !m.boardCfg.tabVisible(extra.tab) {
 			continue
 		}
 		extra.label = tr(extra.label)
@@ -154,8 +154,8 @@ func paletteCommands() []paletteCmd {
 // subsequence rule the task search uses, so one habit covers both. Matching
 // runs over the label and the section, so "board" and "stage" both find the
 // card move.
-func paletteResults(query string) []paletteCmd {
-	all := paletteCommands()
+func (m model) paletteResults(query string) []paletteCmd {
+	all := m.paletteCommands()
 	q := strings.TrimSpace(query)
 	if q == "" {
 		return all
@@ -256,7 +256,7 @@ func (m model) paletteSelection(n int) int {
 func (m model) updatePalette(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if key, ok := msg.(tea.KeyMsg); ok {
-		results := paletteResults(m.paletteInput.Value())
+		results := m.paletteResults(m.paletteInput.Value())
 		switch key.String() {
 		case "esc":
 			m.mode = modeNormal

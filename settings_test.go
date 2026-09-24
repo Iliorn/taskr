@@ -123,11 +123,9 @@ func TestSettingsMigrationKeepsTheOldLastColumnWorking(t *testing.T) {
 	if want := []string{"Backlog", "In progress", "Review", "Done"}; !reflect.DeepEqual(stages, want) {
 		t.Fatalf("migrated board = %v, want %v", stages, want)
 	}
-	withStages(t, stages, func() {
-		if _, ok := canonicalStage("Review"); !ok {
-			t.Error("Review stopped being a working column after the migration")
-		}
-	})
+	if _, ok := testBoard(stages).canonicalStage("Review"); !ok {
+		t.Error("Review stopped being a working column after the migration")
+	}
 
 	// A file already on v2 is left alone — migrating twice would append a
 	// second Done column every launch.

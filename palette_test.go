@@ -7,6 +7,9 @@ import (
 	"github.com/Iliorn/taskr/todo"
 )
 
+// paletteModel is the smallest model the palette reads: the default board.
+func paletteModel() model { return model{boardCfg: defaultBoardConfig()} }
+
 // Every palette entry works by pressing a key, so every entry's key must be one
 // the app actually binds on that tab. An entry pressing an unbound key would
 // look like a working command and do nothing.
@@ -15,7 +18,7 @@ func TestPaletteEntriesPressBoundKeys(t *testing.T) {
 	for _, e := range paletteExtras {
 		extras[string(rune(e.tab))+e.key] = true
 	}
-	for _, c := range paletteCommands() {
+	for _, c := range paletteModel().paletteCommands() {
 		if !paletteSendable(c.key) && !extras[string(rune(c.tab))+c.key] {
 			t.Errorf("entry %q presses %q, which is not a single sendable key", c.label, c.key)
 		}
@@ -56,7 +59,7 @@ func paletteCtxFor(tb tab) (keyCtx, bool) {
 func TestPaletteRunsCommands(t *testing.T) {
 	find := func(t *testing.T, label string, tb tab) paletteCmd {
 		t.Helper()
-		for _, c := range paletteCommands() {
+		for _, c := range paletteModel().paletteCommands() {
 			if c.label == label && (c.anyTab || c.tab == tb) {
 				return c
 			}
@@ -105,7 +108,7 @@ func TestPaletteRunsCommands(t *testing.T) {
 // abbreviation-length queries — otherwise a five-letter query threads through
 // unrelated labels and the list fills with noise.
 func TestPaletteRanking(t *testing.T) {
-	stage := paletteResults("stage")
+	stage := paletteModel().paletteResults("stage")
 	if len(stage) == 0 {
 		t.Fatal("'stage' found nothing")
 	}
@@ -115,13 +118,13 @@ func TestPaletteRanking(t *testing.T) {
 		}
 	}
 
-	if got := paletteResults("board"); got[0].label != tr("Go to Board") {
+	if got := paletteModel().paletteResults("board"); got[0].label != tr("Go to Board") {
 		t.Errorf("'board' ranked %q first, want the tab jump", got[0].label)
 	}
 
 	// Abbreviations still work at three runes or fewer.
 	found := false
-	for _, c := range paletteResults("gtb") {
+	for _, c := range paletteModel().paletteResults("gtb") {
 		if c.label == tr("Go to Board") {
 			found = true
 		}
@@ -131,7 +134,7 @@ func TestPaletteRanking(t *testing.T) {
 	}
 
 	// Multi-word queries AND their words together.
-	hits := paletteResults("tag rename")
+	hits := paletteModel().paletteResults("tag rename")
 	if len(hits) == 0 {
 		t.Fatal("'tag rename' found nothing")
 	}
@@ -141,7 +144,7 @@ func TestPaletteRanking(t *testing.T) {
 		}
 	}
 
-	if got := paletteResults("zzzznope"); len(got) != 0 {
+	if got := paletteModel().paletteResults("zzzznope"); len(got) != 0 {
 		t.Errorf("a nonsense query matched %d commands, want none", len(got))
 	}
 }
@@ -160,7 +163,7 @@ func TestPaletteKeyFlow(t *testing.T) {
 	if got := m.paletteInput.Value(); got != "board" {
 		t.Fatalf("query = %q, want %q", got, "board")
 	}
-	results := paletteResults(m.paletteInput.Value())
+	results := m.paletteResults(m.paletteInput.Value())
 	if len(results) < 2 {
 		t.Fatalf("need at least two results to move between, got %d", len(results))
 	}
