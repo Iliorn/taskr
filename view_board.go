@@ -488,15 +488,16 @@ const (
 	boardBoxMinRoom = 5
 )
 
-var (
-	boardBoxRounded = [6]string{"╭", "╮", "╰", "╯", "─", "│"}
-	boardBoxHeavy   = [6]string{"┏", "┓", "┗", "┛", "━", "┃"}
-)
+// Every card keeps its rounded corners whatever state it is in. Selection
+// used to swap in the heavy set, but Unicode has no heavy rounded corner, so
+// the selected card turned square — a change of shape that read as a
+// different kind of thing rather than the same card highlighted.
+var boardBoxRounded = [6]string{"╭", "╮", "╰", "╯", "─", "│"}
 
 // renderBoardBox draws one card as a box. The border carries the card's state
 // the way the row tone does on the Tasks tab — red overdue, the timer colour
-// while tracked, dim in Done — and the selected card is drawn heavy in the
-// selection colour. A card that is held or has just landed is heavy in the
+// while tracked, dim in Done — and the selected card is drawn bold in the
+// selection colour. A card that is held or has just landed is bold in the
 // glow colour, fading to its resting border as the glow runs out.
 func (m model) renderBoardBox(t *todo.Todo, doneCol, selected bool, colW, maxLines int) []string {
 	inner := colW - boardBoxChrome
@@ -512,11 +513,11 @@ func (m model) renderBoardBox(t *todo.Todo, doneCol, selected bool, colW, maxLin
 		textStyle = overdueStyle
 	}
 	if selected {
-		glyphs, edge = boardBoxHeavy, currentTheme.green
+		edge = currentTheme.green
 		textStyle = textStyle.Bold(true)
 	}
 	if flash > 0 {
-		glyphs, edge = boardBoxHeavy, blendHex(edge, m.boardFlashColor(), flash)
+		edge = blendHex(edge, m.boardFlashColor(), flash)
 		textStyle = textStyle.Bold(true)
 	}
 	border := lipgloss.NewStyle().Foreground(edge)

@@ -349,7 +349,9 @@ func TestBoardHeadingsLineUpWithTheirCards(t *testing.T) {
 	}
 	// Display columns, not byte offsets: the card row carries the ▶ marker and
 	// the box-drawing borders, which are three bytes each.
-	col := func(line, sub string) int { return ansi.StringWidth(line[:strings.Index(line, sub)]) }
+	// The last box on the card row is In progress's; Backlog's selected
+	// card is rounded too, so the first ╭ is not it.
+	col := func(line, sub string) int { return ansi.StringWidth(line[:strings.LastIndex(line, sub)]) }
 	if h, c := col(header, "In progress"), col(cards, "╭"); h != c {
 		t.Errorf("heading starts at column %d but its card's box at %d:\n%s", h, c, strings.Join(lines, "\n"))
 	}
@@ -383,9 +385,9 @@ func TestBoardCardsAreBoxesWhileTheyFit(t *testing.T) {
 		return out
 	}
 	got := firstCol(m)
-	if !strings.HasPrefix(got[0], "┏") || !strings.HasPrefix(got[1], "▶ ┃ Draft") ||
-		!strings.HasPrefix(got[2], "┃") || !strings.HasPrefix(got[3], "┗") {
-		t.Fatalf("selected long card should be a heavy two-line box:\n%s", strings.Join(got[:4], "\n"))
+	if !strings.HasPrefix(got[0], "╭") || !strings.HasPrefix(got[1], "▶ │ Draft") ||
+		!strings.HasPrefix(got[2], "│") || !strings.HasPrefix(got[3], "╰") {
+		t.Fatalf("selected long card should be a rounded two-line box:\n%s", strings.Join(got[:4], "\n"))
 	}
 	if !strings.HasPrefix(got[4], "╭") || !strings.Contains(got[5], "Buy filters") || !strings.HasPrefix(got[6], "╰") {
 		t.Fatalf("the next card should be its own rounded box:\n%s", strings.Join(got[:7], "\n"))
@@ -393,7 +395,7 @@ func TestBoardCardsAreBoxesWhileTheyFit(t *testing.T) {
 
 	m.termHeight = 15 // room for one-line boxes only
 	got = firstCol(m)
-	if !strings.HasPrefix(got[1], "▶ ┃ Draft") || !strings.HasSuffix(got[1], ellipsis+" ┃") || !strings.HasPrefix(got[2], "┗") {
+	if !strings.HasPrefix(got[1], "▶ │ Draft") || !strings.HasSuffix(got[1], ellipsis+" │") || !strings.HasPrefix(got[2], "╰") {
 		t.Fatalf("a shorter column should clip the title inside a one-line box:\n%s", strings.Join(got, "\n"))
 	}
 
@@ -472,7 +474,7 @@ func TestBoardBoxEdgeCarriesProjectAndDue(t *testing.T) {
 	m.termWidth, m.termHeight = 120, 30
 	m.refreshCaches()
 	out := ansi.Strip(m.renderBoardList())
-	if !strings.Contains(out, "┗━ House · -2d ━") {
+	if !strings.Contains(out, "╰─ House · -2d ─") {
 		t.Fatalf("the box's bottom edge should carry project and due:\n%s", out)
 	}
 }
