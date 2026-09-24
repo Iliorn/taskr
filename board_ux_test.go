@@ -489,9 +489,9 @@ func TestScriptBoardAddFilesIntoTheFocusedColumn(t *testing.T) {
 	if added == nil || added.Stage != "In progress" {
 		t.Fatalf("a card added with In progress focused should land there, got %+v", added)
 	}
-	if m.board.col != 1 || m.board.flashID != added.ID || m.pane != paneList {
-		t.Errorf("the board should stay put with the new card selected and lit: col %d glow %q pane %v",
-			m.board.col, m.board.flashID, m.pane)
+	if sel := m.boardSelectedTask(); m.board.col != 1 || sel == nil || sel.ID != added.ID || m.pane != paneList {
+		t.Errorf("the board should stay put with the new card selected: col %d selected %v pane %v",
+			m.board.col, sel, m.pane)
 	}
 
 	// From Done, a new card lands in the first column.

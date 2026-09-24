@@ -64,12 +64,11 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 					saveLastAddedID(t.ID)
 					if onBoard {
 						m.boardFollow(stageIndex(t.Stage), t.ID)
-						flash := m.startBoardFlash(t.ID, false)
 						if depErr != nil {
 							m.flashError(fmt.Sprintf("%s: %v", tr("Dependency not linked"), depErr))
-							return m, tea.Batch(flash, clearErrAfter())
+							return m, clearErrAfter()
 						}
-						return m, flash
+						return m, nil
 					}
 					// Position the cursor on the newly added task and open its
 					// detail view so the user lands on it immediately. A live

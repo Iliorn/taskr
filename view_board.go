@@ -407,8 +407,8 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 	// The focused column is marked by an accented rule under its heading — the
 	// heading text itself keeps the standard style so it stays legible.
 	rule := strings.Repeat("─", colW)
-	if f := m.boardColumnFlash(cards); f > 0 {
-		lines = append(lines, lipgloss.NewStyle().Foreground(blendHex(currentTheme.green, m.boardFlashColor(), f)).Render(rule))
+	if m.boardColumnHoldsCarry(cards) {
+		lines = append(lines, lipgloss.NewStyle().Foreground(m.carryColor()).Render(rule))
 	} else if cursor != -1 {
 		lines = append(lines, selectedStyle.Render(rule))
 	} else {
@@ -435,15 +435,15 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 	return lines
 }
 
-// boardColumnFlash is the glow level of the card that just landed, if it
-// landed in this column, so the column's rule lights with it.
-func (m model) boardColumnFlash(cards []todo.Todo) float64 {
+// boardColumnHoldsCarry reports whether the held card is over this column, so
+// the column's rule lights with it.
+func (m model) boardColumnHoldsCarry(cards []todo.Todo) bool {
 	for i := range cards {
-		if f := m.boardFlashLevel(cards[i].ID); f > 0 {
-			return f
+		if m.carrying(cards[i].ID) {
+			return true
 		}
 	}
-	return 0
+	return false
 }
 
 // boardCardBadge is the high-priority "!" the task list uses, on pending cards.
@@ -497,12 +497,11 @@ var boardBoxRounded = [6]string{"╭", "╮", "╰", "╯", "─", "│"}
 // renderBoardBox draws one card as a box. The border carries the card's state
 // the way the row tone does on the Tasks tab — red overdue, the timer colour
 // while tracked, dim in Done — and the selected card is drawn bold in the
-// selection colour. A card that is held or has just landed is bold in the
-// glow colour, fading to its resting border as the glow runs out.
+// selection colour. A card that is held is bold in the carry colour.
 func (m model) renderBoardBox(t *todo.Todo, doneCol, selected bool, colW, maxLines int) []string {
 	inner := colW - boardBoxChrome
 	text, badge := boardCardText(t, doneCol, inner, maxLines)
-	flash := m.boardFlashLevel(t.ID)
+	held := m.carrying(t.ID)
 
 	edge, glyphs := boardBoxRestingColor(t, doneCol), boardBoxRounded
 	textStyle := normalStyle
@@ -516,15 +515,15 @@ func (m model) renderBoardBox(t *todo.Todo, doneCol, selected bool, colW, maxLin
 		edge = currentTheme.green
 		textStyle = textStyle.Bold(true)
 	}
-	if flash > 0 {
-		edge = blendHex(edge, m.boardFlashColor(), flash)
+	if held {
+		edge = m.carryColor()
 		textStyle = textStyle.Bold(true)
 	}
 	border := lipgloss.NewStyle().Foreground(edge)
-	if selected || flash > 0 {
+	if selected || held {
 		border = border.Bold(true)
 	}
-	if flash > 0 && m.boardGlowDone() {
+	if held && m.carryGlowDone() {
 		text[0] = truncate("✓ "+text[0], inner-len([]rune(badge)))
 	}
 
@@ -623,25 +622,25 @@ func (m model) renderBoardCard(t *todo.Todo, doneCol, selected bool, colW, maxLi
 			style = fastSelectedDim
 		}
 	}
-	flash := m.boardFlashLevel(t.ID)
+	held := m.carrying(t.ID)
 	out := make([]string, len(text))
 	for i, line := range text {
 		lead := cursorGap
 		if i == 0 && selected {
 			lead = cursorMark
 		}
-		if i == 0 && flash > 0 && m.boardGlowDone() {
+		if i == 0 && held && m.carryGlowDone() {
 			lead = "✓ "
 		}
 		line = lead + line
 		if i == len(text)-1 {
 			line += badge
 		}
-		if selected || flash > 0 {
+		if selected || held {
 			line = padRight(line, colW)
 		}
-		if flash > 0 {
-			out[i] = m.boardFlashStyle(flash).Render(line)
+		if held {
+			out[i] = m.carryRowStyle().Render(line)
 			continue
 		}
 		out[i] = style.render(line)

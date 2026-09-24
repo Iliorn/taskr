@@ -1359,8 +1359,8 @@ func TestScriptBoardCarryCard(t *testing.T) {
 	if !m.savePending && !m.saveScheduled {
 		t.Error("putting the card down did not schedule a save")
 	}
-	if m.board.col != 2 || m.board.flashID != seed.ID {
-		t.Errorf("focus and glow should follow the card: col %d, glow on %q", m.board.col, m.board.flashID)
+	if sel := m.boardSelectedTask(); m.board.col != 2 || sel == nil || sel.ID != seed.ID {
+		t.Errorf("focus should follow the card: col %d, selected %v", m.board.col, sel)
 	}
 
 	m = script(t, m, "enter", "enter") // pick up and put straight back
