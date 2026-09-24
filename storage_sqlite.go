@@ -15,11 +15,9 @@ import (
 // SQLite is the live storage backend. After migration 002, every field is
 // queryable from SQL — scalars live in dedicated columns on `todos`, and
 // nested data (tags, dependencies, comments, time entries) lives in
-// child tables joined by task_id. The legacy `data` column survives this
-// migration for safety (a future migration can drop it) but is no longer the
-// source of truth: the adapter reads from the normalized tables exclusively.
-// Deletes are soft (tombstones) so a deletion can propagate in a future sync
-// adapter instead of the row silently reappearing.
+// child tables joined by task_id. The legacy `data` column still exists but is
+// never read. Deletes are soft (tombstones) so a deletion syncs instead of the
+// row reappearing.
 
 func dbPath() string {
 	return pathFor(pathData, "tasks.db")
@@ -283,17 +281,15 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 	// merge follows slice order), and each task's todos row is written just
 	// before its own dependency rows. Defer FK enforcement to COMMIT — when
 	// every row in the batch exists — so a dependent written ahead of its
-	// dependency no longer fails with SQLITE_CONSTRAINT_FOREIGNKEY (787). A
+	// dependency does not fail with SQLITE_CONSTRAINT_FOREIGNKEY (787). A
 	// genuinely dangling reference still fails at COMMIT, correctly. The pragma
 	// is transaction-scoped and resets when this tx ends.
 	if _, err := tx.Exec(`PRAGMA defer_foreign_keys = ON`); err != nil {
 		return err
 	}
 	if len(dirty) > 0 {
-		// `data` is the legacy blob column — still NOT NULL after migration 002
-		// (we deliberately didn't drop it, so a future migration can if/when
-		// rollback is no longer a concern). Write an empty string; the column
-		// is no longer the source of truth.
+		// `data` is the legacy blob column, still NOT NULL but never read.
+		// Write an empty string.
 		upsertTask, err := tx.Prepare(`INSERT INTO todos
 			(id,title,status,priority,size,project,parent_id,created_at,modified_at,due_date,start_date,notes,completed_at,sequence,recurrence,seq_rank_done,stage,data,deleted,deleted_at)
 			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,?)

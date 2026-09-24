@@ -102,8 +102,7 @@ func (m *model) popFocus() {
 	}
 }
 
-// exitFocus is the single owner of every state's exit action (previously
-// scattered across handleListEsc and the detail-pane esc handlers).
+// exitFocus is the single owner of every state's exit action.
 func (m *model) exitFocus(s uiState) {
 	switch s {
 	case stateDetailPane:

@@ -54,9 +54,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ctrl+c quits from anywhere — every mode, both panes — after flushing any
 	// mutation still inside the 300ms save debounce. Bubble Tea delivers it as
-	// an ordinary key (there is no built-in quit), and previously only the list
-	// pane's normal mode handled it, so ctrl+c in a modal or the detail pane
-	// silently did nothing.
+	// an ordinary key (there is no built-in quit), so it is handled here
+	// rather than per mode.
 	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
 		m.flushPendingWrites()
 		m.closeWatcher()
@@ -307,8 +306,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// All handler paths feed through the common tail below so the dirty
 	// flag set by a modal mutation (add task, confirm delete, edit title,
 	// etc.) schedules the 300ms save immediately — not on the next
-	// keystroke, which previously left a window where quitting between
-	// the modal Enter and any subsequent key would lose the change.
+	// keystroke, or quitting right after the modal Enter would lose it.
 	var newModel tea.Model
 	var cmd tea.Cmd
 	switch m.mode {
@@ -894,10 +892,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "D":
-			// Rescheduling is the most common single edit a task gets, and it
-			// used to mean opening the detail pane, walking to the due-date
-			// field and pressing enter. Same prompt, same parser, from the
-			// row the cursor is already on.
+			// Rescheduling is the most common single edit a task gets, so it
+			// is reachable from the row: same prompt and parser as the
+			// detail pane's due-date field.
 			if (m.tab == tabTasks && !m.showHistory) || m.drilledIntoTasks() {
 				return m.startEditDueDate()
 			}
@@ -1363,7 +1360,7 @@ func (m *model) switchTab(t tab) {
 	// tab's, so a tab switch is non-destructive: your cursor, scroll, open
 	// pane, and search survive a detour to another tab. Tab-private state
 	// (projectCursor, tagTabCursor, showHistory, the calendar day, …) lives in
-	// its own fields and persists on its own — no longer zeroed here.
+	// its own fields and persists on its own.
 	m.tabViews[m.tab] = tabView{
 		cursor:       m.cursor,
 		listOffset:   m.listOffset,
@@ -1542,12 +1539,6 @@ func (m *model) toggleAutoCloseSubtasks() {
 	m.persistSettings()
 }
 
-// persistSettings writes all current preferences to disk, surfacing any write
-// failure so a setting that silently won't stick is at least visible.
-// toggleShowBoard turns the kanban surface on and off. Turning it off while
-// standing on the Board would leave the cursor on a tab that no longer exists
-// in the bar, so the move off happens here rather than being discovered by the
-// next keystroke.
 // toggleSyncBoard turns sharing the column list with the fleet on or off.
 // Turning it on does not push anything by itself: this device's list only
 // wins if it was edited here more recently than the fleet's (boardsync.go).
@@ -1556,6 +1547,10 @@ func (m *model) toggleSyncBoard() {
 	m.persistSettings()
 }
 
+// toggleShowBoard turns the kanban surface on and off. Turning it off while
+// standing on the Board would leave the cursor on a tab that no longer exists
+// in the bar, so the move off happens here rather than being discovered by the
+// next keystroke.
 func (m *model) toggleShowBoard() {
 	applyShowBoard(!showBoard)
 	if !showBoard && m.tab == tabBoard {
@@ -1580,6 +1575,8 @@ func (m *model) persistedSearch() string {
 	return m.tabViews[tabTasks].search
 }
 
+// persistSettings writes all current preferences to disk, surfacing any write
+// failure so a setting that silently won't stick is at least visible.
 func (m *model) persistSettings() {
 	if err := saveSettings(appSettings{
 		TaskSort:          m.taskSort,
@@ -1804,9 +1801,8 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 		}
 	case tabTags:
 		// Enter walks in one level at a time, exactly like the Projects tab:
-		// tag → its tasks → the selected task's detail. The old "jump to the
-		// Tasks tab filtered by this tag" moved to f, which is what it always
-		// was: a filter.
+		// tag → its tasks → the selected task's detail. Filtering the Tasks
+		// tab by this tag is f.
 		if !m.tagTaskMode {
 			if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
 				m.tagTaskMode = true
@@ -1848,8 +1844,7 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	case settingSyncToken:
 		m.mode = modeEditSyncToken
 		m.textInput.SetValue(m.syncCfg.Token)
-		// Mask the pre-filled secret — the list row shows "•••• set" but the
-		// editor used to echo it back in plaintext. The editors reset EchoMode
+		// Mask the pre-filled secret, as the list row does. The editors reset EchoMode
 		// on exit so the shared input doesn't stay masked for other modes.
 		m.textInput.EchoMode = textinput.EchoPassword
 		m.textInput.Placeholder = tr("Sync token (clear the field to remove it)")

@@ -114,9 +114,7 @@ const (
 	// wider of its header and its widest value, plus this", so no column is ever
 	// padded for a value it does not have. Two is what separates two columns
 	// legibly; the cells it saves go to the title and the tags, which are the
-	// columns whose content is actually open-ended. The old layout spent five
-	// here and assembled it out of asymmetric per-column pads, which only summed
-	// to five for the widest value in each column.
+	// columns whose content is actually open-ended.
 	listColGap = 2
 
 	// scoreValW is the widest Score value: "100%". The header is wider, so it is
@@ -143,14 +141,10 @@ const (
 	// list cannot make it in fewer cells.
 	tagsOverflowMinW = 3
 
-	// barTrack is the glyph the unfilled part of a progress bar is drawn with.
-	// It used to be "░", a half-density shade block: on the Tags tab, where
-	// most rows sit at 0%, that meant twenty-odd shaded cells per row and a
-	// solid wall of texture down the pane in which no row could be told from
-	// any other. Then it was "─", a rule, which still drew a line through every
-	// row. It is now blank cells on a faint background tint (barTrackStyle):
-	// the bar's extent is still there to see, but as a shade rather than as
-	// marks, so an empty bar reads as empty.
+	// barTrack is the glyph the unfilled part of a progress bar is drawn with:
+	// blank cells on a faint background tint (barTrackStyle). Most Tags rows sit
+	// at 0%, and any visible glyph here turns the pane into a wall of texture;
+	// a shade keeps the bar's extent visible while an empty bar reads as empty.
 	barTrack = " "
 
 	// tagsReservePct caps how much of the pane the Tags column may hold back

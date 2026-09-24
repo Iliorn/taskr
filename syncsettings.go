@@ -76,13 +76,10 @@ func (m model) updateEditSyncURL(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// deliberate clear, not an accidental no-op.
 			m.syncCfg.URL = strings.TrimSpace(m.textInput.Value())
 			m.saveSyncCfg()
-			// Set *and* clear. The warning used only to be set, so moving
-			// from a public http URL to a Tailscale address or https left
-			// the old line on screen still claiming the token travelled in
-			// the clear — a security notice that outlives the condition it
-			// describes is worse than none, because it teaches the user to
-			// ignore it. Only this message is cleared; a sync status from
-			// somewhere else is not ours to erase.
+			// Set *and* clear: a security notice that outlives the condition
+			// it describes teaches the user to ignore it. Only this message
+			// is cleared; a sync status from somewhere else is not ours to
+			// erase.
 			warning := tr("Plain http to a public host — token travels unencrypted")
 			switch {
 			case tasksync.InsecureURLWarning(m.syncCfg.URL) != "":

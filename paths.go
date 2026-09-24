@@ -19,8 +19,7 @@ import (
 //
 //  1. TASKR_HOME, if set — one directory for everything, for people who would
 //     rather have a single thing to back up than a tidy split.
-//  2. An existing ~/.taskr — every install before this change put everything
-//     there, and moving a user's database out from under them to satisfy a
+//  2. An existing ~/.taskr — older installs put everything there, and moving a user's database out from under them to satisfy a
 //     specification is not an upgrade. It keeps working, forever.
 //  3. The platform convention: XDG on Linux/BSD (and anywhere the XDG_*
 //     variables are set deliberately), %APPDATA%/%LOCALAPPDATA% on Windows,

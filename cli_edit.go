@@ -253,9 +253,7 @@ func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propaga
 		t.RemoveDependency(dep.ID)
 		changed = true
 	}
-	// Notes: clear wins, then replace, then append (a new paragraph). Notes
-	// were previously settable only at `add` and editable only via the TUI's
-	// $EDITOR flow. The '-' stdin form is resolved by the caller, once.
+	// Notes: clear wins, then replace, then append (a new paragraph). The '-' stdin form is resolved by the caller, once.
 	switch {
 	case *clearNote:
 		t.SetNotes("")

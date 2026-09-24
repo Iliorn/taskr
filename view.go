@@ -302,8 +302,7 @@ func (m model) View() string {
 		shortcutHint, padW = "", 1
 	}
 	out.WriteString(ansi.Truncate(tabsStr+strings.Repeat(" ", padW)+shortcutHint, m.termWidth-2, "") + "\n")
-	// One fixed status line replaces the old stack of banner rows, so filters
-	// and toasts never reflow the list below (see renderStatusLine).
+	// One fixed status line, so filters and toasts never reflow the list below (see renderStatusLine).
 	out.WriteString(m.renderStatusLine() + "\n")
 
 	// ── FOOTER ───────────────────────────────────────────────────────────
@@ -525,17 +524,9 @@ func (m model) tagSortLabel() string {
 // syncGlyph reports background-sync health for the status line: a red mark
 // after a failure, and nothing otherwise.
 //
-// Healthy sync says nothing on purpose. It used to show a dim ✓, which spent
-// the status line's best corner on "there is nothing wrong" — in a symbol with
-// nowhere to look it up, so the one question it reliably provoked was what it
-// meant. The steady-state answer belongs in Settings, which carries it in
-// words ("Last sync: sent 3, received 1") next to the rows that configure it,
-// and which Init populates with a launch sync.
-//
-// The failure keeps its place here: sync failing means this device is drifting
-// away from the others, which is the one sync fact a user must not have to go
-// looking for. So the corner speaks only when something is wrong, and what it
-// says carries the word "sync".
+// Healthy sync says nothing on purpose: the steady state is shown in words in
+// Settings. A failure means this device is drifting from the others, the one
+// sync fact a user must not have to go looking for.
 func (m model) syncGlyph() string {
 	if !m.autoSync || !m.lastSyncFailed {
 		return ""
@@ -1611,7 +1602,7 @@ func (m model) statsActivity() (label string, buckets []statsBucket, weekly bool
 }
 
 // statsPanelTitle is the Activity pane's border title, carrying the caption
-// the pane used to spend a row on: the range, the completions in it, and what
+// so it costs no row: the range, the completions in it, and what
 // a block stands for. On the border it costs nothing, and the row it gives
 // back is one more block a busy day can stack. Dropped back to front as the
 // window narrows, so the least useful half goes first.

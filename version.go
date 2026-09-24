@@ -13,12 +13,8 @@ import (
 // `-ldflags "-X main.appVersion=v1.31.0"`, and that is always authoritative.
 // But it is not the only way taskr gets installed: `go install
 // github.com/Iliorn/taskr@latest` (which the README recommends) compiles
-// without ldflags, and a binary built that way used to report itself as
-// "dev" forever. That is not just cosmetic — the update check compares the
-// running version against the latest release tag by string, so a "dev"
-// binary reported an update available on every single check, and the
-// Settings tab showed a version that told the user nothing about what they
-// were actually running.
+// without ldflags. Reporting "dev" there would make the update check, which
+// compares versions by string, offer an update on every run.
 //
 // The Go toolchain already knows the answer in both remaining cases and
 // stamps it into the binary: a module-proxy install records the module

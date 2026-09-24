@@ -3,8 +3,7 @@ package main
 // The keymap registry is the single source of truth for keyboard controls.
 // Both the footer hint line (renderKeyHints) and the full help overlay
 // (renderHelpFullscreen) are generated from it, so the two can never drift
-// from each other — the old failure mode where working keys (T, m) were
-// simply missing from the help.
+// from each other.
 //
 // It is also the surface where cross-page control consistency is enforced:
 // every binding carries a canonical action id, and TestKeymapActionsAre

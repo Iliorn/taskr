@@ -184,10 +184,9 @@ func (m model) dueDaysInRange(from, to time.Time) map[string]bool {
 
 func (m model) buildCalendarContent(w, outerH int) string {
 	innerH := panelContentHeight(outerH)
-	// The month grid is a fixed 22-column block, and the timeline used to floor
-	// at minInnerWidth — so on a narrow window the two panes were joined into
-	// lines wider than the terminal, which is the one place the no-wrap
-	// contract broke (everything else clips). Below the threshold, drop the
+	// The month grid is a fixed 22-column block, so on a narrow window the two
+	// panes would join into lines wider than the terminal. Below the threshold,
+	// drop the
 	// grid and give the timeline the whole width: ← / → and [ / ] still move
 	// the day and month, so nothing becomes unreachable, and the month title
 	// moves onto the timeline's border so you can still see where you are.

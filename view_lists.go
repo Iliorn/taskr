@@ -393,10 +393,7 @@ func (m model) renderStatsList() string {
 	// Lay sections out in up to three columns when there's room, so the page
 	// stays short enough to fit a not-very-tall screen. minColW is only where
 	// the search starts: the sections are built as thunks over colW/valW, and
-	// the layout below takes the most columns whose lines all fit. A fixed
-	// floor used to promise the longest line fitted, and the first value
-	// longer than it ("7 pending, no pace") was cut mid-word with space to
-	// spare on the page.
+	// the layout below takes the most columns whose lines all fit.
 	const gap = 4
 	const minColW = 37
 	maxCols := (availW + gap) / (minColW + gap)
@@ -447,7 +444,7 @@ func (m model) renderStatsList() string {
 		}
 		// The track shares one style for its whole run, so it costs one Render
 		// call rather than one per cell (ARCHITECTURE.md, "Group same-style
-		// runs") — this loop used to emit an escape pair per empty column.
+		// runs").
 		if empty := barW - filled; empty > 0 {
 			bar.WriteString(barTrackStyle.Render(strings.Repeat(barTrack, empty)))
 		}
@@ -992,28 +989,15 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 	return fastDim.render(cursorStr+body) + "\n"
 }
 
-// taskRowLabel splits a task's list label into the three pieces a row draws:
-// the running-timer prefix, the title text itself, and the badge suffix
-// (priority, blocker/blocked arrows, recurrence, subtask progress).
-//
-// They are kept apart so the row can truncate the *title* and still draw the
-// badges. Concatenating them first made "!" and "(1/2)" the last characters of
-// the string and therefore the first ones a narrow title column threw away —
-// which are exactly the characters a glance down the list is looking for. The
-// text is what has slack in it; the badges are four cells that change the
-// decision.
+// taskRowLabel splits a row's title cell into the three pieces fitTaskRowLabel
+// lays out: the prefix (answers "can I pick this up?" at the left edge), the
+// title text, and the badges (blocker/blocked arrows, recurrence, subtask
+// progress). They are kept apart so a narrow column clips the title, which has
+// slack in it, and never the badges, which change the decision.
 //
 // refreshTaskColMetrics sizes the title column from this same function, so the
-// width it reserves and the width the row draws cannot drift.
-// taskRowLabel splits a row's title cell into the three pieces fitTaskRowLabel
-// lays out. What goes where follows what the eye asks and when: the prefix
-// answers "can I pick this up?" at the left edge, before the title is read;
-// the badges are detail you only want once the title has told you which task
-// this is.
-//
-// Priority has no glyph. It is already the largest term in the Score column,
-// so the "!" it used to own said a second time what the number said first —
-// and "!" reads as an alarm, which is what overdue needed (see the status box).
+// width it reserves and the width the row draws cannot drift. Priority has no
+// glyph: it is already the largest term in the Score column.
 func (m *model) taskRowLabel(t *todo.Todo) (prefix, text, badges string) {
 	var p strings.Builder
 	if t.IsTimerRunning() {
@@ -1263,9 +1247,7 @@ func (m model) renderProjectListContent(projects []string) string {
 	// or the "Project" / "Active" headers butt up against each other.
 	projW := contentFitWidth(m.termWidth, nameMax, 4, len([]rune(projHdr))+4)
 
-	// The counts are bare numbers right-aligned under their headings. Each
-	// used to repeat its heading ("2 active   0 done   1 overdue"), which
-	// tripled the words on the row without adding a fact.
+	// The counts are bare numbers right-aligned under their headings.
 	activeHdr, doneHdr, overdueHdr := tr("Active"), tr("Done"), tr("Overdue")
 	gap := strings.Repeat(" ", listColGap)
 	countCol := func(v, hdr string) string { return padLeft(v, len([]rune(hdr))) }
@@ -1404,17 +1386,8 @@ func (m model) renderProjectDrillTaskList(tasks []todo.Todo) []string {
 // ── Settings list ─────────────────────────────────────────────────────────────
 
 // Settings is one pane of grouped rows, laid out in two columns when the
-// terminal is wide enough. It used to be two *panes* — Preferences beside
-// Sequencer — which spent a second border and a second scroll position on four
-// ranking knobs, and asked the reader to notice that the cursor had crossed
-// from one document into another. One border, two columns: the knobs are a
-// group like Sync or Server, and the pane still fits on a laptop screen
-// instead of running off the bottom as one tall column.
-//
-// The grouping is the part that was load-bearing: fifteen rows in one flat
-// column left "Listen" and "Server token" reading as loose app settings
-// instead of as the sync server's own, and a reader had to already know the
-// model to tell which control belonged to what. Titles are held in English and
+// terminal is wide enough. The groups say which control belongs to what
+// ("Listen" and "Server token" are the sync server's own). Titles are held in English and
 // passed through tr() at render time — a package var would freeze them before
 // applyLang runs.
 type settingsGroup struct {
@@ -1641,11 +1614,8 @@ func (m model) renderSettingsSection(w int) (string, int) {
 	if m.syncCfg.Token != "" {
 		syncTokenVal = "•••• " + tr("set")
 	}
-	// Off is the answer for every machine that is not the hub, which is most
-	// of them. The row used to read "needs token" instead, which stated a
-	// prerequisite as if it were an outstanding task — the token is only
-	// needed by someone who wants to turn this on, and toggleServer says so
-	// in the footer the moment they try.
+	// Off is the answer for every machine that is not the hub. The token is
+	// only needed to turn this on, and toggleServer says so when they try.
 	serverState := tr("Off")
 	switch {
 	case m.inprocServer != nil:

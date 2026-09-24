@@ -34,10 +34,7 @@ func clamp(val, min, max int) int {
 	return val
 }
 
-// ellipsis is the one-cell marker every clipped string ends in. It used to be
-// "(…)" — three cells to say the same thing, on a list where the two cells it
-// wasted were exactly the ones the title had run out of. The parentheses also
-// read as content: a title ending "(…)" looks like it has a parenthetical.
+// ellipsis is the one-cell marker every clipped string ends in.
 const ellipsis = "…"
 
 func truncate(s string, max int) string {
@@ -259,13 +256,8 @@ func selectedRowTail(st fastStyle, drawn, contentW int) string {
 // styled cell and the width it drew. Callers reach it through
 // model.renderRowTags, which serves the whole-set case from the render cache
 // and only falls through to here when chips actually have to be dropped.
-//
-// The old rule was all-or-nothing: one cell short of the full set and every
-// chip was replaced by a bare "(…)", three cells spent to say "there is
-// something here you cannot see". "⟨#bug⟩ +2" costs the same three cells in the
-// worst case, names the tag most likely to matter, and says how many are
-// hidden. Chips are dropped from the end because the tag list is already sorted
-// on the task, so the order is stable frame to frame.
+// Chips are dropped from the end because the tag list is already sorted on the
+// task, so the order is stable frame to frame.
 func renderTaskTagsClipped(tags []string, avail int, selected bool) (string, int) {
 	// tagsRenderWidth already counts the trailing space each chip draws, so the
 	// marker needs no separator of its own. k starts at the full set so the
@@ -1160,11 +1152,9 @@ func copyFile(srcPath, dstPath string) error {
 
 // ── Release lookup ───────────────────────────────────────────────────────────
 //
-// Both the update check and the download talk to the GitHub REST API directly.
-// They used to shell out to the `gh` CLI, which made "Update to latest release"
-// fail for anyone who hadn't installed a second tool — an odd requirement for a
-// self-contained 20 MB binary. The repository is public, so the endpoint needs
-// no authentication and stdlib net/http is enough.
+// Both the update check and the download talk to the GitHub REST API directly
+// over stdlib net/http, so updating needs no second tool installed. The
+// repository is public, so the endpoint needs no authentication.
 
 // releaseAPIBase is the API root. A variable rather than a constant so tests can
 // point it at an httptest server; nothing else reassigns it.

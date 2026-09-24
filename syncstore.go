@@ -12,15 +12,11 @@ import (
 
 // syncstore.go is the one place a sync merge touches the database. Both sides
 // of a sync — `taskr serve` folding a client's push into the authoritative
-// store, and `taskr sync` applying the server's response locally — previously
-// did load → Merge → save as three separate steps. That left a window where a
-// writer in ANOTHER process (a CLI `taskr add` on the same host, exactly the
-// hub setup where scripted writes and client syncs coexist) could commit
-// between the load and the save: its edit would be overwritten by the merged
-// snapshot, and worse, a just-added comment would be tombstoned by
-// saveChildren as "vanished" — a deletion that then propagates to every
-// device. mergeIntoStore closes the window by running all three steps inside
-// one SQLite transaction.
+// store, and `taskr sync` applying the server's response locally — run
+// load → Merge → save inside one SQLite transaction. As three separate steps,
+// a writer in another process (a CLI `taskr add` on the same host) could
+// commit between the load and the save and have its edit overwritten, or a
+// just-added comment tombstoned as "vanished" and deleted on every device.
 
 // mergeTxRetries bounds how many times a merge is retried when a concurrent
 // writer invalidates its snapshot. Under WAL a deferred transaction that read
@@ -31,7 +27,7 @@ const mergeTxRetries = 3
 
 // mergeStoreTestHook, when non-nil, runs between the transactional load and
 // the save. Tests use it to inject a concurrent same-host write at the exact
-// moment the old code would have clobbered it. Always nil in production.
+// moment a non-transactional merge would have clobbered it. Always nil in production.
 var mergeStoreTestHook func()
 
 // mergeIntoStore folds incoming into the store at h atomically and returns the
@@ -66,9 +62,8 @@ func mergeIntoStoreOnce(h *sql.DB, incoming []todo.Todo) ([]todo.Todo, bool, err
 		mergeStoreTestHook()
 	}
 	merged := tasksync.Merge(current, incoming)
-	// Write only the rows the merge actually changed. Previously every merged
-	// task was rewritten — O(whole store) of DB churn per sync, and every
-	// untouched row was still a potential clobber surface. An empty change set
+	// Write only the rows the merge actually changed: rewriting every merged
+	// task is O(whole store) per sync and a clobber surface. An empty change set
 	// doubles as the no-op guard: nothing written, the deferred rollback just
 	// releases the read snapshot.
 	dirty := changedTasks(current, merged)

@@ -9,9 +9,8 @@ import (
 )
 
 // servetls.go gives `taskr serve` its own TLS, for the deployments where the
-// transport is not already private. Before this, https meant a reverse proxy
-// in front — a second program to install, configure and keep running for what
-// is, on a single-owner server, two file paths. Tailscale users do not need it
+// transport is not already private, without a reverse proxy in front.
+// Tailscale users do not need it
 // (the tunnel is encrypted); a VPS or a LAN without it does, since the bearer
 // token and every task otherwise cross the network in the clear.
 //

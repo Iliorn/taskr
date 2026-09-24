@@ -192,7 +192,7 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // detailSectionJump moves the detail cursor to the next/previous section
-// head — the pageless replacement for the old [1/3] page flip.
+// head.
 func (m *model) detailSectionJump(dir int) {
 	sections := []detailField{fieldStartDate, fieldTags, fieldSubtasks, fieldDependencies, fieldTimeEntries, fieldComments}
 	cur := 0

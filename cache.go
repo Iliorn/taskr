@@ -190,8 +190,7 @@ func (m *model) refreshTaskColMetrics() {
 	active := m.cache.active
 	for i := range active {
 		// Same function the row draws with, so the width reserved here and the
-		// width drawn there cannot drift — which is what the two hand-kept
-		// copies of this arithmetic used to do every time a badge was added.
+		// width drawn there cannot drift.
 		if w := taskRowLabelWidth(m.taskRowLabel(&active[i])); w > contentMax {
 			contentMax = w
 		}
@@ -235,9 +234,8 @@ func (m *model) refreshFilteredCaches() {
 }
 
 // rebuildSortedTagsFrom refreshes the cached unique, sorted tag list. The list
-// is the expensive part of the Tags tab (a full scan + sort) and was previously
-// recomputed on every render; cache it alongside tagStats and invalidate it
-// the same way (on data change, and on sort-mode toggle via sortCachedTags).
+// is the expensive part of the Tags tab (a full scan + sort), so it is cached
+// alongside tagStats and invalidated the same way (on data change, and on sort-mode toggle via sortCachedTags).
 func (m *model) rebuildSortedTagsFrom(todos []*todo.Todo) {
 	m.cache.tagsSorted, m.cache.untaggedTotal, m.cache.untaggedDone =
 		selectSortedTags(todos, m.tagSort, m.cache.tags, m.cache.tagLastUsed)
@@ -314,10 +312,8 @@ func (m *model) refreshTagRenderCache() {
 }
 
 // refreshSubtaskProgress rebuilds the parent → (done, total) counts in a single
-// pass over the task set. It used to be computed per row by subtaskProgress,
-// which walked the child index and did a map lookup per child — 13% of a cache
-// refresh at 2000 tasks, because the row-metrics pass asks every active task
-// for it. One pass over the children answers it for every parent at once.
+// pass over the task set, rather than per row: the row-metrics pass asks every
+// active task for it.
 func (m *model) refreshSubtaskProgress(all []*todo.Todo) {
 	if m.cache.subProgress == nil {
 		m.cache.subProgress = make(map[string]subProgress, 16)

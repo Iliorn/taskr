@@ -130,10 +130,9 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	timerVal := func(s string) string { return timerStyle.Render(s) }
 	doneVal := func(s string) string { return checkDoneStyle.Render(s) }
 
-	// Order within this block is derived-facts first, provenance last. Score is
-	// what the app is *for*, and it used to render below the task's UUID and
-	// two timestamps — three rows nobody acts on, sitting between the reader
-	// and the one number that explains the task's position in the list.
+	// Order within this block is derived-facts first, provenance last: Score
+	// explains the task's position in the list, the UUID and timestamps are
+	// rows nobody acts on.
 	subTime := m.descendantTimeSpent(t.ID)
 	if len(t.TimeEntries) > 0 || subTime > 0 {
 		own := t.TotalTimeSpent()

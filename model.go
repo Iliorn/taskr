@@ -70,8 +70,7 @@ const (
 // switchTab snapshots it on the way out of a tab and restores it on the way
 // back, so glancing at another tab doesn't wipe your position or filter. Tab-
 // private state (projectCursor, tagTabCursor, showHistory, projectTaskMode, the
-// per-tab search queries, …) lives in its own fields and simply persists —
-// switchTab no longer zeroes it.
+// per-tab search queries, …) lives in its own fields and simply persists.
 type tabView struct {
 	cursor       int
 	listOffset   int

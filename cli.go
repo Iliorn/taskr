@@ -147,10 +147,7 @@ func dispatchCLI(args []string) int {
 // ── update ───────────────────────────────────────────────────────────────────
 
 // cliUpdate is the shell-side door to the same self-update the Settings tab
-// offers. Updating used to be the one thing that required opening the TUI,
-// which is a mode switch for someone whose taskr is otherwise a command.
-//
-// The verdict comes from planUpdate, shared with the TUI so a binary cannot be
+// offers. The verdict comes from planUpdate, shared with the TUI so a binary cannot be
 // told two different things about itself; only the sentences are local, since
 // CLI output is deliberately English (see lang.go).
 func cliUpdate(args []string) int {
@@ -380,9 +377,7 @@ Notes:
 // Which flags consume the next arg when written without an embedded `=`
 // (e.g. `--due tomorrow`) is derived from fs itself: every registered flag
 // whose Value does not implement the stdlib's boolFlag interface takes a
-// value. Deriving it kills the old hand-maintained per-command maps, which
-// had to mirror each FlagSet and would silently mis-parse when they drifted.
-// Callers must therefore define all flags on fs BEFORE calling this.
+// value, so there is no separate list to drift from the FlagSet. Callers must therefore define all flags on fs BEFORE calling this.
 func splitFlagsAndPositionals(fs *flag.FlagSet, args []string) (flags, positionals []string) {
 	valueFlags := make(map[string]bool)
 	fs.VisitAll(func(f *flag.Flag) {

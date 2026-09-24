@@ -395,8 +395,8 @@ func (m model) detailTagsRows(t *todo.Todo) int {
 }
 
 // detailMainHeight is the rendered height of the detail column's first
-// section: the fields block, blank, tags label, tag rows. (The task title has
-// moved to the top border of the panel and is no longer counted here.)
+// section: the fields block, blank, tags label, tag rows. The task title sits
+// on the panel's top border and is not counted.
 func (m model) detailMainHeight(t *todo.Todo) int {
 	h := 0 // title is on the border now; content starts at the first field
 	h += 9 // start, due, recurrence, priority, size, project, notes, created, id

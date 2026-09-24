@@ -222,7 +222,7 @@ func (m model) boardGeometry(cols [][]todo.Todo) boardGeom {
 	}
 	// boardColWidths gets the full pane width, not boardWindow's per-column
 	// share: that share is an integer division and drops the remainder, which
-	// is how the grid used to stop a few columns short of its own border.
+	// would stop the grid a few columns short of its own border.
 	g.widths = boardColWidths(g.count, availW)
 	// Each column wraps its titles if it has the room, but boxes are all or
 	// nothing across the board, so a short window never draws boxes beside
@@ -257,9 +257,7 @@ func boardCardHeights(cards []todo.Todo, colW int, layout boardCardLayout) []int
 // boardCardWindow decides which cards of a column are drawn: [first, end),
 // scrolled from offset only as far as it takes to keep cursor on screen, with
 // a row given to an "↑ N more" / "↓ N more" marker on each side that has cards
-// past it. A column that used to overflow just stopped drawing, hiding the
-// selected card along with the rest, so a cursor moving down a long column
-// walked off the bottom of the screen. Pure, so the clamp in Update and the
+// past it. Pure, so the clamp in Update and the
 // render run the same arithmetic.
 func boardCardWindow(heights []int, cursor, offset, room int) (first, end int) {
 	n := len(heights)
@@ -312,12 +310,8 @@ func boardCardWindow(heights []int, cursor, offset, room int) (first, end int) {
 // boardColWidths splits the board's width into an even grid across the
 // visible columns, the rounding remainder spread one column at a time so no
 // column sits more than a character off its neighbours.
-//
-// Even whatever the columns hold. The grid used to trade width towards a
-// column whose longest title would clip, which was worth it while a card was
-// one clipped row; with titles wrapping inside boxes it bought little, and it
-// meant the columns changed width whenever a card moved — the whole board
-// shifting under a card being carried across it.
+// Even whatever the columns hold, so the board does not shift under a card
+// being carried across it.
 func boardColWidths(n, availW int) []int {
 	widths := make([]int, n)
 	if n == 0 {
@@ -367,8 +361,8 @@ func joinBoardColumns(widths []int, height int, columns ...[]string) string {
 // boardCardLayout is how a column draws its cards, chosen per column by how
 // much room it has: boxes with the title wrapped onto two lines while the whole
 // column fits that way, one-line boxes otherwise — scrolling when even those
-// run past the bottom — and the plain rows the board used to draw only on a
-// window too short to hold a box and its scroll markers.
+// run past the bottom — and plain rows only on a window too short to hold a
+// box and its scroll markers.
 type boardCardLayout struct {
 	boxed bool
 	lines int // title lines per card
@@ -488,10 +482,9 @@ const (
 	boardBoxMinRoom = 5
 )
 
-// Every card keeps its rounded corners whatever state it is in. Selection
-// used to swap in the heavy set, but Unicode has no heavy rounded corner, so
-// the selected card turned square — a change of shape that read as a
-// different kind of thing rather than the same card highlighted.
+// Every card keeps its rounded corners whatever state it is in. Unicode has no
+// heavy rounded corner, and a square selected card reads as a different kind
+// of thing rather than the same card highlighted.
 var boardBoxRounded = [6]string{"╭", "╮", "╰", "╯", "─", "│"}
 
 // renderBoardBox draws one card as a box. The border carries the card's state

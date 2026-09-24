@@ -180,14 +180,9 @@ func (s *Store) len() int { return len(s.tasks) }
 // them, index them — but do not write through them, and do not hold one across
 // a mutation that could remove the task. Anything that needs a durable value
 // (an undo snapshot, the sync wire format) must copyTodo first, as pushUndo
-// does.
-//
-// It used to return []todo.Todo, which meant a full 416-byte struct copy per
-// task on every cache refresh — about a megabyte and a millisecond per refresh
-// at 2000 tasks, on the path that runs for every search keystroke. The contract
-// was already "treat as read-only", so handing out the pointers costs nothing
-// semantically. Callers that legitimately hold values (the CLI, storage, the
-// sync package, tests) adapt with todoPtrs.
+// does. Pointers rather than values because this runs on every search
+// keystroke, and copying a 416-byte struct per task adds up. Callers that
+// hold values (the CLI, storage, the sync package, tests) adapt with todoPtrs.
 func (s *Store) allTodos() []*todo.Todo {
 	out := make([]*todo.Todo, 0, len(s.tasks))
 	for _, t := range s.tasks {

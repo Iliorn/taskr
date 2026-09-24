@@ -8,19 +8,11 @@ import (
 
 // Atomic file replacement.
 //
-// Everything taskr keeps outside SQLite — settings.json, sync.json,
-// sync-state.json, serve-state.json, the persisted undo stack, task notes —
-// used to be written with a plain os.WriteFile, which truncates the existing
-// file and then writes into it. A crash, a power loss or a full disk between
-// those two steps leaves a half-written file, and the next start reads a
-// truncated JSON document where a valid one used to be. The tasks themselves
-// are safe (SQLite in WAL mode), so this was the one class of user state that
-// could be destroyed by bad timing rather than by a bug.
-//
-// The fix is the standard one: write a temporary file beside the target,
-// flush it to disk, then rename it over the target. Rename is atomic within a
-// filesystem, so a reader sees either the whole old file or the whole new one
-// and never the seam between them.
+// Everything taskr keeps outside SQLite (settings.json, sync.json, sync state,
+// the undo stack, task notes) goes through here. A plain os.WriteFile
+// truncates first, so a crash mid-write leaves a half-written file. Instead:
+// write a temp file beside the target, flush it, rename it over the target.
+// Rename is atomic, so a reader sees the whole old file or the whole new one.
 
 // writeFileAtomic writes data to path via a temporary file in the same
 // directory, replacing path only once the new contents are safely on disk.

@@ -15,12 +15,6 @@ import (
 
 // `taskr doctor` — diagnose this installation.
 //
-// The name is what every other tool means by it (brew, gh, flutter): tell me
-// what I am running and whether anything about it is broken. It used to name
-// the dependency-suggestion pass, which is now `taskr suggest`; the drift was
-// already visible in completion.go, which described `doctor` as "check the
-// store for problems" — the thing it did not do.
-//
 // This is the output to paste into a bug report, so it answers the questions a
 // maintainer would otherwise have to ask: version, platform, where the data
 // lives, whether SQLite is healthy, what schema it is on, whether settings
