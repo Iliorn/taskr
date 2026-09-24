@@ -99,7 +99,7 @@ func TestSyncConcurrentLocalWriteSurvives(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 
-	if _, err := runClientSync(ch, syncConfig{URL: ts.URL, Token: "tok"}, 5*time.Second); err != nil {
+	if _, err := runClientSync(ch, syncConfig{URL: ts.URL, Token: "tok"}, 5*time.Second, defaultBiases()); err != nil {
 		t.Fatalf("client sync: %v", err)
 	}
 

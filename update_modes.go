@@ -726,7 +726,7 @@ func (m *model) confirmCloseParent() tea.Cmd {
 			if t.IsTimerRunning() {
 				m.stopTimer(t.ID)
 			}
-			captureSeqRankAtDone(m.allTodos(), t)
+			captureSeqRankAtDone(m.rank, m.allTodos(), t)
 			t.Toggle()
 			ids := []string{t.ID}
 			if t.IsRecurring() {

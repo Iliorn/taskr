@@ -14,7 +14,7 @@ import (
 
 func TestSSEEventsRequireToken(t *testing.T) {
 	h := openTestDB(t)
-	srv := &tasksync.Server{Token: "tok", Store: dbStore{h}, Hub: tasksync.NewHub()}
+	srv := &tasksync.Server{Token: "tok", Store: dbStore{h: h}, Hub: tasksync.NewHub()}
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/events", nil))
 	if w.Code != http.StatusUnauthorized {
@@ -27,7 +27,7 @@ func TestSSEEventsRequireToken(t *testing.T) {
 // no-op sync (the skip-write guard).
 func TestSSEPushOnChange(t *testing.T) {
 	h := openTestDB(t)
-	srv := &tasksync.Server{Token: "tok", Store: dbStore{h}, Hub: tasksync.NewHub()}
+	srv := &tasksync.Server{Token: "tok", Store: dbStore{h: h}, Hub: tasksync.NewHub()}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 

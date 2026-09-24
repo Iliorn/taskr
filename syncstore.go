@@ -34,10 +34,12 @@ var mergeStoreTestHook func()
 // merged set. changed is false when the store already contained the merged
 // result — nothing was written, so callers can skip change broadcasts and the
 // fs watcher stays quiet (the no-op-write guard that prevents sync feedback
-// loops).
-func mergeIntoStore(h *sql.DB, incoming []todo.Todo) (merged []todo.Todo, changed bool, err error) {
+// loops). The changed rows' `sequence` column is scored with b against the
+// merged set's own activity heat, so a merge needs nothing from the caller's
+// in-memory state and can run on any goroutine.
+func mergeIntoStore(h *sql.DB, incoming []todo.Todo, b biases) (merged []todo.Todo, changed bool, err error) {
 	for attempt := 0; ; attempt++ {
-		merged, changed, err = mergeIntoStoreOnce(h, incoming)
+		merged, changed, err = mergeIntoStoreOnce(h, incoming, b)
 		if err == nil || attempt >= mergeTxRetries || !isBusyErr(err) {
 			return merged, changed, err
 		}
@@ -47,7 +49,7 @@ func mergeIntoStore(h *sql.DB, incoming []todo.Todo) (merged []todo.Todo, change
 	}
 }
 
-func mergeIntoStoreOnce(h *sql.DB, incoming []todo.Todo) ([]todo.Todo, bool, error) {
+func mergeIntoStoreOnce(h *sql.DB, incoming []todo.Todo, b biases) ([]todo.Todo, bool, error) {
 	tx, err := h.Begin()
 	if err != nil {
 		return nil, false, err
@@ -70,7 +72,14 @@ func mergeIntoStoreOnce(h *sql.DB, incoming []todo.Todo) ([]todo.Todo, bool, err
 	if len(dirty) == 0 {
 		return merged, false, nil
 	}
-	if err := saveNormalizedIn(tx, dirty, nil); err != nil {
+	var live []*todo.Todo
+	for i := range merged {
+		if !merged[i].Deleted {
+			live = append(live, &merged[i])
+		}
+	}
+	rk := ranker{biases: b}.refreshed(time.Now(), live)
+	if err := saveNormalizedIn(tx, dirty, nil, rk.scoreNow()); err != nil {
 		return nil, false, err
 	}
 	if err := tx.Commit(); err != nil {

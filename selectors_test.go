@@ -34,7 +34,7 @@ func TestSelectActiveDoneFilterAndSort(t *testing.T) {
 	sub.ParentID = "a" // subtasks are excluded from the top-level lists
 	todos := []todo.Todo{a, b, c, sub}
 
-	active, done := selectActiveDone(todoPtrs(todos), "", false, taskSortDueDate, historySortCompleted)
+	active, done := selectActiveDone(todoPtrs(todos), defaultRanker().scoreNow(), "", false, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 2 || got[0] != "b" || got[1] != "a" {
 		t.Fatalf("active = %v, want [b a] (sorted by due date, subtask excluded)", got)
 	}
@@ -59,13 +59,13 @@ func TestSelectActiveDoneHistorySort(t *testing.T) {
 	todos := []todo.Todo{a, b, c}
 
 	// Completed mode: most recent first, regardless of the active sort mode.
-	_, done := selectActiveDone(todoPtrs(todos), "", false, taskSortSequence, historySortCompleted)
+	_, done := selectActiveDone(todoPtrs(todos), defaultRanker().scoreNow(), "", false, taskSortSequence, historySortCompleted)
 	if got := ids(done); len(got) != 3 || got[0] != "c" || got[1] != "b" || got[2] != "a" {
 		t.Fatalf("history completed = %v, want [c b a] (most recent first)", got)
 	}
 
 	// Alpha mode: title A→Z.
-	_, done = selectActiveDone(todoPtrs(todos), "", false, taskSortSize, historySortAlpha)
+	_, done = selectActiveDone(todoPtrs(todos), defaultRanker().scoreNow(), "", false, taskSortSize, historySortAlpha)
 	if got := ids(done); len(got) != 3 || got[0] != "b" || got[1] != "c" || got[2] != "a" {
 		t.Fatalf("history alpha = %v, want [b c a] (apple, mango, zebra)", got)
 	}
@@ -82,11 +82,11 @@ func TestDependencyBoostLiftsBlockerAboveDependent(t *testing.T) {
 	urgent.Dependencies = []string{"a"}
 
 	// Without the boost, urgent's score dwarfs the blocker's.
-	if sequenceScore(&blocker) >= sequenceScore(&urgent) {
+	if defaultRanker().score(&blocker) >= defaultRanker().score(&urgent) {
 		t.Fatalf("precondition: blocker raw score should be below urgent")
 	}
 
-	active, _ := selectActiveDone(todoPtrs([]todo.Todo{blocker, urgent}), "", false, taskSortSequence, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{blocker, urgent}), defaultRanker().scoreNow(), "", false, taskSortSequence, historySortCompleted)
 	if got := ids(active); len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Fatalf("active = %v, want [a b] (blocker lifted above its dependent)", got)
 	}
@@ -104,7 +104,7 @@ func TestDependencyBoostTransitiveChain(t *testing.T) {
 	c.Priority = todo.PriorityHigh
 	c.Dependencies = []string{"b"}
 
-	active, _ := selectActiveDone(todoPtrs([]todo.Todo{a, b, c}), "", false, taskSortSequence, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{a, b, c}), defaultRanker().scoreNow(), "", false, taskSortSequence, historySortCompleted)
 	if got := ids(active); len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {
 		t.Fatalf("active = %v, want [a b c] (chain lifted in dependency order)", got)
 	}
@@ -129,7 +129,7 @@ func TestDependencyFanOutBonus(t *testing.T) {
 		mk("e1", "narrow"),
 	}
 
-	rollup := dependencyScoreRollup(todoPtrs(todos), nil)
+	rollup := dependencyScoreRollup(todoPtrs(todos), nil, defaultRanker().score)
 	// Same inherited score on both blockers; only the fan-out differs:
 	// wide = +min(4×0.5, 2) = +2, narrow = +0.5 → gap of exactly 1.5.
 	gap := rollup["wide"] - rollup["narrow"]
@@ -139,13 +139,13 @@ func TestDependencyFanOutBonus(t *testing.T) {
 
 	// Five dependents still cap at +2 — no gain over four.
 	todos = append(todos, mk("d5", "wide"))
-	capped := dependencyScoreRollup(todoPtrs(todos), nil)
+	capped := dependencyScoreRollup(todoPtrs(todos), nil, defaultRanker().score)
 	if diff := capped["wide"] - rollup["wide"]; diff > 1e-9 {
 		t.Fatalf("fifth dependent raised the bonus by %v, want capped at +2", diff)
 	}
 
 	// And the ranking reflects it: wide sorts above narrow.
-	active, _ := selectActiveDone(todoPtrs(todos), "", false, taskSortSequence, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs(todos), defaultRanker().scoreNow(), "", false, taskSortSequence, historySortCompleted)
 	wideAt, narrowAt := -1, -1
 	for i, id := range ids(active) {
 		switch id {
@@ -167,7 +167,7 @@ func TestDependencyBoostCycleSafe(t *testing.T) {
 	b := mkTodo("b", "b", todo.Pending)
 	b.Dependencies = []string{"a"}
 	// Just assert it returns; a non-terminating walk would hang the test.
-	selectActiveDone(todoPtrs([]todo.Todo{a, b}), "", false, taskSortSequence, historySortCompleted)
+	selectActiveDone(todoPtrs([]todo.Todo{a, b}), defaultRanker().scoreNow(), "", false, taskSortSequence, historySortCompleted)
 }
 
 // The dependency picker must hide tasks that would close a loop: the current
@@ -206,7 +206,7 @@ func TestLoopingDepCandidates(t *testing.T) {
 func TestSelectActiveDoneSearch(t *testing.T) {
 	p1 := mkTodo("a", "buy milk", todo.Pending)
 	p2 := mkTodo("b", "walk dog", todo.Pending)
-	active, _ := selectActiveDone(todoPtrs([]todo.Todo{p1, p2}), "milk", false, taskSortDueDate, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{p1, p2}), defaultRanker().scoreNow(), "milk", false, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 1 || got[0] != "a" {
 		t.Fatalf("search active = %v, want [a]", got)
 	}
@@ -228,13 +228,13 @@ func TestSelectActiveDoneStableUnderShuffle(t *testing.T) {
 	base := []todo.Todo{mkDone("a"), mkDone("b"), mkDone("c"), mkDone("d")}
 
 	for _, mode := range []taskSortMode{taskSortSequence, taskSortDueDate, taskSortSize} {
-		_, want := selectActiveDone(todoPtrs(base), "", false, mode, historySortCompleted)
+		_, want := selectActiveDone(todoPtrs(base), defaultRanker().scoreNow(), "", false, mode, historySortCompleted)
 		for shuffle, perm := range [][]int{{3, 2, 1, 0}, {1, 3, 0, 2}, {2, 0, 3, 1}} {
 			in := make([]todo.Todo, len(base))
 			for i, p := range perm {
 				in[i] = base[p]
 			}
-			_, got := selectActiveDone(todoPtrs(in), "", false, mode, historySortCompleted)
+			_, got := selectActiveDone(todoPtrs(in), defaultRanker().scoreNow(), "", false, mode, historySortCompleted)
 			if w, g := ids(want), ids(got); !equalStrings(w, g) {
 				t.Errorf("mode=%v shuffle=%d: got %v, want %v", mode, shuffle, g, w)
 			}
@@ -261,7 +261,7 @@ func TestSelectActiveDoneFocusFilter(t *testing.T) {
 	future := mkTodo("f", "future", todo.Pending)
 	future.DueDate = now.AddDate(0, 0, 10)
 	// focus filter keeps only overdue/due-today
-	active, _ := selectActiveDone(todoPtrs([]todo.Todo{overdue, future}), "", true, taskSortDueDate, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{overdue, future}), defaultRanker().scoreNow(), "", true, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 1 || got[0] != "o" {
 		t.Fatalf("focus active = %v, want [o]", got)
 	}
@@ -588,14 +588,14 @@ func TestRankedScoreShowsWhatTheSortRankedBy(t *testing.T) {
 	urgent.Dependencies = []string{"a"}
 
 	all := todoPtrs([]todo.Todo{blocker, urgent})
-	rollup := rankScores(all)
-	shown := rankScoreOf(&blocker, rollup, sequenceScore)
-	if shown < sequenceScore(&urgent) {
-		t.Errorf("blocker shows %.2f, below the %.2f it was lifted to", shown, sequenceScore(&urgent))
+	rollup := rankScores(all, defaultRanker().score)
+	shown := rankScoreOf(&blocker, rollup, defaultRanker().score)
+	if shown < defaultRanker().score(&urgent) {
+		t.Errorf("blocker shows %.2f, below the %.2f it was lifted to", shown, defaultRanker().score(&urgent))
 	}
 	// And the scale it is measured against has room for it, so the top of the
 	// list is 100% rather than several rows clamped there.
-	if max := maxRankedScore(all); max < shown {
+	if max := maxRankedScoreWith(all, rankScores(all, defaultRanker().score), defaultRanker().score); max < shown {
 		t.Errorf("field maximum %.2f is below the highest ranked score %.2f", max, shown)
 	}
 }
@@ -628,7 +628,7 @@ func TestScoreColumnNeverContradictsThePosition(t *testing.T) {
 		if !blocked && seenBlocked {
 			t.Fatalf("row %d (%q) is startable but sorts below blocked work", i, row.Title)
 		}
-		got := sequencePercent(m.rankedScore(m.get(row.ID)))
+		got := m.rank.percent(m.rankedScore(m.get(row.ID)))
 		if got > prev {
 			t.Errorf("row %d (%q) reads %d%% under a row reading %d%%", i, row.Title, got, prev)
 		}

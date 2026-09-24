@@ -178,7 +178,6 @@ func TestSettingsTopPreviewAppearsInView(t *testing.T) {
 	m := modelWithTasks(t, tasks...)
 	m.tab = tabSettings
 	m.taskSort = taskSortSequence
-	applyBiases(defaultBiases())
 	m.ensureCache()
 
 	out := m.renderSettingsList()
@@ -192,7 +191,6 @@ func TestSettingsTopPreviewAppearsInView(t *testing.T) {
 func TestSettingsTopPreviewEmptyWhenNoTasks(t *testing.T) {
 	m := modelWithTasks(t)
 	m.tab = tabSettings
-	applyBiases(defaultBiases())
 	m.ensureCache()
 
 	out := m.renderSettingsList()
@@ -207,7 +205,6 @@ func TestSettingsRendersOneGroupedPane(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Ranked task"))
 	m.tab = tabSettings
 	m.termHeight = 40
-	applyBiases(defaultBiases())
 	m.ensureCache()
 	content, _ := m.renderSettingsSection(50)
 	content = ansi.Strip(content)
@@ -244,7 +241,6 @@ func TestSettingsRendersOneGroupedPane(t *testing.T) {
 func TestSettingsPaneKeepsTheSelectedRowOnScreen(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Ranked task"))
 	m.tab = tabSettings
-	applyBiases(defaultBiases())
 	m.ensureCache()
 	for _, h := range []int{12, 16, 20, 24, 30} {
 		m.termWidth, m.termHeight = 70, h
@@ -342,7 +338,6 @@ func TestSettingsTopPreviewNoWrap(t *testing.T) {
 		m.tab = tabSettings
 		m.termWidth = width
 		m.termHeight = 40
-		applyBiases(defaultBiases())
 		m.ensureCache()
 
 		out := m.View()
@@ -428,7 +423,6 @@ func TestSettingsPaneSplitsIntoTwoColumns(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Ranked task"))
 	m.tab = tabSettings
 	m.termHeight = 40
-	applyBiases(defaultBiases())
 	m.ensureCache()
 
 	wide, _ := m.renderSettingsSection(settingsTwoColMinWidth + 20)

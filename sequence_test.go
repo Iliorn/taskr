@@ -355,15 +355,15 @@ func TestCaptureSeqRankAtDone(t *testing.T) {
 	sub.ParentID = "top"
 	todos := []todo.Todo{low, mid, top, sub}
 
-	captureSeqRankAtDone(todoPtrs(todos), &top)
+	captureSeqRankAtDone(defaultRanker(), todoPtrs(todos), &top)
 	if top.SeqRankAtDone != 1 {
 		t.Errorf("top rank = %d, want 1", top.SeqRankAtDone)
 	}
-	captureSeqRankAtDone(todoPtrs(todos), &low)
+	captureSeqRankAtDone(defaultRanker(), todoPtrs(todos), &low)
 	if low.SeqRankAtDone != 3 {
 		t.Errorf("low rank = %d, want 3", low.SeqRankAtDone)
 	}
-	captureSeqRankAtDone(todoPtrs(todos), &sub)
+	captureSeqRankAtDone(defaultRanker(), todoPtrs(todos), &sub)
 	if sub.SeqRankAtDone != 0 {
 		t.Errorf("subtask rank = %d, want 0 (not recorded)", sub.SeqRankAtDone)
 	}
@@ -565,7 +565,7 @@ func TestSeqSuggestionGates(t *testing.T) {
 	}
 }
 
-// A sort must score every task against ONE instant. sequenceScore reads
+// A sort must score every task against ONE instant. ranker.score reads
 // time.Now() per call and Age accrues continuously, so scoring tasks one at a
 // time makes identical tasks differ by ~1e-11 — enough for the comparator to
 // separate them on the float and never reach the ID tie-break, leaving the
@@ -586,8 +586,8 @@ func TestSequenceSortIsDeterministicForIdenticalTasks(t *testing.T) {
 	}
 	forward := build([]string{"aaaa", "bbbb", "cccc"})
 	shuffled := build([]string{"cccc", "aaaa", "bbbb"})
-	sortTodoPtrsBySequence(forward, nil, nil, sequenceScoreNow())
-	sortTodoPtrsBySequence(shuffled, nil, nil, sequenceScoreNow())
+	sortTodoPtrsBySequence(forward, nil, nil, defaultRanker().scoreNow())
+	sortTodoPtrsBySequence(shuffled, nil, nil, defaultRanker().scoreNow())
 	for i := range forward {
 		if forward[i].ID != shuffled[i].ID {
 			t.Fatalf("same tasks in a different input order sorted differently: %s vs %s at %d",

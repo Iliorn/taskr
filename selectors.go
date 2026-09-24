@@ -208,8 +208,8 @@ func todoMatchesFocus(t todo.Todo, focus bool) bool {
 //
 // The map holds candidates, not final scores: a task appears only when
 // something lifted it, and the value is applied with rankScoreOf's max.
-func rankScores(todos []*todo.Todo) map[string]float64 {
-	return dependencyScoreRollup(todos, descendantScoreRollup(todos))
+func rankScores(todos []*todo.Todo, score func(*todo.Todo) float64) map[string]float64 {
+	return dependencyScoreRollup(todos, descendantScoreRollup(todos, score), score)
 }
 
 // rankScoreOf is the score the sequencer ranks t by, and — since a rank the
@@ -260,19 +260,19 @@ func dependencySets(all []*todo.Todo) (blocked, blocker map[string]bool) {
 	return blocked, blocker
 }
 
-func selectActiveDone(todos []*todo.Todo, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
+func selectActiveDone(todos []*todo.Todo, score func(*todo.Todo) float64, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
 	var rollup map[string]float64
 	if sortMode == taskSortSequence {
-		rollup = rankScores(todos)
+		rollup = rankScores(todos, score)
 	}
-	return selectActiveDoneRanked(todos, rollup, search, focus, sortMode, historyMode)
+	return selectActiveDoneRanked(todos, rollup, score, search, focus, sortMode, historyMode)
 }
 
 // selectActiveDoneRanked takes the lift map from its caller. The model computes
 // it once per data change and caches it: it depends on the task set, not on the
 // filter, so recomputing it inside the per-keystroke search path walked every
 // task twice for an answer that had not changed.
-func selectActiveDoneRanked(todos []*todo.Todo, rollup map[string]float64, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
+func selectActiveDoneRanked(todos []*todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
 	match := compileSearch(search)
 	// Split and sort as pointers, then materialize once at the end. The caches
 	// hold values — they outlive this call and are read while the store mutates
@@ -298,32 +298,25 @@ func selectActiveDoneRanked(todos []*todo.Todo, rollup map[string]float64, searc
 	switch sortMode {
 	case taskSortSequence:
 		blocked, _ := dependencySets(todos)
-		sortTodoPtrsBySequence(activeP, rollup, blocked, sequenceScoreNow())
+		sortTodoPtrsBySequence(activeP, rollup, blocked, score)
 	case taskSortDueDate:
 		sortTodoPtrs(activeP, lessByDueDate)
 	case taskSortSize:
 		sortTodoPtrs(activeP, lessBySize)
 	default:
 		blocked, _ := dependencySets(todos)
-		sortTodoPtrsBySequence(activeP, nil, blocked, sequenceScoreNow())
+		sortTodoPtrsBySequence(activeP, nil, blocked, score)
 	}
 	sortTodoPtrs(doneP, historyLess(historyMode))
 	return todoValues(activeP), todoValues(doneP)
 }
 
 // descendantScoreRollup walks the full task slice and returns, per top-level
-// ID, the max sequenceScore observed across all of its transitive subtasks.
+// ID, the max score observed across all of its transitive subtasks.
 // Pure: builds its own parent index in one pass and follows ParentID chains
 // instead of relying on the model's subtaskOf cache. Tasks without subtasks
 // don't appear in the map.
-func descendantScoreRollup(todos []*todo.Todo) map[string]float64 {
-	return descendantScoreRollupWith(todos, sequenceScore)
-}
-
-// descendantScoreRollupWith is the parameterised form of descendantScoreRollup:
-// it accepts an arbitrary score function so callers can compute the rollup with
-// explicit biases/clock rather than the activeBiases / activeHeat globals.
-func descendantScoreRollupWith(todos []*todo.Todo, score func(*todo.Todo) float64) map[string]float64 {
+func descendantScoreRollup(todos []*todo.Todo, score func(*todo.Todo) float64) map[string]float64 {
 	if len(todos) == 0 {
 		return nil
 	}
@@ -378,14 +371,7 @@ const (
 	fanOutBonusCap  = 2.0
 )
 
-func dependencyScoreRollup(todos []*todo.Todo, base map[string]float64) map[string]float64 {
-	return dependencyScoreRollupWith(todos, base, sequenceScore)
-}
-
-// dependencyScoreRollupWith is the parameterised form of dependencyScoreRollup:
-// it accepts an arbitrary score function so callers can compute the rollup with
-// explicit biases/clock rather than the activeBiases / activeHeat globals.
-func dependencyScoreRollupWith(todos []*todo.Todo, base map[string]float64, score func(*todo.Todo) float64) map[string]float64 {
+func dependencyScoreRollup(todos []*todo.Todo, base map[string]float64, score func(*todo.Todo) float64) map[string]float64 {
 	if len(todos) == 0 {
 		return base
 	}

@@ -118,8 +118,8 @@ type seqExplain struct {
 // what it blocks, ranks on the inherited number, so quoting the own-score as
 // the margin to a neighbour would be quoting the wrong one.
 func seqRanking(todos []*todo.Todo, score func(*todo.Todo) float64) ([]todo.Todo, map[string]float64) {
-	rollup := descendantScoreRollupWith(todos, score)
-	rollup = dependencyScoreRollupWith(todos, rollup, score)
+	rollup := descendantScoreRollup(todos, score)
+	rollup = dependencyScoreRollup(todos, rollup, score)
 	rows := make([]todo.Todo, 0, len(todos))
 	for _, t := range todos {
 		if t.ParentID == "" && t.Status == todo.Pending {
@@ -129,7 +129,7 @@ func seqRanking(todos []*todo.Todo, score func(*todo.Todo) float64) ([]todo.Todo
 	// Same partition the live list applies, or `taskr top` and the explain
 	// view would rank a blocked task the list has already pushed to the bottom.
 	blocked, _ := dependencySets(todos)
-	sortTodosBySequenceWithRollupBy(rows, rollup, blocked, score)
+	sortTodosBySequenceWithRollup(rows, rollup, blocked, score)
 	eff := make(map[string]float64, len(rows))
 	for i := range rows {
 		eff[rows[i].ID] = rankScoreOf(&rows[i], rollup, score)
@@ -342,8 +342,8 @@ func explainSequenceAt(now time.Time, t *todo.Todo, all []*todo.Todo, b biases, 
 	return e
 }
 
-// explainSequenceFor is the live form: current clock, active biases, active
-// heat — what the TUI overlay and `taskr why` both call.
-func explainSequenceFor(t *todo.Todo, all []*todo.Todo) seqExplain {
-	return explainSequenceAt(time.Now(), t, all, activeBiases, activeHeat)
+// explain is the live form: current clock and the ranker's biases and heat —
+// what the TUI overlay and `taskr why` both call.
+func (r ranker) explain(t *todo.Todo, all []*todo.Todo) seqExplain {
+	return explainSequenceAt(time.Now(), t, all, r.biases, r.heat)
 }

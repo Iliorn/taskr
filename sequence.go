@@ -109,19 +109,10 @@ func defaultBiases() biases {
 	return biases{Aging: true}
 }
 
-// activeBiases is the package-level setting the score functions read at the
-// time they're called. Settings.go's load/save path sets it via applyBiases on
-// startup and whenever the user cycles a bias, matching the pattern already in
-// use for themes (applyTheme) and language (applyLang). It boots into the
-// neutral default (all Balanced, aging on); settings.json may overwrite later.
-var activeBiases = defaultBiases()
-
-func applyBiases(b biases) { activeBiases = b }
-
-// cycleBias is the user-facing knob bound to ←/→ on a Settings bias row.
+// cycleBiasLevel is the user-facing knob bound to ←/→ on a Settings bias row.
 // Direction +1 cycles Relaxed→Balanced→Intense (next), -1 the other way. After
-// mutating activeBiases the caller is responsible for invalidating the task
-// cache so the new weights take effect on the next render.
+// changing a bias the caller is responsible for invalidating the task cache so
+// the new weights take effect on the next render.
 func cycleBiasLevel(b biasLevel, direction int) biasLevel {
 	if direction < 0 {
 		return b.prev()
@@ -324,13 +315,6 @@ func heatExpiries(t *todo.Todo, h activityHeat, now time.Time) []time.Time {
 	return out
 }
 
-// activeHeat is the package-level snapshot the live score functions read,
-// following the applyTheme/applyLang/applyBiases pattern. Refreshed by
-// refreshCaches (TUI) and loadForCLI (CLI) so both surfaces rank identically.
-var activeHeat activityHeat
-
-func applyActivityHeat(h activityHeat) { activeHeat = h }
-
 // ── Per-dimension contributions ──────────────────────────────────────────────
 
 // dimensionsAt is the pure core of the formula: given `now`, a task, and the
@@ -477,39 +461,73 @@ func sequenceComponentsAt(now time.Time, t *todo.Todo, b biases, heat activityHe
 	return out
 }
 
-// sequenceComponentsFor is the live form used by callers that want the
-// breakdown for display (detail view). Reads activeBiases, activeHeat, and
-// time.Now.
-func sequenceComponentsFor(t *todo.Todo) sequenceComponents {
-	return sequenceComponentsAt(time.Now(), t, activeBiases, activeHeat)
+// ranker is everything a live score depends on besides the task and the clock:
+// the user's bias knobs, the activity-heat snapshot behind Momentum, and the
+// top of the current field that percentages are measured against. It is a
+// value, handed to whoever scores — the model holds one (refreshed in
+// refreshCaches), the CLI builds one in loadForCLI, and the save path copies it
+// into the goroutine that writes the sequence column — so a score never reads
+// state another goroutine may be changing.
+type ranker struct {
+	biases biases
+	heat   activityHeat
+	max    float64
 }
 
-// sequenceScore is the total persisted score: written into todos.sequence on
-// every save and read by the Sequence sort. Live callers (render loop, sort)
-// invoke this directly; the per-dimension breakdown is exposed via
-// sequenceComponentsFor for the detail view.
-func sequenceScore(t *todo.Todo) float64 {
-	return sequenceComponentsAt(time.Now(), t, activeBiases, activeHeat).Total
+// defaultRanker is the neutral ranker: default biases, no activity heat, no
+// field yet. It is what a surface without settings scores with — the headless
+// server, a first-run import.
+func defaultRanker() ranker { return ranker{biases: defaultBiases()} }
+
+// storedBiases reads the bias knobs from settings.json, for the paths that
+// score rows without a model or a loaded CLI store: the headless server and
+// the syncs that run beside a command. An unreadable file reads as the
+// defaults, as it does everywhere else.
+func storedBiases() biases {
+	s, _ := loadSettings()
+	return biasesFromSettings(s)
 }
 
-// sequenceScoreNow returns sequenceScore bound to a single instant, and is what
-// every *sort* and *ranking* must use — never sequenceScore itself.
+// components is the per-dimension breakdown at time.Now, for display.
+func (r ranker) components(t *todo.Todo) sequenceComponents {
+	return sequenceComponentsAt(time.Now(), t, r.biases, r.heat)
+}
+
+// score is the total persisted score: written into todos.sequence on every
+// save and printed next to a task.
+func (r ranker) score(t *todo.Todo) float64 {
+	return sequenceComponentsAt(time.Now(), t, r.biases, r.heat).Total
+}
+
+// scoreNow returns score bound to a single instant, and is what every *sort*
+// and *ranking* must use — never score itself.
 //
-// Age contributes 0.2/day continuously, so sequenceScore reads its own clock
-// and two tasks created at the same moment score differently by ~1e-11 purely
-// because their scores were computed microseconds apart. The comparator then
-// separates them on that float and never reaches the ID tie-break, so the order
-// of equal tasks is decided by whatever order they were scored in — which
-// sort.Slice does not preserve. The result was a listing whose ordering of
-// equal-scoring tasks could change between two runs over identical data.
-// Freezing the clock for the duration of one sort makes equal tasks actually
-// tie, so lessBySequenceTie runs and the order ends at ID, like every other
-// comparator in this repo.
-func sequenceScoreNow() func(*todo.Todo) float64 {
-	now := time.Now()
+// Age contributes 0.2/day continuously, so score reads its own clock and two
+// tasks created at the same moment score differently by ~1e-11 purely because
+// their scores were computed microseconds apart. The comparator then separates
+// them on that float and never reaches the ID tie-break, so the order of equal
+// tasks is decided by whatever order they were scored in — which sort.Slice
+// does not preserve. Freezing the clock for the duration of one sort makes
+// equal tasks actually tie, so lessBySequenceTie runs and the order ends at ID,
+// like every other comparator in this repo.
+func (r ranker) scoreNow() func(*todo.Todo) float64 {
+	return r.scoreAt(time.Now())
+}
+
+// scoreAt is score against a caller-chosen instant.
+func (r ranker) scoreAt(now time.Time) func(*todo.Todo) float64 {
 	return func(t *todo.Todo) float64 {
-		return sequenceComponentsAt(now, t, activeBiases, activeHeat).Total
+		return sequenceComponentsAt(now, t, r.biases, r.heat).Total
 	}
+}
+
+// refreshed returns r with the heat snapshot and the 100% mark recomputed from
+// the task set at `now`: the step both surfaces take after loading or changing
+// tasks, so they rank identically.
+func (r ranker) refreshed(now time.Time, todos []*todo.Todo) ranker {
+	r.heat = computeActivityHeat(now, todos)
+	r.max = maxRankedScoreWith(todos, rankScores(todos, r.scoreAt(now)), r.scoreAt(now))
+	return r
 }
 
 // ── The percentage scale ─────────────────────────────────────────────────────
@@ -527,37 +545,21 @@ func sequenceScoreNow() func(*todo.Todo) float64 {
 // moving when the top task is finished. The explain overlay states what 100%
 // currently equals, so the move is visible rather than mysterious.
 
-// activeScoreMax is the highest sequence score among pending tasks — the 100%
-// mark. A package-level global refreshed alongside activeHeat (refreshCaches in
-// the TUI, loadForCLI in the CLI), following the same pattern. Zero means
-// "no field yet", which reads as 0% everywhere rather than dividing by zero.
-var activeScoreMax float64
-
-func applyScoreMax(v float64) { activeScoreMax = v }
-
 // maxSequenceScoreWith is the parameterised form, so the explain view can
-// establish the same 100% mark against its own clock and biases instead of the
-// globals. One definition of "the field" keeps the overlay's percentage and the
+// establish the same 100% mark against its own clock and biases. One definition of "the field" keeps the overlay's percentage and the
 // list column's from disagreeing about the same task.
 func maxSequenceScoreWith(todos []*todo.Todo, score func(*todo.Todo) float64) float64 {
 	return maxRankedScoreWith(todos, nil, score)
 }
 
-// maxRankedScore is the top of the field with lifts counted — the highest score
-// anything is actually ranked by. That is the 100% mark because the ranked
-// score is what the list prints: measuring it against the best *raw* score lets
-// a blocker carrying a fan-out bonus land above the top of the scale, where the
-// clamp would print 100% for it and for the task it inherited from, hiding a
-// difference the ranking still makes.
-func maxRankedScore(todos []*todo.Todo) float64 {
-	return maxRankedScoreWith(todos, rankScores(todos), sequenceScore)
-}
-
-// maxRankedScoreWith is the parameterised form: the caller supplies the lift map
-// (nil for the raw field) and the score function, so the explain view can
-// establish the same 100% mark against its own clock and biases as the globals
-// give the list. One definition of "the field" keeps the overlay's percentage
-// and the list column's from disagreeing about the same task.
+// maxRankedScoreWith is the top of the field with lifts counted — the highest
+// score anything is actually ranked by. That is the 100% mark because the
+// ranked score is what the list prints: measuring it against the best *raw*
+// score lets a blocker carrying a fan-out bonus land above the top of the
+// scale, where the clamp would print 100% for it and for the task it inherited
+// from, hiding a difference the ranking still makes. The caller supplies the
+// lift map (nil for the raw field) and the score function, so the explain view
+// can establish the mark against its own clock and biases.
 func maxRankedScoreWith(todos []*todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) float64 {
 	max := 0.0
 	for _, t := range todos {
@@ -586,18 +588,17 @@ func percentOfField(score, max float64) int {
 	return p
 }
 
-// sequencePercent is percentOfField against the live field.
-func sequencePercent(score float64) int { return percentOfField(score, activeScoreMax) }
+// percent is percentOfField against the ranker's field.
+func (r ranker) percent(score float64) int { return percentOfField(score, r.max) }
 
-// formatSequencePercent is the on-screen form. Four columns wide at most
-// ("100%"), which is exactly what the one-decimal score it replaced occupied.
-func formatSequencePercent(score float64) string {
-	return strconv.Itoa(sequencePercent(score)) + "%"
+// formatPercent is the on-screen form, four columns wide at most ("100%").
+func (r ranker) formatPercent(score float64) string {
+	return strconv.Itoa(r.percent(score)) + "%"
 }
 
 // rankTopBySequenceWith is the pure, testable form of rankTopBySequence: it
 // accepts explicit biases, a heat snapshot, and a clock so callers can compute
-// a preview ranking without touching the activeBiases / activeHeat globals.
+// a preview ranking with knob values that are not live yet.
 // The result is the same critical-path ordering (subtask + dependency rollups
 // applied) as the live path — only the scoring inputs differ.
 func rankTopBySequenceWith(todos []*todo.Todo, b biases, heat activityHeat, now time.Time) []todo.Todo {
@@ -619,12 +620,12 @@ const (
 // call it just before Toggle flips the status; auto-closed parents and
 // recurrence spawns don't, so the metric only reads deliberate picks —
 // "when you finished something, was it what the engine suggested".
-func captureSeqRankAtDone(todos []*todo.Todo, t *todo.Todo) {
+func captureSeqRankAtDone(r ranker, todos []*todo.Todo, t *todo.Todo) {
 	t.SeqRankAtDone = 0
 	if t.ParentID != "" {
 		return
 	}
-	for i, row := range rankTopBySequence(todos) {
+	for i, row := range rankTopBySequenceBy(todos, r.scoreNow()) {
 		if row.ID == t.ID {
 			t.SeqRankAtDone = i + 1
 			return

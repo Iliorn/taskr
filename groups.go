@@ -103,7 +103,7 @@ func inProjectGroup(t *todo.Todo, key string) bool { return t.Project == key }
 
 // summarizeGroups builds one summary per group in a single pass over the task
 // set. score ranks the open tasks for "next up"; pass a frozen one
-// (sequenceScoreNow) so equal tasks tie and the ID decides.
+// (ranker.scoreNow) so equal tasks tie and the ID decides.
 func summarizeGroups(all []*todo.Todo, keys func(*todo.Todo, func(string)), score func(*todo.Todo) float64) map[string]*groupSummary {
 	out := make(map[string]*groupSummary)
 	for _, t := range all {
@@ -236,7 +236,7 @@ func (m model) groupTaskList(match func(*todo.Todo) bool) []todo.Todo {
 			roots = append(roots, t)
 		}
 	}
-	score := sequenceScoreNow()
+	score := m.rank.scoreNow()
 	rank := make(map[string]float64, len(roots))
 	for _, t := range roots {
 		rank[t.ID] = rankScoreOf(t, m.cache.rankScore, score)

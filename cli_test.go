@@ -744,7 +744,7 @@ func TestRankTopBySequenceLiftsBlockerAboveDependent(t *testing.T) {
 	dependent.DueDate = time.Now()
 	dependent.AddDependency(blocker.ID)
 
-	ranked := rankTopBySequence(todoPtrs([]todo.Todo{dependent, blocker}))
+	ranked := rankTopBySequence(todoPtrs([]todo.Todo{dependent, blocker}), defaultRanker())
 
 	pos := make(map[string]int, len(ranked))
 	for i := range ranked {

@@ -1549,23 +1549,24 @@ func (m *model) isBiasSettingRow(row int) bool {
 }
 
 // cycleBias rotates the named bias by `direction` (+1 next, -1 prev), updates
-// the activeBiases global, invalidates the sort cache so the new ranking takes
+// the model's ranker, invalidates the sort cache so the new ranking takes
 // effect on the next render, persists the change, and resyncs the persisted
 // `sequence` column so anything reading the database directly sees the new
 // weights immediately rather than waiting for the next mutation.
 func (m *model) cycleBias(row, direction int) {
 	switch row {
 	case settingBiasDeadline:
-		activeBiases.Deadline = cycleBiasLevel(activeBiases.Deadline, direction)
+		m.rank.biases.Deadline = cycleBiasLevel(m.rank.biases.Deadline, direction)
 	case settingBiasPriority:
-		activeBiases.Priority = cycleBiasLevel(activeBiases.Priority, direction)
+		m.rank.biases.Priority = cycleBiasLevel(m.rank.biases.Priority, direction)
 	case settingBiasMomentum:
-		activeBiases.Momentum = cycleBiasLevel(activeBiases.Momentum, direction)
+		m.rank.biases.Momentum = cycleBiasLevel(m.rank.biases.Momentum, direction)
 	default:
 		return
 	}
 	m.markCacheDirty()
 	m.persistSettings()
+	m.repo.SetRanker(m.rank)
 	if err := m.repo.ResyncScores(); err != nil {
 		m.flashError(fmt.Sprintf(tr("Score resync failed: %v"), err))
 	}
@@ -1575,9 +1576,10 @@ func (m *model) cycleBias(row, direction int) {
 // invalidate-persist-resync pattern so the new ranking is visible immediately
 // and persists across restarts.
 func (m *model) toggleAging() {
-	activeBiases.Aging = !activeBiases.Aging
+	m.rank.biases.Aging = !m.rank.biases.Aging
 	m.markCacheDirty()
 	m.persistSettings()
+	m.repo.SetRanker(m.rank)
 	if err := m.repo.ResyncScores(); err != nil {
 		m.flashError(fmt.Sprintf(tr("Score resync failed: %v"), err))
 	}
@@ -1645,10 +1647,10 @@ func (m *model) persistSettings() {
 		ProjectOrder:      m.projectOrder,
 		Theme:             m.themeName,
 		Language:          string(activeLang),
-		SeqBiasDeadline:   activeBiases.Deadline,
-		SeqBiasPriority:   activeBiases.Priority,
-		SeqBiasMomentum:   activeBiases.Momentum,
-		SeqAgingDisabled:  !activeBiases.Aging,
+		SeqBiasDeadline:   m.rank.biases.Deadline,
+		SeqBiasPriority:   m.rank.biases.Priority,
+		SeqBiasMomentum:   m.rank.biases.Momentum,
+		SeqAgingDisabled:  !m.rank.biases.Aging,
 		AutoCloseParent:   m.autoCloseParent,
 		AutoCloseSubtasks: m.autoCloseSubtasks,
 		BoardDisabled:     !showBoard,

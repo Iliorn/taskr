@@ -21,8 +21,11 @@ import (
 type Repository interface {
 	Load() ([]todo.Todo, error)
 	Save(dirty []*todo.Todo, tombstones map[string]time.Time) error
+	// SetRanker hands the repository the ranker it scores the persisted
+	// `sequence` column with. Safe to call while a Save is running.
+	SetRanker(ranker)
 	// ResyncScores rewrites the persisted `sequence` column for every live
-	// row at the current activeBiases. Without this, a bias change or
+	// row with the current ranker. Without this, a bias change or
 	// passage of time (Age drift) leaves the column stale relative to the
 	// in-memory formula — invisible to the TUI (which sorts in memory) but
 	// a trap for anything reading the database directly.

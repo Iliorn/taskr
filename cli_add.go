@@ -54,9 +54,9 @@ func cliAdd(args []string) int {
 	if sErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
-	applyBiases(biasesFromSettings(settings))
 	applyBoardSettings(settings)
 	repo := newSQLiteRepo()
+	repo.SetRanker(ranker{biases: biasesFromSettings(settings)})
 
 	// Resolve everything that's shared across all created tasks exactly once
 	// (parsing and ref lookups), so batch add doesn't re-do it per line.

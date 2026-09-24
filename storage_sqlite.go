@@ -207,7 +207,7 @@ func importFromJSON(h *sql.DB) error {
 	for i := range todos {
 		ptrs[i] = &todos[i]
 	}
-	return saveNormalized(h, ptrs, nil)
+	return saveNormalized(h, ptrs, nil, defaultRanker().scoreNow())
 }
 
 func fmtTime(t time.Time) string {
@@ -257,7 +257,7 @@ type querier interface {
 // saveNormalized writes the dirty tasks and tombstones to the normalized
 // schema. One transaction; per task the scalars go into `todos` and the
 // children replace the previous child rows. Untouched tasks are not rewritten.
-func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones map[string]time.Time) error {
+func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones map[string]time.Time, score func(*todo.Todo) float64) error {
 	if len(dirty) == 0 && len(tombstones) == 0 {
 		return nil
 	}
@@ -266,7 +266,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones map[string]time.Ti
 		return err
 	}
 	defer tx.Rollback()
-	if err := saveNormalizedIn(tx, dirty, tombstones); err != nil {
+	if err := saveNormalizedIn(tx, dirty, tombstones, score); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -275,7 +275,7 @@ func saveNormalized(h *sql.DB, dirty []*todo.Todo, tombstones map[string]time.Ti
 // saveNormalizedIn is saveNormalized's body on a caller-owned transaction —
 // the caller commits (or rolls back). Split out so mergeIntoStore can bundle
 // the load, the merge and this write into one atomic unit.
-func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time.Time) error {
+func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time.Time, score func(*todo.Todo) float64) error {
 	// Foreign-key checks are immediate by default, but a batch can hold a task
 	// and the task it depends on in either order (drainDirty iterates a map; the
 	// merge follows slice order), and each task's todos row is written just
@@ -394,7 +394,7 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 			if _, err := upsertTask.Exec(t.ID, t.Title, int(t.Status), int(t.Priority), int(t.Size),
 				t.Project, t.ParentID, fmtTime(t.CreatedAt), fmtTime(t.ModifiedAt),
 				fmtTime(t.DueDate), fmtTime(t.StartDate), t.Notes, fmtTime(t.CompletedAt),
-				sequenceScore(t), t.Recurrence, t.SeqRankAtDone, t.Stage, boolToInt(t.Deleted), fmtTime(t.DeletedAt)); err != nil {
+				score(t), t.Recurrence, t.SeqRankAtDone, t.Stage, boolToInt(t.Deleted), fmtTime(t.DeletedAt)); err != nil {
 				return err
 			}
 			// Tags and dependencies are value-sets (no per-row identity), so
@@ -690,7 +690,7 @@ func loadChildren(h querier, todos map[string]*todo.Todo, table, cols, where str
 
 // loadTodos is the storage entry point used by initialModel: open the store
 // (importing legacy JSON on first run) and return the live tasks, sorted.
-func loadTodos() ([]todo.Todo, error) {
+func loadTodos(score func(*todo.Todo) float64) ([]todo.Todo, error) {
 	if err := openStore(); err != nil {
 		return nil, err
 	}
@@ -698,7 +698,7 @@ func loadTodos() ([]todo.Todo, error) {
 	if err != nil {
 		return nil, err
 	}
-	sortTodosByMode(todos, taskSortSequence)
+	sortTodosByMode(todos, taskSortSequence, score)
 	return todos, nil
 }
 
@@ -745,28 +745,47 @@ func safeSize(raw int, taskID string) todo.Size {
 
 // sqliteRepo is the SQLite Repository adapter. It reuses the package-level
 // connection opened lazily by openStore.
-type sqliteRepo struct{}
+//
+// It keeps its own copy of the ranker for the `sequence` column, behind a
+// mutex: SetRanker is called from the Update loop while Save runs on the
+// background save command.
+type sqliteRepo struct {
+	mu   sync.Mutex
+	rank ranker
+}
 
-func newSQLiteRepo() *sqliteRepo { return &sqliteRepo{} }
+func newSQLiteRepo() *sqliteRepo { return &sqliteRepo{rank: defaultRanker()} }
+
+func (r *sqliteRepo) SetRanker(rk ranker) {
+	r.mu.Lock()
+	r.rank = rk
+	r.mu.Unlock()
+}
+
+func (r *sqliteRepo) ranker() ranker {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.rank
+}
 
 func (r *sqliteRepo) Load() ([]todo.Todo, error) {
-	return loadTodos()
+	return loadTodos(r.ranker().scoreNow())
 }
 
 // ResyncScores rewrites the persisted `sequence` column for every live row
-// at the current activeBiases. See Repository.ResyncScores for the why.
+// with the repository's ranker. See Repository.ResyncScores for the why.
 func (r *sqliteRepo) ResyncScores() error {
 	if err := openStore(); err != nil {
 		return err
 	}
-	return resyncSequenceColumn(db)
+	return resyncSequenceColumn(db, r.ranker().scoreNow())
 }
 
 // resyncSequenceColumn is the worker: load the score-relevant fields of
-// every live row, compute sequenceScore in Go using the current activeBiases,
+// every live row, compute its score in Go with the given score function,
 // and write back only the score column in one transaction. Touches no
 // child tables and no other scalars — cheap even on large task sets.
-func resyncSequenceColumn(h *sql.DB) error {
+func resyncSequenceColumn(h *sql.DB, score func(*todo.Todo) float64) error {
 	rows, err := h.Query(`SELECT id, status, priority, size, due_date, created_at
 		FROM todos WHERE deleted = 0`)
 	if err != nil {
@@ -790,7 +809,7 @@ func resyncSequenceColumn(h *sql.DB) error {
 		t.Size = safeSize(size, t.ID)
 		t.DueDate = parseTime(due)
 		t.CreatedAt = parseTime(created)
-		updates = append(updates, scored{t.ID, sequenceScore(&t)})
+		updates = append(updates, scored{t.ID, score(&t)})
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -827,5 +846,5 @@ func (r *sqliteRepo) Save(dirty []*todo.Todo, tombstones map[string]time.Time) e
 	if err := openStore(); err != nil {
 		return err
 	}
-	return saveNormalized(db, dirty, tombstones)
+	return saveNormalized(db, dirty, tombstones, r.ranker().scoreNow())
 }

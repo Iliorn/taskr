@@ -31,6 +31,7 @@ func syncTick() tea.Cmd {
 // merge changed anything on disk, the watcher reloads the UI.
 func (m model) backgroundSync() tea.Cmd {
 	cfg := m.syncCfg
+	b := m.rank.biases
 	return func() tea.Msg {
 		// Stale-device guard — same rule as the CLI path; the Settings footer
 		// carries the pointer to the manual override.
@@ -44,7 +45,7 @@ func (m model) backgroundSync() tea.Cmd {
 			n, _ := countLiveTasks(db)
 			return syncDoneMsg{err: fmt.Errorf("paused: %s — run `taskr sync` in a shell to choose", firstSyncNotice(n))}
 		}
-		sum, err := runClientSync(db, cfg, 20*time.Second)
+		sum, err := runClientSync(db, cfg, 20*time.Second, b)
 		return syncDoneMsg{summary: sum, err: err}
 	}
 }

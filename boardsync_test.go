@@ -135,7 +135,7 @@ func TestClientSyncExchangesTheBoard(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 
-	sum, err := runClientSync(h, syncConfig{URL: ts.URL, Token: "tok"}, 5*time.Second)
+	sum, err := runClientSync(h, syncConfig{URL: ts.URL, Token: "tok"}, 5*time.Second, defaultBiases())
 	if err != nil {
 		t.Fatalf("sync: %v", err)
 	}

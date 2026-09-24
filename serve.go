@@ -203,11 +203,15 @@ func cliNewServerToken() int {
 
 // dbStore adapts the app's SQLite store to tasksync.Store: MergeIn is the
 // transactional load+merge+save (mergeIntoStore), the one write path a sync
-// is allowed to use.
-type dbStore struct{ h *sql.DB }
+// is allowed to use. biases score the rows it writes; the zero value is
+// the neutral default.
+type dbStore struct {
+	h      *sql.DB
+	biases biases
+}
 
 func (d dbStore) MergeIn(incoming []todo.Todo) ([]todo.Todo, bool, error) {
-	return mergeIntoStore(d.h, incoming)
+	return mergeIntoStore(d.h, incoming, d.biases)
 }
 
 // newAppSyncServer wires a tasksync.Server to this app: the shared SQLite
@@ -216,7 +220,7 @@ func (d dbStore) MergeIn(incoming []todo.Todo) ([]todo.Todo, bool, error) {
 func newAppSyncServer(token string) *tasksync.Server {
 	return &tasksync.Server{
 		Token:        token,
-		Store:        dbStore{db},
+		Store:        dbStore{db, storedBiases()},
 		Board:        &boardStore{},
 		Version:      appVersion,
 		Hub:          tasksync.NewHub(),

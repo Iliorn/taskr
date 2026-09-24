@@ -44,7 +44,7 @@ func saveTodos(t *testing.T, h *sql.DB, todos []todo.Todo, tombstones ...string)
 			dead[id] = time.Now()
 		}
 	}
-	if err := saveNormalized(h, ptrs, dead); err != nil {
+	if err := saveNormalized(h, ptrs, dead, defaultRanker().score); err != nil {
 		t.Fatalf("saveNormalized: %v", err)
 	}
 }
@@ -61,7 +61,7 @@ func TestTombstoneCarriesTheDeletionsOwnTime(t *testing.T) {
 	saveTodos(t, h, []todo.Todo{x})
 
 	deletedAt := time.Now().Add(-30 * time.Second)
-	if err := saveNormalized(h, nil, map[string]time.Time{x.ID: deletedAt}); err != nil {
+	if err := saveNormalized(h, nil, map[string]time.Time{x.ID: deletedAt}, defaultRanker().score); err != nil {
 		t.Fatalf("saveNormalized: %v", err)
 	}
 	if got := tombstoneDeletedAt(h, x.ID); !got.Equal(deletedAt) {
@@ -80,7 +80,7 @@ func TestTombstoneOutTimesTheVersionItDeletes(t *testing.T) {
 
 	// A clock that ran backwards between the edit and the delete.
 	stale := x.ModifiedAt.Add(-time.Minute)
-	if err := saveNormalized(h, nil, map[string]time.Time{x.ID: stale}); err != nil {
+	if err := saveNormalized(h, nil, map[string]time.Time{x.ID: stale}, defaultRanker().score); err != nil {
 		t.Fatalf("saveNormalized: %v", err)
 	}
 	if got := tombstoneDeletedAt(h, x.ID); !got.After(x.ModifiedAt) {

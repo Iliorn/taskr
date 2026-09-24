@@ -18,6 +18,8 @@ func (r *fakeRepo) Load() ([]todo.Todo, error) { return r.todos, nil }
 // formula") is vacuously satisfied when nothing is persisted.
 func (r *fakeRepo) ResyncScores() error { return nil }
 
+func (r *fakeRepo) SetRanker(ranker) {}
+
 // Save mirrors the whole-snapshot semantics of the SQLite adapter at this step:
 // dirty contains the full live set, tombstones is nil. We rebuild r.todos from
 // the dirty pointers (deep-copied for test isolation).

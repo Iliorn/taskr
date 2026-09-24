@@ -80,7 +80,7 @@ Import is idempotent: running it a second time with the same file changes nothin
 		return 1
 	}
 
-	merged, changed, err := mergeIntoStore(db, tasks)
+	merged, changed, err := mergeIntoStore(db, tasks, storedBiases())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "taskr import: merge: %v\n", err)
 		return 1

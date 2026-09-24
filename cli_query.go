@@ -41,14 +41,14 @@ func cliList(args []string) int {
 	}
 	opts.onlyReady = *ready
 	opts.onlyBlocked = *blocked
-	_, todos, err := loadForCLI()
+	repo, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
 	blockedSet := buildBlockedSet(todos)
 	rows := filterTopLevel(todos, opts)
-	if err := sortTodosByCLIMode(rows, *sortBy, blockedSet); err != nil {
+	if err := sortTodosByCLIMode(rows, *sortBy, blockedSet, repo.ranker()); err != nil {
 		fmt.Fprintf(os.Stderr, "taskr list: %v\n", err)
 		return 2
 	}
@@ -160,14 +160,14 @@ func cliSearch(args []string) int {
 	default:
 		opts.search = term
 	}
-	_, todos, err := loadForCLI()
+	repo, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
 	blockedSet := buildBlockedSet(todos)
 	rows := filterTopLevel(todos, opts)
-	if err := sortTodosByCLIMode(rows, *sortBy, blockedSet); err != nil {
+	if err := sortTodosByCLIMode(rows, *sortBy, blockedSet, repo.ranker()); err != nil {
 		fmt.Fprintf(os.Stderr, "taskr search: %v\n", err)
 		return 2
 	}
@@ -288,14 +288,14 @@ func cliProjects(args []string) int {
 // dependency targets, not just the top-level rows. Pure; the caller applies any
 // -n limit. `taskr top`'s displayed SCORE stays each task's own score (matching
 // the TUI); only the ordering reflects the boost.
-func rankTopBySequence(todos []*todo.Todo) []todo.Todo {
-	return rankTopBySequenceBy(todos, sequenceScoreNow())
+func rankTopBySequence(todos []*todo.Todo, r ranker) []todo.Todo {
+	return rankTopBySequenceBy(todos, r.scoreNow())
 }
 
 // rankTopBySequenceBy is the shared implementation behind rankTopBySequence and
 // rankTopBySequenceWith. It accepts an arbitrary score function so callers can
-// supply explicit biases/clock (the preview path) or the live globals (the CLI
-// and TUI paths). The rollup and sort logic — subtask inheritance, critical-path
+// supply knob values that are not live yet (the preview path) or the live
+// ranker (the CLI and TUI paths). The rollup and sort logic — subtask inheritance, critical-path
 // dependency boost, fan-out bonus, cycle-safe DFS — is identical for both.
 func rankTopBySequenceBy(todos []*todo.Todo, score func(*todo.Todo) float64) []todo.Todo {
 	// seqRanking (sequence_explain.go) is the same fold; it also hands back the
@@ -314,12 +314,13 @@ func cliTop(args []string) int {
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
-	_, todos, err := loadForCLI()
+	repo, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
-	rows := rankTopBySequence(todoPtrs(todos))
+	rk := repo.ranker()
+	rows := rankTopBySequence(todoPtrs(todos), rk)
 	if *n > 0 && len(rows) > *n {
 		rows = rows[:*n]
 	}
@@ -343,8 +344,8 @@ func cliTop(args []string) int {
 			if !rows[i].DueDate.IsZero() {
 				due = rows[i].DueDate.Format("2006-01-02")
 			}
-			score := sequenceScore(&rows[i])
-			out[i] = scoredOut{rows[i].ID, rows[i].Title, score, sequencePercent(score),
+			score := rk.score(&rows[i])
+			out[i] = scoredOut{rows[i].ID, rows[i].Title, score, rk.percent(score),
 				priorityLetter(rows[i].Priority), due, rows[i].Tags}
 		}
 		return emitJSON(out)
@@ -372,7 +373,7 @@ func cliTop(args []string) int {
 			}
 			tags := truncate(tagStrings[i], tagW)
 			fmt.Printf("%-8s  %5s  %-3s  %-10s  %-*s  %s\n",
-				rows[i].ID[:8], formatSequencePercent(sequenceScore(&rows[i])),
+				rows[i].ID[:8], rk.formatPercent(rk.score(&rows[i])),
 				priorityLetter(rows[i].Priority), due, tagW, tags,
 				truncate(rows[i].Title, 60))
 		}
@@ -380,7 +381,7 @@ func cliTop(args []string) int {
 	}
 	for i := range rows {
 		fmt.Printf("%-8s %5s  %s\n", rows[i].ID[:8],
-			formatSequencePercent(sequenceScore(&rows[i])), truncate(rows[i].Title, 60))
+			rk.formatPercent(rk.score(&rows[i])), truncate(rows[i].Title, 60))
 	}
 	return 0
 }

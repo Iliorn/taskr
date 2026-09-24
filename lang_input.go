@@ -76,7 +76,7 @@ var extraInputAliases = map[language]map[string]string{
 
 // activeInputWords maps a localized word to the English keyword the grammar
 // switches on. It is a package-level global rebuilt by applyLang, following the
-// applyTheme / applyBiases pattern — the parsers read it directly rather than
+// applyTheme / applyLang pattern — the parsers read it directly rather than
 // being handed a vocabulary. English boots with an empty map, which is exactly
 // right: with no aliases, only English parses.
 var activeInputWords = map[string]string{}

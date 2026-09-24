@@ -71,7 +71,7 @@ func TestMergeSurvivesConcurrentLocalWrite(t *testing.T) {
 	}
 	t.Cleanup(func() { mergeStoreTestHook = nil })
 
-	merged, changed, err := mergeIntoStore(h1, []todo.Todo{incoming})
+	merged, changed, err := mergeIntoStore(h1, []todo.Todo{incoming}, defaultBiases())
 	if err != nil {
 		t.Fatalf("mergeIntoStore: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestMergeIntoStoreNoOpDoesNotWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	_, changed, err := mergeIntoStore(h, loaded)
+	_, changed, err := mergeIntoStore(h, loaded, defaultBiases())
 	if err != nil {
 		t.Fatalf("mergeIntoStore: %v", err)
 	}

@@ -280,7 +280,7 @@ func loadTodosJSON() ([]todo.Todo, error) {
 		return loadBackup()
 	}
 
-	sortTodosByMode(todos, taskSortSequence)
+	sortTodosByMode(todos, taskSortSequence, defaultRanker().scoreNow())
 	return todos, nil
 }
 
@@ -417,7 +417,7 @@ func sortTodoPtrsBySequence(todos []*todo.Todo, rollup map[string]float64, block
 
 // sortTodosByMode sorts todos by the given mode. After the sequencing engine
 // only two modes exist; any other value falls through to Sequence.
-func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
+func sortTodosByMode(todos []todo.Todo, mode taskSortMode, score func(*todo.Todo) float64) {
 	if len(todos) <= 1 {
 		return
 	}
@@ -429,7 +429,7 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode) {
 		// intent as "show me the quick wins".
 		sortTodoValues(todos, lessBySize)
 	default: // taskSortSequence
-		sortTodosBySequenceWithRollup(todos, nil)
+		sortTodosBySequenceWithRollup(todos, nil, nil, score)
 	}
 }
 
@@ -446,15 +446,7 @@ func sortTodoValues(todos []todo.Todo, less func(a, b *todo.Todo) bool) {
 // parent doesn't disappear into the bottom of the list. Passing nil
 // preserves the original behaviour (used by callers that don't have the
 // child set on hand, e.g. on-disk loads).
-func sortTodosBySequenceWithRollup(todos []todo.Todo, rollup map[string]float64) {
-	sortTodosBySequenceWithRollupBy(todos, rollup, nil, sequenceScoreNow())
-}
-
-// sortTodosBySequenceWithRollupBy is the parameterised form of
-// sortTodosBySequenceWithRollup: it accepts an arbitrary score function so
-// callers can sort with explicit biases/clock rather than the activeBiases /
-// activeHeat globals.
-func sortTodosBySequenceWithRollupBy(todos []todo.Todo, rollup map[string]float64, blocked map[string]bool, score func(*todo.Todo) float64) {
+func sortTodosBySequenceWithRollup(todos []todo.Todo, rollup map[string]float64, blocked map[string]bool, score func(*todo.Todo) float64) {
 	if len(todos) <= 1 {
 		return
 	}

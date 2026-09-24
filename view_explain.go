@@ -291,7 +291,7 @@ func (m model) renderExplainFullscreen() string {
 	if t == nil {
 		t = m.currentTodo()
 	}
-	e := explainSequenceFor(t, m.allTodos())
+	e := m.rank.explain(t, m.allTodos())
 
 	b := getBuilder()
 	defer putBuilder(b)

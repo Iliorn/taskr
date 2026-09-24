@@ -13,25 +13,25 @@ import (
 )
 
 // loadForCLI opens the store with the user's persisted biases and stage list
-// applied so any score-based or stage-aware output matches the TUI.
-func loadForCLI() (Repository, []todo.Todo, error) {
+// applied so any score-based or stage-aware output matches the TUI. The
+// returned repository carries the ranker (repo.ranker()) the command scores with.
+func loadForCLI() (*sqliteRepo, []todo.Todo, error) {
 	settings, sErr := loadSettings()
 	if sErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
-	applyBiases(biasesFromSettings(settings))
 	applyBoardSettings(settings)
 	// The CLI has no keys of its own, but it persists settings on some paths;
 	// applying the overlay keeps a round trip from dropping it.
 	keys, _ := sanitizeKeyOverrides(settings.Keys)
 	applyKeys(keys)
 	repo := newSQLiteRepo()
+	repo.SetRanker(ranker{biases: biasesFromSettings(settings)})
 	todos, err := repo.Load()
 	if err == nil {
 		// Momentum reads recent activity; snapshot it so CLI output ranks
 		// the same way the TUI does after its cache refresh.
-		applyActivityHeat(computeActivityHeat(time.Now(), todoPtrs(todos)))
-		applyScoreMax(maxRankedScore(todoPtrs(todos)))
+		repo.SetRanker(repo.ranker().refreshed(time.Now(), todoPtrs(todos)))
 	}
 	return repo, todos, err
 }
@@ -417,14 +417,14 @@ func cliSortNames() []string {
 // unfinished dependency below work that can be started, in the sequence order
 // only — an explicit --sort=due or --sort=size is an instruction to order by
 // that key alone.
-func sortTodosByCLIMode(rows []todo.Todo, mode string, blocked map[string]bool) error {
+func sortTodosByCLIMode(rows []todo.Todo, mode string, blocked map[string]bool, rk ranker) error {
 	switch mode {
 	case "", "seq":
-		sortTodosBySequenceWithRollupBy(rows, nil, blocked, sequenceScoreNow())
+		sortTodosBySequenceWithRollup(rows, nil, blocked, rk.scoreNow())
 	case "due":
-		sortTodosByMode(rows, taskSortDueDate)
+		sortTodosByMode(rows, taskSortDueDate, nil)
 	case "size":
-		sortTodosByMode(rows, taskSortSize)
+		sortTodosByMode(rows, taskSortSize, nil)
 	case "age":
 		sortTodoValues(rows, func(a, b *todo.Todo) bool {
 			if !a.CreatedAt.Equal(b.CreatedAt) {

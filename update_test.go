@@ -569,36 +569,31 @@ func TestPKeyCyclesPriority(t *testing.T) {
 // ── Bias cycle on Settings tab ───────────────────────────────────────────────
 
 func TestBiasCycleOnSettingsTab(t *testing.T) {
-	// Reset to a known starting point so prior tests' bias mutations don't
-	// leak in. applyBiases is global state — explicit reset is the safest
-	// guard for parallel-safety even with -race off.
-	applyBiases(biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true})
-	defer applyBiases(biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true})
-
 	m := modelWithTasks(t)
+	m.rank.biases = biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}
 	m.tab = tabSettings
 	m.settingsCursor = settingBiasDeadline
 
 	m = sendKey(t, m, "right")
-	if activeBiases.Deadline != biasIntense {
-		t.Errorf("after right on Deadline row: %v, want Intense (Balanced → next)", activeBiases.Deadline)
+	if m.rank.biases.Deadline != biasIntense {
+		t.Errorf("after right on Deadline row: %v, want Intense (Balanced → next)", m.rank.biases.Deadline)
 	}
 	m = sendKey(t, m, "left")
-	if activeBiases.Deadline != biasBalanced {
-		t.Errorf("after left: %v, want Balanced", activeBiases.Deadline)
+	if m.rank.biases.Deadline != biasBalanced {
+		t.Errorf("after left: %v, want Balanced", m.rank.biases.Deadline)
 	}
 
 	// Other rows are not touched by this row's cycle.
-	if activeBiases.Priority != biasBalanced || activeBiases.Momentum != biasBalanced {
+	if m.rank.biases.Priority != biasBalanced || m.rank.biases.Momentum != biasBalanced {
 		t.Errorf("siblings should be untouched: Priority=%v Momentum=%v",
-			activeBiases.Priority, activeBiases.Momentum)
+			m.rank.biases.Priority, m.rank.biases.Momentum)
 	}
 
 	// Move cursor to the Momentum row and confirm the cycle hits that one.
 	m.settingsCursor = settingBiasMomentum
 	m = sendKey(t, m, "right")
-	if activeBiases.Momentum != biasIntense {
-		t.Errorf("after right on Momentum row: %v, want Intense", activeBiases.Momentum)
+	if m.rank.biases.Momentum != biasIntense {
+		t.Errorf("after right on Momentum row: %v, want Intense", m.rank.biases.Momentum)
 	}
 }
 
@@ -829,8 +824,7 @@ func TestPriorityCycleKeepsCursorOnTask(t *testing.T) {
 	// (both tasks have none → no reorder) or zero the Priority weight. Pin both
 	// to the score-based defaults and rebuild the initial ordering.
 	m.taskSort = taskSortSequence
-	applyBiases(defaultBiases())
-	defer applyBiases(defaultBiases())
+	m.rank.biases = defaultBiases()
 	m.cache.dirty = true
 	m.ensureCache()
 

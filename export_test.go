@@ -127,7 +127,7 @@ func TestExportImportRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseExportData: %v", err)
 	}
-	_, _, err = mergeIntoStore(fresh, tasks)
+	_, _, err = mergeIntoStore(fresh, tasks, defaultBiases())
 	if err != nil {
 		t.Fatalf("mergeIntoStore: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestImportLegacyBareArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseExportData: %v", err)
 	}
-	_, _, err = mergeIntoStore(h, tasks)
+	_, _, err = mergeIntoStore(h, tasks, defaultBiases())
 	if err != nil {
 		t.Fatalf("mergeIntoStore: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestImportIdempotent(t *testing.T) {
 	}
 
 	// First import: must change the store.
-	_, changed1, err := mergeIntoStore(h, tasks)
+	_, changed1, err := mergeIntoStore(h, tasks, defaultBiases())
 	if err != nil {
 		t.Fatalf("first mergeIntoStore: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestImportIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseExportData (second): %v", err)
 	}
-	_, changed2, err := mergeIntoStore(h, tasks2)
+	_, changed2, err := mergeIntoStore(h, tasks2, defaultBiases())
 	if err != nil {
 		t.Fatalf("second mergeIntoStore: %v", err)
 	}
@@ -331,7 +331,7 @@ func TestCliImportStdinLargeSingleLine(t *testing.T) {
 	tomb.Deleted = true
 	tomb.DeletedAt = time.Now()
 	tomb.ModifiedAt = time.Now()
-	if _, _, err := mergeIntoStore(testStore(t), []todo.Todo{tomb}); err != nil {
+	if _, _, err := mergeIntoStore(testStore(t), []todo.Todo{tomb}, defaultBiases()); err != nil {
 		t.Fatalf("cleanup tombstone: %v", err)
 	}
 }

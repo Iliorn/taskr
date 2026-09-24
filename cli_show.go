@@ -30,7 +30,7 @@ func cliShow(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: taskr show <ref>")
 		return 2
 	}
-	_, todos, err := loadForCLI()
+	repo, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
@@ -52,7 +52,7 @@ func cliShow(args []string) int {
 		}
 	}
 	sort.Slice(subs, func(i, j int) bool { return subs[i].CreatedAt.Before(subs[j].CreatedAt) })
-	printTaskDetail(t, subs, todos)
+	printTaskDetail(t, subs, todos, repo.ranker())
 	return 0
 }
 
@@ -72,7 +72,7 @@ func cliWhy(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: taskr why <ref>")
 		return 2
 	}
-	_, todos, err := loadForCLI()
+	repo, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
@@ -83,7 +83,7 @@ func cliWhy(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	e := explainSequenceFor(t, ptrs)
+	e := repo.ranker().explain(t, ptrs)
 	if *asJSON {
 		return emitJSON(seqExplainJSONOf(e))
 	}
@@ -138,7 +138,7 @@ func seqExplainJSONOf(e seqExplain) seqExplainJSON {
 	return out
 }
 
-func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo) {
+func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo, rk ranker) {
 	fmt.Printf("ID:       %s\n", t.ID)
 	fmt.Printf("Title:    %s\n", t.Title)
 	status := "pending"
@@ -174,14 +174,14 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo) {
 	fmt.Printf("Modified: %s\n", t.ModifiedAt.Format("2006-01-02 15:04"))
 
 	if t.Status == todo.Pending {
-		sc := sequenceComponentsFor(t)
+		sc := rk.components(t)
 		// Spelled-out component names instead of single letters — the previous
 		// `D/P/M/A` was a stat-readout cliff for anyone not already steeped in
 		// the sequencing engine's terminology.
 		// Percent of the current field, with the points that produced it —
 		// `taskr why` spells out where each of them came from.
 		fmt.Printf("Score:    %s  (%.1f pts: Deadline %.1f · Priority %.1f · Momentum %.1f · Size %.1f · Age %.1f)\n",
-			formatSequencePercent(sc.Total), sc.Total,
+			rk.formatPercent(sc.Total), sc.Total,
 			sc.Urgency, sc.Importance, sc.Momentum, sc.Size, sc.Age)
 	}
 	if len(subs) > 0 {
@@ -334,7 +334,7 @@ func cliStats(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	_, todos, err := loadForCLI()
+	repo, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
@@ -353,7 +353,7 @@ func cliStats(args []string) int {
 	if *seq {
 		// Heat always reconstructs from the full set: completions outside the
 		// filter still warmed their projects/tags at the time.
-		a := analyzeSeqMisses(todoPtrs(scoped), todoPtrs(todos), seqHitWindow, activeBiases)
+		a := analyzeSeqMisses(todoPtrs(scoped), todoPtrs(todos), seqHitWindow, repo.ranker().biases)
 		s.Seq = &a
 	}
 	switch strings.ToLower(*format) {
@@ -392,7 +392,7 @@ func cliStats(args []string) int {
 		}
 		fmt.Println(line)
 		if s.Seq != nil {
-			fmt.Print("\n" + renderSeqAnalysisText(*s.Seq, activeBiases))
+			fmt.Print("\n" + renderSeqAnalysisText(*s.Seq, repo.ranker().biases))
 		}
 		return 0
 	}

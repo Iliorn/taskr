@@ -281,7 +281,7 @@ func TestWhyKeyOpensTheOverlayOnTheCurrentTask(t *testing.T) {
 func TestOverlayAndCLIAgree(t *testing.T) {
 	m := explainModel(t)
 	tt := m.currentTodo()
-	e := explainSequenceFor(tt, m.allTodos())
+	e := m.rank.explain(tt, m.allTodos())
 
 	plain := strings.Join(explainPlainLines(e), "\n")
 	if !strings.Contains(plain, tt.Title) {
@@ -304,7 +304,7 @@ func TestOverlayAndCLIAgree(t *testing.T) {
 func TestOverlayHonoursTheWidthBudget(t *testing.T) {
 	defer applyLang("en")
 	m := explainModel(t)
-	e := explainSequenceFor(m.currentTodo(), m.allTodos())
+	e := m.rank.explain(m.currentTodo(), m.allTodos())
 	for _, lang := range availableLanguages {
 		applyLang(string(lang))
 		for _, w := range []int{0, 1, 8, 20, 40, 60, 80, 100, 160} {
@@ -327,7 +327,7 @@ func TestOverlayHandlesUnrankedAndMissingTasks(t *testing.T) {
 	sub.ParentID = "p"
 	m := modelWithTasks(t, parent, sub)
 
-	e := explainSequenceFor(m.get("s"), m.allTodos())
+	e := m.rank.explain(m.get("s"), m.allTodos())
 	if e.Pos != 0 {
 		t.Errorf("a subtask reported rank #%d, want unranked", e.Pos)
 	}

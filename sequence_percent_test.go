@@ -70,14 +70,14 @@ func TestPercentPreservesTheOrdering(t *testing.T) {
 	}
 	prev := 101
 	for i := range rows {
-		got := sequencePercent(m.rankedScore(m.get(rows[i].ID)))
+		got := m.rank.percent(m.rankedScore(m.get(rows[i].ID)))
 		if got > prev {
 			t.Errorf("row %d reads %d%% after a row reading %d%% — the scale reordered the list", i, got, prev)
 		}
 		prev = got
 	}
 	// The list is sorted by sequence, so its first row is the top of the field.
-	if top := sequencePercent(sequenceScore(m.get(rows[0].ID))); top != 100 {
+	if top := m.rank.percent(m.rank.score(m.get(rows[0].ID))); top != 100 {
 		t.Errorf("the top row reads %d%%, want 100%%", top)
 	}
 }
@@ -88,8 +88,8 @@ func TestOverlayPercentMatchesTheListColumn(t *testing.T) {
 	m := explainModel(t)
 	for i := range m.cache.active {
 		task := m.get(m.cache.active[i].ID)
-		e := explainSequenceFor(task, m.allTodos())
-		want := formatSequencePercent(sequenceScore(task))
+		e := m.rank.explain(task, m.allTodos())
+		want := m.rank.formatPercent(m.rank.score(task))
 		if got := formatPercentOf(e.Total, e.FieldMax); got != want {
 			t.Errorf("%q: overlay says %s, the list column says %s", task.Title, got, want)
 		}
@@ -100,7 +100,7 @@ func TestOverlayPercentMatchesTheListColumn(t *testing.T) {
 // the live field makes, so the overlay has to state what 100% currently costs.
 func TestOverlayStatesWhatFullScaleCosts(t *testing.T) {
 	m := explainModel(t)
-	e := explainSequenceFor(m.currentTodo(), m.allTodos())
+	e := m.rank.explain(m.currentTodo(), m.allTodos())
 	line := seqScaleLine(e)
 	if !strings.Contains(line, formatPercentOf(e.Total, e.FieldMax)) {
 		t.Errorf("the scale line %q does not name this task's percentage", line)

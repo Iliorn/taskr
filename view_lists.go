@@ -1223,7 +1223,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		// number". Right-aligned in the field so every score ends in the same
 		// column and the % signs line up; the field's trailing listColGap is
 		// the gap to Due.
-		r.add(pal.meta, padRight(padLeft(formatSequencePercent(m.rankedScore(t)), cols.lastW-listColGap), cols.lastW))
+		r.add(pal.meta, padRight(padLeft(m.rank.formatPercent(m.rankedScore(t)), cols.lastW-listColGap), cols.lastW))
 	}
 	if cols.showDue {
 		// Right-aligned for the same reason: "2d" and "20-09-27" share a right
@@ -1498,7 +1498,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingCheckUpdate:       tr("Check for updates"),
 	}
 	agingVal := tr("Off")
-	if activeBiases.Aging {
+	if m.rank.biases.Aging {
 		agingVal = tr("On")
 	}
 	autoCloseVal := tr("Off")
@@ -1553,9 +1553,9 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		}
 	}
 	values := map[int]string{
-		settingBiasDeadline:      biasPickerValue(activeBiases.Deadline),
-		settingBiasPriority:      biasPickerValue(activeBiases.Priority),
-		settingBiasMomentum:      biasPickerValue(activeBiases.Momentum),
+		settingBiasDeadline:      biasPickerValue(m.rank.biases.Deadline),
+		settingBiasPriority:      biasPickerValue(m.rank.biases.Priority),
+		settingBiasMomentum:      biasPickerValue(m.rank.biases.Momentum),
 		settingAging:             "‹ " + agingVal + " ›",
 		settingAutoCloseParent:   "‹ " + autoCloseVal + " ›",
 		settingAutoCloseSubtasks: "‹ " + autoCloseSubsVal + " ›",
@@ -1628,7 +1628,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 			// the whole account the pane gives of a bias change — a prose tagline
 			// for the mix said less than the five rows that actually move.
 			if g.preview {
-				if preview := m.renderSettingsTopPreview(activeBiases, activeHeat, m.frameTime, colW); preview != "" {
+				if preview := m.renderSettingsTopPreview(m.rank.biases, m.rank.heat, m.frameTime, colW); preview != "" {
 					lines = append(lines, strings.Split(strings.TrimRight(preview, "\n"), "\n")...)
 				}
 			}

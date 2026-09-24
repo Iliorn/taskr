@@ -274,6 +274,7 @@ type boardState struct {
 type model struct {
 	Store  // embedded source of truth (tasks map, indexes, undo) — promotes m.tasks, m.add, m.pushUndo, etc.
 	repo   Repository
+	rank   ranker // bias knobs, activity heat and the 100% mark every score reads
 	cursor int
 	tab    tab
 	pane   pane
@@ -484,7 +485,6 @@ func initialModel(repo Repository) model {
 	th := themeByName(settings.Theme)
 	applyTheme(th)
 	applyLang(settings.Language)
-	applyBiases(biasesFromSettings(settings))
 	applyBoardSettings(settings)
 	// A rejected rebind must be visible: silently falling back to the default
 	// looks like the setting was ignored at random.
@@ -512,6 +512,7 @@ func initialModel(repo Repository) model {
 	m := model{
 		Store:             store,
 		repo:              repo,
+		rank:              ranker{biases: biasesFromSettings(settings)},
 		textInput:         ti,
 		searchInput:       si,
 		depSearchInput:    di,
@@ -1339,7 +1340,7 @@ func (m *model) closePendingSubtree(parentID string) []string {
 		if s.IsTimerRunning() {
 			m.stopTimer(s.ID)
 		}
-		captureSeqRankAtDone(m.allTodos(), s)
+		captureSeqRankAtDone(m.rank, m.allTodos(), s)
 		s.Toggle()
 		closed = append(closed, s.ID)
 	}

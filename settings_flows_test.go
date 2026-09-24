@@ -251,11 +251,10 @@ func TestToggleAutoClosePreferencesPersist(t *testing.T) {
 
 func TestToggleAgingFlipsAndPersists(t *testing.T) {
 	m := settingsModel(t)
-	before := activeBiases.Aging
+	before := m.rank.biases.Aging
 	m.toggleAging()
-	defer func() { activeBiases.Aging = before }()
 
-	if activeBiases.Aging == before {
+	if m.rank.biases.Aging == before {
 		t.Fatal("toggleAging did not flip the bias")
 	}
 	// Aging changes the ranking, so the derived caches must be invalidated
@@ -268,9 +267,9 @@ func TestToggleAgingFlipsAndPersists(t *testing.T) {
 	// exactly the kind of inversion a test should pin rather than trust.
 	if got, err := loadSettings(); err != nil {
 		t.Fatal(err)
-	} else if got.SeqAgingDisabled == activeBiases.Aging {
+	} else if got.SeqAgingDisabled == m.rank.biases.Aging {
 		t.Errorf("settings.json SeqAgingDisabled = %v with Aging = %v; they must be inverses",
-			got.SeqAgingDisabled, activeBiases.Aging)
+			got.SeqAgingDisabled, m.rank.biases.Aging)
 	}
 }
 
@@ -442,10 +441,9 @@ func TestSettingsEnterAndRightAgreeOnEveryToggleRow(t *testing.T) {
 	// Half of these rows write package-level globals; put them back so the
 	// rest of the suite sees the state it started with.
 	base := settingsModel(t)
-	lang, biasesBefore, board, themeBefore := activeLang, activeBiases, showBoard, base.themeName
+	lang, board, themeBefore := activeLang, showBoard, base.themeName
 	t.Cleanup(func() {
 		applyLang(string(lang))
-		applyBiases(biasesBefore)
 		applyShowBoard(board)
 		applyTheme(themeByName(themeBefore))
 	})

@@ -73,7 +73,7 @@ func maybeAutoSyncCLI() {
 		fmt.Fprintf(os.Stderr, "taskr sync: auto-sync paused: %s; run `taskr sync` to choose\n", firstSyncNotice(n))
 		return
 	}
-	sum, err := runClientSync(db, cfg, 10*time.Second)
+	sum, err := runClientSync(db, cfg, 10*time.Second, storedBiases())
 	if err == nil {
 		applyBoardFromSync(sum.board)
 	}
@@ -321,7 +321,7 @@ Options:
 	if rc := resolveFirstSync(cfg, *adoptLocal, *adoptRemoteFlag); rc != 0 {
 		return rc
 	}
-	sum, err := runClientSync(db, cfg, 30*time.Second)
+	sum, err := runClientSync(db, cfg, 30*time.Second, storedBiases())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "taskr sync: %v\n", err)
 		return 1
@@ -366,7 +366,7 @@ type syncSummary struct {
 // server, persists the merged set it returns, and logs any local edit that lost
 // a conflict. On error nothing is applied locally, so the local store is left
 // untouched.
-func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummary, error) {
+func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b biases) (syncSummary, error) {
 	local, err := loadTodosForSync(h)
 	if err != nil {
 		return syncSummary{}, err
@@ -403,7 +403,7 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration) (syncSummar
 	// moment either lands before our snapshot or forces a retry; whatever the
 	// server hasn't seen yet goes out on the next sync. Its no-op guard also
 	// keeps the fs watcher from waking the TUI on an unchanged periodic pull.
-	if _, _, err := mergeIntoStore(h, merged); err != nil {
+	if _, _, err := mergeIntoStore(h, merged, b); err != nil {
 		return syncSummary{}, err
 	}
 	// Count live tasks only: the wire sets include every tombstone ever made,

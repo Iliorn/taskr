@@ -112,7 +112,7 @@ func cliDone(args []string) int {
 			t.StopTimer()
 			stopped = append(stopped, t)
 		}
-		captureSeqRankAtDone(todoPtrs(todos), t)
+		captureSeqRankAtDone(repo.ranker(), todoPtrs(todos), t)
 		t.Toggle()
 		closed[t.ID] = true
 		dirty = append(dirty, t)
@@ -138,7 +138,7 @@ func cliDone(args []string) int {
 					s.StopTimer()
 					stopped = append(stopped, s)
 				}
-				captureSeqRankAtDone(todoPtrs(todos), s)
+				captureSeqRankAtDone(repo.ranker(), todoPtrs(todos), s)
 				s.Toggle()
 				closed[s.ID] = true
 				cascaded = append(cascaded, s)

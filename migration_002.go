@@ -129,7 +129,7 @@ func backfillNormalizedTables(tx *sql.Tx) error {
 				return err
 			}
 		}
-		if _, err := updateScalars.Exec(t.Notes, fmtTime(t.CompletedAt), sequenceScore(&t), r.id); err != nil {
+		if _, err := updateScalars.Exec(t.Notes, fmtTime(t.CompletedAt), defaultRanker().score(&t), r.id); err != nil {
 			return err
 		}
 	}

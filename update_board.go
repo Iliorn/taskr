@@ -51,7 +51,7 @@ func (m *model) closePendingTask(t *todo.Todo) bool {
 	} else {
 		m.pushUndo("toggle done", t.ID)
 	}
-	captureSeqRankAtDone(m.allTodos(), t)
+	captureSeqRankAtDone(m.rank, m.allTodos(), t)
 	t.Toggle()
 	ids := []string{t.ID}
 	if t.IsRecurring() {
