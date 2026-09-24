@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 )
@@ -254,11 +255,11 @@ type serveState struct {
 }
 
 func serveStatePath() string {
-	return pathFor(pathState, "serve-state.json")
+	return paths.For(paths.State, "serve-state.json")
 }
 
 func writeServeState(now time.Time) error {
-	if _, err := ensureDir(pathState); err != nil {
+	if _, err := paths.Ensure(paths.State); err != nil {
 		return err
 	}
 	b, err := json.MarshalIndent(serveState{LastClientSync: now.UTC()}, "", "  ")

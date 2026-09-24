@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/Iliorn/taskr/paths"
 )
 
 // syncadopt.go is the first-sync gate.
@@ -232,7 +234,7 @@ func writePreSyncBackup(h *sql.DB) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if _, err := ensureDir(pathState); err != nil {
+	if _, err := paths.Ensure(paths.State); err != nil {
 		return "", err
 	}
 	b, err := json.MarshalIndent(exportEnvelope{
@@ -243,7 +245,7 @@ func writePreSyncBackup(h *sql.DB) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	path := pathFor(pathState, fmt.Sprintf("pre-sync-backup-%s.json", time.Now().Format("20060102-150405")))
+	path := paths.For(paths.State, fmt.Sprintf("pre-sync-backup-%s.json", time.Now().Format("20060102-150405")))
 	if err := writeFileAtomic(path, b, 0600); err != nil {
 		return "", err
 	}

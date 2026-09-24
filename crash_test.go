@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -88,9 +89,9 @@ func TestCrashGuardIsInertWithoutAPanic(t *testing.T) {
 	if lastCrashReport != "" {
 		t.Fatalf("a quiet frame wrote a crash report at %s", lastCrashReport)
 	}
-	stateDir, err := appDir(pathState)
+	stateDir, err := paths.Dir(paths.State)
 	if err != nil {
-		t.Fatalf("appDir: %v", err)
+		t.Fatalf("paths.Dir: %v", err)
 	}
 	matches, _ := filepath.Glob(filepath.Join(stateDir, "crash-*.log"))
 	if len(matches) > 0 {

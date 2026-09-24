@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -140,7 +141,7 @@ func backfillNormalizedTables(tx *sql.Tx) error {
 // alongside the DB so a user can recover if a future migration drops the data
 // column. Returns the path written, or "" if no backup was needed/possible.
 func writePreNormalizeBackup(tx *sql.Tx) (string, error) {
-	dir, err := appDir(pathData)
+	dir, err := paths.Dir(paths.Data)
 	if err != nil {
 		return "", err
 	}

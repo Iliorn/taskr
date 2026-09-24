@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/todo"
 
 	_ "modernc.org/sqlite"
@@ -20,7 +21,7 @@ import (
 // row reappearing.
 
 func dbPath() string {
-	return pathFor(pathData, "tasks.db")
+	return paths.For(paths.Data, "tasks.db")
 }
 
 var (

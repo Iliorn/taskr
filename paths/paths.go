@@ -1,4 +1,4 @@
-package main
+package paths
 
 import (
 	"os"
@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// paths.go decides where taskr keeps its files. There are four kinds and they
+// Package paths decides where taskr keeps its files. There are four kinds and they
 // belong in four places, because that is what the platform conventions say:
 //
 //	config  settings.json, sync.json          — yours to edit, worth backing up
@@ -28,25 +28,26 @@ import (
 // Rule 3 only ever applies to a fresh install, which is why rule 2 has no
 // migration step and no prompt: nothing moves, nothing needs to be told.
 
-const appDirName = "taskr"
+// AppDirName is the directory taskr adds under each platform base.
+const AppDirName = "taskr"
 
-// legacyDirName is the single directory every version before the XDG split
+// LegacyDirName is the single directory every version before the XDG split
 // used. Its presence is what pins an existing install to it.
-const legacyDirName = ".taskr"
+const LegacyDirName = ".taskr"
 
-// pathKind is which of the four directories a file belongs in.
-type pathKind int
+// Kind is which of the four directories a file belongs in.
+type Kind int
 
 const (
-	pathConfig pathKind = iota
-	pathData
-	pathState
-	pathCache
+	Config Kind = iota
+	Data
+	State
+	Cache
 )
 
-// taskrHomeOverride returns TASKR_HOME, expanded, or "" when unset. It collapses
+// HomeOverride returns TASKR_HOME, expanded, or "" when unset. It collapses
 // all four kinds into one directory.
-func taskrHomeOverride() string {
+func HomeOverride() string {
 	return strings.TrimSpace(os.Getenv("TASKR_HOME"))
 }
 
@@ -56,17 +57,17 @@ func legacyHome() string {
 	if err != nil {
 		return ""
 	}
-	dir := filepath.Join(home, legacyDirName)
+	dir := filepath.Join(home, LegacyDirName)
 	if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
 		return dir
 	}
 	return ""
 }
 
-// appDir resolves one of the four directories. It does not create anything —
-// callers that write go through ensureDir.
-func appDir(kind pathKind) (string, error) {
-	if override := taskrHomeOverride(); override != "" {
+// Dir resolves one of the four directories. It does not create anything —
+// callers that write go through Ensure.
+func Dir(kind Kind) (string, error) {
+	if override := HomeOverride(); override != "" {
 		return override, nil
 	}
 	if legacy := legacyHome(); legacy != "" {
@@ -76,13 +77,13 @@ func appDir(kind pathKind) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, appDirName), nil
+	return filepath.Join(base, AppDirName), nil
 }
 
 // platformBase is the parent directory for a kind, before the "taskr" element.
 // An explicitly set XDG variable wins on every platform: someone who exports
 // XDG_DATA_HOME on macOS or Windows means it.
-func platformBase(kind pathKind) (string, error) {
+func platformBase(kind Kind) (string, error) {
 	if dir := xdgFromEnv(kind); dir != "" {
 		return dir, nil
 	}
@@ -95,7 +96,7 @@ func platformBase(kind pathKind) (string, error) {
 		// Roaming for config (it follows the user between machines), Local for
 		// everything else (a database and a log do not belong in a roaming
 		// profile).
-		if kind == pathConfig {
+		if kind == Config {
 			if v := os.Getenv("APPDATA"); v != "" {
 				return v, nil
 			}
@@ -108,7 +109,7 @@ func platformBase(kind pathKind) (string, error) {
 	case "darwin":
 		// macOS has no state directory of its own; Application Support is
 		// where both config and data live, and Caches is separate.
-		if kind == pathCache {
+		if kind == Cache {
 			return filepath.Join(home, "Library", "Caches"), nil
 		}
 		return filepath.Join(home, "Library", "Application Support"), nil
@@ -117,16 +118,16 @@ func platformBase(kind pathKind) (string, error) {
 	}
 }
 
-func xdgFromEnv(kind pathKind) string {
+func xdgFromEnv(kind Kind) string {
 	var name string
 	switch kind {
-	case pathConfig:
+	case Config:
 		name = "XDG_CONFIG_HOME"
-	case pathData:
+	case Data:
 		name = "XDG_DATA_HOME"
-	case pathState:
+	case State:
 		name = "XDG_STATE_HOME"
-	case pathCache:
+	case Cache:
 		name = "XDG_CACHE_HOME"
 	}
 	v := strings.TrimSpace(os.Getenv(name))
@@ -140,22 +141,22 @@ func xdgFromEnv(kind pathKind) string {
 }
 
 // xdgDefault is the spec's fallback for each kind, relative to $HOME.
-func xdgDefault(kind pathKind) []string {
+func xdgDefault(kind Kind) []string {
 	switch kind {
-	case pathConfig:
+	case Config:
 		return []string{".config"}
-	case pathData:
+	case Data:
 		return []string{".local", "share"}
-	case pathState:
+	case State:
 		return []string{".local", "state"}
 	default:
 		return []string{".cache"}
 	}
 }
 
-// ensureDir resolves a kind and creates it, so writers can just ask for a path.
-func ensureDir(kind pathKind) (string, error) {
-	dir, err := appDir(kind)
+// Ensure resolves a kind and creates it, so writers can just ask for a path.
+func Ensure(kind Kind) (string, error) {
+	dir, err := Dir(kind)
 	if err != nil {
 		return "", err
 	}
@@ -165,20 +166,20 @@ func ensureDir(kind pathKind) (string, error) {
 	return dir, nil
 }
 
-// pathFor is the read-side helper: the full path of a file, whether or not its
+// For is the read-side helper: the full path of a file, whether or not its
 // directory exists yet. An unresolvable home yields "", which every caller
 // already treats as "no such file".
-func pathFor(kind pathKind, name ...string) string {
-	dir, err := appDir(kind)
+func For(kind Kind, name ...string) string {
+	dir, err := Dir(kind)
 	if err != nil {
 		return ""
 	}
 	return filepath.Join(append([]string{dir}, name...)...)
 }
 
-// usingLegacyLayout reports whether taskr is reading and writing the old single
+// UsingLegacyLayout reports whether taskr is reading and writing the old single
 // ~/.taskr directory. The doctor says so, since it explains why the XDG paths
 // are not in use.
-func usingLegacyLayout() bool {
-	return taskrHomeOverride() == "" && legacyHome() != ""
+func UsingLegacyLayout() bool {
+	return HomeOverride() == "" && legacyHome() != ""
 }

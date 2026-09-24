@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 )
@@ -314,7 +315,7 @@ func TestCLISyncRefusesStale(t *testing.T) {
 	// Only the data directory is created eagerly (paths.go); a writer of the
 	// state directory has to make it, which is what writeSyncState does before
 	// it writes this same file.
-	if _, err := ensureDir(pathState); err != nil {
+	if _, err := paths.Ensure(paths.State); err != nil {
 		t.Fatalf("ensure state dir: %v", err)
 	}
 	old := syncState{LastSync: time.Now().Add(-staleSyncThreshold - 24*time.Hour)}

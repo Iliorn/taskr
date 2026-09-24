@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/Iliorn/taskr/paths"
 )
 
 // clearPathEnv puts one test in a known state: a fresh home, no XDG variables,
@@ -22,7 +24,7 @@ func clearPathEnv(t *testing.T) string {
 // opinion about the XDG spec.
 func TestLegacyDirectoryKeepsItsFiles(t *testing.T) {
 	home := clearPathEnv(t)
-	legacy := filepath.Join(home, legacyDirName)
+	legacy := filepath.Join(home, paths.LegacyDirName)
 	if err := os.MkdirAll(legacy, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +38,7 @@ func TestLegacyDirectoryKeepsItsFiles(t *testing.T) {
 			t.Errorf("%s = %q, want it left in the legacy directory %q", name, got, legacy)
 		}
 	}
-	if !usingLegacyLayout() {
+	if !paths.UsingLegacyLayout() {
 		t.Error("usingLegacyLayout() = false with ~/.taskr present")
 	}
 }
@@ -44,10 +46,10 @@ func TestLegacyDirectoryKeepsItsFiles(t *testing.T) {
 // A file called .taskr is not a legacy install.
 func TestLegacyDetectionIgnoresAFile(t *testing.T) {
 	home := clearPathEnv(t)
-	if err := os.WriteFile(filepath.Join(home, legacyDirName), []byte("not a dir"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(home, paths.LegacyDirName), []byte("not a dir"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if usingLegacyLayout() {
+	if paths.UsingLegacyLayout() {
 		t.Error("a regular file named .taskr was treated as the legacy directory")
 	}
 }
@@ -63,7 +65,7 @@ func TestTaskrHomeOverridesEverything(t *testing.T) {
 			t.Errorf("%q ignored TASKR_HOME=%q", got, one)
 		}
 	}
-	if usingLegacyLayout() {
+	if paths.UsingLegacyLayout() {
 		t.Error("TASKR_HOME should not report the legacy layout")
 	}
 }
@@ -87,7 +89,7 @@ func TestExplicitXDGWinsEverywhere(t *testing.T) {
 		{notesFilePath("id"), cache, "editor scratch"},
 	}
 	for _, c := range cases {
-		want := filepath.Join(c.wantBase, appDirName)
+		want := filepath.Join(c.wantBase, paths.AppDirName)
 		if !strings.HasPrefix(c.got, want) {
 			t.Errorf("%s = %q, want it under %q", c.name, c.got, want)
 		}
@@ -114,19 +116,19 @@ func TestPlatformDefaults(t *testing.T) {
 	case "windows":
 		// The test home has no APPDATA/LOCALAPPDATA of its own, so assert the
 		// shape rather than the exact root: config roams, data does not.
-		if !strings.Contains(db, appDirName) || !strings.Contains(settings, appDirName) {
+		if !strings.Contains(db, paths.AppDirName) || !strings.Contains(settings, paths.AppDirName) {
 			t.Errorf("windows paths missing the app directory: %q / %q", db, settings)
 		}
 	case "darwin":
-		want := filepath.Join(home, "Library", "Application Support", appDirName)
+		want := filepath.Join(home, "Library", "Application Support", paths.AppDirName)
 		if filepath.Dir(db) != want {
 			t.Errorf("database = %q, want %q", db, want)
 		}
 	default:
 		for _, c := range []struct{ got, want, name string }{
-			{db, filepath.Join(home, ".local", "share", appDirName), "database"},
-			{settings, filepath.Join(home, ".config", appDirName), "settings"},
-			{undo, filepath.Join(home, ".local", "state", appDirName), "undo"},
+			{db, filepath.Join(home, ".local", "share", paths.AppDirName), "database"},
+			{settings, filepath.Join(home, ".config", paths.AppDirName), "settings"},
+			{undo, filepath.Join(home, ".local", "state", paths.AppDirName), "undo"},
 		} {
 			if filepath.Dir(c.got) != c.want {
 				t.Errorf("%s = %q, want it in %q", c.name, c.got, c.want)
@@ -152,9 +154,9 @@ func TestTheFourKindsAreDistinct(t *testing.T) {
 	case "windows":
 		want = 2 // Roaming + Local
 	}
-	seen := map[string][]pathKind{}
-	for _, kind := range []pathKind{pathConfig, pathData, pathState, pathCache} {
-		dir, err := appDir(kind)
+	seen := map[string][]paths.Kind{}
+	for _, kind := range []paths.Kind{paths.Config, paths.Data, paths.State, paths.Cache} {
+		dir, err := paths.Dir(kind)
 		if err != nil {
 			t.Fatal(err)
 		}

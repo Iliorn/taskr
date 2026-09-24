@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/tasksync"
 )
 
@@ -22,7 +23,7 @@ import (
 // fleet's columns are not what someone expects.
 type boardStore struct{ mu sync.Mutex }
 
-func boardStatePath() string { return pathFor(pathState, "board.json") }
+func boardStatePath() string { return paths.For(paths.State, "board.json") }
 
 // LoadBoard returns the stored list. A missing file is the zero Board with no
 // error — a server that has never been told anything has nothing to say, which
@@ -47,7 +48,7 @@ func (b *boardStore) LoadBoard() (tasksync.Board, error) {
 func (b *boardStore) SaveBoard(board tasksync.Board) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if _, err := ensureDir(pathState); err != nil {
+	if _, err := paths.Ensure(paths.State); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(board, "", "  ")

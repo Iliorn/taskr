@@ -8,19 +8,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/todo"
 )
 
 // getStoragePath is the legacy JSON file, kept only as the first-run import
 // source. It sits with the database: it *was* the database.
 func getStoragePath() string {
-	return pathFor(pathData, "tasks.json")
+	return paths.For(paths.Data, "tasks.json")
 }
 
 // taskrDir is the directory holding tasks.db — what the filesystem watcher
 // watches and what the doctor reports as the data directory.
 func taskrDir() string {
-	dir, _ := appDir(pathData)
+	dir, _ := paths.Dir(paths.Data)
 	return dir
 }
 
@@ -159,7 +160,7 @@ func biasesFromSettings(s appSettings) biases {
 }
 
 func settingsPath() string {
-	return pathFor(pathConfig, "settings.json")
+	return paths.For(paths.Config, "settings.json")
 }
 
 // loadSettings reads ~/.taskr/settings.json and applies any schema migration.
@@ -191,7 +192,7 @@ func saveSettings(s appSettings) error {
 	if err != nil {
 		return err
 	}
-	if _, err := ensureDir(pathConfig); err != nil {
+	if _, err := paths.Ensure(paths.Config); err != nil {
 		return err
 	}
 	return writeFileAtomic(settingsPath(), data, 0644)
@@ -199,7 +200,7 @@ func saveSettings(s appSettings) error {
 
 // ensureStorageDir creates the data directory (the database's home).
 func ensureStorageDir() error {
-	_, err := ensureDir(pathData)
+	_, err := paths.Ensure(paths.Data)
 	return err
 }
 

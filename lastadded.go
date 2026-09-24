@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"strings"
+
+	"github.com/Iliorn/taskr/paths"
 )
 
 // The "last added" pointer backs the `dep:^` / `--depends ^` shorthand: a
@@ -14,11 +16,11 @@ import (
 // both ends — a missing file just means "nothing to chain to yet".
 
 func lastAddedPath() string {
-	return pathFor(pathState, "last-added")
+	return paths.For(paths.State, "last-added")
 }
 
 func saveLastAddedID(id string) {
-	if _, err := ensureDir(pathState); err != nil {
+	if _, err := paths.Ensure(paths.State); err != nil {
 		return
 	}
 	_ = writeFileAtomic(lastAddedPath(), []byte(id+"\n"), 0o644)

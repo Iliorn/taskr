@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -90,7 +91,7 @@ func saveOnCrash(m *model) (ok bool) {
 // the layout math is where the panics have historically been, and a report
 // from an 8-column window says so immediately.
 func writeCrashReport(r any, stack []byte, stage string, m *model) string {
-	dir, err := ensureDir(pathState)
+	dir, err := paths.Ensure(paths.State)
 	if err != nil {
 		return ""
 	}

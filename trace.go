@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -53,10 +54,10 @@ func tracePath() string {
 	case "", "0", "false", "off":
 		return ""
 	case "1", "true", "on":
-		if _, err := ensureDir(pathState); err != nil {
+		if _, err := paths.Ensure(paths.State); err != nil {
 			return ""
 		}
-		return pathFor(pathState, "trace.log")
+		return paths.For(paths.State, "trace.log")
 	}
 	return v
 }

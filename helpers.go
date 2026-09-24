@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -641,7 +642,7 @@ const editorDraftKey = "__taskr_input_draft__"
 // the notes themselves live in the database, and this copy exists only for the
 // seconds an editor is open.
 func notesFilePath(taskID string) string {
-	dir, err := ensureDir(pathCache)
+	dir, err := paths.Ensure(paths.Cache)
 	if err != nil {
 		return ""
 	}

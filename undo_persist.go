@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -39,7 +40,7 @@ type persistedUndoEntry struct {
 }
 
 func undoPersistPath() string {
-	return pathFor(pathState, undoPersistFile)
+	return paths.For(paths.State, undoPersistFile)
 }
 
 func isPersistedDelete(desc string) bool {

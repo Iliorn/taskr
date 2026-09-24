@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -113,19 +114,19 @@ func diagnoseStorage() []diagnostic {
 	var out []diagnostic
 	dir := taskrDir()
 	out = append(out, diagnostic{Name: "data directory", Value: dir})
-	if usingLegacyLayout() {
+	if paths.UsingLegacyLayout() {
 		out = append(out, diagnostic{
-			Name: "layout", Value: "legacy (~/" + legacyDirName + ")",
+			Name: "layout", Value: "legacy (~/" + paths.LegacyDirName + ")",
 			Detail: "kept because the directory exists; move it to switch to the XDG paths, or set TASKR_HOME",
 		})
-	} else if home := taskrHomeOverride(); home != "" {
+	} else if home := paths.HomeOverride(); home != "" {
 		out = append(out, diagnostic{Name: "layout", Value: "single directory (TASKR_HOME)"})
 	} else {
 		for _, k := range []struct {
 			name string
-			kind pathKind
-		}{{"config directory", pathConfig}, {"state directory", pathState}} {
-			if d, err := appDir(k.kind); err == nil {
+			kind paths.Kind
+		}{{"config directory", paths.Config}, {"state directory", paths.State}} {
+			if d, err := paths.Dir(k.kind); err == nil {
 				out = append(out, diagnostic{Name: k.name, Value: d})
 			}
 		}

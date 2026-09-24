@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -303,7 +304,7 @@ func reapplyDroppedEdit(logPath, ref string) int {
 // appendRecoveryMarker appends a "recovered" marker line to the log at path
 // so subsequent --recover listings skip this entry.
 func appendRecoveryMarker(path string, original syncLogEntry) error {
-	if _, err := ensureDir(pathState); err != nil {
+	if _, err := paths.Ensure(paths.State); err != nil {
 		return err
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)

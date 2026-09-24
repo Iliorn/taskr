@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 )
@@ -152,7 +153,7 @@ func TestCLISyncAdoptRemote(t *testing.T) {
 	// rather than cut out of the sentence: on macOS the state directory is
 	// "Application Support", and splitting the notice on spaces is exactly
 	// the mistake a user's shell would make with an unquoted path.
-	matches, err := filepath.Glob(pathFor(pathState, "pre-sync-backup-*.json"))
+	matches, err := filepath.Glob(paths.For(paths.State, "pre-sync-backup-*.json"))
 	if err != nil || len(matches) != 1 {
 		t.Fatalf("want exactly one backup in the state dir, got %v (err %v)", matches, err)
 	}

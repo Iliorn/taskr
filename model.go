@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/paths"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -693,7 +694,7 @@ func startModelWatcher(m *model) {
 	if watcherDisabled() {
 		return
 	}
-	dir, err := appDir(pathData)
+	dir, err := paths.Dir(paths.Data)
 	if err != nil {
 		return
 	}
