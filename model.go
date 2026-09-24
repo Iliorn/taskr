@@ -206,6 +206,7 @@ func (m *model) flashInfo(s string)    { m.err, m.errKind = s, toastInfo }
 // ── Messages ──────────────────────────────────────────────────────────────────
 
 type clearErrMsg struct{}
+type boardFlashMsg struct{ seq int }
 type saveDoneMsg struct{}
 type saveErrMsg struct{ err error }
 type editorFinishedMsg struct {
@@ -261,6 +262,13 @@ type boardState struct {
 	// fit is not a reason to shrink every column past readability, so the view
 	// is a window over the columns that follows the focus — see boardWindow.
 	colOffset int
+	// The landing glow on a card that just moved (board_flash.go): which card,
+	// how many frames are left, and whether it landed in Done. flashSeq tells a
+	// tick from an animation a later move has already replaced.
+	flashID     string
+	flashFrames int
+	flashDone   bool
+	flashSeq    int
 }
 
 // ── Model ─────────────────────────────────────────────────────────────────────

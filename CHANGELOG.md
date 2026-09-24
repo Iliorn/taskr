@@ -13,6 +13,10 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+### Added
+
+- Moving a card on the Board lights it up as it lands; a card moved into Done lands with a green ✓.
+
 ### Fixed
 
 - At 80 columns the tab bar keeps its short labels on every tab instead of collapsing to digits.

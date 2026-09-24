@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Iliorn/taskr/todo"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // update_board.go — Board tab interactions: column focus, card cursor, and
@@ -128,31 +129,34 @@ func (m *model) boardFollow(col int, id string) {
 // boardMoveCard moves the selected card one column left or right: between
 // stages it's a stage edit (undoable), into the last column it completes the
 // task via the shared close path, and out of it stages the reopen confirm —
-// the card then reappears in its stored stage.
-func (m *model) boardMoveCard(dir int) {
+// the card then reappears in its stored stage. A card that moved returns the
+// command that plays its landing glow.
+func (m *model) boardMoveCard(dir int) tea.Cmd {
 	cols := m.boardColumns()
 	col, _ := m.boardSelection(cols)
 	t := m.boardSelectedTask()
 	if t == nil {
-		return
+		return nil
 	}
 	doneCol := doneColumn()
 	target := col + dir
 	if target < 0 || target > doneCol {
-		return
+		return nil
 	}
 	if col == doneCol {
 		m.stageReopenConfirm(t)
-		return
+		return nil
 	}
 	if target == doneCol {
-		if m.closePendingTask(t) {
-			m.boardFollow(doneCol, t.ID)
+		if !m.closePendingTask(t) {
+			return nil
 		}
-		return
+		m.boardFollow(doneCol, t.ID)
+		return m.startBoardFlash(t.ID, true)
 	}
 	m.pushUndo("move stage", t.ID)
 	t.SetStage(pendingStages()[target])
 	m.markModified(t.ID)
 	m.boardFollow(target, t.ID)
+	return m.startBoardFlash(t.ID, false)
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -317,7 +318,9 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 	// The focused column is marked by an accented rule under its header — the
 	// header text itself keeps the standard style so it stays legible.
 	rule := strings.Repeat("─", colW)
-	if cursor != -1 {
+	if f := m.boardColumnFlash(cards); f > 0 {
+		lines = append(lines, lipgloss.NewStyle().Foreground(blendHex(currentTheme.green, m.boardFlashColor(), f)).Render(rule))
+	} else if cursor != -1 {
 		lines = append(lines, selectedStyle.Render(rule))
 	} else {
 		lines = append(lines, dimStyle.Render(rule))
@@ -353,6 +356,17 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 		lines = append(lines, m.renderBoardCard(&cards[i], doneCol, i == cursor, colW, cardLines)...)
 	}
 	return lines
+}
+
+// boardColumnFlash is the glow level of the card that just landed, if it
+// landed in this column, so the column's rule lights with it.
+func (m model) boardColumnFlash(cards []todo.Todo) float64 {
+	for i := range cards {
+		if f := m.boardFlashLevel(cards[i].ID); f > 0 {
+			return f
+		}
+	}
+	return 0
 }
 
 // boardCardBadge is the high-priority "!" the task list uses, on pending cards.
@@ -400,18 +414,26 @@ func (m model) renderBoardCard(t *todo.Todo, doneCol, selected bool, colW, maxLi
 			style = fastSelectedDim
 		}
 	}
+	flash := m.boardFlashLevel(t.ID)
 	out := make([]string, len(text))
 	for i, line := range text {
 		lead := cursorGap
 		if i == 0 && selected {
 			lead = cursorMark
 		}
+		if i == 0 && flash > 0 && m.board.flashDone {
+			lead = "✓ "
+		}
 		line = lead + line
 		if i == len(text)-1 {
 			line += badge
 		}
-		if selected {
+		if selected || flash > 0 {
 			line = padRight(line, colW)
+		}
+		if flash > 0 {
+			out[i] = m.boardFlashStyle(flash).Render(line)
+			continue
 		}
 		out[i] = style.render(line)
 	}

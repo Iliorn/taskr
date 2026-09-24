@@ -91,6 +91,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = ""
 		m.errKind = toastError
 		return m, nil
+	case boardFlashMsg:
+		return m, m.advanceBoardFlash(msg.seq)
 	case timerTickMsg:
 		if m.anyTimerRunning() {
 			// Heartbeat the running timer's last_seen at most once a minute so
@@ -826,11 +828,11 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "H", "<", "shift+left":
 			if m.tab == tabBoard {
-				m.boardMoveCard(-1)
+				flashCmd = m.boardMoveCard(-1)
 			}
 		case "L", ">", "shift+right":
 			if m.tab == tabBoard {
-				m.boardMoveCard(1)
+				flashCmd = m.boardMoveCard(1)
 			}
 
 		case "[", "]":
