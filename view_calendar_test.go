@@ -129,3 +129,27 @@ func TestRenderTimelineEntryOverdue(t *testing.T) {
 		t.Fatalf("timeline entry = %q, want overdue marker", line)
 	}
 }
+
+// TestTimelineTicksTrackedTaskCompletedThatDay asserts a task that was timed
+// and then closed on the same day shows a ✓ on its entry. The separate
+// "done at" row is suppressed when the day has tracked time, so without this
+// the entry kept the timer dot and read as still running.
+func TestTimelineTicksTrackedTaskCompletedThatDay(t *testing.T) {
+	m := newTestModel()
+	day := localMidnight(-1)
+
+	tracked := mkTodo("t", "write report", todo.Done)
+	tracked.TimeEntries = []todo.TimeEntry{{ID: "e1", StartedAt: day.Add(9 * time.Hour), StoppedAt: day.Add(10 * time.Hour)}}
+	tracked.CompletedAt = day.Add(10 * time.Hour)
+	m.add(tracked)
+	m.refreshCaches()
+
+	acts := m.activitiesForDay(day)
+	if len(acts) != 1 || !acts[0].doneThatDay {
+		t.Fatalf("activitiesForDay = %+v, want one entry marked doneThatDay", acts)
+	}
+	line := ansi.Strip(m.renderTimelineEntry(acts[0], 0, 80))
+	if !strings.Contains(line, "✓") || strings.Contains(line, "●") {
+		t.Fatalf("timeline entry = %q, want ✓ instead of the timer dot", line)
+	}
+}

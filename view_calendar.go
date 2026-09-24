@@ -29,6 +29,11 @@ type dayActivity struct {
 	// timeline renders it as "⧗ due" (orange) or "⧗ overdue" (red) when the
 	// due day is already past.
 	due bool
+	// doneThatDay marks a time entry whose task was completed on the same
+	// day. The separate "✓ done at" row is suppressed when the day has
+	// tracked time, so the entry carries the tick itself — otherwise a
+	// finished task showed only the timer dot, which read as still running.
+	doneThatDay bool
 	// parentTitle is set when the activity's task is a subtask; the timeline
 	// shows it as a "↳ parent" reference because subtask titles are often too
 	// terse to identify on their own.
@@ -67,11 +72,13 @@ func (m model) activitiesForDay(day time.Time) []dayActivity {
 				parentTitle = p.Title
 			}
 		}
+		doneToday := t.Status == todo.Done && !t.CompletedAt.IsZero() && dayKey(t.CompletedAt) == key
 		for _, e := range t.TimeEntries {
 			if dayKey(e.StartedAt) != key {
 				continue
 			}
 			acts = append(acts, dayActivity{
+				doneThatDay: doneToday && !e.StoppedAt.IsZero(),
 				taskID:      t.ID,
 				entryID:     e.ID,
 				title:       t.Title,
@@ -86,7 +93,7 @@ func (m model) activitiesForDay(day time.Time) []dayActivity {
 		// the day has no tracked time for that task — otherwise the time
 		// entries already cover the work and a second "done at HH:MM" row
 		// would just be noise.
-		if t.Status == todo.Done && !t.CompletedAt.IsZero() && dayKey(t.CompletedAt) == key {
+		if doneToday {
 			hasTracked := false
 			for _, e := range t.TimeEntries {
 				if dayKey(e.StartedAt) == key {
@@ -555,7 +562,7 @@ func (m model) renderTimelineEntry(a dayActivity, index, innerW int) string {
 
 	dot := timerStyle.Render("●")
 	switch {
-	case a.completed:
+	case a.completed, a.doneThatDay:
 		dot = checkDoneStyle.Render("✓")
 	case a.due:
 		dot = depOverdueStyle.Render("◆")
