@@ -326,7 +326,18 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 		lines = append(lines, dimStyle.Render("  "+tr("empty")))
 		return lines
 	}
-	maxCards := budget - len(lines)
+	// A card takes a second line when the whole column still fits with it: a
+	// board is mostly empty rows, and clipping every title to one line beside
+	// them was the column spending nothing of what it had. Wrapped cards are
+	// spaced by a blank row, or a title's second line reads as the next card.
+	// All or nothing, so a column never mixes wrapped and clipped cards, and a
+	// column too long for that is exactly as it was.
+	room := budget - len(lines)
+	cardLines := 1
+	if need := boardCardLinesNeeded(cards, colW, 2) + len(cards) - 1; need <= room {
+		cardLines = 2
+	}
+	maxCards := room
 	overflow := 0
 	if len(cards) > maxCards {
 		overflow = len(cards) - (maxCards - 1) // reserve the last row for the marker
@@ -336,32 +347,75 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 			lines = append(lines, dimStyle.Render(fmt.Sprintf("  +%d %s", overflow, tr("more"))))
 			break
 		}
-		lines = append(lines, m.renderBoardCard(&cards[i], doneCol, i == cursor, colW))
+		if cardLines > 1 && i > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, m.renderBoardCard(&cards[i], doneCol, i == cursor, colW, cardLines)...)
 	}
 	return lines
 }
 
-// renderBoardCard renders one card row: cursor marker, truncated title, and
-// the high-priority "!" the task list uses. Selected cards get the selection
-// style; Done-column cards are dim.
-func (m model) renderBoardCard(t *todo.Todo, doneCol, selected bool, colW int) string {
-	marker := cursorGap
-	if selected {
-		marker = cursorMark
-	}
-	suffix := ""
+// boardCardBadge is the high-priority "!" the task list uses, on pending cards.
+func boardCardBadge(t *todo.Todo, doneCol bool) string {
 	if !doneCol && t.Priority == todo.PriorityHigh {
-		suffix = " !"
+		return " !"
 	}
-	title := truncate(t.Title, colW-len([]rune(marker))-len([]rune(suffix)))
-	switch {
-	case selected:
-		return selectedStyle.Render(marker + title + suffix)
-	case doneCol:
-		return dimStyle.Render(marker + title + suffix)
-	default:
-		return normalStyle.Render(marker+title) + overdueStyle.Render(suffix)
+	return ""
+}
+
+// boardCardText wraps a card's title into at most maxLines lines, leaving room
+// on the last for the badge, so the "!" sits at the end of the title however
+// it wrapped rather than being the first thing a narrow column clips.
+func boardCardText(t *todo.Todo, doneCol bool, colW, maxLines int) (lines []string, badge string) {
+	badge = boardCardBadge(t, doneCol)
+	textW := colW - len([]rune(cursorGap)) - len([]rune(badge))
+	if maxLines <= 1 || textW < 1 {
+		return []string{truncate(t.Title, textW)}, badge
 	}
+	return clampLines(wrapText(t.Title, textW), maxLines), badge
+}
+
+// boardCardLinesNeeded counts the rows a column's cards take at up to maxLines
+// each — a short title stays one line even when the column wraps.
+func boardCardLinesNeeded(cards []todo.Todo, colW, maxLines int) int {
+	n := 0
+	for i := range cards {
+		lines, _ := boardCardText(&cards[i], false, colW, maxLines)
+		n += len(lines)
+	}
+	return n
+}
+
+// renderBoardCard renders one card, one or two rows: cursor marker, title and
+// the "!" badge. Pending cards take the task list's status tone (overdue, timer
+// running, selected), so a late card reads as late on the Board too; the
+// selected card is padded to the column so the highlight is one block rather
+// than a ragged edge per line. Done-column cards are dim — history, not work.
+func (m model) renderBoardCard(t *todo.Todo, doneCol, selected bool, colW, maxLines int) []string {
+	text, badge := boardCardText(t, doneCol, colW, maxLines)
+	style := taskRowPalette(t, false, selected).status
+	if doneCol {
+		style = fastDim
+		if selected {
+			style = fastSelectedDim
+		}
+	}
+	out := make([]string, len(text))
+	for i, line := range text {
+		lead := cursorGap
+		if i == 0 && selected {
+			lead = cursorMark
+		}
+		line = lead + line
+		if i == len(text)-1 {
+			line += badge
+		}
+		if selected {
+			line = padRight(line, colW)
+		}
+		out[i] = style.render(line)
+	}
+	return out
 }
 
 // renderBoardStacked is the narrow-terminal fallback: stages as full-width
@@ -385,7 +439,7 @@ func (m model) renderBoardStacked(cols [][]todo.Todo, titles []string) string {
 			if c == selCol {
 				cursor = selCursor
 			}
-			sb.WriteString(m.renderBoardCard(&cols[c][i], c == len(cols)-1, i == cursor, availW) + "\n")
+			sb.WriteString(strings.Join(m.renderBoardCard(&cols[c][i], c == len(cols)-1, i == cursor, availW, 1), "\n") + "\n")
 		}
 	}
 	return strings.TrimRight(sb.String(), "\n")

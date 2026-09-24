@@ -413,3 +413,37 @@ func TestBoardDividersRunTheFullPane(t *testing.T) {
 		}
 	}
 }
+
+// A column with room wraps a long title onto a second row rather than clipping
+// it, and spaces the cards so the second row does not read as the next card. A
+// column too long for that falls back to one clipped row per card.
+func TestBoardCardsWrapWhenTheColumnHasRoom(t *testing.T) {
+	long := todo.New("Draft the quarterly budget proposal for the board meeting")
+	short := todo.New("Buy filters")
+	m := newTagModel(long, short)
+	m.tab = tabBoard
+	m.termWidth, m.termHeight = 80, 30
+	m.refreshCaches()
+
+	cards := func(m model) []string {
+		lines := strings.Split(ansi.Strip(m.renderBoardList()), "\n")
+		col := make([]string, 0, len(lines))
+		for _, l := range lines[2:] {
+			col = append(col, strings.TrimSpace(strings.SplitN(l, boardColSep, 2)[0]))
+		}
+		return col
+	}
+	got := cards(m)
+	if !strings.HasSuffix(got[1], "for the") && !strings.Contains(got[1], "proposal") {
+		t.Fatalf("long title did not wrap onto a second row: %q", got[:4])
+	}
+	if got[2] != "" || !strings.Contains(got[3], "Buy filters") {
+		t.Fatalf("wrapped cards are not spaced by a blank row: %q", got[:4])
+	}
+
+	m.termHeight = 10 // too short for two rows a card plus the gap
+	got = cards(m)
+	if !strings.HasSuffix(got[0], ellipsis) || !strings.Contains(got[1], "Buy filters") {
+		t.Fatalf("a crowded column should clip each card to one row: %q", got)
+	}
+}
