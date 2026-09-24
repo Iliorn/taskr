@@ -8,7 +8,7 @@ import (
 	"github.com/Iliorn/taskr/rank"
 )
 
-// view_explain.go is the reading side of sequence_explain.go: the "why this
+// view_explain.go is the reading side of rank/explain.go: the "why this
 // rank" overlay (w on a task) and the shared line building `taskr why` prints.
 // Both surfaces compose the same rows so the two can never explain one score
 // differently.

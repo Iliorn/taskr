@@ -318,7 +318,7 @@ func (r Ranker) Top(todos []*todo.Todo) []todo.Todo {
 // live yet (the preview path) or the live ranker (the CLI and TUI paths). The rollup and sort logic — subtask inheritance, critical-path
 // dependency boost, fan-out bonus, cycle-safe DFS — is identical for both.
 func TopBy(todos []*todo.Todo, score func(*todo.Todo) float64) []todo.Todo {
-	// Ranking (sequence_explain.go) is the same fold; it also hands back the
+	// Ranking (explain.go) is the same fold; it also hands back the
 	// effective score each row sorted by, which only the explain view needs.
 	rows, _ := Ranking(todos, score)
 	return rows

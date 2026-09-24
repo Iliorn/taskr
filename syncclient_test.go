@@ -313,7 +313,7 @@ func TestStaleSyncGuard(t *testing.T) {
 // the unreachable test URL with exit 1, proving it got past the guard).
 func TestCLISyncRefusesStale(t *testing.T) {
 	setTestHome(t, t.TempDir())
-	// Only the data directory is created eagerly (paths.go); a writer of the
+	// Only the data directory is created eagerly (the paths package); a writer of the
 	// state directory has to make it, which is what writeSyncState does before
 	// it writes this same file.
 	if _, err := paths.Ensure(paths.State); err != nil {

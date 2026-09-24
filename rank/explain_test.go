@@ -7,7 +7,7 @@ import (
 	"github.com/Iliorn/taskr/todo"
 )
 
-// sequence_explain_test.go guards the promise the explain view makes: that what
+// explain_test.go guards the promise the explain view makes: that what
 // it says about a score is the score. An explanation that drifts from the
 // arithmetic it describes is worse than no explanation — it teaches a model of
 // the ranking that is wrong.

@@ -24,7 +24,7 @@ func TestTraceOffByDefault(t *testing.T) {
 }
 
 // wantStateFile spells out where the state directory lands per platform,
-// rather than asking paths.go and comparing its answer to itself. The XDG
+// rather than asking the paths package and comparing its answer to itself. The XDG
 // layout was hard-coded here, so this test failed on macOS — where state lives
 // in Application Support — for a reason that had nothing to do with tracing.
 func wantStateFile(home, name string) string {

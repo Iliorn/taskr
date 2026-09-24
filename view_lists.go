@@ -1219,7 +1219,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	r.add(pal.status, cursorStr+checkbox+foldIcon)
 	r.add(pal.status, padRight(label, titleW))
 	if cols.showLast {
-		// Score reads as a percent of the current field (sequence.go): "82%"
+		// Score reads as a percent of the current field (rank/score.go): "82%"
 		// says how close to the top this is, where a bare "24.4" only said "a
 		// number". Right-aligned in the field so every score ends in the same
 		// column and the % signs line up; the field's trailing listColGap is

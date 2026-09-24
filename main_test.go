@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 	os.Setenv("HOME", tmp)
 	os.Setenv("USERPROFILE", tmp) // os.UserHomeDir on Windows
 	// Windows resolves config to %APPDATA% and everything else to
-	// %LOCALAPPDATA% *before* it ever looks at the home directory (paths.go),
+	// %LOCALAPPDATA% *before* it ever looks at the home directory (the paths package),
 	// so redirecting the home alone left the whole Windows suite reading and
 	// writing the runner's real C:\Users\…\AppData\Local\taskr — the
 	// accident this function exists to prevent, and the reason
@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 	// Pointed into the temp home rather than unset, so the branch real Windows
 	// takes is the branch the tests exercise.
 	setWindowsAppData(os.Setenv, tmp)
-	// Paths now resolve through XDG (paths.go), and an XDG_* variable exported
+	// Paths now resolve through XDG (the paths package), and an XDG_* variable exported
 	// in the developer's shell is absolute — it would send the whole suite to
 	// the real ~/.local/share while HOME pointed somewhere harmless. Redirect
 	// them into the temp home rather than unsetting them, so the XDG branch is
@@ -85,7 +85,7 @@ func setTestHome(t *testing.T, dir string) {
 	releaseStoreSingleton(t)
 }
 
-// setWindowsAppData points the two variables paths.go consults on Windows at
+// setWindowsAppData points the two variables the paths package consults on Windows at
 // dir. Harmless elsewhere — nothing reads them — so it is unconditional rather
 // than behind a GOOS check, which keeps the Linux run honest about what the
 // Windows run does.
