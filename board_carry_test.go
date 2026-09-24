@@ -55,3 +55,25 @@ func TestBoardCarryOverDoneShowsACheck(t *testing.T) {
 		t.Fatal("the ✓ is a carry preview and should go once the card is down")
 	}
 }
+
+// The selected card's title takes its border's colour, so the whole card
+// lights up and not only its frame; the other cards' titles stay plain.
+func TestBoardSelectedCardTextLightsUp(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer func() {
+		lipgloss.SetColorProfile(before)
+		applyTheme(themes[0])
+	}()
+	applyTheme(themes[0])
+
+	card := todo.New("Draft the budget")
+	m := newTagModel(card)
+	lit := lipgloss.NewStyle().Foreground(currentTheme.green).Bold(true).Render("Draft the budget")
+	if got := strings.Join(m.renderBoardBox(m.get(card.ID), false, true, 30, 2), "\n"); !strings.Contains(got, lit) {
+		t.Errorf("selected card title is not lit in the selection colour:\n%q", got)
+	}
+	if got := strings.Join(m.renderBoardBox(m.get(card.ID), false, false, 30, 2), "\n"); strings.Contains(got, lit) {
+		t.Errorf("an unselected card's title should not be lit:\n%q", got)
+	}
+}

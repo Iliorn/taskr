@@ -506,15 +506,17 @@ func (m model) renderBoardBox(t *todo.Todo, doneCol, selected bool, colW, maxLin
 	}
 	if selected {
 		edge = currentTheme.green
-		textStyle = textStyle.Bold(true)
 	}
 	if held {
 		edge = m.carryColor()
-		textStyle = textStyle.Bold(true)
 	}
 	border := lipgloss.NewStyle().Foreground(edge)
 	if selected || held {
+		// The title lights up with its edge, so the card under the cursor
+		// reads as one lit object rather than a coloured frame round the
+		// same text as every other card. The overdue badge keeps its red.
 		border = border.Bold(true)
+		textStyle = border
 	}
 	if held && m.carryGlowDone() {
 		text[0] = truncate("✓ "+text[0], inner-len([]rune(badge)))
