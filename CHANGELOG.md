@@ -11,11 +11,10 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
-## [Unreleased]
+## [1.38.0] - 2026-09-24
 
 ### Added
 
-- Moving a card on the Board lights it up as it lands; a card moved into Done lands with a green ✓.
 - Board: press enter to pick up a card, ←/→ to carry it, and enter or esc to put it down.
 - Board cards are drawn as boxes in an even grid, without the table lines between columns.
 - Board cards show their project and due date on the box's bottom edge.
