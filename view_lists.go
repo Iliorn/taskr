@@ -194,7 +194,7 @@ func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, show
 	if sel >= 0 {
 		pos = listPosLabel(sel, len(tasks))
 	}
-	renderListHeader(b, m.termWidth, false, cols, pos)
+	renderListHeaderTitled(b, m.termWidth, false, cols, pos, tr("Tasks"))
 
 	nested := groupNestedRows(tasks)
 	siblings := make(map[string]int)

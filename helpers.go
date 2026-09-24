@@ -506,6 +506,17 @@ func listPosLabel(cursor, total int) string {
 // posLabel, when non-empty (e.g. "3/47"), is drawn right-aligned on the header
 // as a scroll-position indicator; pass "" to omit it.
 func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listCols, posLabel string) {
+	title := tr("Active tasks")
+	if isHistory {
+		title = tr("Completed tasks")
+	}
+	renderListHeaderTitled(b, termWidth, isHistory, c, posLabel, title)
+}
+
+// renderListHeaderTitled is renderListHeader with the title column's label
+// given, for lists that are neither all open nor all done (a tag or project
+// drill-in holds both).
+func renderListHeaderTitled(b *strings.Builder, termWidth int, isHistory bool, c listCols, posLabel, title string) {
 	dueW := c.dueW
 	sizeLabel := padRight(tr("Size"), c.sizeW)
 	// Score and Due are right-aligned value fields on the active list (see
@@ -516,13 +527,11 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 	lastLabel := padRight(padLeft(tr("Score"), c.lastW-listColGap), c.lastW)
 	// The active-sort cue lives in the panel border title, so column headers
 	// stay plain — no >..< decoration to reflow.
-	title := tr("Active tasks")
 	if isHistory {
 		// History's dates are all the same width, so its columns stay
 		// left-aligned and its labels with them.
 		sizeLabel = padCenter(tr("Size"), c.sizeW)
 		dueLabel = padRight(tr("Due"), dueW)
-		title = tr("Completed tasks")
 		lastLabel = padRight(tr("Completed"), 12)
 	}
 
