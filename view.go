@@ -806,6 +806,8 @@ func (m model) footerContentFor(w int) string {
 		return m.renderPalette(w)
 	case modeConfirm:
 		return confirmStyle.Render("    " + m.confirmMsg)
+	case modeBoardCarry:
+		return helpStyle.Render("    " + tr("←/→ carry to a column · enter/esc put it down"))
 	}
 	return ""
 }

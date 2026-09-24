@@ -8,6 +8,7 @@ import (
 
 	"github.com/Iliorn/taskr/todo"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // update_keyscript_test.go drives the real Update dispatch with scripted key
@@ -1320,5 +1321,60 @@ func TestScriptProjectDrillKeepsCursorAfterMutation(t *testing.T) {
 	m = sendKey(t, m, "p")
 	if got := m.get(second.ID); got.Priority == todo.PriorityMedium {
 		t.Error("the follow-up key did not reach the task under the cursor")
+	}
+}
+
+// Enter picks a card up, the arrows carry it, and enter or esc puts it down.
+// Nothing is stored while it is held — carrying it over Done completes
+// nothing — and the trip is one undo step however far it went.
+func TestScriptBoardCarryCard(t *testing.T) {
+	seed := todo.New("carried card")
+	m := modelWithTasks(t, seed)
+	m = script(t, m, "5", "enter")
+	if m.mode != modeBoardCarry {
+		t.Fatalf("enter on a card: mode = %v, want modeBoardCarry", m.mode)
+	}
+
+	m = script(t, m, "right", "right", "right") // over Done
+	if got := m.get(seed.ID); got.Stage != "" || got.Status != todo.Pending {
+		t.Fatalf("carrying changed the task before it was put down: stage %q status %v", got.Stage, got.Status)
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "✓ Carried card") {
+		t.Errorf("a card held over Done should preview the done look:\n%s", ansi.Strip(m.View()))
+	}
+	if len(m.undoStack) != 0 {
+		t.Fatalf("carrying pushed %d undo entries, want 0", len(m.undoStack))
+	}
+
+	m = script(t, m, "left", "esc") // back to Review, put down
+	if m.mode != modeNormal {
+		t.Fatalf("esc should put the card down, mode = %v", m.mode)
+	}
+	if got := m.get(seed.ID); got.Stage != "Review" || got.Status != todo.Pending {
+		t.Fatalf("after dropping on Review: stage %q status %v", got.Stage, got.Status)
+	}
+	if len(m.undoStack) != 1 {
+		t.Fatalf("the trip pushed %d undo entries, want 1", len(m.undoStack))
+	}
+	if !m.savePending && !m.saveScheduled {
+		t.Error("putting the card down did not schedule a save")
+	}
+	if m.board.col != 2 || m.board.flashID != seed.ID {
+		t.Errorf("focus and glow should follow the card: col %d, glow on %q", m.board.col, m.board.flashID)
+	}
+
+	m = script(t, m, "enter", "enter") // pick up and put straight back
+	if len(m.undoStack) != 1 || m.mode != modeNormal {
+		t.Fatalf("a round trip to the same column should change nothing: %d undo, mode %v", len(m.undoStack), m.mode)
+	}
+
+	m = script(t, m, "enter", "right", "enter") // into Done: the shared close path
+	if got := m.get(seed.ID); got.Status != todo.Done || got.SeqRankAtDone == 0 {
+		t.Fatalf("dropping in Done should close the task: status %v rank %d", got.Status, got.SeqRankAtDone)
+	}
+
+	m = script(t, m, "enter")
+	if m.mode != modeConfirm {
+		t.Fatalf("enter on a done card should ask to reopen it, mode = %v", m.mode)
 	}
 }

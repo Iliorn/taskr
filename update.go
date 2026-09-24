@@ -318,6 +318,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m.updateHelp(msg)
 	case modeExplain:
 		newModel, cmd = m.updateExplain(msg)
+	case modeBoardCarry:
+		newModel, cmd = m.updateBoardCarry(msg)
 	case modeConfirm:
 		newModel, cmd = m.updateConfirm(msg)
 	case modeConfirmUpdate:
@@ -1737,6 +1739,8 @@ func (m *model) currentProjectTaskLen() int {
 
 func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 	switch m.tab {
+	case tabBoard:
+		m.startBoardCarry()
 	case tabCalendar:
 		if len(m.activitiesForDay(m.calendar.selected)) > 0 {
 			m.calendar.focusTimeline = true

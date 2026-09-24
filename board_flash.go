@@ -53,6 +53,9 @@ func (m *model) advanceBoardFlash(seq int) tea.Cmd {
 // boardFlashLevel is how lit a card is, from 1 on the frame it lands down to 0
 // once the glow is over; 0 for every card but the one that moved.
 func (m model) boardFlashLevel(id string) float64 {
+	if m.carrying(id) {
+		return 1 // held up: lit for as long as it is carried
+	}
 	if id == "" || id != m.board.flashID || m.board.flashFrames <= 0 {
 		return 0
 	}
@@ -60,8 +63,18 @@ func (m model) boardFlashLevel(id string) float64 {
 	return f * f // ease out: a bright landing, then a quick settle
 }
 
+// boardGlowDone reports whether the glow is the Done one: a card that landed in
+// Done, or a held card over the Done column — which previews what putting it
+// down there will do.
+func (m model) boardGlowDone() bool {
+	if m.mode == modeBoardCarry {
+		return m.board.carryCol == doneColumn()
+	}
+	return m.board.flashDone
+}
+
 func (m model) boardFlashColor() lipgloss.Color {
-	if m.board.flashDone {
+	if m.boardGlowDone() {
 		return currentTheme.green
 	}
 	return currentTheme.yellow
@@ -74,7 +87,7 @@ func (m model) boardFlashColor() lipgloss.Color {
 func (m model) boardFlashStyle(f float64) lipgloss.Style {
 	t := currentTheme
 	fg := t.green
-	if m.board.flashDone {
+	if m.boardGlowDone() {
 		fg = t.dim
 	}
 	if f > 0.35 {

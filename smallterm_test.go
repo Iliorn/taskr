@@ -81,6 +81,12 @@ var smallTermStates = []struct {
 	{"tag picker", func(m *model) { m.mode = modeSearchTag; m.tagSearchInput.SetValue("h") }},
 	{"project picker", func(m *model) { m.mode = modeSearchProject; m.projSearchInput.SetValue("h") }},
 	{"dep picker", func(m *model) { m.mode = modeSearchDep; m.depSearchInput.SetValue("b") }},
+	{"board carry", func(m *model) {
+		if m.tab == tabBoard {
+			m.startBoardCarry()
+			m.board.carryCol = doneColumn()
+		}
+	}},
 	{"toast", func(m *model) { m.err = "Something went wrong somewhere far away" }},
 }
 

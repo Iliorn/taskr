@@ -134,6 +134,9 @@ const (
 	// modeExplain is the "why this rank" overlay: a read-only screen over the
 	// current task, like modeHelp, that any key dismisses.
 	modeExplain
+	// modeBoardCarry is a Board card picked up with enter: ←/→ carry it
+	// across the columns and enter/esc put it down (update_board.go).
+	modeBoardCarry
 )
 
 type tagSortMode int
@@ -269,6 +272,10 @@ type boardState struct {
 	flashFrames int
 	flashDone   bool
 	flashSeq    int
+	// The card picked up in modeBoardCarry, and the column it is held over.
+	// Nothing is changed until it is put down.
+	carryID  string
+	carryCol int
 }
 
 // ── Model ─────────────────────────────────────────────────────────────────────

@@ -89,6 +89,35 @@ func (m model) boardSelection(cols [][]todo.Todo) (col, cursor int) {
 	return col, cursor
 }
 
+// boardColumnsForView is boardColumns with a held card drawn at the top of the
+// column it is over instead of the one it is stored in — a preview only; the
+// store changes when the card is put down.
+func (m model) boardColumnsForView() [][]todo.Todo {
+	cols := m.boardColumns()
+	if m.mode != modeBoardCarry {
+		return cols
+	}
+	from := boardCardColumn(cols, m.board.carryID)
+	to := m.board.carryCol
+	if from < 0 || to < 0 || to >= len(cols) || from == to {
+		return cols
+	}
+	out := make([][]todo.Todo, len(cols))
+	copy(out, cols)
+	var held todo.Todo
+	rest := make([]todo.Todo, 0, len(cols[from]))
+	for _, c := range cols[from] {
+		if c.ID == m.board.carryID {
+			held = c
+			continue
+		}
+		rest = append(rest, c)
+	}
+	out[from] = rest
+	out[to] = append([]todo.Todo{held}, cols[to]...)
+	return out
+}
+
 // boardSelectedTask returns the task under the board cursor, or nil on an
 // empty column.
 func (m model) boardSelectedTask() *todo.Todo {
@@ -141,7 +170,7 @@ func boardWindow(n, offset, availW int) (start, count, colW int) {
 }
 
 func (m model) renderBoardList() string {
-	cols := m.boardColumns()
+	cols := m.boardColumnsForView()
 	titles := boardColTitles()
 	n := len(cols)
 	availW := m.termWidth - 8
@@ -421,7 +450,7 @@ func (m model) renderBoardCard(t *todo.Todo, doneCol, selected bool, colW, maxLi
 		if i == 0 && selected {
 			lead = cursorMark
 		}
-		if i == 0 && flash > 0 && m.board.flashDone {
+		if i == 0 && flash > 0 && m.boardGlowDone() {
 			lead = "✓ "
 		}
 		line = lead + line

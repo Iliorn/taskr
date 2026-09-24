@@ -147,6 +147,14 @@ func (m *model) boardMoveCard(dir int) tea.Cmd {
 		m.stageReopenConfirm(t)
 		return nil
 	}
+	return m.boardPlaceCard(t, target)
+}
+
+// boardPlaceCard puts a pending card into column target: a stage edit
+// (undoable) for a working column, the shared close path for Done. Returns the
+// landing glow, or nil when nothing moved.
+func (m *model) boardPlaceCard(t *todo.Todo, target int) tea.Cmd {
+	doneCol := doneColumn()
 	if target == doneCol {
 		if !m.closePendingTask(t) {
 			return nil
@@ -159,4 +167,79 @@ func (m *model) boardMoveCard(dir int) tea.Cmd {
 	m.markModified(t.ID)
 	m.boardFollow(target, t.ID)
 	return m.startBoardFlash(t.ID, false)
+}
+
+// boardCardColumn is the column the card with the given ID sits in, or -1.
+func boardCardColumn(cols [][]todo.Todo, id string) int {
+	for c := range cols {
+		for i := range cols[c] {
+			if cols[c][i].ID == id {
+				return c
+			}
+		}
+	}
+	return -1
+}
+
+// startBoardCarry picks up the selected card. A done card has nowhere to be
+// carried but out of Done, which is the reopen question, so it gets that
+// prompt directly — the same answer d gives on it.
+func (m *model) startBoardCarry() {
+	t := m.boardSelectedTask()
+	if t == nil {
+		return
+	}
+	if t.Status != todo.Pending {
+		m.stageReopenConfirm(t)
+		return
+	}
+	col, _ := m.boardSelection(m.boardColumns())
+	m.mode = modeBoardCarry
+	m.board.carryID, m.board.carryCol = t.ID, col
+	m.board.col, m.board.cursor = col, 0
+}
+
+// updateBoardCarry moves the held card between columns. Nothing is stored
+// until it is put down, so carrying it across Done on the way to somewhere
+// else completes nothing, and the whole trip is one undo step.
+func (m model) updateBoardCarry(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "left", "h", "H", "shift+left":
+		if m.board.carryCol > 0 {
+			m.board.carryCol--
+		}
+	case "right", "l", "L", "shift+right":
+		if m.board.carryCol < doneColumn() {
+			m.board.carryCol++
+		}
+	case "enter", "esc":
+		return m, m.dropBoardCarry()
+	}
+	m.board.col, m.board.cursor = m.board.carryCol, 0
+	return m, nil
+}
+
+// dropBoardCarry puts the held card down in the column it is over.
+func (m *model) dropBoardCarry() tea.Cmd {
+	id, target := m.board.carryID, m.board.carryCol
+	m.mode = modeNormal
+	m.board.carryID = ""
+	t := m.get(id)
+	if t == nil || t.Status != todo.Pending {
+		return nil // gone while held (a sync or reload removed or closed it)
+	}
+	if from := boardCardColumn(m.boardColumns(), id); from == target || from < 0 {
+		m.boardFollow(from, id)
+		return nil
+	}
+	return m.boardPlaceCard(t, target)
+}
+
+// carrying reports whether the card with the given ID is the one held up.
+func (m model) carrying(id string) bool {
+	return m.mode == modeBoardCarry && id != "" && id == m.board.carryID
 }
