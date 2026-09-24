@@ -2,36 +2,13 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/x/ansi"
 )
-
-func TestWeekIndexBucketsByMondayWeeks(t *testing.T) {
-	// Thursday 24 Sep 2026; its week starts Monday 21 Sep.
-	now := time.Date(2026, 9, 24, 15, 0, 0, 0, time.Local)
-	start := startOfWeek(now)
-	if want := time.Date(2026, 9, 21, 0, 0, 0, 0, time.Local); !start.Equal(want) {
-		t.Fatalf("startOfWeek = %v, want %v", start, want)
-	}
-	cases := []struct {
-		at   time.Time
-		want int
-	}{
-		{time.Date(2026, 9, 24, 9, 0, 0, 0, time.Local), groupWeeks - 1},  // today
-		{time.Date(2026, 9, 21, 0, 0, 0, 0, time.Local), groupWeeks - 1},  // Monday midnight
-		{time.Date(2026, 9, 20, 23, 0, 0, 0, time.Local), groupWeeks - 2}, // Sunday before
-		{time.Date(2026, 9, 14, 0, 0, 0, 0, time.Local), groupWeeks - 2},  // the week before
-		{time.Date(2026, 8, 3, 0, 0, 0, 0, time.Local), 0},                // the oldest week kept
-		{time.Date(2026, 8, 2, 23, 0, 0, 0, time.Local), -1},              // the Sunday before it
-	}
-	for _, c := range cases {
-		if got := weekIndex(c.at, start); got != c.want {
-			t.Errorf("weekIndex(%v) = %d, want %d", c.at.Format("Mon 02 Jan"), got, c.want)
-		}
-	}
-}
 
 func TestFormatSince(t *testing.T) {
 	applyLang(string(langEN))
@@ -68,12 +45,11 @@ func TestSummarizeGroups(t *testing.T) {
 	late.DueDate = now.AddDate(0, 0, -2)
 	done := mkTodo("d", "done", todo.Done)
 	done.Tags = []string{"home"}
-	done.CompletedAt = now
 	bare := mkTodo("b", "bare", todo.Pending)
 	all := todoPtrs([]todo.Todo{parent, child, late, done, bare})
 
 	score := map[string]float64{"p": 1, "l": 5, "c": 9, "b": 2}
-	sums := summarizeGroups(all, tagGroupKeys, func(t *todo.Todo) float64 { return score[t.ID] }, now)
+	sums := summarizeGroups(all, tagGroupKeys, func(t *todo.Todo) float64 { return score[t.ID] })
 
 	home := sums["home"]
 	if home.open != 2 || home.overdue != 1 || home.done != 1 {
@@ -81,9 +57,6 @@ func TestSummarizeGroups(t *testing.T) {
 	}
 	if home.nextID != "l" {
 		t.Errorf("home next = %q, want the best-scored open task l", home.nextID)
-	}
-	if home.weekly[groupWeeks-1] != 1 {
-		t.Errorf("home weekly = %v, want this week's completion counted", home.weekly)
 	}
 	if u := sums[untaggedKey]; u == nil || u.open != 1 || u.nextID != "b" {
 		t.Errorf("untagged = %+v, want only the top-level bare task", u)
@@ -131,10 +104,26 @@ func TestHasDatedOpenTask(t *testing.T) {
 	}
 }
 
-func TestWeeklySparklineScalesToTheBusiestWeek(t *testing.T) {
-	var w [groupWeeks]int
-	w[0], w[3], w[groupWeeks-1] = 1, 8, 4
-	if got, want := weeklySparkline(w), "▁··█···▄"; got != want {
-		t.Errorf("sparkline = %q, want %q", got, want)
+// The pane under a list shows how much of the group is done as a small bar,
+// groupBarWidth cells whatever the window, followed by the percentage.
+func TestGroupPaneShowsAProgressBar(t *testing.T) {
+	applyLang(string(langEN))
+	for _, width := range []int{60, 120, 200} {
+		m := newTagModel()
+		m.termWidth = width
+		head := m.groupPaneHead(&groupSummary{open: 1, done: 3}, width-8)
+		if len(head) != 2 {
+			t.Fatalf("width %d: pane head = %q, want counts then bar", width, head)
+		}
+		bar := ansi.Strip(head[1])
+		if !strings.HasSuffix(bar, " 75%") {
+			t.Errorf("width %d: bar line = %q, want it to end in the percentage", width, bar)
+		}
+		if got := ansi.StringWidth(bar); got != 2+groupBarWidth+len("  75%") {
+			t.Errorf("width %d: bar line is %d cells, want a fixed %d-cell bar", width, got, groupBarWidth)
+		}
+	}
+	if head := newTagModel().groupPaneHead(&groupSummary{}, 80); len(head) != 1 {
+		t.Errorf("an empty group has no bar to draw, got %q", head)
 	}
 }

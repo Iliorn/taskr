@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -230,23 +231,62 @@ func (m model) groupFoldNote(s *groupSummary) string {
 }
 
 // groupPaneHead is the top of the pane under a Tags or Projects list: the
-// group's counts and, when it has finished anything lately, one block per week
-// of how much.
+// group's counts, and a small bar of how much of it is done.
 func (m model) groupPaneHead(s *groupSummary, availW int) []string {
 	if s == nil {
 		return nil
 	}
 	lines := []string{normalStyle.Render(truncate(fmt.Sprintf(tr("  %d open · %d overdue · %d done"), s.open, s.overdue, s.done), availW))}
-	recent := 0
-	for _, n := range s.weekly {
-		recent += n
-	}
-	if recent > 0 {
-		label := fmt.Sprintf(tr("  done per week, last %d: "), groupWeeks)
-		lines = append(lines, dimStyle.Render(label)+activeCountStyle.Render(weeklySparkline(s.weekly))+
-			dimStyle.Render(fmt.Sprintf(tr("  (%d this week)"), s.weekly[groupWeeks-1])))
+	if total := s.open + s.done; total > 0 {
+		pct := float64(s.done) / float64(total)
+		lines = append(lines, "  "+renderProgressBar(pct, groupBarWidth)+normalStyle.Render(fmt.Sprintf(" %3d%%", int(pct*100))))
 	}
 	return lines
+}
+
+// progressEighths maps a sub-cell fill (1–7 eighths) to its block element, so
+// a bar moves in eighths of a cell rather than whole cells.
+var progressEighths = [8]string{"", "▏", "▎", "▍", "▌", "▋", "▊", "▉"}
+
+// renderProgressBar draws pct (0–1) as a barW-cell bar in tagProgressGradient,
+// the unfilled rest as the faint track. Cells sharing a gradient step render
+// as one run.
+func renderProgressBar(pct float64, barW int) string {
+	var b strings.Builder
+	grad := len(tagProgressGradient)
+	gradAt := func(pos float64) lipgloss.Style {
+		return tagProgressGradient[min(int(pos*float64(grad-1)), grad-1)]
+	}
+	eighths := min(int(math.Round(pct*float64(barW)*8)), barW*8)
+	filled, partial := eighths/8, eighths%8
+	run, runIdx := 0, -1
+	for j := 0; j < filled; j++ {
+		pos := 0.0
+		if filled > 1 {
+			pos = float64(j) / float64(filled-1)
+		}
+		idx := min(int(pos*float64(grad-1)), grad-1)
+		if idx != runIdx && run > 0 {
+			b.WriteString(tagProgressGradient[runIdx].Render(strings.Repeat("█", run)))
+			run = 0
+		}
+		runIdx = idx
+		run++
+	}
+	if run > 0 {
+		b.WriteString(tagProgressGradient[runIdx].Render(strings.Repeat("█", run)))
+	}
+	empty := barW - filled
+	if partial > 0 && filled < barW {
+		// The partial glyph's unfilled part is its background, so it takes
+		// the track's tint and the fill runs straight into it.
+		b.WriteString(gradAt(float64(filled) / float64(barW)).Inherit(barTrackStyle).Render(progressEighths[partial]))
+		empty--
+	}
+	if empty > 0 {
+		b.WriteString(barTrackStyle.Render(strings.Repeat(barTrack, empty)))
+	}
+	return b.String()
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────

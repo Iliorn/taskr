@@ -218,8 +218,8 @@ func (m *model) refreshFilteredCaches() {
 func (m *model) refreshGroups(all []*todo.Todo) {
 	frozen := sequenceScoreNow()
 	score := func(t *todo.Todo) float64 { return rankScoreOf(t, m.cache.rankScore, frozen) }
-	m.cache.tagGroups = summarizeGroups(all, tagGroupKeys, score, m.frameTime)
-	m.cache.projectGroups = summarizeGroups(all, projectGroupKeys, score, m.frameTime)
+	m.cache.tagGroups = summarizeGroups(all, tagGroupKeys, score)
+	m.cache.projectGroups = summarizeGroups(all, projectGroupKeys, score)
 	m.cache.tagNames = sortedGroupNames(m.cache.tagGroups)
 	m.cache.projectNames = sortedGroupNames(m.cache.projectGroups)
 }

@@ -140,10 +140,14 @@ const (
 	// list cannot make it in fewer cells.
 	tagsOverflowMinW = 3
 
+	// groupBarWidth is the progress bar under a tag or project's name in the
+	// pane below its list: small, since the counts beside it carry the numbers.
+	groupBarWidth = 20
+
 	// barTrack is the glyph the unfilled part of a progress bar is drawn with:
-	// blank cells on a faint background tint (barTrackStyle). Most Tags rows sit
-	// at 0%, and any visible glyph here turns the pane into a wall of texture;
-	// a shade keeps the bar's extent visible while an empty bar reads as empty.
+	// blank cells on a faint background tint (barTrackStyle). Any visible glyph
+	// here turns a mostly empty bar into texture; a shade keeps the bar's
+	// extent visible while an empty bar reads as empty.
 	barTrack = " "
 
 	// tagsReservePct caps how much of the pane the Tags column may hold back

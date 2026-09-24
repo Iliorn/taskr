@@ -49,10 +49,6 @@ func (s groupSort) label() string {
 	}
 }
 
-// groupWeeks is how many weeks of finished-task history a summary keeps, the
-// current week included.
-const groupWeeks = 8
-
 // groupSummary is everything a Tags or Projects row says about its group.
 type groupSummary struct {
 	open, overdue, done int
@@ -63,9 +59,6 @@ type groupSummary struct {
 	nextID    string
 	nextTitle string
 	nextScore float64
-	// weekly counts tasks completed per week, oldest first; the last bucket is
-	// the current week, which starts on Monday.
-	weekly [groupWeeks]int
 }
 
 func (s *groupSummary) finished() bool { return s.open == 0 }
@@ -108,35 +101,11 @@ func inTagGroup(t *todo.Todo, key string) bool {
 
 func inProjectGroup(t *todo.Todo, key string) bool { return t.Project == key }
 
-// weekIndex maps a completion time onto a summary's weekly buckets, or -1
-// when it falls outside them.
-func weekIndex(at, weekStart time.Time) int {
-	if !at.Before(weekStart) {
-		return groupWeeks - 1
-	}
-	// Weeks back from the current one, rounding up: anything before Monday
-	// midnight is at least one week back, and a week's own Monday midnight
-	// still belongs to that week.
-	back := int((weekStart.Sub(at)-1)/(7*24*time.Hour)) + 1
-	if back >= groupWeeks {
-		return -1
-	}
-	return groupWeeks - 1 - back
-}
-
-// startOfWeek is local midnight on the Monday of now's week.
-func startOfWeek(now time.Time) time.Time {
-	day := startOfDay(now)
-	offset := (int(day.Weekday()) + 6) % 7 // Monday = 0
-	return day.AddDate(0, 0, -offset)
-}
-
 // summarizeGroups builds one summary per group in a single pass over the task
 // set. score ranks the open tasks for "next up"; pass a frozen one
 // (sequenceScoreNow) so equal tasks tie and the ID decides.
-func summarizeGroups(all []*todo.Todo, keys func(*todo.Todo, func(string)), score func(*todo.Todo) float64, now time.Time) map[string]*groupSummary {
+func summarizeGroups(all []*todo.Todo, keys func(*todo.Todo, func(string)), score func(*todo.Todo) float64) map[string]*groupSummary {
 	out := make(map[string]*groupSummary)
-	weekStart := startOfWeek(now)
 	for _, t := range all {
 		var s float64
 		scored := false
@@ -151,11 +120,6 @@ func summarizeGroups(all []*todo.Todo, keys func(*todo.Todo, func(string)), scor
 			}
 			if t.Status == todo.Done {
 				g.done++
-				if !t.CompletedAt.IsZero() {
-					if i := weekIndex(t.CompletedAt, weekStart); i >= 0 {
-						g.weekly[i]++
-					}
-				}
 				return
 			}
 			g.open++
@@ -328,8 +292,8 @@ func groupNestedRows(tasks []todo.Todo) []bool {
 }
 
 // hasDatedOpenTask reports whether a timeline has anything ahead of it to
-// draw: an open task with a start or a due date. Without one the chart is a
-// record of when things were finished, which the weekly count says better.
+// draw: an open task with a start or a due date. Without one the chart is only
+// a record of when things were finished.
 func hasDatedOpenTask(tasks []todo.Todo) bool {
 	for i := range tasks {
 		t := &tasks[i]
@@ -357,26 +321,4 @@ func formatSince(at, now time.Time) string {
 	default:
 		return strconv.Itoa(days/30) + "mo"
 	}
-}
-
-// weeklySparkline draws a summary's weekly completions as one block per week,
-// scaled to the busiest week.
-func weeklySparkline(weekly [groupWeeks]int) string {
-	const ramp = "▁▂▃▄▅▆▇█"
-	steps := []rune(ramp)
-	peak := 0
-	for _, n := range weekly {
-		peak = max(peak, n)
-	}
-	var b strings.Builder
-	for _, n := range weekly {
-		switch {
-		case n == 0:
-			b.WriteRune('·')
-		default:
-			i := (n*len(steps) - 1) / peak
-			b.WriteRune(steps[min(i, len(steps)-1)])
-		}
-	}
-	return b.String()
 }

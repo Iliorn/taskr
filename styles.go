@@ -362,6 +362,20 @@ var ganttOverdueGradient = []lipgloss.Style{
 	lipgloss.NewStyle().Foreground(lipgloss.Color("#ff8888")),
 }
 
+// tagProgressGradient colours a group's progress bar, dark to light purple
+// along the filled part (renderProgressBar).
+var tagProgressGradient = []lipgloss.Style{
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#1a0a2e")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#2d1b4e")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#3d2060")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#5a2d8a")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#7a3aaa")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#9b4cc8")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#b865e0")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#d480f0")),
+	lipgloss.NewStyle().Foreground(lipgloss.Color("#e8a0ff")),
+}
+
 var calGradient = []lipgloss.Style{
 	lipgloss.NewStyle().Foreground(lipgloss.Color("#1f4a40")),
 	lipgloss.NewStyle().Foreground(lipgloss.Color("#2a6356")),

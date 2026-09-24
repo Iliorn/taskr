@@ -19,6 +19,8 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Tags and Projects hide finished groups, and the done tasks inside one, until you press `h`.
 - Inside a tag or project, open tasks come first, ranked, with their subtasks indented under them.
 - The project timeline appears only when an open task has a date, and always reaches today.
+- The pane under a tag or project shows a small purple bar of how much of it is done.
+- The selected card on the Board lights up its title as well as its border.
 
 ### Added
 
