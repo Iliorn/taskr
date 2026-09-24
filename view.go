@@ -221,6 +221,9 @@ func (m model) listPanelTitle() string {
 		// not in the status line above the tab where it read as a stray label.
 		return tr("Overview") + " [" + tr("sort:") + " " + m.tagSortLabel() + "]"
 	case tabBoard:
+		if m.mode == modeBoardCard {
+			return tr("Card")
+		}
 		title := tr("Workflow")
 		if cols := m.boardColumns(); len(cols) > 0 {
 			start, count, _ := boardWindow(len(cols), m.board.colOffset, m.termWidth-8)
@@ -808,6 +811,8 @@ func (m model) footerContentFor(w int) string {
 		return confirmStyle.Render("    " + m.confirmMsg)
 	case modeBoardCarry:
 		return helpStyle.Render("    " + tr("←/→ carry to a column · enter/esc put it down"))
+	case modeBoardCard:
+		return helpStyle.Render("    " + tr("↑/↓ previous/next card · enter edit in Tasks · esc close"))
 	}
 	return ""
 }

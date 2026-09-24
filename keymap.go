@@ -161,6 +161,8 @@ var keymap = []binding{
 	// ── Board ────────────────────────────────────────────────────────────
 	{ctxBoard, "←/→", "boardcolumn", "focus previous/next column", secBoard, true, true},
 	{ctxBoard, "enter", "boardcarry", "pick up card to move it", secBoard, true, true},
+	{ctxBoard, "space", "boardcard", "show card details", secBoard, true, false},
+	{ctxBoard, "a", "add", "new card in this column", secBoard, true, false},
 	{ctxBoard, "H/L", "boardmove", "move card between stages (into Done completes it)", secBoard, false, false},
 	{ctxBoard, "d", "done", "toggle done", secBoard, true, false},
 	{ctxBoard, "w", "why", "why this rank", secBoard, false, false},

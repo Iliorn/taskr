@@ -87,6 +87,11 @@ var smallTermStates = []struct {
 			m.board.carryCol = doneColumn()
 		}
 	}},
+	{"board card view", func(m *model) {
+		if m.tab == tabBoard && m.boardSelectedTask() != nil {
+			m.mode = modeBoardCard
+		}
+	}},
 	{"toast", func(m *model) { m.err = "Something went wrong somewhere far away" }},
 }
 

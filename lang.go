@@ -269,6 +269,9 @@ var daTranslations = map[string]string{
 	"pick up card to move it":                           "løft kort for at flytte det",
 	"←/→ carry to a column · enter/esc put it down":     "←/→ bær til en kolonne · enter/esc sæt det ned",
 	"filter cards (#tag, @project, text)":               "filtrér kort (#mærke, @projekt, tekst)",
+	"show card details":                                 "vis kortets detaljer",
+	"new card in this column":                           "nyt kort i denne kolonne",
+	"Card":                                              "Kort",
 	"empty":                                             "tom",
 	"more":                                              "flere",
 	"close help":                                        "luk hjælp",
@@ -824,6 +827,9 @@ var daTranslations = map[string]string{
 	"track": "tid",
 	"del":   "slet",
 	"sort":  "sortér",
+
+	// Board card-view footer, kept apart so its long key does not realign the table.
+	"↑/↓ previous/next card · enter edit in Tasks · esc close": "↑/↓ forrige/næste kort · enter rediger i Opgaver · esc luk",
 }
 var deTranslations = map[string]string{
 	// Header / chrome
@@ -878,6 +884,9 @@ var deTranslations = map[string]string{
 	"pick up card to move it":                           "Karte zum Verschieben aufnehmen",
 	"←/→ carry to a column · enter/esc put it down":     "←/→ in eine Spalte tragen · Enter/Esc ablegen",
 	"filter cards (#tag, @project, text)":               "Karten filtern (#Schlagwort, @Projekt, Text)",
+	"show card details":                                 "Kartendetails anzeigen",
+	"new card in this column":                           "neue Karte in dieser Spalte",
+	"Card":                                              "Karte",
 	"empty":                                             "leer",
 	"more":                                              "mehr",
 	"close help":                                        "Hilfe schließen",
@@ -1433,4 +1442,7 @@ var deTranslations = map[string]string{
 	"track": "Zeit",
 	"del":   "weg",
 	"sort":  "Sort.",
+
+	// Board card-view footer, kept apart so its long key does not realign the table.
+	"↑/↓ previous/next card · enter edit in Tasks · esc close": "↑/↓ vorige/nächste Karte · Enter in Aufgaben bearbeiten · Esc schließen",
 }

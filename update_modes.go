@@ -49,10 +49,28 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						t.AddDependency(dep.ID)
 					}
+					// Added from the Board: the card lands in the column you were
+					// looking at. Done is not a place to create work, so from
+					// there it lands in the first column.
+					onBoard := m.tab == tabBoard
+					if onBoard {
+						if col := m.board.addCol; col > 0 && col < doneColumn() {
+							t.SetStage(pendingStages()[col])
+						}
+					}
 					m.pushUndo("add task", t.ID)
 					m.add(t)
 					m.markModified(t.ID)
 					saveLastAddedID(t.ID)
+					if onBoard {
+						m.boardFollow(stageIndex(t.Stage), t.ID)
+						flash := m.startBoardFlash(t.ID, false)
+						if depErr != nil {
+							m.flashError(fmt.Sprintf("%s: %v", tr("Dependency not linked"), depErr))
+							return m, tea.Batch(flash, clearErrAfter())
+						}
+						return m, flash
+					}
 					// Position the cursor on the newly added task and open its
 					// detail view so the user lands on it immediately. A live
 					// search/focus filter can hide the new task — then the

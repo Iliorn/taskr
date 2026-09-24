@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
@@ -398,5 +400,134 @@ func TestBoardCardsAreBoxesWhileTheyFit(t *testing.T) {
 	got = firstCol(m)
 	if !strings.HasPrefix(got[0], "▶ Draft") || !strings.Contains(got[1], "Buy filters") {
 		t.Fatalf("a crowded column should fall back to plain rows:\n%s", strings.Join(got, "\n"))
+	}
+}
+
+// ── Scrolling, card edges, adding, the card view ────────────────────────────
+
+func TestBoardCardWindowKeepsTheCursorOnScreen(t *testing.T) {
+	h := []int{3, 3, 3, 3, 3, 3, 3, 3} // eight one-line boxes
+	const room = 11
+
+	first, end := boardCardWindow(h, 0, 0, room)
+	if first != 0 || end != 3 {
+		t.Fatalf("top of the column: window [%d,%d), want [0,3) with a row for ↓", first, end)
+	}
+	first, end = boardCardWindow(h, 5, 0, room)
+	if !(first <= 5 && 5 < end) || first == 0 {
+		t.Fatalf("cursor 5 should scroll into view: window [%d,%d)", first, end)
+	}
+	// Moving back up scrolls only once the cursor passes the top.
+	if f, _ := boardCardWindow(h, first, first, room); f != first {
+		t.Errorf("cursor at the top of the window moved it: %d → %d", first, f)
+	}
+	if f, _ := boardCardWindow(h, first-1, first, room); f != first-1 {
+		t.Errorf("cursor above the window should scroll by one: got first=%d, want %d", f, first-1)
+	}
+	// The last card: no ↓ marker, so the window reaches the end.
+	if _, e := boardCardWindow(h, 7, 0, room); e != len(h) {
+		t.Errorf("cursor on the last card: end = %d, want %d", e, len(h))
+	}
+	// A column that shrank pulls a stale offset back.
+	if f, _ := boardCardWindow(h[:3], 0, 2, room); f != 0 {
+		t.Errorf("three cards fit, but the window starts at %d", f)
+	}
+}
+
+func TestBoardLongColumnScrollsToTheSelectedCard(t *testing.T) {
+	var cards []todo.Todo
+	for i := 0; i < 12; i++ {
+		cards = append(cards, todo.New(fmt.Sprintf("card %02d", i)))
+	}
+	m := newTagModel(cards...)
+	m.tab = tabBoard
+	m.termWidth, m.termHeight = 100, 24
+	m.refreshCaches()
+	for i := 0; i < 11; i++ {
+		m = sendKey(t, m, "down")
+	}
+	out := ansi.Strip(m.renderBoardList())
+	sel := m.boardSelectedTask()
+	var marked string
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, "▶") {
+			marked = l
+		}
+	}
+	if !strings.Contains(marked, sel.Title) {
+		t.Fatalf("selected %q is not on screen:\n%s", sel.Title, out)
+	}
+	if !strings.Contains(out, "↑ ") {
+		t.Errorf("a scrolled column should say how many cards are above:\n%s", out)
+	}
+}
+
+func TestBoardBoxEdgeCarriesProjectAndDue(t *testing.T) {
+	late := todo.New("late one")
+	late.Project = "House"
+	late.DueDate = startOfDay(time.Now()).AddDate(0, 0, -2)
+	m := newTagModel(late)
+	m.tab = tabBoard
+	m.termWidth, m.termHeight = 120, 30
+	m.refreshCaches()
+	out := ansi.Strip(m.renderBoardList())
+	if !strings.Contains(out, "┗━ House · -2d ━") {
+		t.Fatalf("the box's bottom edge should carry project and due:\n%s", out)
+	}
+}
+
+func TestScriptBoardAddFilesIntoTheFocusedColumn(t *testing.T) {
+	m := modelWithTasks(t)
+	m = script(t, m, "5", "right", "a", "call the plumber", "enter")
+	var added *todo.Todo
+	for _, x := range m.allTodos() {
+		added = m.get(x.ID)
+	}
+	if added == nil || added.Stage != "In progress" {
+		t.Fatalf("a card added with In progress focused should land there, got %+v", added)
+	}
+	if m.board.col != 1 || m.board.flashID != added.ID || m.pane != paneList {
+		t.Errorf("the board should stay put with the new card selected and lit: col %d glow %q pane %v",
+			m.board.col, m.board.flashID, m.pane)
+	}
+
+	// From Done, a new card lands in the first column.
+	m = script(t, m, "right", "right", "a", "second", "enter")
+	for _, x := range m.allTodos() {
+		if x.Title == "Second" && (x.Stage != "" || x.Status != todo.Pending) {
+			t.Fatalf("a card added from Done should be a pending first-column card: stage %q status %v", x.Stage, x.Status)
+		}
+	}
+	if m.board.col != 0 {
+		t.Errorf("focus should follow the card into the first column, col = %d", m.board.col)
+	}
+}
+
+func TestScriptBoardCardView(t *testing.T) {
+	a := todo.New("first card")
+	a.Notes = "the whole note"
+	b := todo.New("second card")
+	m := modelWithTasks(t, a, b)
+	m = script(t, m, "5", " ")
+	if m.mode != modeBoardCard {
+		t.Fatalf("space should open the card view, mode = %v", m.mode)
+	}
+	first := m.boardSelectedTask().Title
+	if out := ansi.Strip(m.View()); !strings.Contains(out, first) || !strings.Contains(out, "Card") {
+		t.Fatalf("card view should show the card:\n%s", out)
+	}
+	m = script(t, m, "down")
+	if m.mode != modeBoardCard || m.boardSelectedTask().Title == first {
+		t.Fatalf("↓ should step to the next card without closing the view")
+	}
+	m = script(t, m, "esc")
+	if m.mode != modeNormal || m.tab != tabBoard {
+		t.Fatalf("esc should close the card view back onto the board")
+	}
+	m = script(t, m, " ")
+	want := m.boardSelectedTask().ID
+	m = script(t, m, "enter")
+	if m.tab != tabTasks || m.pane != paneDetail || m.currentTodo() == nil || m.currentTodo().ID != want {
+		t.Fatalf("enter should open the card in the Tasks detail pane: tab %v pane %v", m.tab, m.pane)
 	}
 }

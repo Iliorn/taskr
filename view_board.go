@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/lipgloss"
@@ -168,46 +169,144 @@ func boardWindow(n, offset, availW int) (start, count, colW int) {
 }
 
 func (m model) renderBoardList() string {
+	if m.mode == modeBoardCard {
+		return m.renderBoardCardView()
+	}
 	cols := m.boardColumnsForView()
 	titles := boardColTitles()
 	n := len(cols)
-	availW := m.termWidth - 8
-	start, count, _ := boardWindow(n, m.board.colOffset, availW)
-	if count == 0 {
+	g := m.boardGeometry(cols)
+	if g.count == 0 {
 		return m.renderBoardStacked(cols, titles)
 	}
+	selCol, selCursor := m.boardSelection(cols)
+	rendered := make([][]string, 0, g.count)
+	for c := g.start; c < g.start+g.count; c++ {
+		cursor, offset := -1, 0
+		if c == selCol {
+			cursor = selCursor
+			if m.board.scrollCol == c {
+				offset = m.board.cardScroll
+			}
+		}
+		rendered = append(rendered,
+			m.renderBoardColumn(cols[c], titles[c], c == n-1, cursor, g.widths[c-g.start], g.budget, g.layouts[c-g.start], offset))
+	}
+	return joinBoardColumns(g.widths, g.budget, rendered...)
+}
+
+// boardGeometry is the board's layout for the current window: which columns
+// are on screen, their widths, the rows each has, and the card layout. The
+// render and the scroll clamp both read it, so the rows the clamp keeps the
+// cursor inside are the rows that are drawn.
+type boardGeom struct {
+	start, count int
+	widths       []int
+	budget       int               // rows per column, heading and rule included
+	layouts      []boardCardLayout // per visible column
+}
+
+func (m model) boardGeometry(cols [][]todo.Todo) boardGeom {
+	availW := m.termWidth - 8
+	var g boardGeom
+	g.start, g.count, _ = boardWindow(len(cols), m.board.colOffset, availW)
 	// Rows available inside the list panel: buildListContent subtracts the two
 	// border lines from the outer height, mirrored here so per-column clipping
-	// and the "+N more" marker line up with what actually fits.
-	budget := m.listVisible() - 2
-	if budget < 4 {
-		budget = 4
+	// and the scroll markers line up with what actually fits.
+	g.budget = m.listVisible() - 2
+	if g.budget < 4 {
+		g.budget = 4
 	}
-	selCol, selCursor := m.boardSelection(cols)
+	if g.count == 0 {
+		return g
+	}
 	// boardColWidths gets the full pane width, not boardWindow's per-column
 	// share: that share is an integer division and drops the remainder, which
 	// is how the grid used to stop a few columns short of its own border.
-	widths := boardColWidths(count, availW)
-	// One layout for the whole board — the most compact any visible column
-	// needs — so a short window never draws boxes beside plain rows.
-	layout := boardCardLayout{boxed: true, lines: 2}
-	for c := start; c < start+count; c++ {
-		l := chooseBoardCardLayout(cols[c], widths[c-start], budget-2)
-		if !l.boxed || l.lines < layout.lines {
-			layout.lines = l.lines
-		}
-		layout.boxed = layout.boxed && l.boxed
+	g.widths = boardColWidths(g.count, availW)
+	// Each column wraps its titles if it has the room, but boxes are all or
+	// nothing across the board, so a short window never draws boxes beside
+	// plain rows.
+	g.layouts = make([]boardCardLayout, g.count)
+	boxed := true
+	for c := g.start; c < g.start+g.count; c++ {
+		g.layouts[c-g.start] = chooseBoardCardLayout(cols[c], g.widths[c-g.start], g.budget-2)
+		boxed = boxed && g.layouts[c-g.start].boxed
 	}
-	rendered := make([][]string, 0, count)
-	for c := start; c < start+count; c++ {
-		cursor := -1
-		if c == selCol {
-			cursor = selCursor
+	if !boxed {
+		for i := range g.layouts {
+			g.layouts[i] = boardCardLayout{lines: 1}
 		}
-		rendered = append(rendered,
-			m.renderBoardColumn(cols[c], titles[c], c == n-1, cursor, widths[c-start], budget, layout))
 	}
-	return joinBoardColumns(widths, budget, rendered...)
+	return g
+}
+
+// boardCardHeights is the rows each card takes in the given layout.
+func boardCardHeights(cards []todo.Todo, colW int, layout boardCardLayout) []int {
+	h := make([]int, len(cards))
+	for i := range cards {
+		h[i] = 1
+		if layout.boxed {
+			lines, _ := boardCardText(&cards[i], false, colW-boardBoxChrome, layout.lines)
+			h[i] = len(lines) + 2
+		}
+	}
+	return h
+}
+
+// boardCardWindow decides which cards of a column are drawn: [first, end),
+// scrolled from offset only as far as it takes to keep cursor on screen, with
+// a row given to an "↑ N more" / "↓ N more" marker on each side that has cards
+// past it. A column that used to overflow just stopped drawing, hiding the
+// selected card along with the rest, so a cursor moving down a long column
+// walked off the bottom of the screen. Pure, so the clamp in Update and the
+// render run the same arithmetic.
+func boardCardWindow(heights []int, cursor, offset, room int) (first, end int) {
+	n := len(heights)
+	if n == 0 {
+		return 0, 0
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= n {
+		cursor = n - 1
+	}
+	visibleEnd := func(off int) int {
+		rows := room
+		if off > 0 {
+			rows-- // ↑ marker
+		}
+		e, used := off, 0
+		for e < n && used+heights[e] <= rows {
+			used += heights[e]
+			e++
+		}
+		// Cards remain below: the ↓ marker needs a row of its own.
+		for e < n && e > off && used+1 > rows {
+			e--
+			used -= heights[e]
+		}
+		if e == off {
+			e = off + 1 // a card taller than the column still shows, clipped
+		}
+		return e
+	}
+	if offset > cursor {
+		offset = cursor
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	for offset < cursor && visibleEnd(offset) <= cursor {
+		offset++
+	}
+	// Scrolled further than the cards need (the column shrank): pull back while
+	// everything from there to the last card still fits.
+	for offset > 0 && visibleEnd(offset-1) >= n && offset-1 <= cursor {
+		offset--
+	}
+	return offset, visibleEnd(offset)
 }
 
 // boardColWidths splits the board's width into an even grid across the
@@ -266,24 +365,24 @@ func joinBoardColumns(widths []int, height int, columns ...[]string) string {
 }
 
 // boardCardLayout is how a column draws its cards, chosen per column by how
-// much room it has: boxes with the title wrapped onto two lines, boxes of one
-// line, or — for a column too long for boxes at all — the plain rows the board
-// used to draw, clipped with a "+N more" marker.
+// much room it has: boxes with the title wrapped onto two lines while the whole
+// column fits that way, one-line boxes otherwise — scrolling when even those
+// run past the bottom — and the plain rows the board used to draw only on a
+// window too short to hold a box and its scroll markers.
 type boardCardLayout struct {
 	boxed bool
 	lines int // title lines per card
 }
 
 func chooseBoardCardLayout(cards []todo.Todo, colW, room int) boardCardLayout {
-	if colW >= boardBoxMinW {
-		inner := colW - boardBoxChrome
-		for _, lines := range []int{2, 1} {
-			if boardCardLinesNeeded(cards, inner, lines)+2*len(cards) <= room {
-				return boardCardLayout{boxed: true, lines: lines}
-			}
-		}
+	if colW < boardBoxMinW || room < boardBoxMinRoom {
+		return boardCardLayout{lines: 1}
 	}
-	return boardCardLayout{lines: 1}
+	inner := colW - boardBoxChrome
+	if boardCardLinesNeeded(cards, inner, 2)+2*len(cards) <= room {
+		return boardCardLayout{boxed: true, lines: 2}
+	}
+	return boardCardLayout{boxed: true, lines: 1}
 }
 
 // boardHeading is a column's heading: its name, and the card count dimmed
@@ -298,7 +397,7 @@ func boardHeading(title string, n, w int) string {
 // the cards in the board's layout, clipped to the row budget. cursor is the selected card index, or
 // -1 when the column isn't focused. doneCol renders its cards dim — they're
 // history, not work.
-func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, cursor, colW, budget int, layout boardCardLayout) []string {
+func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, cursor, colW, budget int, layout boardCardLayout, offset int) []string {
 	lines := make([]string, 0, budget)
 	// The heading starts where its cards do — after the marker column, which is
 	// blank on every row but the selected one — or it hangs out to the left of
@@ -319,23 +418,19 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 		lines = append(lines, dimStyle.Render(indent+tr("empty")))
 		return lines
 	}
-	if layout.boxed {
-		for i := range cards {
+	first, end := boardCardWindow(boardCardHeights(cards, colW, layout), cursor, offset, budget-len(lines))
+	if first > 0 {
+		lines = append(lines, dimStyle.Render(fmt.Sprintf("%s↑ %d %s", indent, first, tr("more"))))
+	}
+	for i := first; i < end; i++ {
+		if layout.boxed {
 			lines = append(lines, m.renderBoardBox(&cards[i], doneCol, i == cursor, colW, layout.lines)...)
+		} else {
+			lines = append(lines, m.renderBoardCard(&cards[i], doneCol, i == cursor, colW, 1)...)
 		}
-		return lines
 	}
-	maxCards := budget - len(lines)
-	overflow := 0
-	if len(cards) > maxCards {
-		overflow = len(cards) - (maxCards - 1) // reserve the last row for the marker
-	}
-	for i := range cards {
-		if overflow > 0 && i == maxCards-1 {
-			lines = append(lines, dimStyle.Render(fmt.Sprintf("  +%d %s", overflow, tr("more"))))
-			break
-		}
-		lines = append(lines, m.renderBoardCard(&cards[i], doneCol, i == cursor, colW, 1)...)
+	if end < len(cards) {
+		lines = append(lines, dimStyle.Render(fmt.Sprintf("%s↓ %d %s", indent, len(cards)-end, tr("more"))))
 	}
 	return lines
 }
@@ -388,6 +483,9 @@ func boardCardLinesNeeded(cards []todo.Todo, textW, maxLines int) int {
 const (
 	boardBoxChrome = 6
 	boardBoxMinW   = boardBoxChrome + 8
+	// boardBoxMinRoom is the fewest card rows that hold a one-line box with a
+	// scroll marker either side; a shorter column draws plain rows.
+	boardBoxMinRoom = 5
 )
 
 var (
@@ -452,8 +550,48 @@ func (m model) renderBoardBox(t *todo.Todo, doneCol, selected bool, colW, maxLin
 		}
 		out = append(out, lead(i)+border.Render(glyphs[5])+" "+body+" "+border.Render(glyphs[5]))
 	}
-	out = append(out, cursorGap+border.Render(glyphs[2]+strings.Repeat(glyphs[4], boxW-2)+glyphs[3]))
+	out = append(out, cursorGap+m.boardBoxBottom(t, doneCol, border, glyphs, boxW))
 	return out
+}
+
+// boardBoxBottom is a box's bottom edge, carrying the card's project and how
+// far off its due date is — the two facts that decide what to pick up next —
+// set into the border, so a card knows them without costing a row: ╰─ House · 2d ─╯.
+// The due part is red when overdue; the project is what gives way when the
+// box is too narrow for both.
+func (m model) boardBoxBottom(t *todo.Todo, doneCol bool, border lipgloss.Style, glyphs [6]string, boxW int) string {
+	room := boxW - 6 // corners, one rule cell each side, a space each side
+	due := ""
+	if !doneCol && !t.DueDate.IsZero() {
+		due = formatDueShort(t.DueDate, time.Now())
+	}
+	proj := t.Project
+	sep := " · "
+	if proj == "" || due == "" {
+		sep = ""
+	}
+	if w := len([]rune(proj + sep + due)); w > room {
+		if keep := room - len([]rune(sep+due)); keep >= 3 {
+			proj = truncate(proj, keep)
+		} else {
+			proj, sep = "", ""
+		}
+	}
+	plain := proj + sep + due
+	if plain == "" || len([]rune(plain)) > room {
+		return border.Render(glyphs[2] + strings.Repeat(glyphs[4], boxW-2) + glyphs[3])
+	}
+	dueStyle := dimStyle
+	if t.IsOverdue() {
+		dueStyle = overdueStyle
+	}
+	meta := dimStyle.Render(proj+sep) + dueStyle.Render(due)
+	if due == "" {
+		meta = dimStyle.Render(proj)
+	}
+	rest := boxW - 4 - 1 - len([]rune(plain)) // corners, lead rule, spaces
+	return border.Render(glyphs[2]+glyphs[4]) + " " + meta + " " +
+		border.Render(strings.Repeat(glyphs[4], rest)+glyphs[3])
 }
 
 // boardBoxRestingColor is a card's border colour when nothing is happening to
@@ -535,4 +673,106 @@ func (m model) renderBoardStacked(cols [][]todo.Todo, titles []string) string {
 		}
 	}
 	return strings.TrimRight(sb.String(), "\n")
+}
+
+// renderBoardCardView is the selected card's fields drawn in place of the
+// columns: the whole title, then only the fields that are set — a read view
+// has no cursor to walk to an empty one, so an empty row would only be noise.
+// Editing stays in one place, the Tasks tab's detail pane, which enter opens.
+func (m model) renderBoardCardView() string {
+	t := m.boardSelectedTask()
+	if t == nil {
+		return ""
+	}
+	w := m.termWidth - 8
+	const labelW = 14
+	valW := w - labelW
+	var lines []string
+	for _, l := range wrapText(t.Title, w) {
+		lines = append(lines, headerStyle.Render(l))
+	}
+	lines = append(lines, "")
+	// The labels are the detail pane's, translations and all; a colon some of
+	// them carry there would be the only punctuation in this column.
+	label := func(s string) string {
+		return detailLabelStyle.Render(padRight(strings.TrimSuffix(tr(s), ":"), labelW))
+	}
+	field := func(name, value string, style lipgloss.Style) {
+		if value == "" {
+			return
+		}
+		lines = append(lines, label(name)+style.Render(truncate(value, valW)))
+	}
+	col, _ := m.boardSelection(m.boardColumns())
+	field("Stage", boardColTitles()[col], normalStyle)
+	if !t.DueDate.IsZero() {
+		due := t.DueDate.Format("02-01-06") + "  (" + formatDueShort(t.DueDate, time.Now()) + ")"
+		style := normalStyle
+		if t.IsOverdue() {
+			style = overdueStyle
+		}
+		field("Due date", due, style)
+	}
+	if !t.StartDate.IsZero() {
+		field("Start date", formatStartDate(t.StartDate), normalStyle)
+	}
+	field("Priority", t.Priority.Icon()+" "+trPriority(t.Priority), normalStyle)
+	field("Size", trSize(t.Size), normalStyle)
+	field("Project", t.Project, projLabelStyle)
+	if len(t.Tags) > 0 {
+		tags, _ := renderTaskTagsClipped(t.Tags, valW+1, false)
+		lines = append(lines, label("Tags:")+strings.TrimPrefix(tags, " "))
+	}
+	if t.Recurrence != "" {
+		field("Recurrence", "↻ "+trRecurrence(t.Recurrence), normalStyle)
+	}
+	if spent := t.TotalTimeSpent(); spent > 0 {
+		field("Time spent:", formatDuration(spent), timerStyle)
+	}
+
+	section := func(title string) {
+		lines = append(lines, "", detailLabelStyle.Render(tr(title)))
+	}
+	if subs := m.subtaskIDs(t.ID); len(subs) > 0 {
+		section("Subtasks:")
+		for _, id := range subs {
+			if s := m.get(id); s != nil {
+				mark, style := "·", normalStyle
+				if s.Status == todo.Done {
+					mark, style = "✓", dimStyle
+				}
+				lines = append(lines, style.Render(truncate("  "+mark+" "+s.Title, w)))
+			}
+		}
+	}
+	if len(t.Dependencies) > 0 {
+		section("Dependencies:")
+		for _, id := range t.Dependencies {
+			if d := m.get(id); d != nil {
+				lines = append(lines, normalStyle.Render(truncate("  · "+d.Title, w)))
+			}
+		}
+	}
+	if strings.TrimSpace(t.Notes) != "" {
+		section("Notes")
+		for _, para := range strings.Split(strings.TrimRight(t.Notes, "\n"), "\n") {
+			for _, l := range wrapText(para, w-2) {
+				lines = append(lines, normalStyle.Render("  "+l))
+			}
+		}
+	}
+	if n := len(t.Comments); n > 0 {
+		section("Comments:")
+		for _, c := range t.Comments[max(0, n-3):] {
+			lines = append(lines, normalStyle.Render(truncate("  · "+c.Text, w)))
+		}
+	}
+
+	// The pane is as tall as the board; a card with long notes is cut with the
+	// ellipsis rather than scrolled — the whole note is one enter away.
+	if budget := m.listVisible() - 2; budget > 0 && len(lines) > budget {
+		lines = lines[:budget]
+		lines[budget-1] = dimStyle.Render("  " + ellipsis)
+	}
+	return strings.Join(lines, "\n")
 }

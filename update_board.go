@@ -243,3 +243,39 @@ func (m *model) dropBoardCarry() tea.Cmd {
 func (m model) carrying(id string) bool {
 	return m.mode == modeBoardCarry && id != "" && id == m.board.carryID
 }
+
+// updateBoardCard is the read-only card view. ↑/↓ step through the column the
+// card is in without closing it, enter opens the card in the Tasks tab's
+// detail pane — where every field can be edited — and esc or space close it.
+func (m model) updateBoardCard(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "up", "k":
+		m.boardMoveCursor(-1)
+	case "down", "j":
+		m.boardMoveCursor(1)
+	case "enter":
+		t := m.boardSelectedTask()
+		m.mode = modeNormal
+		if t == nil {
+			return m, nil
+		}
+		m.switchTab(tabTasks)
+		m.followTask(t.ID)
+		m.detailTaskID = t.ID
+		m.detailStack = nil
+		m.pane = paneDetail
+		m.detail = detailState{field: fieldStartDate}
+		m.invalidateDetailCache()
+		m.pushFocus(stateDetailPane)
+	case "esc", " ", "q":
+		m.mode = modeNormal
+	}
+	if m.boardSelectedTask() == nil && m.mode == modeBoardCard {
+		m.mode = modeNormal // the card went away underneath (a sync, a reload)
+	}
+	return m, nil
+}

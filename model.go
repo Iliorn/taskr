@@ -137,6 +137,9 @@ const (
 	// modeBoardCarry is a Board card picked up with enter: ←/→ carry it
 	// across the columns and enter/esc put it down (update_board.go).
 	modeBoardCarry
+	// modeBoardCard is the read-only card view: the selected card's fields in
+	// place of the columns, until esc (update_board.go).
+	modeBoardCard
 )
 
 type tagSortMode int
@@ -276,6 +279,12 @@ type boardState struct {
 	// Nothing is changed until it is put down.
 	carryID  string
 	carryCol int
+	// cardScroll is the first card drawn in column scrollCol, the focused
+	// one; clampBoardWindow keeps the cursor inside it (boardCardWindow).
+	cardScroll int
+	scrollCol  int
+	// addCol is the column a quick-add started from the Board files into.
+	addCol int
 }
 
 // ── Model ─────────────────────────────────────────────────────────────────────

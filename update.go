@@ -320,6 +320,8 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m.updateExplain(msg)
 	case modeBoardCarry:
 		newModel, cmd = m.updateBoardCarry(msg)
+	case modeBoardCard:
+		newModel, cmd = m.updateBoardCard(msg)
 	case modeConfirm:
 		newModel, cmd = m.updateConfirm(msg)
 	case modeConfirmUpdate:
@@ -828,6 +830,12 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+		case " ":
+			if m.tab == tabBoard && m.boardSelectedTask() != nil {
+				m.mode = modeBoardCard
+				return m, nil
+			}
+
 		case "H", "<", "shift+left":
 			if m.tab == tabBoard {
 				flashCmd = m.boardMoveCard(-1)
@@ -976,6 +984,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// you are looking at, so capturing into it costs one key instead
 			// of a tab switch and a remembered spelling.
 			if seed, ok := m.quickAddSeed(); ok {
+				if m.tab == tabBoard {
+					m.board.addCol, _ = m.boardSelection(m.boardColumns())
+				}
 				m.mode = modeInput
 				m.textInput.SetValue(seed)
 				m.textInput.SetCursor(len([]rune(seed)))
@@ -1076,6 +1087,8 @@ func (m model) quickAddSeed() (string, bool) {
 			return "", true
 		}
 		return "#" + tags[m.tagTabCursor] + " ", true
+	case tabBoard:
+		return "", true
 	case tabProjects:
 		projects := m.allProjectsForList()
 		if m.projectCursor >= len(projects) || strings.ContainsFunc(projects[m.projectCursor], unicode.IsSpace) {
@@ -1199,6 +1212,7 @@ func (m *model) clampBoardWindow() {
 	_, count, _ := boardWindow(len(cols), m.board.colOffset, m.termWidth-8)
 	if count == 0 || count >= len(cols) {
 		m.board.colOffset = 0 // everything fits (or nothing does): no window
+		m.clampBoardCardScroll()
 		return
 	}
 	col, _ := m.boardSelection(cols)
@@ -1214,6 +1228,25 @@ func (m *model) clampBoardWindow() {
 	if m.board.colOffset < 0 {
 		m.board.colOffset = 0
 	}
+	m.clampBoardCardScroll()
+}
+
+// clampBoardCardScroll keeps the selected card inside the focused column's
+// drawn window, scrolling only as far as that takes. Focus moving to another
+// column starts that column from the top.
+func (m *model) clampBoardCardScroll() {
+	cols := m.boardColumnsForView()
+	col, cursor := m.boardSelection(cols)
+	if col != m.board.scrollCol {
+		m.board.scrollCol, m.board.cardScroll = col, 0
+	}
+	g := m.boardGeometry(cols)
+	if g.count == 0 || col < g.start || col >= g.start+g.count || len(cols[col]) == 0 {
+		m.board.cardScroll = 0
+		return
+	}
+	heights := boardCardHeights(cols[col], g.widths[col-g.start], g.layouts[col-g.start])
+	m.board.cardScroll, _ = boardCardWindow(heights, cursor, m.board.cardScroll, g.budget-2)
 }
 
 // drilledIntoTasks reports whether the cursor has walked into a row's task
