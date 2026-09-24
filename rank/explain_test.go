@@ -1,12 +1,10 @@
-package main
+package rank
 
 import (
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/Iliorn/taskr/todo"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // sequence_explain_test.go guards the promise the explain view makes: that what
@@ -14,17 +12,17 @@ import (
 // arithmetic it describes is worse than no explanation — it teaches a model of
 // the ranking that is wrong.
 
-func balancedBiases() biases {
-	return biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}
+func balancedBiases() Biases {
+	return Biases{Deadline: Balanced, Priority: Balanced, Momentum: Balanced, Aging: true}
 }
 
 // The five factors must add up to the number the sort used. Any future
 // dimension that forgets to appear here shows up as a gap.
 func TestExplainFactorsSumToTheScore(t *testing.T) {
-	for _, b := range []biases{
+	for _, b := range []Biases{
 		balancedBiases(),
-		{Deadline: biasIntense, Priority: biasRelaxed, Momentum: biasIntense, Aging: true},
-		{Deadline: biasRelaxed, Priority: biasRelaxed, Momentum: biasRelaxed, Aging: false},
+		{Deadline: Intense, Priority: Relaxed, Momentum: Intense, Aging: true},
+		{Deadline: Relaxed, Priority: Relaxed, Momentum: Relaxed, Aging: false},
 	} {
 		tt := todo.New("sum check")
 		tt.Priority = todo.PriorityHigh
@@ -34,9 +32,9 @@ func TestExplainFactorsSumToTheScore(t *testing.T) {
 		tt.CreatedAt = fixedNow.AddDate(0, 0, -40)
 		heat := hotHeat(fixedNow, nil, []string{"hot"}, nil)
 
-		want := sequenceComponentsAt(fixedNow, &tt, b, heat).Total
+		want := ComponentsAt(fixedNow, &tt, b, heat).Total
 		var sum float64
-		for _, f := range seqFactorsAt(fixedNow, &tt, b, heat) {
+		for _, f := range FactorsAt(fixedNow, &tt, b, heat) {
 			sum += f.Weighted
 		}
 		if !approxEq(sum, want) {
@@ -51,27 +49,27 @@ func TestExplainDeadlineReasonMatchesTheNumber(t *testing.T) {
 	cases := []struct {
 		name   string
 		due    time.Time
-		reason seqReason
+		reason Reason
 		n      int
 	}{
-		{"no date", time.Time{}, reasonNoDue, 0},
-		{"overdue", startOfDay(fixedNow).AddDate(0, 0, -4), reasonOverdue, 4},
-		{"today", fixedNow.Add(2 * time.Hour), reasonDueToday, 0},
-		{"tomorrow", startOfDay(fixedNow).AddDate(0, 0, 1), reasonDueTomorrow, 1},
-		{"inside the ramp", startOfDay(fixedNow).AddDate(0, 0, 5), reasonDueInDays, 5},
-		{"past the ramp", startOfDay(fixedNow).AddDate(0, 0, 20), reasonDueBeyondRamp, 20},
+		{"no date", time.Time{}, ReasonNoDue, 0},
+		{"overdue", startOfDay(fixedNow).AddDate(0, 0, -4), ReasonOverdue, 4},
+		{"today", fixedNow.Add(2 * time.Hour), ReasonDueToday, 0},
+		{"tomorrow", startOfDay(fixedNow).AddDate(0, 0, 1), ReasonDueTomorrow, 1},
+		{"inside the ramp", startOfDay(fixedNow).AddDate(0, 0, 5), ReasonDueInDays, 5},
+		{"past the ramp", startOfDay(fixedNow).AddDate(0, 0, 20), ReasonDueBeyondRamp, 20},
 	}
 	for _, c := range cases {
 		tt := todo.New(c.name)
 		tt.DueDate = c.due
-		f := seqFactorsAt(fixedNow, &tt, balancedBiases(), activityHeat{})[0]
+		f := FactorsAt(fixedNow, &tt, balancedBiases(), Heat{})[0]
 		if f.Reason != c.reason || f.N != c.n {
 			t.Errorf("%s: reason %v/%d, want %v/%d", c.name, f.Reason, f.N, c.reason, c.n)
 		}
 		// The sentence and the points have to agree about whether the deadline
 		// contributed anything at all.
 		scores := f.Weighted > 0
-		says := c.reason != reasonNoDue && c.reason != reasonDueBeyondRamp
+		says := c.reason != ReasonNoDue && c.reason != ReasonDueBeyondRamp
 		if scores != says {
 			t.Errorf("%s: scored %v but the reason (%v) reads otherwise", c.name, f.Weighted, c.reason)
 		}
@@ -88,16 +86,16 @@ func TestExplainMomentumNamesItsSource(t *testing.T) {
 	cases := []struct {
 		name   string
 		t      *todo.Todo
-		reason seqReason
+		reason Reason
 		word   string
 	}{
-		{"own work", mk("self", ""), reasonMomentumTask, ""},
-		{"project", mk("other", "alpha"), reasonMomentumProj, "alpha"},
-		{"tag", mk("other", "cold", "go"), reasonMomentumTag, "go"},
-		{"cold", mk("other", "cold", "rust"), reasonMomentumCold, ""},
+		{"own work", mk("self", ""), ReasonMomentumTask, ""},
+		{"project", mk("other", "alpha"), ReasonMomentumProj, "alpha"},
+		{"tag", mk("other", "cold", "go"), ReasonMomentumTag, "go"},
+		{"cold", mk("other", "cold", "rust"), ReasonMomentumCold, ""},
 	}
 	for _, c := range cases {
-		f := seqFactorsAt(fixedNow, c.t, balancedBiases(), heat)[2]
+		f := FactorsAt(fixedNow, c.t, balancedBiases(), heat)[2]
 		if f.Reason != c.reason || f.Word != c.word {
 			t.Errorf("%s: got %v/%q, want %v/%q", c.name, f.Reason, f.Word, c.reason, c.word)
 		}
@@ -121,7 +119,7 @@ func TestExplainQuotesRealMargins(t *testing.T) {
 	}
 	all := []*todo.Todo{&high, &mid, &low}
 
-	e := explainSequenceAt(fixedNow, &mid, all, balancedBiases(), activityHeat{})
+	e := ExplainAt(fixedNow, &mid, all, balancedBiases(), Heat{})
 	if e.Pos != 2 || e.Of != 3 {
 		t.Fatalf("rank = #%d of %d, want #2 of 3", e.Pos, e.Of)
 	}
@@ -147,7 +145,7 @@ func TestExplainFlagsARollupBoost(t *testing.T) {
 	child.CreatedAt = fixedNow
 	all := []*todo.Todo{&parent, &child}
 
-	e := explainSequenceAt(fixedNow, &parent, all, balancedBiases(), activityHeat{})
+	e := ExplainAt(fixedNow, &parent, all, balancedBiases(), Heat{})
 	if !e.Boosted {
 		t.Fatalf("parent lifted by its subtask did not report a boost (own %.1f, ranked %.1f)", e.Total, e.Ranked)
 	}
@@ -164,12 +162,12 @@ func TestForecastReportsTheMidnightDeadlineStep(t *testing.T) {
 	tt.CreatedAt = fixedNow
 	tt.DueDate = startOfDay(fixedNow).AddDate(0, 0, 3)
 
-	shifts := forecastSequence(fixedNow, &tt, []*todo.Todo{&tt}, balancedBiases(), activityHeat{})
+	shifts := Forecast(fixedNow, &tt, []*todo.Todo{&tt}, balancedBiases(), Heat{})
 	if len(shifts) == 0 {
 		t.Fatal("a task inside the deadline ramp reported no upcoming change")
 	}
 	first := shifts[0]
-	if first.Cause != shiftMidnight {
+	if first.Cause != ShiftMidnight {
 		t.Errorf("first shift cause = %v, want the midnight step", first.Cause)
 	}
 	if !first.At.Equal(startOfDay(fixedNow).AddDate(0, 0, 1)) {
@@ -190,10 +188,10 @@ func TestForecastReportsMomentumRunningOut(t *testing.T) {
 	tt.CreatedAt = fixedNow
 	heat := hotHeat(signal, nil, []string{"alpha"}, nil)
 
-	shifts := forecastSequence(fixedNow, &tt, []*todo.Todo{&tt}, balancedBiases(), heat)
-	var found *seqShift
+	shifts := Forecast(fixedNow, &tt, []*todo.Todo{&tt}, balancedBiases(), heat)
+	var found *Shift
 	for i := range shifts {
-		if shifts[i].Cause == shiftMomentum {
+		if shifts[i].Cause == ShiftMomentum {
 			found = &shifts[i]
 			break
 		}
@@ -201,7 +199,7 @@ func TestForecastReportsMomentumRunningOut(t *testing.T) {
 	if found == nil {
 		t.Fatalf("momentum expiry was not forecast; shifts = %+v", shifts)
 	}
-	if want := signal.Add(momentumWindow); !found.At.Equal(want) {
+	if want := signal.Add(MomentumWindow); !found.At.Equal(want) {
 		t.Errorf("momentum expiry at %v, want %v (signal + 48h)", found.At, want)
 	}
 	// Age keeps accruing across the eight hours, so the drop is the whole
@@ -218,126 +216,9 @@ func TestForecastStaysQuietForAStableTask(t *testing.T) {
 	tt.ID = "quiet"
 	tt.CreatedAt = fixedNow.AddDate(0, 0, -3)
 
-	if shifts := forecastSequence(fixedNow, &tt, []*todo.Todo{&tt}, balancedBiases(), activityHeat{}); len(shifts) != 0 {
+	if shifts := Forecast(fixedNow, &tt, []*todo.Todo{&tt}, balancedBiases(), Heat{}); len(shifts) != 0 {
 		t.Errorf("a task with no deadline and no heat forecast %d change(s): %+v", len(shifts), shifts)
 	}
 }
 
-// Done tasks score 0 by rule; the explanation must say that instead of
-// printing five zeros and a total nobody can act on.
-func TestExplainDoneTaskSaysSo(t *testing.T) {
-	tt := todo.New("finished")
-	tt.Status = todo.Done
-	tt.Priority = todo.PriorityHigh
-	e := explainSequenceAt(fixedNow, &tt, []*todo.Todo{&tt}, balancedBiases(), activityHeat{})
-	if !e.Done || len(e.Factors) != 0 {
-		t.Errorf("done task: Done=%v with %d factors, want the done headline and no breakdown", e.Done, len(e.Factors))
-	}
-	if !strings.Contains(seqHeadline(e), "done") {
-		t.Errorf("headline %q does not mention that the task is done", seqHeadline(e))
-	}
-}
-
 // ── The overlay ───────────────────────────────────────────────────────────────
-
-func explainModel(t *testing.T) model {
-	t.Helper()
-	overdue := todo.New("Fix the boiler in the basement before the inspection")
-	overdue.Priority = todo.PriorityHigh
-	overdue.Project = "House"
-	overdue.AddTag("home")
-	overdue.DueDate = time.Now().Add(-72 * time.Hour)
-	soon := todo.New("Write the quarterly memo")
-	soon.DueDate = time.Now().Add(48 * time.Hour)
-	plain := todo.New("Buy filters")
-	return modelWithTasks(t, overdue, soon, plain)
-}
-
-// w opens the overlay on the task under the cursor and pins it by ID, so a
-// re-sort underneath cannot swap out what is being explained.
-func TestWhyKeyOpensTheOverlayOnTheCurrentTask(t *testing.T) {
-	m := explainModel(t)
-	want := m.currentTodo()
-	if want == nil {
-		t.Fatal("no task under the cursor")
-	}
-	m = sendKey(t, m, "w")
-	if m.mode != modeExplain {
-		t.Fatalf("mode = %v after w, want modeExplain", m.mode)
-	}
-	if m.explainTaskID != want.ID {
-		t.Errorf("overlay pinned %q, want the task under the cursor (%q)", m.explainTaskID, want.ID)
-	}
-	if body := m.View(); !strings.Contains(body, "Why this rank") {
-		t.Error("the overlay did not render its title")
-	}
-	m = sendKey(t, m, "esc")
-	if m.mode != modeNormal || m.explainTaskID != "" {
-		t.Errorf("esc left mode=%v pinned=%q, want a closed overlay", m.mode, m.explainTaskID)
-	}
-}
-
-// The overlay says the same things the CLI prints — one score, one story.
-func TestOverlayAndCLIAgree(t *testing.T) {
-	m := explainModel(t)
-	tt := m.currentTodo()
-	e := m.rank.explain(tt, m.allTodos())
-
-	plain := strings.Join(explainPlainLines(e), "\n")
-	if !strings.Contains(plain, tt.Title) {
-		t.Errorf("plain output does not name the task:\n%s", plain)
-	}
-	for _, name := range seqDimNames {
-		if !strings.Contains(plain, name) {
-			t.Errorf("plain output is missing the %s row:\n%s", name, plain)
-		}
-	}
-	styled := strings.Join(m.explainBodyLines(e, 100), "\n")
-	if !strings.Contains(ansi.Strip(styled), tt.Title) {
-		t.Error("the overlay body does not name the task")
-	}
-}
-
-// The no-wrap contract, swept across widths and languages — German is the
-// width stress case, and a translated sentence is exactly what would push a
-// hand-budgeted column over the edge.
-func TestOverlayHonoursTheWidthBudget(t *testing.T) {
-	defer applyLang("en")
-	m := explainModel(t)
-	e := m.rank.explain(m.currentTodo(), m.allTodos())
-	for _, lang := range availableLanguages {
-		applyLang(string(lang))
-		for _, w := range []int{0, 1, 8, 20, 40, 60, 80, 100, 160} {
-			for _, line := range m.explainBodyLines(e, w) {
-				if got := ansi.StringWidth(line); got > w && w >= 8 {
-					t.Errorf("%s at width %d: line is %d wide: %q", lang, w, got, ansi.Strip(line))
-				}
-			}
-		}
-	}
-}
-
-// The overlay must survive being asked about a task that is not in the
-// ranking at all — a subtask, or a row whose ID went stale.
-func TestOverlayHandlesUnrankedAndMissingTasks(t *testing.T) {
-	parent := todo.New("parent")
-	parent.ID = "p"
-	sub := todo.New("subtask")
-	sub.ID = "s"
-	sub.ParentID = "p"
-	m := modelWithTasks(t, parent, sub)
-
-	e := m.rank.explain(m.get("s"), m.allTodos())
-	if e.Pos != 0 {
-		t.Errorf("a subtask reported rank #%d, want unranked", e.Pos)
-	}
-	if len(m.explainBodyLines(e, 80)) == 0 {
-		t.Error("an unranked task rendered no body")
-	}
-
-	m.mode = modeExplain
-	m.explainTaskID = "gone"
-	if got := m.View(); got == "" {
-		t.Error("a stale explain ID rendered nothing")
-	}
-}

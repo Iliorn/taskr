@@ -293,7 +293,7 @@ func manPage() string {
 	b.WriteString(".B r:weekly\n and\n.B dep:^\n(the last-added task).\n")
 	b.WriteString(".SH FILES\n")
 	b.WriteString(".TP\n.I ~/.taskr/tasks.db\nThe task store (SQLite, WAL mode).\n")
-	b.WriteString(".TP\n.I ~/.taskr/settings.json\nPreferences: theme, language, sequencing biases, board columns.\n")
+	b.WriteString(".TP\n.I ~/.taskr/settings.json\nPreferences: theme, language, sequencing rank.Biases, board columns.\n")
 	b.WriteString(".TP\n.I ~/.taskr/sync.json\nSync server URL and token, when configured.\n")
 	b.WriteString(".SH ENVIRONMENT\n")
 	b.WriteString(".TP\n.B EDITOR\nEditor used for task notes. Falls back to notepad on Windows.\n")

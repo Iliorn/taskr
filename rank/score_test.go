@@ -1,4 +1,4 @@
-package main
+package rank
 
 import (
 	"math"
@@ -92,9 +92,9 @@ func TestImportanceDim(t *testing.T) {
 
 // hotHeat builds a heat snapshot whose every listed key carries a signal that
 // landed just now — the shape tests want when they only care about hot/cold.
-// The heat maps hold the signal instant (see activityHeat), so a literal of
+// The heat maps hold the signal instant (see Heat), so a literal of
 // bare keys needs a timestamp per entry.
-func hotHeat(at time.Time, tasks, projects, tags []string) activityHeat {
+func hotHeat(at time.Time, tasks, projects, tags []string) Heat {
 	fill := func(keys []string) map[string]time.Time {
 		m := make(map[string]time.Time, len(keys))
 		for _, k := range keys {
@@ -102,7 +102,7 @@ func hotHeat(at time.Time, tasks, projects, tags []string) activityHeat {
 		}
 		return m
 	}
-	return activityHeat{tasks: fill(tasks), projects: fill(projects), tags: fill(tags)}
+	return Heat{tasks: fill(tasks), projects: fill(projects), tags: fill(tags)}
 }
 
 func TestMomentumDim(t *testing.T) {
@@ -131,7 +131,7 @@ func TestMomentumDim(t *testing.T) {
 		}
 	}
 	// Zero-value heat (no snapshot computed) must read as all-cold, not panic.
-	if got := momentumDim(mk("any", "p", "t"), activityHeat{}); got != 0 {
+	if got := momentumDim(mk("any", "p", "t"), Heat{}); got != 0 {
 		t.Errorf("zero-value heat = %v, want 0", got)
 	}
 }
@@ -189,7 +189,7 @@ func TestComputeActivityHeat(t *testing.T) {
 	ghost.Deleted = true
 	ghost.Project = "epsilon"
 
-	h := computeActivityHeat(now, todoPtrs([]todo.Todo{fresh, old, commented, tracked, ghost}))
+	h := ComputeHeat(now, todoPtrs([]todo.Todo{fresh, old, commented, tracked, ghost}))
 
 	for _, want := range []struct {
 		kind string
@@ -242,7 +242,7 @@ func TestDoneTaskScoresZero(t *testing.T) {
 	tt.Status = todo.Done
 	tt.Priority = todo.PriorityHigh
 	tt.Size = todo.SizeSmall
-	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true}, activityHeat{})
+	got := ComponentsAt(fixedNow, &tt, Biases{Deadline: Intense, Priority: Intense, Momentum: Intense, Aging: true}, Heat{})
 	if got.Total != 0 {
 		t.Errorf("done task scored %v, want 0", got.Total)
 	}
@@ -255,7 +255,7 @@ func TestBalancedBiasGivesUnweightedSum(t *testing.T) {
 	tt.Project = "hot"
 	tt.CreatedAt = fixedNow.Add(-1 * 24 * time.Hour)
 	heat := hotHeat(fixedNow, nil, []string{"hot"}, nil)
-	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}, heat)
+	got := ComponentsAt(fixedNow, &tt, Biases{Deadline: Balanced, Priority: Balanced, Momentum: Balanced, Aging: true}, heat)
 	// no due, so urgency=0. importance 10 + momentum 10 + size 2 + age 0.1 = 22.1
 	if !approxEq(got.Total, 22.1) {
 		t.Errorf("Balanced score = %v, want ~22.1; components=%+v", got.Total, got)
@@ -269,7 +269,7 @@ func TestIntenseBiasDoublesEachAxis(t *testing.T) {
 	tt.Project = "hot"
 	tt.DueDate = fixedNow.Add(48 * time.Hour) // 2 days out
 	heat := hotHeat(fixedNow, nil, []string{"hot"}, nil)
-	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasIntense, Priority: biasIntense, Momentum: biasIntense, Aging: true}, heat)
+	got := ComponentsAt(fixedNow, &tt, Biases{Deadline: Intense, Priority: Intense, Momentum: Intense, Aging: true}, heat)
 	// urgency dim = 10 - 16/7 ≈ 7.714; weighted ×2 ≈ 15.428
 	// importance dim = 10; weighted ×2 = 20
 	// momentum dim = 10 (hot project); weighted ×2 = 20
@@ -285,7 +285,7 @@ func TestRelaxedBiasHalvesEachAxis(t *testing.T) {
 	tt := todo.New("relaxed")
 	tt.Priority = todo.PriorityHigh
 	tt.Size = todo.SizeLarge
-	got := sequenceComponentsAt(fixedNow, &tt, biases{Deadline: biasRelaxed, Priority: biasRelaxed, Momentum: biasRelaxed, Aging: true}, activityHeat{})
+	got := ComponentsAt(fixedNow, &tt, Biases{Deadline: Relaxed, Priority: Relaxed, Momentum: Relaxed, Aging: true}, Heat{})
 	// urgency 0, importance 10 * 0.5 = 5, momentum 0 (cold), size 0, age 0
 	if !approxEq(got.Total, 5.0) {
 		t.Errorf("Relaxed score = %v, want 5.0; components=%+v", got.Total, got)
@@ -296,7 +296,7 @@ func TestRelaxedBiasHalvesEachAxis(t *testing.T) {
 // identical tasks — the one whose project saw activity in the window ranks a
 // full axis (10 points, Balanced) above the cold one.
 func TestHotProjectOutranksColdPeer(t *testing.T) {
-	bal := biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}
+	bal := Biases{Deadline: Balanced, Priority: Balanced, Momentum: Balanced, Aging: true}
 	heat := hotHeat(fixedNow, nil, []string{"active"}, nil)
 
 	inFlow := todo.New("next step in the active project")
@@ -304,8 +304,8 @@ func TestHotProjectOutranksColdPeer(t *testing.T) {
 	cold := todo.New("same shape, dormant project")
 	cold.Project = "dormant"
 
-	s := sequenceComponentsAt(fixedNow, &inFlow, bal, heat).Total
-	p := sequenceComponentsAt(fixedNow, &cold, bal, heat).Total
+	s := ComponentsAt(fixedNow, &inFlow, bal, heat).Total
+	p := ComponentsAt(fixedNow, &cold, bal, heat).Total
 	if s-p < 9.99 {
 		t.Errorf("hot project lead = %v, want 10 (in-flow=%v cold=%v)", s-p, s, p)
 	}
@@ -318,11 +318,11 @@ func TestAgingToggle(t *testing.T) {
 	tt.Size = todo.SizeMedium
 	tt.CreatedAt = fixedNow.Add(-60 * 24 * time.Hour) // 60d old → 30·0.1 + 30·0.2 = 9.0 of Age
 
-	with := biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}
-	without := biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: false}
+	with := Biases{Deadline: Balanced, Priority: Balanced, Momentum: Balanced, Aging: true}
+	without := Biases{Deadline: Balanced, Priority: Balanced, Momentum: Balanced, Aging: false}
 
-	gotWith := sequenceComponentsAt(fixedNow, &tt, with, activityHeat{})
-	gotWithout := sequenceComponentsAt(fixedNow, &tt, without, activityHeat{})
+	gotWith := ComponentsAt(fixedNow, &tt, with, Heat{})
+	gotWithout := ComponentsAt(fixedNow, &tt, without, Heat{})
 
 	if !approxEq(gotWith.Age, 9.0) {
 		t.Errorf("aging on: Age = %v, want ~9.0 (60d)", gotWith.Age)
@@ -355,15 +355,15 @@ func TestCaptureSeqRankAtDone(t *testing.T) {
 	sub.ParentID = "top"
 	todos := []todo.Todo{low, mid, top, sub}
 
-	captureSeqRankAtDone(defaultRanker(), todoPtrs(todos), &top)
+	CaptureRankAtDone(Default(), todoPtrs(todos), &top)
 	if top.SeqRankAtDone != 1 {
 		t.Errorf("top rank = %d, want 1", top.SeqRankAtDone)
 	}
-	captureSeqRankAtDone(defaultRanker(), todoPtrs(todos), &low)
+	CaptureRankAtDone(Default(), todoPtrs(todos), &low)
 	if low.SeqRankAtDone != 3 {
 		t.Errorf("low rank = %d, want 3", low.SeqRankAtDone)
 	}
-	captureSeqRankAtDone(defaultRanker(), todoPtrs(todos), &sub)
+	CaptureRankAtDone(Default(), todoPtrs(todos), &sub)
 	if sub.SeqRankAtDone != 0 {
 		t.Errorf("subtask rank = %d, want 0 (not recorded)", sub.SeqRankAtDone)
 	}
@@ -400,7 +400,7 @@ func TestSequenceHitStats(t *testing.T) {
 	pendingNoise := todo.New("pending")
 	todos = append(todos, pendingNoise)
 
-	hits, rated := sequenceHitStats(todoPtrs(todos), 3)
+	hits, rated := HitStats(todoPtrs(todos), 3)
 	if rated != 3 || hits != 2 {
 		t.Errorf("hits/rated = %d/%d, want 2/3 (window keeps the 3 newest rated)", hits, rated)
 	}
@@ -440,7 +440,7 @@ func TestComputeActivityHeatAtBounds(t *testing.T) {
 		StoppedAt: at.Add(-3 * 24 * time.Hour),
 	}}
 
-	h := computeActivityHeatAt(at, todoPtrs([]todo.Todo{self, prior, future, spanning, stale}))
+	h := ComputeHeatAt(at, todoPtrs([]todo.Todo{self, prior, future, spanning, stale}))
 
 	for id, want := range map[string]bool{
 		"self":     false,
@@ -482,7 +482,7 @@ func TestAnalyzeSeqMissesDeadlineGap(t *testing.T) {
 	miss3 := seqDone("miss3", 8, base.Add(-1*24*time.Hour))
 
 	todos := []todo.Todo{hit1, miss1, hit2, miss2, miss3}
-	a := analyzeSeqMisses(todoPtrs(todos), todoPtrs(todos), seqHitWindow, defaultBiases())
+	a := AnalyzeMisses(todoPtrs(todos), todoPtrs(todos), HitWindow, DefaultBiases())
 
 	if a.Hits != 2 || a.Rated != 5 {
 		t.Fatalf("hits/rated = %d/%d, want 2/5", a.Hits, a.Rated)
@@ -505,12 +505,12 @@ func TestAnalyzeSeqMissesDeadlineGap(t *testing.T) {
 			t.Errorf("miss %s weakest = %q, want Deadline", r.ID, r.Weakest)
 		}
 	}
-	if s := seqSuggestion(a, defaultBiases()); !strings.Contains(s, "Deadline: relaxed") {
+	if s := Suggestion(a, DefaultBiases()); !strings.Contains(s, "Deadline: relaxed") {
 		t.Errorf("suggestion = %q, want a Deadline: relaxed hint", s)
 	}
-	already := defaultBiases()
-	already.Deadline = biasRelaxed
-	if s := seqSuggestion(a, already); !strings.Contains(s, "already leans") {
+	already := DefaultBiases()
+	already.Deadline = Relaxed
+	if s := Suggestion(a, already); !strings.Contains(s, "already leans") {
 		t.Errorf("suggestion with Deadline already relaxed = %q, want an 'already leans' note", s)
 	}
 }
@@ -530,12 +530,12 @@ func TestAnalyzeSeqMissesMomentumIntenseHint(t *testing.T) {
 	miss2 := mkMiss("miss2", 11, base.Add(-2*24*time.Hour))
 	miss3 := mkMiss("miss3", 9, base.Add(-1*24*time.Hour))
 
-	a := analyzeSeqMisses(todoPtrs([]todo.Todo{hit1, miss1, miss2, miss3}), todoPtrs([]todo.Todo{hit1, miss1, miss2, miss3}), seqHitWindow, defaultBiases())
+	a := AnalyzeMisses(todoPtrs([]todo.Todo{hit1, miss1, miss2, miss3}), todoPtrs([]todo.Todo{hit1, miss1, miss2, miss3}), HitWindow, DefaultBiases())
 
 	if !approxEq(a.Gap[2], 10.0) {
 		t.Fatalf("Momentum gap = %v, want +10", a.Gap[2])
 	}
-	if s := seqSuggestion(a, defaultBiases()); !strings.Contains(s, "Momentum: intense") {
+	if s := Suggestion(a, DefaultBiases()); !strings.Contains(s, "Momentum: intense") {
 		t.Errorf("suggestion = %q, want a Momentum: intense hint", s)
 	}
 }
@@ -548,8 +548,8 @@ func TestSeqSuggestionGates(t *testing.T) {
 		seqDone("m1", 9, base.Add(-2*24*time.Hour)),
 		seqDone("m2", 8, base.Add(-1*24*time.Hour)),
 	}
-	few := analyzeSeqMisses(todoPtrs(fewSet), todoPtrs(fewSet), seqHitWindow, defaultBiases())
-	if s := seqSuggestion(few, defaultBiases()); s != "" {
+	few := AnalyzeMisses(todoPtrs(fewSet), todoPtrs(fewSet), HitWindow, DefaultBiases())
+	if s := Suggestion(few, DefaultBiases()); s != "" {
 		t.Errorf("suggestion with 2 misses = %q, want empty", s)
 	}
 	// Three misses with dims identical to the hit → calibrated message.
@@ -559,13 +559,13 @@ func TestSeqSuggestionGates(t *testing.T) {
 		seqDone("m2", 8, base.Add(-2*24*time.Hour)),
 		seqDone("m3", 7, base.Add(-1*24*time.Hour)),
 	}
-	flat := analyzeSeqMisses(todoPtrs(flatSet), todoPtrs(flatSet), seqHitWindow, defaultBiases())
-	if s := seqSuggestion(flat, defaultBiases()); !strings.Contains(s, "calibrated") {
+	flat := AnalyzeMisses(todoPtrs(flatSet), todoPtrs(flatSet), HitWindow, DefaultBiases())
+	if s := Suggestion(flat, DefaultBiases()); !strings.Contains(s, "calibrated") {
 		t.Errorf("suggestion with flat gaps = %q, want the calibrated note", s)
 	}
 }
 
-// A sort must score every task against ONE instant. ranker.score reads
+// A sort must score every task against ONE instant. Ranker.Score reads
 // time.Now() per call and Age accrues continuously, so scoring tasks one at a
 // time makes identical tasks differ by ~1e-11 — enough for the comparator to
 // separate them on the float and never reach the ID tie-break, leaving the
@@ -586,8 +586,8 @@ func TestSequenceSortIsDeterministicForIdenticalTasks(t *testing.T) {
 	}
 	forward := build([]string{"aaaa", "bbbb", "cccc"})
 	shuffled := build([]string{"cccc", "aaaa", "bbbb"})
-	sortTodoPtrsBySequence(forward, nil, nil, defaultRanker().scoreNow())
-	sortTodoPtrsBySequence(shuffled, nil, nil, defaultRanker().scoreNow())
+	SortPtrs(forward, nil, nil, Default().ScoreNow())
+	SortPtrs(shuffled, nil, nil, Default().ScoreNow())
 	for i := range forward {
 		if forward[i].ID != shuffled[i].ID {
 			t.Fatalf("same tasks in a different input order sorted differently: %s vs %s at %d",

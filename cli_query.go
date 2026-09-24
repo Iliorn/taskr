@@ -280,30 +280,6 @@ func cliProjects(args []string) int {
 
 // ── top ──────────────────────────────────────────────────────────────────────
 
-// rankTopBySequence returns the top-level pending tasks ranked exactly as the
-// TUI's Sequence sort ranks them (selectActiveDone): each task's base score
-// lifted by the subtask and dependency critical-path rollups, so a parent
-// inherits its subtasks' urgency and a blocker inherits the urgency of the work
-// it holds up. The rollup is computed from the full set — it needs subtasks and
-// dependency targets, not just the top-level rows. Pure; the caller applies any
-// -n limit. `taskr top`'s displayed SCORE stays each task's own score (matching
-// the TUI); only the ordering reflects the boost.
-func rankTopBySequence(todos []*todo.Todo, r ranker) []todo.Todo {
-	return rankTopBySequenceBy(todos, r.scoreNow())
-}
-
-// rankTopBySequenceBy is the shared implementation behind rankTopBySequence and
-// rankTopBySequenceWith. It accepts an arbitrary score function so callers can
-// supply knob values that are not live yet (the preview path) or the live
-// ranker (the CLI and TUI paths). The rollup and sort logic — subtask inheritance, critical-path
-// dependency boost, fan-out bonus, cycle-safe DFS — is identical for both.
-func rankTopBySequenceBy(todos []*todo.Todo, score func(*todo.Todo) float64) []todo.Todo {
-	// seqRanking (sequence_explain.go) is the same fold; it also hands back the
-	// effective score each row sorted by, which only the explain view needs.
-	rows, _ := seqRanking(todos, score)
-	return rows
-}
-
 func cliTop(args []string) int {
 	fs := flag.NewFlagSet("top", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -320,7 +296,7 @@ func cliTop(args []string) int {
 		return 1
 	}
 	rk := repo.ranker()
-	rows := rankTopBySequence(todoPtrs(todos), rk)
+	rows := rk.Top(todoPtrs(todos))
 	if *n > 0 && len(rows) > *n {
 		rows = rows[:*n]
 	}
@@ -344,8 +320,8 @@ func cliTop(args []string) int {
 			if !rows[i].DueDate.IsZero() {
 				due = rows[i].DueDate.Format("2006-01-02")
 			}
-			score := rk.score(&rows[i])
-			out[i] = scoredOut{rows[i].ID, rows[i].Title, score, rk.percent(score),
+			score := rk.Score(&rows[i])
+			out[i] = scoredOut{rows[i].ID, rows[i].Title, score, rk.Percent(score),
 				priorityLetter(rows[i].Priority), due, rows[i].Tags}
 		}
 		return emitJSON(out)
@@ -373,7 +349,7 @@ func cliTop(args []string) int {
 			}
 			tags := truncate(tagStrings[i], tagW)
 			fmt.Printf("%-8s  %5s  %-3s  %-10s  %-*s  %s\n",
-				rows[i].ID[:8], rk.formatPercent(rk.score(&rows[i])),
+				rows[i].ID[:8], rk.FormatPercent(rk.Score(&rows[i])),
 				priorityLetter(rows[i].Priority), due, tagW, tags,
 				truncate(rows[i].Title, 60))
 		}
@@ -381,7 +357,7 @@ func cliTop(args []string) int {
 	}
 	for i := range rows {
 		fmt.Printf("%-8s %5s  %s\n", rows[i].ID[:8],
-			rk.formatPercent(rk.score(&rows[i])), truncate(rows[i].Title, 60))
+			rk.FormatPercent(rk.Score(&rows[i])), truncate(rows[i].Title, 60))
 	}
 	return 0
 }

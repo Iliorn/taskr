@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -30,7 +31,7 @@ type cacheState struct {
 	projectNames  []string
 	tagLastUsed   map[string]time.Time   // tag → latest ModifiedAt of a task using it
 	subProgress   map[string]subProgress // parentID → subtask done/total; see refreshSubtaskProgress
-	rankScore     map[string]float64     // taskID → the lift the sequence ranking sorts (and shows) it by; see rankScores
+	rankScore     map[string]float64     // taskID → the lift the sequence ranking sorts (and shows) it by; see rank.Lifts
 	projLastUsed  map[string]time.Time   // project → latest ModifiedAt of a task in it
 	tagRender     map[string]string
 	taskTagRender map[string]string
@@ -60,15 +61,15 @@ func (m *model) refreshCaches() {
 
 	// Momentum reads recent activity; refresh the snapshot before anything
 	// downstream (selectActiveDone, rollups) computes scores from it.
-	m.rank.heat = computeActivityHeat(m.frameTime, all)
+	m.rank.Heat = rank.ComputeHeat(m.frameTime, all)
 	// The lift depends on the task set, not on the filter, so it is computed
 	// once here: the ranking sorts by it, every row prints it, and the filter
 	// path below reuses it instead of walking the task set twice per keystroke.
-	m.cache.rankScore = rankScores(all, m.rank.score)
+	m.cache.rankScore = rank.Lifts(all, m.rank.Score)
 	// The percentage scale is relative to the current field, so its 100% mark
 	// is refreshed in the same step — and after the heat, since the scores it
 	// takes the maximum of read momentum from it.
-	m.rank.max = maxRankedScoreWith(all, m.cache.rankScore, m.rank.score)
+	m.rank.Max = rank.MaxRanked(all, m.cache.rankScore, m.rank.Score)
 	m.repo.SetRanker(m.rank)
 
 	for k := range m.cache.overdueSet {
@@ -82,7 +83,7 @@ func (m *model) refreshCaches() {
 
 	m.rebuildDependencySets(all)
 
-	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.rank.scoreNow(), m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
+	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.rank.ScoreNow(), m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 
 	m.refreshUsageRecency(all)
 	m.refreshGroups(all)
@@ -102,10 +103,10 @@ func (m *model) refreshCaches() {
 }
 
 // rebuildDependencySets recomputes blockedSet/blockerSet from the full task set.
-// The rule itself lives in dependencySets (selectors.go), so the sequence sort
+// The rule itself lives in rank.DependencySets (rank/order.go), so the sequence sort
 // and the rendered row agree on what "blocked" means.
 func (m *model) rebuildDependencySets(all []*todo.Todo) {
-	m.cache.blockedSet, m.cache.blockerSet = dependencySets(all)
+	m.cache.blockedSet, m.cache.blockerSet = rank.DependencySets(all)
 }
 
 // refreshUsageRecency records, per tag and per project, the latest ModifiedAt of
@@ -195,7 +196,7 @@ func (m *model) refreshTaskColMetrics() {
 // whatever it unblocks or contains, exactly as the sequence sort ranked it.
 // Reads the cached lift map, so it is a map lookup per row rather than a walk.
 func (m model) rankedScore(t *todo.Todo) float64 {
-	return rankScoreOf(t, m.cache.rankScore, m.rank.score)
+	return rank.ScoreOf(t, m.cache.rankScore, m.rank.Score)
 }
 
 // refreshFilteredCaches rebuilds only the views that depend on the search/focus
@@ -206,7 +207,7 @@ func (m model) rankedScore(t *todo.Todo) float64 {
 // entire task set on every keypress for no reason.
 func (m *model) refreshFilteredCaches() {
 	all := m.allTodos()
-	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.rank.scoreNow(), m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
+	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.rank.ScoreNow(), m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
 	m.refreshClosedToday()
@@ -217,8 +218,8 @@ func (m *model) refreshFilteredCaches() {
 // refreshGroups rebuilds the Tags and Projects summaries. Next-up is ranked by
 // the score the Tasks list shows, lift included, against one frozen instant.
 func (m *model) refreshGroups(all []*todo.Todo) {
-	frozen := m.rank.scoreNow()
-	score := func(t *todo.Todo) float64 { return rankScoreOf(t, m.cache.rankScore, frozen) }
+	frozen := m.rank.ScoreNow()
+	score := func(t *todo.Todo) float64 { return rank.ScoreOf(t, m.cache.rankScore, frozen) }
 	m.cache.tagGroups = summarizeGroups(all, tagGroupKeys, score)
 	m.cache.projectGroups = summarizeGroups(all, projectGroupKeys, score)
 	m.cache.tagNames = sortedGroupNames(m.cache.tagGroups)

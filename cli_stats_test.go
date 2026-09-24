@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -99,11 +100,11 @@ func TestScopeForStats(t *testing.T) {
 }
 
 func TestRenderSeqAnalysisTextEdges(t *testing.T) {
-	if s := renderSeqAnalysisText(seqAnalysis{}, defaultBiases()); !strings.Contains(s, "no rank-stamped completions") {
+	if s := renderSeqAnalysisText(rank.Analysis{}, rank.DefaultBiases()); !strings.Contains(s, "no rank-stamped completions") {
 		t.Errorf("empty analysis = %q, want the no-history message", s)
 	}
-	allHits := seqAnalysis{Hits: 4, Rated: 4, TopN: seqHitTopN}
-	if s := renderSeqAnalysisText(allHits, defaultBiases()); !strings.Contains(s, "no misses") {
+	allHits := rank.Analysis{Hits: 4, Rated: 4, TopN: rank.HitTopN}
+	if s := renderSeqAnalysisText(allHits, rank.DefaultBiases()); !strings.Contains(s, "no misses") {
 		t.Errorf("all-hits analysis = %q, want the no-misses message", s)
 	}
 }
@@ -128,8 +129,8 @@ func TestRenderSeqAnalysisTextTable(t *testing.T) {
 		mk("m2", 12, base.Add(-2*24*time.Hour), false),
 		mk("m3", 8, base.Add(-1*24*time.Hour), false),
 	}
-	a := analyzeSeqMisses(todoPtrs(todos), todoPtrs(todos), seqHitWindow, defaultBiases())
-	out := renderSeqAnalysisText(a, defaultBiases())
+	a := rank.AnalyzeMisses(todoPtrs(todos), todoPtrs(todos), rank.HitWindow, rank.DefaultBiases())
+	out := renderSeqAnalysisText(a, rank.DefaultBiases())
 	for _, want := range []string{"largest gap", "Deadline: relaxed", "recent misses:", "rank   9"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rendered analysis missing %q:\n%s", want, out)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 )
@@ -371,7 +372,7 @@ type syncSummary struct {
 // untouched.
 // b scores the rows the merge writes; board is this device's column list as
 // offered to the fleet (boardConfig.wire), nil to leave the fleet's alone.
-func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b biases, board *tasksync.Board) (syncSummary, error) {
+func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b rank.Biases, board *tasksync.Board) (syncSummary, error) {
 	local, err := loadTodosForSync(h)
 	if err != nil {
 		return syncSummary{}, err

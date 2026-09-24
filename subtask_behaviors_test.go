@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -321,11 +322,11 @@ func TestDescendantScoreRollupLiftsChildScore(t *testing.T) {
 	child.Priority = todo.PriorityHigh
 	child.DueDate = time.Now().Add(-24 * time.Hour) // overdue + high priority
 
-	rollup := descendantScoreRollup(todoPtrs([]todo.Todo{parent, child}), defaultRanker().score)
+	rollup := rank.DescendantRollup(todoPtrs([]todo.Todo{parent, child}), rank.Default().Score)
 	if rollup["p"] == 0 {
 		t.Error("rollup should report a non-zero score for parent (child is overdue+high)")
 	}
-	parentOwn := defaultRanker().score(&parent)
+	parentOwn := rank.Default().Score(&parent)
 	if rollup["p"] <= parentOwn {
 		t.Errorf("rollup score %.2f should exceed parent's own %.2f", rollup["p"], parentOwn)
 	}

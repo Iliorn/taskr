@@ -1,16 +1,4 @@
-package main
-
-import (
-	"fmt"
-	"math"
-	"sort"
-	"strconv"
-	"time"
-
-	"github.com/Iliorn/taskr/todo"
-)
-
-// sequence.go is the sequencing engine: the rule that decides the "Sequence"
+// Package rank is the sequencing engine: the rule that decides the "Sequence"
 // sort order and the value persisted in the todos.sequence column on every save.
 //
 // The score is the design's Normalized Power Scale: three 0–10 dimensions,
@@ -24,110 +12,121 @@ import (
 //	U  Urgency    closeness to deadline (0..10+)
 //	I  Importance priority bucket (0/5/10)
 //	M  Momentum   activity heat: 10 when the task or its project saw activity
-//	              (completion, timer, comment) inside momentumWindow, 5 when
+//	              (completion, timer, comment) inside MomentumWindow, 5 when
 //	              only one of its tags did, 0 cold
 //	Size          quick-win nudge (S=2, M=1, L=0)
 //	Age           rot-guard: +0.1/day, +0.2/day past 30
 //	Wd Wp Wm      Deadline / Priority / Momentum bias multipliers
 //
 // Done tasks score 0.
+package rank
+
+import (
+	"fmt"
+	"math"
+	"sort"
+	"strconv"
+	"time"
+
+	"github.com/Iliorn/taskr/todo"
+)
 
 // ── Bias level ────────────────────────────────────────────────────────────────
 
-// biasLevel is the three-state user-facing knob exposed in Settings. The
+// Level is the three-state user-facing knob exposed in Settings. The
 // numbers are deliberately symmetric around Balanced so cycling left/right
 // doubles or halves the dimension's voting weight.
-type biasLevel int
+type Level int
 
 const (
-	biasBalanced biasLevel = iota // weight 1.0 — the design's "neutral middleground"
-	biasRelaxed                   // weight 0.5
-	biasIntense                   // weight 2.0
+	Balanced Level = iota // weight 1.0 — the design's "neutral middleground"
+	Relaxed               // weight 0.5
+	Intense               // weight 2.0
 )
 
-func (b biasLevel) weight() float64 {
+func (b Level) Weight() float64 {
 	switch b {
-	case biasRelaxed:
+	case Relaxed:
 		return 0.5
-	case biasIntense:
+	case Intense:
 		return 2.0
 	default:
 		return 1.0
 	}
 }
 
-func (b biasLevel) String() string {
+func (b Level) String() string {
 	switch b {
-	case biasRelaxed:
+	case Relaxed:
 		return "relaxed"
-	case biasIntense:
+	case Intense:
 		return "intense"
 	default:
 		return "balanced"
 	}
 }
 
-// next cycles Relaxed → Balanced → Intense → Relaxed.
-func (b biasLevel) next() biasLevel {
+// Next cycles Relaxed → Balanced → Intense → Relaxed.
+func (b Level) Next() Level {
 	switch b {
-	case biasRelaxed:
-		return biasBalanced
-	case biasBalanced:
-		return biasIntense
+	case Relaxed:
+		return Balanced
+	case Balanced:
+		return Intense
 	default:
-		return biasRelaxed
+		return Relaxed
 	}
 }
 
-// prev cycles in the opposite direction so ←/→ in Settings are symmetric.
-func (b biasLevel) prev() biasLevel {
+// Prev cycles in the opposite direction so ←/→ in Settings are symmetric.
+func (b Level) Prev() Level {
 	switch b {
-	case biasIntense:
-		return biasBalanced
-	case biasBalanced:
-		return biasRelaxed
+	case Intense:
+		return Balanced
+	case Balanced:
+		return Relaxed
 	default:
-		return biasIntense
+		return Intense
 	}
 }
 
 // ── Biases (the user setting) ─────────────────────────────────────────────────
 
-type biases struct {
-	Deadline biasLevel
-	Priority biasLevel
-	Momentum biasLevel
+type Biases struct {
+	Deadline Level
+	Priority Level
+	Momentum Level
 	// Aging gates the per-day Age contribution. true (default) keeps the rot
 	// guard on; toggling off zeros the Age term so a brand-new task and a
 	// year-old task with the same Deadline/Priority/Momentum score identically.
 	Aging bool
 }
 
-// defaultBiases is the all-Balanced, aging-on configuration that the engine
+// DefaultBiases is the all-Balanced, aging-on configuration that the engine
 // boots into before settings.json is read.
-func defaultBiases() biases {
-	return biases{Aging: true}
+func DefaultBiases() Biases {
+	return Biases{Aging: true}
 }
 
-// cycleBiasLevel is the user-facing knob bound to ←/→ on a Settings bias row.
+// CycleLevel is the user-facing knob bound to ←/→ on a Settings bias row.
 // Direction +1 cycles Relaxed→Balanced→Intense (next), -1 the other way. After
 // changing a bias the caller is responsible for invalidating the task cache so
 // the new weights take effect on the next render.
-func cycleBiasLevel(b biasLevel, direction int) biasLevel {
+func CycleLevel(b Level, direction int) Level {
 	if direction < 0 {
-		return b.prev()
+		return b.Prev()
 	}
-	return b.next()
+	return b.Next()
 }
 
 // ── Activity heat (the Momentum signal) ──────────────────────────────────────
 
-// momentumWindow is how far back an activity signal still counts as "recent".
-const momentumWindow = 48 * time.Hour
+// MomentumWindow is how far back an activity signal still counts as "recent".
+const MomentumWindow = 48 * time.Hour
 
-// activityHeat is the recent-activity snapshot the Momentum dimension reads:
+// Heat is the recent-activity snapshot the Momentum dimension reads:
 // which tasks, projects, and tags saw a completion, a time entry, or a comment
-// inside momentumWindow. The zero value means everything is cold (momentum 0),
+// inside MomentumWindow. The zero value means everything is cold (momentum 0),
 // which is what a process that never computes heat — the sync server
 // persisting merged rows — correctly falls back to; every user-facing surface
 // recomputes it on load or cache refresh.
@@ -135,10 +134,10 @@ const momentumWindow = 48 * time.Hour
 // A key's presence is the hot/cold answer scoring needs; the value it maps to
 // is the newest signal behind it, which is what says *when* that heat runs out.
 // Momentum is the one dimension that changes with no user action at all — it
-// expires momentumWindow after the last signal — so a list can reshuffle
+// expires MomentumWindow after the last signal — so a list can reshuffle
 // overnight with nothing to point at. Recording the instant lets the explain
-// view name it in advance (see expire / heatExpiries).
-type activityHeat struct {
+// view name it in advance (see expire / HeatExpiries).
+type Heat struct {
 	tasks    map[string]time.Time
 	projects map[string]time.Time
 	tags     map[string]time.Time
@@ -146,7 +145,7 @@ type activityHeat struct {
 
 // hot reports whether a heat map carries a live signal for key. Presence is the
 // answer: both builders only record signals already inside the window, and
-// expire drops the ones that have aged out.
+// Expire drops the ones that have aged out.
 func hot(m map[string]time.Time, key string) bool {
 	if key == "" {
 		return false
@@ -155,12 +154,12 @@ func hot(m map[string]time.Time, key string) bool {
 	return ok
 }
 
-// computeActivityHeat scans the full task set (done tasks included — their
+// ComputeHeat scans the full task set (done tasks included — their
 // completions are the strongest signal) and marks the task, its project, and
 // its tags hot when any signal lands inside the window ending at `now`, with
 // the newest such signal as the value.
-func computeActivityHeat(now time.Time, todos []*todo.Todo) activityHeat {
-	cutoff := now.Add(-momentumWindow)
+func ComputeHeat(now time.Time, todos []*todo.Todo) Heat {
+	cutoff := now.Add(-MomentumWindow)
 	return scanHeat(todos, func(t *todo.Todo) time.Time {
 		var newest time.Time
 		bump := func(ts time.Time) {
@@ -189,17 +188,17 @@ func computeActivityHeat(now time.Time, todos []*todo.Todo) activityHeat {
 	})
 }
 
-// computeActivityHeatAt reconstructs the heat snapshot as it stood at a past
+// ComputeHeatAt reconstructs the heat snapshot as it stood at a past
 // moment `at` — used by the stats --seq miss analysis to re-score a completion
 // with the momentum signal its rank stamp actually saw. Unlike the live
-// computeActivityHeat it bounds signals STRICTLY before `at`: the completion
-// being analyzed lands at exactly `at`, and captureSeqRankAtDone stamps the
+// ComputeHeat it bounds signals STRICTLY before `at`: the completion
+// being analyzed lands at exactly `at`, and CaptureRankAtDone stamps the
 // rank before Toggle flips the status, so the task's own completion must not
 // count toward its own momentum. The live path keeps its open upper edge on
 // purpose — cross-device clock skew after a sync can put a legitimate hot
 // signal slightly in the future, and dropping it there would be wrong.
-func computeActivityHeatAt(at time.Time, todos []*todo.Todo) activityHeat {
-	cutoff := at.Add(-momentumWindow)
+func ComputeHeatAt(at time.Time, todos []*todo.Todo) Heat {
+	cutoff := at.Add(-MomentumWindow)
 	return scanHeat(todos, func(t *todo.Todo) time.Time {
 		var newest time.Time
 		bump := func(ts time.Time) {
@@ -235,12 +234,12 @@ func computeActivityHeatAt(at time.Time, todos []*todo.Todo) activityHeat {
 	})
 }
 
-// scanHeat builds an activityHeat by asking `latest` for each live task's newest
+// scanHeat builds a Heat by asking `latest` for each live task's newest
 // in-window signal and marking the task, its project, and its tags with it. A
 // zero time means cold and records nothing. The two heat builders above share
 // it; only their notion of "recent" differs.
-func scanHeat(todos []*todo.Todo, latest func(*todo.Todo) time.Time) activityHeat {
-	h := activityHeat{
+func scanHeat(todos []*todo.Todo, latest func(*todo.Todo) time.Time) Heat {
+	h := Heat{
 		tasks:    make(map[string]time.Time),
 		projects: make(map[string]time.Time),
 		tags:     make(map[string]time.Time),
@@ -270,12 +269,12 @@ func scanHeat(todos []*todo.Todo, latest func(*todo.Todo) time.Time) activityHea
 	return h
 }
 
-// expire returns the snapshot as it will stand at `future`: every signal that
-// will have aged out of momentumWindow by then is dropped. Scoring a task
+// Expire returns the snapshot as it will stand at `future`: every signal that
+// will have aged out of MomentumWindow by then is dropped. Scoring a task
 // against an expired snapshot is how the explain view forecasts the moment
 // momentum stops holding a task up — the reshuffle nobody triggered.
-func (h activityHeat) expire(future time.Time) activityHeat {
-	cutoff := future.Add(-momentumWindow)
+func (h Heat) Expire(future time.Time) Heat {
+	cutoff := future.Add(-MomentumWindow)
 	keep := func(m map[string]time.Time) map[string]time.Time {
 		out := make(map[string]time.Time, len(m))
 		for k, ts := range m {
@@ -285,13 +284,13 @@ func (h activityHeat) expire(future time.Time) activityHeat {
 		}
 		return out
 	}
-	return activityHeat{tasks: keep(h.tasks), projects: keep(h.projects), tags: keep(h.tags)}
+	return Heat{tasks: keep(h.tasks), projects: keep(h.projects), tags: keep(h.tags)}
 }
 
-// heatExpiries returns the distinct future instants at which a signal feeding
+// HeatExpiries returns the distinct future instants at which a signal feeding
 // this task's momentum ages out — the candidate moments its Momentum term can
 // drop. Signals already expired (or with no bearing on this task) are skipped.
-func heatExpiries(t *todo.Todo, h activityHeat, now time.Time) []time.Time {
+func HeatExpiries(t *todo.Todo, h Heat, now time.Time) []time.Time {
 	var out []time.Time
 	seen := map[time.Time]bool{}
 	add := func(m map[string]time.Time, key string) {
@@ -299,7 +298,7 @@ func heatExpiries(t *todo.Todo, h activityHeat, now time.Time) []time.Time {
 		if !ok {
 			return
 		}
-		at := ts.Add(momentumWindow)
+		at := ts.Add(MomentumWindow)
 		if !at.After(now) || seen[at] {
 			return
 		}
@@ -320,7 +319,7 @@ func heatExpiries(t *todo.Todo, h activityHeat, now time.Time) []time.Time {
 // dimensionsAt is the pure core of the formula: given `now`, a task, and the
 // activity-heat snapshot, return the five un-weighted dimension scores.
 // Splitting `now` and `heat` out lets tests pin both without monkey-patching.
-func dimensionsAt(now time.Time, t *todo.Todo, heat activityHeat) (u, i, m, size, age float64) {
+func dimensionsAt(now time.Time, t *todo.Todo, heat Heat) (u, i, m, size, age float64) {
 	if t == nil || t.Status == todo.Done {
 		return 0, 0, 0, 0, 0
 	}
@@ -331,7 +330,7 @@ func dimensionsAt(now time.Time, t *todo.Todo, heat activityHeat) (u, i, m, size
 // miss analysis re-scores *completed* tasks as of their completion moment,
 // where the live guard (Done scores 0) would erase exactly the data it needs.
 // Live scoring must keep going through dimensionsAt.
-func rawDimensionsAt(now time.Time, t *todo.Todo, heat activityHeat) (u, i, m, size, age float64) {
+func rawDimensionsAt(now time.Time, t *todo.Todo, heat Heat) (u, i, m, size, age float64) {
 	u = urgencyDim(now, t.DueDate)
 	i = importanceDim(t.Priority)
 	m = momentumDim(t, heat)
@@ -379,11 +378,11 @@ func importanceDim(p todo.Priority) float64 {
 }
 
 // momentumDim is the activity-heat lookup: 10 when the task itself or its
-// project was touched (completion, timer, comment) inside momentumWindow,
+// project was touched (completion, timer, comment) inside MomentumWindow,
 // 5 when only one of its tags was, 0 cold. "The thing you're already deep in
 // comes next" — the informal ordering that dependency edges encode explicitly,
 // available even when no edges were recorded.
-func momentumDim(t *todo.Todo, heat activityHeat) float64 {
+func momentumDim(t *todo.Todo, heat Heat) float64 {
 	if hot(heat.tasks, t.ID) || hot(heat.projects, t.Project) {
 		return 10
 	}
@@ -431,10 +430,10 @@ func ageDim(now, created time.Time) float64 {
 
 // ── Score assembly ────────────────────────────────────────────────────────────
 
-// sequenceComponents is the breakdown shown in the detail view. Each field is
+// Components is the breakdown shown in the detail view. Each field is
 // already weighted (i.e. multiplied by its bias) so the five values sum to
 // Total — the user sees the actual contributions, not the raw 0..10 axes.
-type sequenceComponents struct {
+type Components struct {
 	Urgency    float64
 	Importance float64
 	Momentum   float64
@@ -443,17 +442,17 @@ type sequenceComponents struct {
 	Total      float64
 }
 
-// sequenceComponentsAt is the testable assembly: pure, takes `now`, biases,
+// ComponentsAt is the testable assembly: pure, takes `now`, biases,
 // and the heat snapshot explicitly.
-func sequenceComponentsAt(now time.Time, t *todo.Todo, b biases, heat activityHeat) sequenceComponents {
+func ComponentsAt(now time.Time, t *todo.Todo, b Biases, heat Heat) Components {
 	u, i, m, size, age := dimensionsAt(now, t, heat)
 	if !b.Aging {
 		age = 0
 	}
-	out := sequenceComponents{
-		Urgency:    u * b.Deadline.weight(),
-		Importance: i * b.Priority.weight(),
-		Momentum:   m * b.Momentum.weight(),
+	out := Components{
+		Urgency:    u * b.Deadline.Weight(),
+		Importance: i * b.Priority.Weight(),
+		Momentum:   m * b.Momentum.Weight(),
 		Size:       size,
 		Age:        age,
 	}
@@ -461,46 +460,37 @@ func sequenceComponentsAt(now time.Time, t *todo.Todo, b biases, heat activityHe
 	return out
 }
 
-// ranker is everything a live score depends on besides the task and the clock:
+// Ranker is everything a live score depends on besides the task and the clock:
 // the user's bias knobs, the activity-heat snapshot behind Momentum, and the
 // top of the current field that percentages are measured against. It is a
 // value, handed to whoever scores — the model holds one (refreshed in
 // refreshCaches), the CLI builds one in loadForCLI, and the save path copies it
 // into the goroutine that writes the sequence column — so a score never reads
 // state another goroutine may be changing.
-type ranker struct {
-	biases biases
-	heat   activityHeat
-	max    float64
+type Ranker struct {
+	Biases Biases
+	Heat   Heat
+	Max    float64
 }
 
-// defaultRanker is the neutral ranker: default biases, no activity heat, no
+// Default is the neutral ranker: default biases, no activity heat, no
 // field yet. It is what a surface without settings scores with — the headless
 // server, a first-run import.
-func defaultRanker() ranker { return ranker{biases: defaultBiases()} }
+func Default() Ranker { return Ranker{Biases: DefaultBiases()} }
 
-// storedBiases reads the bias knobs from settings.json, for the paths that
-// score rows without a model or a loaded CLI store: the headless server and
-// the syncs that run beside a command. An unreadable file reads as the
-// defaults, as it does everywhere else.
-func storedBiases() biases {
-	s, _ := loadSettings()
-	return biasesFromSettings(s)
+// Components is the per-dimension breakdown at time.Now, for display.
+func (r Ranker) Components(t *todo.Todo) Components {
+	return ComponentsAt(time.Now(), t, r.Biases, r.Heat)
 }
 
-// components is the per-dimension breakdown at time.Now, for display.
-func (r ranker) components(t *todo.Todo) sequenceComponents {
-	return sequenceComponentsAt(time.Now(), t, r.biases, r.heat)
-}
-
-// score is the total persisted score: written into todos.sequence on every
+// Score is the total persisted score: written into todos.sequence on every
 // save and printed next to a task.
-func (r ranker) score(t *todo.Todo) float64 {
-	return sequenceComponentsAt(time.Now(), t, r.biases, r.heat).Total
+func (r Ranker) Score(t *todo.Todo) float64 {
+	return ComponentsAt(time.Now(), t, r.Biases, r.Heat).Total
 }
 
-// scoreNow returns score bound to a single instant, and is what every *sort*
-// and *ranking* must use — never score itself.
+// ScoreNow returns Score bound to a single instant, and is what every *sort*
+// and *ranking* must use — never Score itself.
 //
 // Age contributes 0.2/day continuously, so score reads its own clock and two
 // tasks created at the same moment score differently by ~1e-11 purely because
@@ -508,25 +498,25 @@ func (r ranker) score(t *todo.Todo) float64 {
 // them on that float and never reaches the ID tie-break, so the order of equal
 // tasks is decided by whatever order they were scored in — which sort.Slice
 // does not preserve. Freezing the clock for the duration of one sort makes
-// equal tasks actually tie, so lessBySequenceTie runs and the order ends at ID,
+// equal tasks actually tie, so LessTie runs and the order ends at ID,
 // like every other comparator in this repo.
-func (r ranker) scoreNow() func(*todo.Todo) float64 {
-	return r.scoreAt(time.Now())
+func (r Ranker) ScoreNow() func(*todo.Todo) float64 {
+	return r.ScoreAt(time.Now())
 }
 
-// scoreAt is score against a caller-chosen instant.
-func (r ranker) scoreAt(now time.Time) func(*todo.Todo) float64 {
+// ScoreAt is Score against a caller-chosen instant.
+func (r Ranker) ScoreAt(now time.Time) func(*todo.Todo) float64 {
 	return func(t *todo.Todo) float64 {
-		return sequenceComponentsAt(now, t, r.biases, r.heat).Total
+		return ComponentsAt(now, t, r.Biases, r.Heat).Total
 	}
 }
 
-// refreshed returns r with the heat snapshot and the 100% mark recomputed from
+// Refreshed returns r with the heat snapshot and the 100% mark recomputed from
 // the task set at `now`: the step both surfaces take after loading or changing
 // tasks, so they rank identically.
-func (r ranker) refreshed(now time.Time, todos []*todo.Todo) ranker {
-	r.heat = computeActivityHeat(now, todos)
-	r.max = maxRankedScoreWith(todos, rankScores(todos, r.scoreAt(now)), r.scoreAt(now))
+func (r Ranker) Refreshed(now time.Time, todos []*todo.Todo) Ranker {
+	r.Heat = ComputeHeat(now, todos)
+	r.Max = MaxRanked(todos, Lifts(todos, r.ScoreAt(now)), r.ScoreAt(now))
 	return r
 }
 
@@ -545,14 +535,16 @@ func (r ranker) refreshed(now time.Time, todos []*todo.Todo) ranker {
 // moving when the top task is finished. The explain overlay states what 100%
 // currently equals, so the move is visible rather than mysterious.
 
-// maxSequenceScoreWith is the parameterised form, so the explain view can
-// establish the same 100% mark against its own clock and biases. One definition of "the field" keeps the overlay's percentage and the
-// list column's from disagreeing about the same task.
-func maxSequenceScoreWith(todos []*todo.Todo, score func(*todo.Todo) float64) float64 {
-	return maxRankedScoreWith(todos, nil, score)
+// MaxScore is the top of the raw field, lifts not counted, against the given
+// score function — so the explain view can establish the same 100% mark
+// against its own clock and biases. One definition of "the field" keeps the
+// overlay's percentage and the list column's from disagreeing about the same
+// task.
+func MaxScore(todos []*todo.Todo, score func(*todo.Todo) float64) float64 {
+	return MaxRanked(todos, nil, score)
 }
 
-// maxRankedScoreWith is the top of the field with lifts counted — the highest
+// MaxRanked is the top of the field with lifts counted — the highest
 // score anything is actually ranked by. That is the 100% mark because the
 // ranked score is what the list prints: measuring it against the best *raw*
 // score lets a blocker carrying a fan-out bonus land above the top of the
@@ -560,24 +552,24 @@ func maxSequenceScoreWith(todos []*todo.Todo, score func(*todo.Todo) float64) fl
 // from, hiding a difference the ranking still makes. The caller supplies the
 // lift map (nil for the raw field) and the score function, so the explain view
 // can establish the mark against its own clock and biases.
-func maxRankedScoreWith(todos []*todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) float64 {
+func MaxRanked(todos []*todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) float64 {
 	max := 0.0
 	for _, t := range todos {
 		if t.Deleted || t.Status != todo.Pending {
 			continue
 		}
-		if s := rankScoreOf(t, rollup, score); s > max {
+		if s := ScoreOf(t, rollup, score); s > max {
 			max = s
 		}
 	}
 	return max
 }
 
-// percentOfField converts a score to its share of `max`, rounded to a whole
+// PercentOfField converts a score to its share of `max`, rounded to a whole
 // percent and clamped to 0..100. Callers with a hypothetical field (the
 // Settings preview ranks with knob values that are not live yet) pass their own
 // maximum so the preview's numbers are internally consistent.
-func percentOfField(score, max float64) int {
+func PercentOfField(score, max float64) int {
 	if max <= 0 || score <= 0 {
 		return 0
 	}
@@ -588,44 +580,44 @@ func percentOfField(score, max float64) int {
 	return p
 }
 
-// percent is percentOfField against the ranker's field.
-func (r ranker) percent(score float64) int { return percentOfField(score, r.max) }
+// Percent is PercentOfField against the ranker's field.
+func (r Ranker) Percent(score float64) int { return PercentOfField(score, r.Max) }
 
-// formatPercent is the on-screen form, four columns wide at most ("100%").
-func (r ranker) formatPercent(score float64) string {
-	return strconv.Itoa(r.percent(score)) + "%"
+// FormatPercent is the on-screen form, four columns wide at most ("100%").
+func (r Ranker) FormatPercent(score float64) string {
+	return strconv.Itoa(r.Percent(score)) + "%"
 }
 
-// rankTopBySequenceWith is the pure, testable form of rankTopBySequence: it
+// TopWith is the pure, testable form of rankTopBySequence: it
 // accepts explicit biases, a heat snapshot, and a clock so callers can compute
 // a preview ranking with knob values that are not live yet.
 // The result is the same critical-path ordering (subtask + dependency rollups
 // applied) as the live path — only the scoring inputs differ.
-func rankTopBySequenceWith(todos []*todo.Todo, b biases, heat activityHeat, now time.Time) []todo.Todo {
-	return rankTopBySequenceBy(todos, func(t *todo.Todo) float64 {
-		return sequenceComponentsAt(now, t, b, heat).Total
+func TopWith(todos []*todo.Todo, b Biases, heat Heat, now time.Time) []todo.Todo {
+	return TopBy(todos, func(t *todo.Todo) float64 {
+		return ComponentsAt(now, t, b, heat).Total
 	})
 }
 
 // ── Sequence hit rate ─────────────────────────────────────────────────────────
 
 const (
-	seqHitWindow = 50 // completions the hit-rate stat looks back over
-	seqHitTopN   = 5  // a "hit" closed while ranked in the top N
+	HitWindow = 50 // completions the hit-rate stat looks back over
+	HitTopN   = 5  // a "hit" closed while ranked in the top N
 )
 
-// captureSeqRankAtDone stamps t.SeqRankAtDone with the task's 1-based
+// CaptureRankAtDone stamps t.SeqRankAtDone with the task's 1-based
 // position in the ranking `taskr top` would have shown at this moment. The
 // user-initiated close paths (CLI done, TUI toggle, confirm-close-parent)
 // call it just before Toggle flips the status; auto-closed parents and
 // recurrence spawns don't, so the metric only reads deliberate picks —
 // "when you finished something, was it what the engine suggested".
-func captureSeqRankAtDone(r ranker, todos []*todo.Todo, t *todo.Todo) {
+func CaptureRankAtDone(r Ranker, todos []*todo.Todo, t *todo.Todo) {
 	t.SeqRankAtDone = 0
 	if t.ParentID != "" {
 		return
 	}
-	for i, row := range rankTopBySequenceBy(todos, r.scoreNow()) {
+	for i, row := range TopBy(todos, r.ScoreNow()) {
 		if row.ID == t.ID {
 			t.SeqRankAtDone = i + 1
 			return
@@ -633,11 +625,11 @@ func captureSeqRankAtDone(r ranker, todos []*todo.Todo, t *todo.Todo) {
 	}
 }
 
-// ratedCompletions returns the rank-stamped completions the hit-rate metric
+// RatedCompletions returns the rank-stamped completions the hit-rate metric
 // reads — done, top-level, stamped, timestamped — most recent first, truncated
-// to `window`. Shared by sequenceHitStats and analyzeSeqMisses so the two
+// to `window`. Shared by HitStats and AnalyzeMisses so the two
 // always agree on which completions count.
-func ratedCompletions(todos []*todo.Todo, window int) []*todo.Todo {
+func RatedCompletions(todos []*todo.Todo, window int) []*todo.Todo {
 	var recent []*todo.Todo
 	for _, t := range todos {
 		if t.Status != todo.Done || t.ParentID != "" || t.SeqRankAtDone <= 0 || t.CompletedAt.IsZero() {
@@ -652,14 +644,14 @@ func ratedCompletions(todos []*todo.Todo, window int) []*todo.Todo {
 	return recent
 }
 
-// sequenceHitStats reports, over the `window` most recent rank-stamped
-// completions, how many closed inside the top seqHitTopN. rated counts the
+// HitStats reports, over the `window` most recent rank-stamped
+// completions, how many closed inside the top HitTopN. rated counts the
 // completions considered, so callers can render "39/50" and hide the stat
 // entirely while no history exists.
-func sequenceHitStats(todos []*todo.Todo, window int) (hits, rated int) {
-	for _, t := range ratedCompletions(todos, window) {
+func HitStats(todos []*todo.Todo, window int) (hits, rated int) {
+	for _, t := range RatedCompletions(todos, window) {
 		rated++
-		if t.SeqRankAtDone <= seqHitTopN {
+		if t.SeqRankAtDone <= HitTopN {
 			hits++
 		}
 	}
@@ -671,7 +663,7 @@ func sequenceHitStats(todos []*todo.Todo, window int) (hits, rated int) {
 // The hit rate says how often a finished task was a top-N pick; this section
 // says WHY the misses weren't. For every rated completion the five score
 // dimensions are recomputed as of its CompletedAt — activity heat rebuilt from
-// the historical record via computeActivityHeatAt — then averaged separately
+// the historical record via ComputeHeatAt — then averaged separately
 // for hits and misses. A dimension where misses lag hits is one the engine
 // values more than the user's actual picking behaviour does (they finished
 // those tasks anyway), so its bias knob is a Relaxed candidate; a dimension
@@ -684,68 +676,68 @@ func sequenceHitStats(todos []*todo.Todo, window int) (hits, rated int) {
 // components stamped at done-time — a schema migration not worth taking until
 // this reconstruction proves its keep.
 
-// seqDimCount / seqDimNames fix the dimension order used by every [seqDimCount]
+// DimCount / DimNames fix the dimension order used by every [DimCount]
 // array below: Deadline, Priority, Momentum, Size, Age. The first three are
 // the knobbed dimensions (they have a Settings bias); Size and Age are shown
 // in the table but never suggested on.
-const seqDimCount = 5
+const DimCount = 5
 
-var seqDimNames = [seqDimCount]string{"Deadline", "Priority", "Momentum", "Size", "Age"}
+var DimNames = [DimCount]string{"Deadline", "Priority", "Momentum", "Size", "Age"}
 
-type seqMissRow struct {
-	ID          string               `json:"id"`
-	Title       string               `json:"title"`
-	Rank        int                  `json:"rank"`
-	CompletedAt time.Time            `json:"completed_at"`
-	Dims        [seqDimCount]float64 `json:"dims"`
+type MissRow struct {
+	ID          string            `json:"id"`
+	Title       string            `json:"title"`
+	Rank        int               `json:"rank"`
+	CompletedAt time.Time         `json:"completed_at"`
+	Dims        [DimCount]float64 `json:"dims"`
 	// Weakest is the dimension where this miss fell furthest below the hit
 	// average — the single best answer to "what buried it". Empty when there
 	// are no hits to compare against.
 	Weakest string `json:"weakest,omitempty"`
 }
 
-type seqAnalysis struct {
-	Hits       int                  `json:"hits"`
-	Rated      int                  `json:"rated"`
-	TopN       int                  `json:"top_n"`
-	Window     int                  `json:"window"`
-	Dimensions [seqDimCount]string  `json:"dimensions"` // names the array order for JSON consumers
-	HitAvg     [seqDimCount]float64 `json:"hit_avg"`
-	MissAvg    [seqDimCount]float64 `json:"miss_avg"`
-	Gap        [seqDimCount]float64 `json:"gap"` // MissAvg − HitAvg
-	Misses     []seqMissRow         `json:"misses"`
+type Analysis struct {
+	Hits       int               `json:"hits"`
+	Rated      int               `json:"rated"`
+	TopN       int               `json:"top_n"`
+	Window     int               `json:"window"`
+	Dimensions [DimCount]string  `json:"dimensions"` // names the array order for JSON consumers
+	HitAvg     [DimCount]float64 `json:"hit_avg"`
+	MissAvg    [DimCount]float64 `json:"miss_avg"`
+	Gap        [DimCount]float64 `json:"gap"` // MissAvg − HitAvg
+	Misses     []MissRow         `json:"misses"`
 }
 
-// analyzeSeqMisses is the pure fold behind stats --seq: re-score every rated
+// AnalyzeMisses is the pure fold behind stats --seq: re-score every rated
 // completion at its own CompletedAt, split hits from misses, and aggregate the
 // weighted per-dimension contributions. Misses come back most recent first
-// (ratedCompletions' order). heatSource is the task set momentum is
+// (RatedCompletions' order). heatSource is the task set momentum is
 // reconstructed from — pass the FULL set even when `todos` is a filtered
 // stats scope, or completions outside the filter stop warming their
 // project/tags and the momentum readings go colder than the rank stamp saw.
-func analyzeSeqMisses(todos, heatSource []*todo.Todo, window int, b biases) seqAnalysis {
-	a := seqAnalysis{TopN: seqHitTopN, Window: window, Dimensions: seqDimNames}
+func AnalyzeMisses(todos, heatSource []*todo.Todo, window int, b Biases) Analysis {
+	a := Analysis{TopN: HitTopN, Window: window, Dimensions: DimNames}
 	type scored struct {
 		t    *todo.Todo
-		dims [seqDimCount]float64
+		dims [DimCount]float64
 	}
 	var missRows []scored
-	var hitSum, missSum [seqDimCount]float64
-	for _, t := range ratedCompletions(todos, window) {
-		heat := computeActivityHeatAt(t.CompletedAt, heatSource)
+	var hitSum, missSum [DimCount]float64
+	for _, t := range RatedCompletions(todos, window) {
+		heat := ComputeHeatAt(t.CompletedAt, heatSource)
 		u, i, m, size, age := rawDimensionsAt(t.CompletedAt, t, heat)
 		if !b.Aging {
 			age = 0
 		}
-		dims := [seqDimCount]float64{
-			u * b.Deadline.weight(),
-			i * b.Priority.weight(),
-			m * b.Momentum.weight(),
+		dims := [DimCount]float64{
+			u * b.Deadline.Weight(),
+			i * b.Priority.Weight(),
+			m * b.Momentum.Weight(),
 			size,
 			age,
 		}
 		a.Rated++
-		if t.SeqRankAtDone <= seqHitTopN {
+		if t.SeqRankAtDone <= HitTopN {
 			a.Hits++
 			for d := range dims {
 				hitSum[d] += dims[d]
@@ -758,7 +750,7 @@ func analyzeSeqMisses(todos, heatSource []*todo.Todo, window int, b biases) seqA
 		}
 	}
 	misses := a.Rated - a.Hits
-	for d := 0; d < seqDimCount; d++ {
+	for d := 0; d < DimCount; d++ {
 		if a.Hits > 0 {
 			a.HitAvg[d] = hitSum[d] / float64(a.Hits)
 		}
@@ -768,7 +760,7 @@ func analyzeSeqMisses(todos, heatSource []*todo.Todo, window int, b biases) seqA
 		a.Gap[d] = a.MissAvg[d] - a.HitAvg[d]
 	}
 	for _, r := range missRows {
-		row := seqMissRow{
+		row := MissRow{
 			ID:          r.t.ID,
 			Title:       r.t.Title,
 			Rank:        r.t.SeqRankAtDone,
@@ -783,7 +775,7 @@ func analyzeSeqMisses(todos, heatSource []*todo.Todo, window int, b biases) seqA
 				}
 			}
 			if worstIdx >= 0 {
-				row.Weakest = seqDimNames[worstIdx]
+				row.Weakest = DimNames[worstIdx]
 			}
 		}
 		a.Misses = append(a.Misses, row)
@@ -799,17 +791,17 @@ const (
 	seqSuggestionMinGap    = 1.0
 )
 
-// seqSuggestion turns the gap table into at most one actionable line: the
+// Suggestion turns the gap table into at most one actionable line: the
 // knobbed dimension (Deadline/Priority/Momentum) with the largest |gap|, and
 // which way to move its bias. Empty when there isn't enough signal to say
 // anything; an explicit "looks calibrated" when there is signal but no
 // dominant pattern.
-func seqSuggestion(a seqAnalysis, b biases) string {
+func Suggestion(a Analysis, b Biases) string {
 	misses := a.Rated - a.Hits
 	if a.Hits == 0 || misses < seqSuggestionMinMisses {
 		return ""
 	}
-	knobs := [3]biasLevel{b.Deadline, b.Priority, b.Momentum}
+	knobs := [3]Level{b.Deadline, b.Priority, b.Momentum}
 	best, bestGap := -1, 0.0
 	for d := 0; d < len(knobs); d++ {
 		if g := a.Gap[d]; math.Abs(g) > math.Abs(bestGap) {
@@ -817,16 +809,16 @@ func seqSuggestion(a seqAnalysis, b biases) string {
 		}
 	}
 	if best < 0 || math.Abs(bestGap) < seqSuggestionMinGap {
-		return "No dominant pattern in the misses — the biases look calibrated."
+		return "No dominant pattern in the misses — the Biases look calibrated."
 	}
-	name := seqDimNames[best]
+	name := DimNames[best]
 	if bestGap < 0 {
-		if knobs[best] == biasRelaxed {
+		if knobs[best] == Relaxed {
 			return fmt.Sprintf("Misses were weakest on %s; your %s: relaxed setting already leans that way.", name, name)
 		}
 		return fmt.Sprintf("Misses were weakest on %s — you finish tasks the engine buried for scoring low there. Consider %s: relaxed (Settings).", name, name)
 	}
-	if knobs[best] == biasIntense {
+	if knobs[best] == Intense {
 		return fmt.Sprintf("Misses scored higher on %s than hits; your %s: intense setting already leans that way.", name, name)
 	}
 	return fmt.Sprintf("Misses scored higher on %s than hits — you follow it more than the engine weights it. Consider %s: intense (Settings).", name, name)

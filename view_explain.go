@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/Iliorn/taskr/rank"
 )
 
 // view_explain.go is the reading side of sequence_explain.go: the "why this
@@ -20,51 +22,51 @@ import (
 // trSeqReason renders the sentence behind one factor's value: not just what the
 // axis scored but what in the task produced it, which is the half the score
 // column can never show.
-func trSeqReason(f seqFactor) string {
+func trSeqReason(f rank.Factor) string {
 	switch f.Reason {
-	case reasonNoDue:
+	case rank.ReasonNoDue:
 		return tr("no due date")
-	case reasonOverdue:
+	case rank.ReasonOverdue:
 		if f.N == 1 {
 			return tr("1 day overdue")
 		}
 		return fmt.Sprintf(tr("%d days overdue"), f.N)
-	case reasonDueToday:
+	case rank.ReasonDueToday:
 		return tr("due today")
-	case reasonDueTomorrow:
+	case rank.ReasonDueTomorrow:
 		return tr("due tomorrow")
-	case reasonDueInDays:
+	case rank.ReasonDueInDays:
 		return fmt.Sprintf(tr("due in %d days — the ramp adds points daily"), f.N)
-	case reasonDueBeyondRamp:
+	case rank.ReasonDueBeyondRamp:
 		return fmt.Sprintf(tr("due in %d days — further out than the 7-day ramp"), f.N)
-	case reasonPriority:
+	case rank.ReasonPriority:
 		return fmt.Sprintf(tr("priority is %s"), tr(f.Word))
-	case reasonMomentumTask:
+	case rank.ReasonMomentumTask:
 		return tr("you worked on this task in the last 48h")
-	case reasonMomentumProj:
+	case rank.ReasonMomentumProj:
 		return fmt.Sprintf(tr("project @%s saw activity in the last 48h"), f.Word)
-	case reasonMomentumTag:
+	case rank.ReasonMomentumTag:
 		return fmt.Sprintf(tr("tag #%s saw activity in the last 48h"), f.Word)
-	case reasonMomentumCold:
+	case rank.ReasonMomentumCold:
 		return tr("nothing here was touched in the last 48h")
-	case reasonSize:
+	case rank.ReasonSize:
 		return fmt.Sprintf(tr("size is %s"), tr(f.Word))
-	case reasonAgeDays:
+	case rank.ReasonAgeDays:
 		if f.N == 1 {
 			return tr("created 1 day ago")
 		}
 		return fmt.Sprintf(tr("created %d days ago"), f.N)
-	case reasonAgeToday:
+	case rank.ReasonAgeToday:
 		return tr("created today")
-	case reasonAgeOff:
+	case rank.ReasonAgeOff:
 		return tr("aging is switched off in Settings")
 	}
 	return ""
 }
 
 // trShiftCause names what will do the moving.
-func trShiftCause(c seqShiftCause) string {
-	if c == shiftMomentum {
+func trShiftCause(c rank.ShiftCause) string {
+	if c == rank.ShiftMomentum {
 		return tr("momentum runs out")
 	}
 	return tr("the deadline ramp steps a day closer")
@@ -80,7 +82,7 @@ const seqMathColW = 20
 // multiplication that produced their points — that is the whole transparency
 // claim, so it is spelled out rather than summarised; Size and Age carry no
 // bias and show only the value, in the same column.
-func seqFactorMath(f seqFactor) string {
+func seqFactorMath(f rank.Factor) string {
 	if !f.Knobbed {
 		return padLeft(fmt.Sprintf("%.1f", f.Weighted), seqMathColW)
 	}
@@ -107,7 +109,7 @@ func seqRelativeWhen(now, at time.Time) string {
 }
 
 // seqShiftRank renders the predicted position, or the fact that it holds.
-func seqShiftRank(e seqExplain, s seqShift) string {
+func seqShiftRank(e rank.Explanation, s rank.Shift) string {
 	switch {
 	case s.Pos == 0:
 		return tr("unranked")
@@ -120,7 +122,7 @@ func seqShiftRank(e seqExplain, s seqShift) string {
 
 // seqHeadline is the one-line answer: where the task sits, and the percentage
 // the lists show for it.
-func seqHeadline(e seqExplain) string {
+func seqHeadline(e rank.Explanation) string {
 	if e.Done {
 		return tr("done — done tasks score 0 and leave the ranking")
 	}
@@ -134,7 +136,7 @@ func seqHeadline(e seqExplain) string {
 // seqScaleLine says what 100% currently costs. Normalizing against the live
 // field means the mark moves when the top task is finished; naming it turns
 // that from a number quietly changing under the user into a stated fact.
-func seqScaleLine(e seqExplain) string {
+func seqScaleLine(e rank.Explanation) string {
 	return fmt.Sprintf(tr("%s = %.1f of the %.1f points the top task scores right now"),
 		formatPercentOf(e.Total, e.FieldMax), e.Total, e.FieldMax)
 }
@@ -143,12 +145,12 @@ func seqScaleLine(e seqExplain) string {
 // the explanation carries its own, computed on the same clock and biases the
 // rest of it used.
 func formatPercentOf(score, max float64) string {
-	return fmt.Sprintf("%d%%", percentOfField(score, max))
+	return fmt.Sprintf("%d%%", rank.PercentOfField(score, max))
 }
 
 // seqNeighbourLine states the margin as the thing the user can act on: how many
 // points short of the row above, how many clear of the row below.
-func seqNeighbourLine(n *seqNeighbour, above bool, width int) string {
+func seqNeighbourLine(n *rank.Neighbour, above bool, width int) string {
 	if n == nil {
 		return ""
 	}
@@ -188,7 +190,7 @@ const explainChromeLines = 6
 // floor no budget can go under — it is a number, not prose. So the overlay
 // clips itself on the way out, the way the help overlay does with its key
 // column, and the width contract holds at any size.
-func (m model) explainBodyLines(e seqExplain, width int) []string {
+func (m model) explainBodyLines(e rank.Explanation, width int) []string {
 	lines := m.explainBodyRows(e, width)
 	if width > 0 {
 		truncateLines(lines, width)
@@ -196,7 +198,7 @@ func (m model) explainBodyLines(e seqExplain, width int) []string {
 	return lines
 }
 
-func (m model) explainBodyRows(e seqExplain, width int) []string {
+func (m model) explainBodyRows(e rank.Explanation, width int) []string {
 	if width < 8 {
 		width = 8
 	}
@@ -291,7 +293,7 @@ func (m model) renderExplainFullscreen() string {
 	if t == nil {
 		t = m.currentTodo()
 	}
-	e := m.rank.explain(t, m.allTodos())
+	e := m.rank.Explain(t, m.allTodos())
 
 	b := getBuilder()
 	defer putBuilder(b)
@@ -336,7 +338,7 @@ func (m model) renderExplainFullscreen() string {
 
 // explainPlainLines is the unstyled form `taskr why` prints. Same rows, same
 // order, no escape sequences — the CLI is a pipe target as often as a terminal.
-func explainPlainLines(e seqExplain) []string {
+func explainPlainLines(e rank.Explanation) []string {
 	var lines []string
 	lines = append(lines, e.Title, "  "+seqHeadline(e))
 	if !e.Done && e.FieldMax > 0 {

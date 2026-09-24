@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 
 	_ "modernc.org/sqlite"
@@ -208,7 +209,7 @@ func importFromJSON(h *sql.DB) error {
 	for i := range todos {
 		ptrs[i] = &todos[i]
 	}
-	return saveNormalized(h, ptrs, nil, defaultRanker().scoreNow())
+	return saveNormalized(h, ptrs, nil, rank.Default().ScoreNow())
 }
 
 func fmtTime(t time.Time) string {
@@ -752,34 +753,34 @@ func safeSize(raw int, taskID string) todo.Size {
 // background save command.
 type sqliteRepo struct {
 	mu   sync.Mutex
-	rank ranker
+	rank rank.Ranker
 }
 
-func newSQLiteRepo() *sqliteRepo { return &sqliteRepo{rank: defaultRanker()} }
+func newSQLiteRepo() *sqliteRepo { return &sqliteRepo{rank: rank.Default()} }
 
-func (r *sqliteRepo) SetRanker(rk ranker) {
+func (r *sqliteRepo) SetRanker(rk rank.Ranker) {
 	r.mu.Lock()
 	r.rank = rk
 	r.mu.Unlock()
 }
 
-func (r *sqliteRepo) ranker() ranker {
+func (r *sqliteRepo) ranker() rank.Ranker {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.rank
 }
 
 func (r *sqliteRepo) Load() ([]todo.Todo, error) {
-	return loadTodos(r.ranker().scoreNow())
+	return loadTodos(r.ranker().ScoreNow())
 }
 
 // ResyncScores rewrites the persisted `sequence` column for every live row
-// with the repository's ranker. See Repository.ResyncScores for the why.
+// with the repository's rank.Ranker. See Repository.ResyncScores for the why.
 func (r *sqliteRepo) ResyncScores() error {
 	if err := openStore(); err != nil {
 		return err
 	}
-	return resyncSequenceColumn(db, r.ranker().scoreNow())
+	return resyncSequenceColumn(db, r.ranker().ScoreNow())
 }
 
 // resyncSequenceColumn is the worker: load the score-relevant fields of
@@ -847,5 +848,5 @@ func (r *sqliteRepo) Save(dirty []*todo.Todo, tombstones map[string]time.Time) e
 	if err := openStore(); err != nil {
 		return err
 	}
-	return saveNormalized(db, dirty, tombstones, r.ranker().scoreNow())
+	return saveNormalized(db, dirty, tombstones, r.ranker().ScoreNow())
 }

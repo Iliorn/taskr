@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -23,9 +24,9 @@ type Repository interface {
 	Save(dirty []*todo.Todo, tombstones map[string]time.Time) error
 	// SetRanker hands the repository the ranker it scores the persisted
 	// `sequence` column with. Safe to call while a Save is running.
-	SetRanker(ranker)
+	SetRanker(rank.Ranker)
 	// ResyncScores rewrites the persisted `sequence` column for every live
-	// row with the current ranker. Without this, a bias change or
+	// row with the current rank.Ranker. Without this, a bias change or
 	// passage of time (Age drift) leaves the column stale relative to the
 	// in-memory formula — invisible to the TUI (which sorts in memory) but
 	// a trap for anything reading the database directly.

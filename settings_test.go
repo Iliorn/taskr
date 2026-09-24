@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -143,7 +144,7 @@ func TestSaveSettingsStampsVersion(t *testing.T) {
 	}
 	defer os.Remove(settingsPath())
 
-	in := appSettings{Theme: "test", SeqBiasDeadline: biasIntense}
+	in := appSettings{Theme: "test", SeqBiasDeadline: rank.Intense}
 	if err := saveSettings(in); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestSaveSettingsStampsVersion(t *testing.T) {
 	if onDisk.Version != currentSettingsVersion {
 		t.Errorf("on-disk version = %d, want %d", onDisk.Version, currentSettingsVersion)
 	}
-	if onDisk.Theme != "test" || onDisk.SeqBiasDeadline != biasIntense {
+	if onDisk.Theme != "test" || onDisk.SeqBiasDeadline != rank.Intense {
 		t.Errorf("payload lost on round-trip: %+v", onDisk)
 	}
 }
@@ -260,10 +261,10 @@ func TestSettingsPaneKeepsTheSelectedRowOnScreen(t *testing.T) {
 }
 
 // TestSettingsTopPreviewRespectsWeights verifies that the preview ranks tasks
-// in the order the biases imply: with Priority=Intense and Deadline=Relaxed,
+// in the order the rank.Biases imply: with Priority=Intense and Deadline=Relaxed,
 // a high-priority task with no due date should rank above a medium-priority
 // task with an imminent due date when the preview is computed directly via
-// rankTopBySequenceWith.
+// rank.TopWith.
 func TestSettingsTopPreviewRespectsWeights(t *testing.T) {
 	now := time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)
 
@@ -276,27 +277,27 @@ func TestSettingsTopPreviewRespectsWeights(t *testing.T) {
 	dueUrgent.DueDate = now.AddDate(0, 0, 1) // due tomorrow (7 days window → ~8.9 urgency)
 
 	todos := []todo.Todo{highPri, dueUrgent}
-	heat := hotHeat(now, nil, nil, nil)
+	heat := rank.Heat{}
 
 	// With Priority=Intense (2×) and Deadline=Relaxed (0.5×):
 	// highPri:  Priority(10) × 2.0 = 20 + small age
 	// dueUrgent: Priority(5) × 2.0 + Urgency(~8.9) × 0.5 = 10 + ~4.45 ≈ 14.45
 	// → highPri should rank first.
-	intensePri := biases{
-		Priority: biasIntense,
-		Deadline: biasRelaxed,
-		Momentum: biasBalanced,
+	intensePri := rank.Biases{
+		Priority: rank.Intense,
+		Deadline: rank.Relaxed,
+		Momentum: rank.Balanced,
 		Aging:    true,
 	}
-	ranked := rankTopBySequenceWith(todoPtrs(todos), intensePri, heat, now)
+	ranked := rank.TopWith(todoPtrs(todos), intensePri, heat, now)
 	if len(ranked) != 2 {
 		t.Fatalf("expected 2 ranked tasks, got %d", len(ranked))
 	}
 	if ranked[0].ID != "hp" {
 		t.Errorf("Priority=Intense ranking: expected high-priority task first, got %q (score order: %s, %s)",
 			ranked[0].ID,
-			fmt.Sprintf("%.2f", sequenceComponentsAt(now, &ranked[0], intensePri, heat).Total),
-			fmt.Sprintf("%.2f", sequenceComponentsAt(now, &ranked[1], intensePri, heat).Total),
+			fmt.Sprintf("%.2f", rank.ComponentsAt(now, &ranked[0], intensePri, heat).Total),
+			fmt.Sprintf("%.2f", rank.ComponentsAt(now, &ranked[1], intensePri, heat).Total),
 		)
 	}
 
@@ -304,21 +305,21 @@ func TestSettingsTopPreviewRespectsWeights(t *testing.T) {
 	// highPri:  Priority(10) × 0.5 = 5 + small age
 	// dueUrgent: Priority(5) × 0.5 + Urgency(~8.9) × 2.0 = 2.5 + ~17.8 ≈ 20.3
 	// → dueUrgent should rank first.
-	intenseDeadline := biases{
-		Priority: biasRelaxed,
-		Deadline: biasIntense,
-		Momentum: biasBalanced,
+	intenseDeadline := rank.Biases{
+		Priority: rank.Relaxed,
+		Deadline: rank.Intense,
+		Momentum: rank.Balanced,
 		Aging:    true,
 	}
-	ranked2 := rankTopBySequenceWith(todoPtrs(todos), intenseDeadline, heat, now)
+	ranked2 := rank.TopWith(todoPtrs(todos), intenseDeadline, heat, now)
 	if len(ranked2) != 2 {
 		t.Fatalf("expected 2 ranked tasks, got %d", len(ranked2))
 	}
 	if ranked2[0].ID != "du" {
 		t.Errorf("Deadline=Intense ranking: expected urgent-deadline task first, got %q (score order: %s, %s)",
 			ranked2[0].ID,
-			fmt.Sprintf("%.2f", sequenceComponentsAt(now, &ranked2[0], intenseDeadline, heat).Total),
-			fmt.Sprintf("%.2f", sequenceComponentsAt(now, &ranked2[1], intenseDeadline, heat).Total),
+			fmt.Sprintf("%.2f", rank.ComponentsAt(now, &ranked2[0], intenseDeadline, heat).Total),
+			fmt.Sprintf("%.2f", rank.ComponentsAt(now, &ranked2[1], intenseDeadline, heat).Total),
 		)
 	}
 }

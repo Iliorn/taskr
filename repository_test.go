@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -18,7 +19,7 @@ func (r *fakeRepo) Load() ([]todo.Todo, error) { return r.todos, nil }
 // formula") is vacuously satisfied when nothing is persisted.
 func (r *fakeRepo) ResyncScores() error { return nil }
 
-func (r *fakeRepo) SetRanker(ranker) {}
+func (r *fakeRepo) SetRanker(rank.Ranker) {}
 
 // Save mirrors the whole-snapshot semantics of the SQLite adapter at this step:
 // dirty contains the full live set, tombstones is nil. We rebuild r.todos from

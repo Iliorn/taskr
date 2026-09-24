@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -44,14 +45,14 @@ type appSettings struct {
 	Theme        string          `json:"theme"`
 	Language     string          `json:"language"`
 
-	// Sequencing biases: ints 0/1/2 mapping to biasBalanced/Relaxed/Intense.
+	// Sequencing biases: ints 0/1/2 mapping to rank.Balanced/Relaxed/Intense.
 	// Stored as ints (not enum names) to match the existing convention used by
-	// TaskSort and friends. Zero value = biasBalanced, which is the neutral
+	// TaskSort and friends. Zero value = rank.Balanced, which is the neutral
 	// default so an unset settings.json keeps the engine "Balanced" out of the
 	// box without explicit migration.
-	SeqBiasDeadline biasLevel `json:"seq_bias_deadline"`
-	SeqBiasPriority biasLevel `json:"seq_bias_priority"`
-	SeqBiasMomentum biasLevel `json:"seq_bias_momentum"`
+	SeqBiasDeadline rank.Level `json:"seq_bias_deadline"`
+	SeqBiasPriority rank.Level `json:"seq_bias_priority"`
+	SeqBiasMomentum rank.Level `json:"seq_bias_momentum"`
 
 	// SeqAgingDisabled gates the per-day Age contribution. Stored as the
 	// inverse of the user-facing "Aging" toggle so the zero value (=false)
@@ -150,13 +151,22 @@ func doneStageIn(l language) string {
 
 // biasesFromSettings is the small adapter between the persisted appSettings
 // shape and the in-memory biases the score functions read.
-func biasesFromSettings(s appSettings) biases {
-	return biases{
+func biasesFromSettings(s appSettings) rank.Biases {
+	return rank.Biases{
 		Deadline: s.SeqBiasDeadline,
 		Priority: s.SeqBiasPriority,
 		Momentum: s.SeqBiasMomentum,
 		Aging:    !s.SeqAgingDisabled,
 	}
+}
+
+// storedBiases reads the bias knobs from settings.json, for the paths that
+// score rows without a model or a loaded CLI store: the headless server and
+// the syncs that run beside a command. An unreadable file reads as the
+// defaults, as it does everywhere else.
+func storedBiases() rank.Biases {
+	s, _ := loadSettings()
+	return biasesFromSettings(s)
 }
 
 func settingsPath() string {
@@ -281,7 +291,7 @@ func loadTodosJSON() ([]todo.Todo, error) {
 		return loadBackup()
 	}
 
-	sortTodosByMode(todos, taskSortSequence, defaultRanker().scoreNow())
+	sortTodosByMode(todos, taskSortSequence, rank.Default().ScoreNow())
 	return todos, nil
 }
 
@@ -317,7 +327,7 @@ func lessByDueDate(a, b *todo.Todo) bool {
 }
 
 func lessBySize(a, b *todo.Todo) bool {
-	if ra, rb := sizeRank(a.Size), sizeRank(b.Size); ra != rb {
+	if ra, rb := a.Size.Rank(), b.Size.Rank(); ra != rb {
 		return ra < rb
 	}
 	if !a.CreatedAt.Equal(b.CreatedAt) {
@@ -341,79 +351,12 @@ func lessByCompletedAt(a, b *todo.Todo) bool {
 	return a.ID < b.ID
 }
 
-// lessBySequenceTie is the tie-break chain applied once two tasks score equal,
-// each key meaningful rather than arbitrary:
-//  1. due proximity (a real due date beats none; sooner beats later)
-//  2. size ascending (the quick win first)
-//  3. CreatedAt ascending (tasks entered as a burst — a decomposed plan typed
-//     in execution order — keep that entry order)
-//  4. ID — the absolute backstop so tasks identical on every key (common in
-//     the Done list, where score is uniformly 0) don't inherit the random
-//     order they came out of Store.allTodos in, which would otherwise
-//     reshuffle them on every cache rebuild (e.g. while the search-input
-//     cursor blinks).
-func lessBySequenceTie(a, b *todo.Todo) bool {
-	aZero, bZero := a.DueDate.IsZero(), b.DueDate.IsZero()
-	if aZero != bZero {
-		return bZero
-	}
-	if !aZero && !a.DueDate.Equal(b.DueDate) {
-		return a.DueDate.Before(b.DueDate)
-	}
-	if ra, rb := sizeRank(a.Size), sizeRank(b.Size); ra != rb {
-		return ra < rb
-	}
-	if !a.CreatedAt.Equal(b.CreatedAt) {
-		return a.CreatedAt.Before(b.CreatedAt)
-	}
-	return a.ID < b.ID
-}
-
 // sortTodoPtrs sorts a pointer slice with one of the comparators above. This is
 // the form the cache refresh uses: sorting []todo.Todo moves 416-byte structs
 // on every swap, which made the stable merge inside selectActiveDone the single
 // most expensive thing in a refresh. Sorting pointers moves 8 bytes.
 func sortTodoPtrs(todos []*todo.Todo, less func(a, b *todo.Todo) bool) {
 	sort.Slice(todos, func(i, j int) bool { return less(todos[i], todos[j]) })
-}
-
-// sortTodoPtrsBySequence sorts by sequence score descending, then the tie-break
-// chain. The score is computed once per task into the slice being sorted, so
-// the comparator reads a float field instead of hashing an ID into a score map
-// on every comparison.
-//
-// blocked (nil when the caller has no dependency set on hand) partitions ahead
-// of the score: work waiting on an unfinished dependency sorts below work that
-// can be started, however urgent it is. A list whose top is always something
-// you can pick up right now is the whole point of the ranking — and it is what
-// lets the row drop its blocked marker from the status column, since position
-// now carries the fact. Within each half the ordering is unchanged, so a
-// blocker still outranks what it holds up.
-func sortTodoPtrsBySequence(todos []*todo.Todo, rollup map[string]float64, blocked map[string]bool, score func(*todo.Todo) float64) {
-	if len(todos) <= 1 {
-		return
-	}
-	type scored struct {
-		t       *todo.Todo
-		score   float64
-		blocked bool
-	}
-	rows := make([]scored, len(todos))
-	for i, t := range todos {
-		rows[i] = scored{t, rankScoreOf(t, rollup, score), blocked[t.ID]}
-	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].blocked != rows[j].blocked {
-			return rows[j].blocked
-		}
-		if rows[i].score != rows[j].score {
-			return rows[i].score > rows[j].score
-		}
-		return lessBySequenceTie(rows[i].t, rows[j].t)
-	})
-	for i := range rows {
-		todos[i] = rows[i].t
-	}
 }
 
 // sortTodosByMode sorts todos by the given mode. After the sequencing engine
@@ -430,7 +373,7 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode, score func(*todo.Todo
 		// intent as "show me the quick wins".
 		sortTodoValues(todos, lessBySize)
 	default: // taskSortSequence
-		sortTodosBySequenceWithRollup(todos, nil, nil, score)
+		rank.SortValues(todos, nil, nil, score)
 	}
 }
 
@@ -438,41 +381,6 @@ func sortTodosByMode(todos []todo.Todo, mode taskSortMode, score func(*todo.Todo
 // hold a []todo.Todo (the CLI, the on-disk load path).
 func sortTodoValues(todos []todo.Todo, less func(a, b *todo.Todo) bool) {
 	sort.Slice(todos, func(i, j int) bool { return less(&todos[i], &todos[j]) })
-}
-
-// sortTodosBySequenceWithRollup is the sequence-mode sort, with an optional
-// per-ID rollup map that boosts each task's effective score to
-// max(own, rollup[id]). The boost is how a parent inherits the urgency of
-// its highest-priority subtask — so a "high" subtask buried under a "low"
-// parent doesn't disappear into the bottom of the list. Passing nil
-// preserves the original behaviour (used by callers that don't have the
-// child set on hand, e.g. on-disk loads).
-func sortTodosBySequenceWithRollup(todos []todo.Todo, rollup map[string]float64, blocked map[string]bool, score func(*todo.Todo) float64) {
-	if len(todos) <= 1 {
-		return
-	}
-	// Sort the pointers, then permute the values once: the same ordering with
-	// 8-byte swaps instead of 416-byte ones.
-	ptrs := todoPtrs(todos)
-	sortTodoPtrsBySequence(ptrs, rollup, blocked, score)
-	sorted := make([]todo.Todo, len(todos))
-	for i, t := range ptrs {
-		sorted[i] = *t
-	}
-	copy(todos, sorted)
-}
-
-// sizeRank orders sizes Small < Medium < Large for sorting — smaller first
-// matches the quick-win reading everywhere sizes break a tie.
-func sizeRank(s todo.Size) int {
-	switch s {
-	case todo.SizeSmall:
-		return 0
-	case todo.SizeMedium:
-		return 1
-	default: // Large
-		return 2
-	}
 }
 
 // sortHistory orders the completed-tasks list by its own mode, independent of

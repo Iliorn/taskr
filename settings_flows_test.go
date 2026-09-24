@@ -251,10 +251,10 @@ func TestToggleAutoClosePreferencesPersist(t *testing.T) {
 
 func TestToggleAgingFlipsAndPersists(t *testing.T) {
 	m := settingsModel(t)
-	before := m.rank.biases.Aging
+	before := m.rank.Biases.Aging
 	m.toggleAging()
 
-	if m.rank.biases.Aging == before {
+	if m.rank.Biases.Aging == before {
 		t.Fatal("toggleAging did not flip the bias")
 	}
 	// Aging changes the ranking, so the derived caches must be invalidated
@@ -267,9 +267,9 @@ func TestToggleAgingFlipsAndPersists(t *testing.T) {
 	// exactly the kind of inversion a test should pin rather than trust.
 	if got, err := loadSettings(); err != nil {
 		t.Fatal(err)
-	} else if got.SeqAgingDisabled == m.rank.biases.Aging {
+	} else if got.SeqAgingDisabled == m.rank.Biases.Aging {
 		t.Errorf("settings.json SeqAgingDisabled = %v with Aging = %v; they must be inverses",
-			got.SeqAgingDisabled, m.rank.biases.Aging)
+			got.SeqAgingDisabled, m.rank.Biases.Aging)
 	}
 }
 

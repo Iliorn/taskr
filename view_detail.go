@@ -156,7 +156,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	// on pending tasks because Done always scores 0 and the breakdown would
 	// be a row of zeros.
 	if t.Status == todo.Pending {
-		sc := m.rank.components(t)
+		sc := m.rank.Components(t)
 		// Same precision as before but with the ".0" noise trimmed off whole
 		// components — the all-%.1f form overflowed valW at a 120-col
 		// terminal and truncated the tail of the breakdown to "(…)".
@@ -173,7 +173,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 			lift = "↑ "
 		}
 		breakdown := fmt.Sprintf(tr("%s  (%sD %s · P %s · M %s · S %s · A %s)"),
-			m.rank.formatPercent(ranked), lift,
+			m.rank.FormatPercent(ranked), lift,
 			comp(sc.Urgency), comp(sc.Importance), comp(sc.Momentum), comp(sc.Size), comp(sc.Age))
 		// The components are an explanation, not a value: clipped to
 		// "(D 10.5 · P 10 · M 10 · S…" they explain nothing and cost a row
@@ -182,7 +182,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		// position agree on — and leave the breakdown to `w` and `taskr why`,
 		// which have the width for it.
 		if len([]rune(breakdown)) > valW {
-			breakdown = m.rank.formatPercent(ranked) + lift
+			breakdown = m.rank.FormatPercent(ranked) + lift
 		}
 		roField(tr("Score:"), plainVal, breakdown)
 	}

@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"fmt"
-	"github.com/Iliorn/taskr/todo"
-	"github.com/charmbracelet/x/ansi"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestIsHomebrewCellarPath(t *testing.T) {

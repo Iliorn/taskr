@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -201,69 +202,10 @@ func todoMatchesFocus(t todo.Todo, focus bool) bool {
 // descendants for ranking only — the displayed score stays the parent's own —
 // so a high-priority subtask pulls its parent up rather than hiding beneath a
 // calmer one.
-// rankScores returns the lift map the sequence ranking sorts by: per task, the
-// best score found among its subtasks and among the pending work waiting on it.
-// It is the two rollups in the order they compose — a dependent's own lift has
-// to be settled before it can be passed on to what blocks it.
-//
-// The map holds candidates, not final scores: a task appears only when
-// something lifted it, and the value is applied with rankScoreOf's max.
-func rankScores(todos []*todo.Todo, score func(*todo.Todo) float64) map[string]float64 {
-	return dependencyScoreRollup(todos, descendantScoreRollup(todos, score), score)
-}
-
-// rankScoreOf is the score the sequencer ranks t by, and — since a rank the
-// list cannot explain reads as a bug — the score every surface shows next to
-// its position. A task that unblocks urgent work is doing that work's job:
-// ranking it high while printing its own low score put the two halves of one
-// row at odds, and the row looked misplaced rather than promoted.
-func rankScoreOf(t *todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) float64 {
-	s := score(t)
-	if rollup != nil {
-		if lift, ok := rollup[t.ID]; ok && lift > s {
-			return lift
-		}
-	}
-	return s
-}
-
-// dependencySets returns, from the full task set, the tasks waiting on an
-// unfinished dependency and the tasks holding others up. A task is "blocked" if
-// any task it depends on is still pending (not Done); that depended-on task is
-// in turn a "blocker". Dependencies on a Done or deleted task don't count —
-// they're already cleared — so a dangling/finished dep never blocks.
-//
-// One definition, two readers: the cache renders from it, and the sequence sort
-// sinks the blocked half below the work that can actually be started.
-func dependencySets(all []*todo.Todo) (blocked, blocker map[string]bool) {
-	blocked = make(map[string]bool)
-	blocker = make(map[string]bool)
-	pending := make(map[string]bool, len(all))
-	for i := range all {
-		// The TUI's store never holds deleted tasks; the CLI's load path can,
-		// so the guard is what lets both share this one rule.
-		if all[i].Status != todo.Done && !all[i].Deleted {
-			pending[all[i].ID] = true
-		}
-	}
-	for i := range all {
-		if all[i].Status == todo.Done {
-			continue
-		}
-		for _, depID := range all[i].Dependencies {
-			if pending[depID] {
-				blocked[all[i].ID] = true
-				blocker[depID] = true
-			}
-		}
-	}
-	return blocked, blocker
-}
-
 func selectActiveDone(todos []*todo.Todo, score func(*todo.Todo) float64, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
 	var rollup map[string]float64
 	if sortMode == taskSortSequence {
-		rollup = rankScores(todos, score)
+		rollup = rank.Lifts(todos, score)
 	}
 	return selectActiveDoneRanked(todos, rollup, score, search, focus, sortMode, historyMode)
 }
@@ -293,162 +235,20 @@ func selectActiveDoneRanked(todos []*todo.Todo, rollup map[string]float64, score
 	// Active tasks rank by taskSort; the done list has its own history sort,
 	// since the active modes (score, size) carry no meaning once tasks close.
 	// Blocked work sinks below everything that can be started today (see
-	// sortTodoPtrsBySequence). Derived from the whole slice, not from activeP:
+	// rank.SortPtrs). Derived from the whole slice, not from activeP:
 	// the task holding one up may be a subtask, or filtered out of view.
 	switch sortMode {
 	case taskSortSequence:
-		blocked, _ := dependencySets(todos)
-		sortTodoPtrsBySequence(activeP, rollup, blocked, score)
+		blocked, _ := rank.DependencySets(todos)
+		rank.SortPtrs(activeP, rollup, blocked, score)
 	case taskSortDueDate:
 		sortTodoPtrs(activeP, lessByDueDate)
 	case taskSortSize:
 		sortTodoPtrs(activeP, lessBySize)
 	default:
-		blocked, _ := dependencySets(todos)
-		sortTodoPtrsBySequence(activeP, nil, blocked, score)
+		blocked, _ := rank.DependencySets(todos)
+		rank.SortPtrs(activeP, nil, blocked, score)
 	}
 	sortTodoPtrs(doneP, historyLess(historyMode))
 	return todoValues(activeP), todoValues(doneP)
-}
-
-// descendantScoreRollup walks the full task slice and returns, per top-level
-// ID, the max score observed across all of its transitive subtasks.
-// Pure: builds its own parent index in one pass and follows ParentID chains
-// instead of relying on the model's subtaskOf cache. Tasks without subtasks
-// don't appear in the map.
-func descendantScoreRollup(todos []*todo.Todo, score func(*todo.Todo) float64) map[string]float64 {
-	if len(todos) == 0 {
-		return nil
-	}
-	idx := make(map[string]int, len(todos))
-	for i := range todos {
-		idx[todos[i].ID] = i
-	}
-	rollup := make(map[string]float64, len(todos))
-	for i := range todos {
-		if todos[i].ParentID == "" {
-			continue
-		}
-		// Walk up to the top-level ancestor, lifting the boost at every
-		// level so a deeply-nested high-pri grandchild reaches the root.
-		s := score(todos[i])
-		cur := todos[i].ParentID
-		for cur != "" {
-			if rollup[cur] < s {
-				rollup[cur] = s
-			}
-			pi, ok := idx[cur]
-			if !ok {
-				break
-			}
-			cur = todos[pi].ParentID
-		}
-	}
-	return rollup
-}
-
-// dependencyScoreRollup augments base (the subtask rollup) with dependency
-// boosts: a still-pending task that another pending task depends on inherits
-// that dependent's urgency, so a blocker can't sort below the work it's holding
-// up — the prerequisite for an urgent task surfaces right above it (critical-path
-// behaviour). Propagation is transitive (a chain lifts end-to-end) and cycle-safe.
-// effBase is max(own score, subtask rollup), so subtask and dependency boosts
-// compose. Returns base unchanged when no task depends on a pending one.
-//
-// On top of the max-inheritance, each blocker earns a fan-out bonus: +0.5 per
-// distinct pending task it directly unblocks, capped at +2. Inheritance alone
-// is max, not sum — unblocking four tasks would score the same as unblocking
-// one — so the bonus is the leverage signal that prefers the wider blocker.
-// It compounds mildly along a chain (each hop adds its own bonus), which reads
-// as intended: a longer chain is more leverage. The cap keeps sheer task count
-// from gaming the ranking.
-//
-// depBoostEpsilon is the per-edge nudge that keeps a boosted blocker strictly
-// ahead of the dependent it inherited from.
-const (
-	depBoostEpsilon = 0.001
-	fanOutBonusPer  = 0.5
-	fanOutBonusCap  = 2.0
-)
-
-func dependencyScoreRollup(todos []*todo.Todo, base map[string]float64, score func(*todo.Todo) float64) map[string]float64 {
-	if len(todos) == 0 {
-		return base
-	}
-	pending := make(map[string]bool, len(todos))
-	for i := range todos {
-		if todos[i].Status != todo.Done {
-			pending[todos[i].ID] = true
-		}
-	}
-	// dependents maps a pending task to the pending tasks that depend on it.
-	dependents := make(map[string][]string)
-	for i := range todos {
-		if todos[i].Status == todo.Done {
-			continue
-		}
-		for _, depID := range todos[i].Dependencies {
-			if pending[depID] {
-				dependents[depID] = append(dependents[depID], todos[i].ID)
-			}
-		}
-	}
-	if len(dependents) == 0 {
-		return base
-	}
-	idx := make(map[string]int, len(todos))
-	for i := range todos {
-		idx[todos[i].ID] = i
-	}
-	effBase := func(id string) float64 {
-		s := score(todos[idx[id]])
-		if b, ok := base[id]; ok && b > s {
-			s = b
-		}
-		return s
-	}
-	// eff(id) = max(effBase(id), max eff over its dependents). Memoised DFS;
-	// visiting guards back-edges so a dependency cycle terminates.
-	eff := make(map[string]float64, len(dependents))
-	visiting := make(map[string]bool)
-	var compute func(id string) float64
-	compute = func(id string) float64 {
-		if v, ok := eff[id]; ok {
-			return v
-		}
-		best := effBase(id)
-		if visiting[id] {
-			return best
-		}
-		visiting[id] = true
-		for _, dep := range dependents[id] {
-			// + epsilon so a blocker sorts strictly above its dependent rather
-			// than merely tying (the score-tie backstop is the tie-break chain,
-			// which could otherwise place the dependent first). Compounds per
-			// chain hop; far below the %.1f the score column rounds to, so
-			// invisible.
-			if s := compute(dep) + depBoostEpsilon; s > best {
-				best = s
-			}
-		}
-		visiting[id] = false
-		if bonus := fanOutBonusPer * float64(len(dependents[id])); bonus > 0 {
-			if bonus > fanOutBonusCap {
-				bonus = fanOutBonusCap
-			}
-			best += bonus
-		}
-		eff[id] = best
-		return best
-	}
-	out := make(map[string]float64, len(base)+len(dependents))
-	for k, v := range base {
-		out[k] = v
-	}
-	for id := range dependents {
-		if s := compute(id); s > out[id] {
-			out[id] = s
-		}
-	}
-	return out
 }

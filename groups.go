@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -103,7 +104,7 @@ func inProjectGroup(t *todo.Todo, key string) bool { return t.Project == key }
 
 // summarizeGroups builds one summary per group in a single pass over the task
 // set. score ranks the open tasks for "next up"; pass a frozen one
-// (ranker.scoreNow) so equal tasks tie and the ID decides.
+// (rank.Ranker.ScoreNow) so equal tasks tie and the ID decides.
 func summarizeGroups(all []*todo.Todo, keys func(*todo.Todo, func(string)), score func(*todo.Todo) float64) map[string]*groupSummary {
 	out := make(map[string]*groupSummary)
 	for _, t := range all {
@@ -236,13 +237,13 @@ func (m model) groupTaskList(match func(*todo.Todo) bool) []todo.Todo {
 			roots = append(roots, t)
 		}
 	}
-	score := m.rank.scoreNow()
-	rank := make(map[string]float64, len(roots))
+	score := m.rank.ScoreNow()
+	ranked := make(map[string]float64, len(roots))
 	for _, t := range roots {
-		rank[t.ID] = rankScoreOf(t, m.cache.rankScore, score)
+		ranked[t.ID] = rank.ScoreOf(t, m.cache.rankScore, score)
 	}
 	sort.Slice(roots, func(i, j int) bool {
-		if ri, rj := rank[roots[i].ID], rank[roots[j].ID]; ri != rj {
+		if ri, rj := ranked[roots[i].ID], ranked[roots[j].ID]; ri != rj {
 			return ri > rj
 		}
 		return roots[i].ID < roots[j].ID

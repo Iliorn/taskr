@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 )
@@ -128,7 +129,7 @@ func TestClientSyncExchangesTheBoard(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 
-	sum, err := runClientSync(h, syncConfig{URL: ts.URL, Token: "tok"}, 5*time.Second, defaultBiases(), c.wire())
+	sum, err := runClientSync(h, syncConfig{URL: ts.URL, Token: "tok"}, 5*time.Second, rank.DefaultBiases(), c.wire())
 	if err != nil {
 		t.Fatalf("sync: %v", err)
 	}

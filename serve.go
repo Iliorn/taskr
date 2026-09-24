@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 )
@@ -208,7 +209,7 @@ func cliNewServerToken() int {
 // the neutral default.
 type dbStore struct {
 	h      *sql.DB
-	biases biases
+	biases rank.Biases
 }
 
 func (d dbStore) MergeIn(incoming []todo.Todo) ([]todo.Todo, bool, error) {

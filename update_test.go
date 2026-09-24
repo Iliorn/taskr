@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 	tea "github.com/charmbracelet/bubbletea"
@@ -570,30 +571,30 @@ func TestPKeyCyclesPriority(t *testing.T) {
 
 func TestBiasCycleOnSettingsTab(t *testing.T) {
 	m := modelWithTasks(t)
-	m.rank.biases = biases{Deadline: biasBalanced, Priority: biasBalanced, Momentum: biasBalanced, Aging: true}
+	m.rank.Biases = rank.Biases{Deadline: rank.Balanced, Priority: rank.Balanced, Momentum: rank.Balanced, Aging: true}
 	m.tab = tabSettings
 	m.settingsCursor = settingBiasDeadline
 
 	m = sendKey(t, m, "right")
-	if m.rank.biases.Deadline != biasIntense {
-		t.Errorf("after right on Deadline row: %v, want Intense (Balanced → next)", m.rank.biases.Deadline)
+	if m.rank.Biases.Deadline != rank.Intense {
+		t.Errorf("after right on Deadline row: %v, want Intense (Balanced → next)", m.rank.Biases.Deadline)
 	}
 	m = sendKey(t, m, "left")
-	if m.rank.biases.Deadline != biasBalanced {
-		t.Errorf("after left: %v, want Balanced", m.rank.biases.Deadline)
+	if m.rank.Biases.Deadline != rank.Balanced {
+		t.Errorf("after left: %v, want Balanced", m.rank.Biases.Deadline)
 	}
 
 	// Other rows are not touched by this row's cycle.
-	if m.rank.biases.Priority != biasBalanced || m.rank.biases.Momentum != biasBalanced {
+	if m.rank.Biases.Priority != rank.Balanced || m.rank.Biases.Momentum != rank.Balanced {
 		t.Errorf("siblings should be untouched: Priority=%v Momentum=%v",
-			m.rank.biases.Priority, m.rank.biases.Momentum)
+			m.rank.Biases.Priority, m.rank.Biases.Momentum)
 	}
 
 	// Move cursor to the Momentum row and confirm the cycle hits that one.
 	m.settingsCursor = settingBiasMomentum
 	m = sendKey(t, m, "right")
-	if m.rank.biases.Momentum != biasIntense {
-		t.Errorf("after right on Momentum row: %v, want Intense", m.rank.biases.Momentum)
+	if m.rank.Biases.Momentum != rank.Intense {
+		t.Errorf("after right on Momentum row: %v, want Intense", m.rank.Biases.Momentum)
 	}
 }
 
@@ -819,12 +820,12 @@ func TestPriorityCycleKeepsCursorOnTask(t *testing.T) {
 	m.tab = tabTasks
 	m.pane = paneList
 
-	// initialModel derives taskSort and biases from the shared TestMain $HOME,
+	// initialModel derives taskSort and rank.Biases from the shared TestMain $HOME,
 	// so another test's saved settings could leave the list sorted by due date
 	// (both tasks have none → no reorder) or zero the Priority weight. Pin both
 	// to the score-based defaults and rebuild the initial ordering.
 	m.taskSort = taskSortSequence
-	m.rank.biases = defaultBiases()
+	m.rank.Biases = rank.DefaultBiases()
 	m.cache.dirty = true
 	m.ensureCache()
 

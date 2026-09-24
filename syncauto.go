@@ -31,7 +31,7 @@ func syncTick() tea.Cmd {
 // merge changed anything on disk, the watcher reloads the UI.
 func (m model) backgroundSync() tea.Cmd {
 	cfg := m.syncCfg
-	b := m.rank.biases
+	b := m.rank.Biases
 	board := m.boardCfg.wire()
 	return func() tea.Msg {
 		// Stale-device guard — same rule as the CLI path; the Settings footer

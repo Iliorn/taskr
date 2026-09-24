@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -130,7 +131,7 @@ func backfillNormalizedTables(tx *sql.Tx) error {
 				return err
 			}
 		}
-		if _, err := updateScalars.Exec(t.Notes, fmtTime(t.CompletedAt), defaultRanker().score(&t), r.id); err != nil {
+		if _, err := updateScalars.Exec(t.Notes, fmtTime(t.CompletedAt), rank.Default().Score(&t), r.id); err != nil {
 			return err
 		}
 	}

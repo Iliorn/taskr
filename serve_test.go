@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 )
@@ -95,7 +96,7 @@ func TestSyncClientServerRoundTrip(t *testing.T) {
 	saveTodos(t, ch, []todo.Todo{b})
 
 	cfg := syncConfig{URL: ts.URL, Token: "tok"}
-	sum, err := runClientSync(ch, cfg, 5*time.Second, defaultBiases(), defaultBoardConfig().wire())
+	sum, err := runClientSync(ch, cfg, 5*time.Second, rank.DefaultBiases(), defaultBoardConfig().wire())
 	if err != nil {
 		t.Fatalf("client sync: %v", err)
 	}
@@ -129,7 +130,7 @@ func TestSyncServerPropagatesDeletion(t *testing.T) {
 	saveTodos(t, ch, []todo.Todo{tomb})
 
 	cfg := syncConfig{URL: ts.URL, Token: "tok"}
-	if _, err := runClientSync(ch, cfg, 5*time.Second, defaultBiases(), defaultBoardConfig().wire()); err != nil {
+	if _, err := runClientSync(ch, cfg, 5*time.Second, rank.DefaultBiases(), defaultBoardConfig().wire()); err != nil {
 		t.Fatalf("client sync: %v", err)
 	}
 
@@ -163,7 +164,7 @@ func TestSyncMergesChildCollections(t *testing.T) {
 	saveTodos(t, ch, []todo.Todo{cx})
 
 	cfg := syncConfig{URL: ts.URL, Token: "tok"}
-	if _, err := runClientSync(ch, cfg, 5*time.Second, defaultBiases(), defaultBoardConfig().wire()); err != nil {
+	if _, err := runClientSync(ch, cfg, 5*time.Second, rank.DefaultBiases(), defaultBoardConfig().wire()); err != nil {
 		t.Fatalf("client sync: %v", err)
 	}
 
@@ -209,15 +210,15 @@ func TestSyncMultiClientConvergence(t *testing.T) {
 	saveTodos(t, c2, []todo.Todo{mkTask("c", "C", at(0))})
 
 	// Client 1 syncs: server gains B; client 1 gains A.
-	if _, err := runClientSync(c1, cfg, 5*time.Second, defaultBiases(), defaultBoardConfig().wire()); err != nil {
+	if _, err := runClientSync(c1, cfg, 5*time.Second, rank.DefaultBiases(), defaultBoardConfig().wire()); err != nil {
 		t.Fatalf("client 1 sync: %v", err)
 	}
 	// Client 2 syncs: server gains C; client 2 gains A and B.
-	if _, err := runClientSync(c2, cfg, 5*time.Second, defaultBiases(), defaultBoardConfig().wire()); err != nil {
+	if _, err := runClientSync(c2, cfg, 5*time.Second, rank.DefaultBiases(), defaultBoardConfig().wire()); err != nil {
 		t.Fatalf("client 2 sync: %v", err)
 	}
 	// Client 1 syncs again: now picks up C too.
-	if _, err := runClientSync(c1, cfg, 5*time.Second, defaultBiases(), defaultBoardConfig().wire()); err != nil {
+	if _, err := runClientSync(c1, cfg, 5*time.Second, rank.DefaultBiases(), defaultBoardConfig().wire()); err != nil {
 		t.Fatalf("client 1 re-sync: %v", err)
 	}
 
@@ -263,7 +264,7 @@ func TestSyncConflictLogged(t *testing.T) {
 	_ = os.Remove(syncStatePath())
 
 	cfg := syncConfig{URL: ts.URL, Token: "tok"}
-	sum, err := runClientSync(ch, cfg, 5*time.Second, defaultBiases(), defaultBoardConfig().wire())
+	sum, err := runClientSync(ch, cfg, 5*time.Second, rank.DefaultBiases(), defaultBoardConfig().wire())
 	if err != nil {
 		t.Fatalf("client sync: %v", err)
 	}

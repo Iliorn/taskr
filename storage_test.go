@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -265,7 +266,7 @@ func TestSortTodosByMode(t *testing.T) {
 	t.Run("by due date", func(t *testing.T) {
 		cp := make([]todo.Todo, len(todos))
 		copy(cp, todos)
-		sortTodosByMode(cp, taskSortDueDate, defaultRanker().scoreNow())
+		sortTodosByMode(cp, taskSortDueDate, rank.Default().ScoreNow())
 		if cp[0].ID != "c" {
 			t.Errorf("first should be 'c' (today), got %s", cp[0].ID)
 		}
@@ -283,7 +284,7 @@ func TestSortTodosByMode(t *testing.T) {
 		// 'a' is low with no date → lowest (just age).
 		cp := make([]todo.Todo, len(todos))
 		copy(cp, todos)
-		sortTodosByMode(cp, taskSortSequence, defaultRanker().scoreNow())
+		sortTodosByMode(cp, taskSortSequence, rank.Default().ScoreNow())
 		if cp[0].ID != "b" {
 			t.Errorf("first should be 'b' (high+tomorrow), got %s", cp[0].ID)
 		}
@@ -294,12 +295,12 @@ func TestSortTodosByMode(t *testing.T) {
 
 	t.Run("empty slice", func(t *testing.T) {
 		var empty []todo.Todo
-		sortTodosByMode(empty, taskSortDueDate, defaultRanker().scoreNow()) // should not panic
+		sortTodosByMode(empty, taskSortDueDate, rank.Default().ScoreNow()) // should not panic
 	})
 
 	t.Run("single item", func(t *testing.T) {
 		single := []todo.Todo{{ID: "x"}}
-		sortTodosByMode(single, taskSortDueDate, defaultRanker().scoreNow()) // should not panic
+		sortTodosByMode(single, taskSortDueDate, rank.Default().ScoreNow()) // should not panic
 	})
 }
 
@@ -317,7 +318,7 @@ func TestSequenceTieBreakChain(t *testing.T) {
 			{ID: "far", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created, DueDate: time.Now().AddDate(0, 0, 20)},
 			{ID: "near", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created, DueDate: time.Now().AddDate(0, 0, 10)},
 		}
-		sortTodosBySequenceWithRollup(todos, nil, nil, defaultRanker().scoreNow())
+		rank.SortValues(todos, nil, nil, rank.Default().ScoreNow())
 		if got := []string{todos[0].ID, todos[1].ID, todos[2].ID}; got[0] != "near" || got[1] != "far" || got[2] != "none" {
 			t.Fatalf("want near/far/none, got %v", got)
 		}
@@ -331,7 +332,7 @@ func TestSequenceTieBreakChain(t *testing.T) {
 			{ID: "small", Priority: todo.PriorityMedium, Size: todo.SizeSmall, CreatedAt: created},
 		}
 		rollup := map[string]float64{"big": 50, "small": 50}
-		sortTodosBySequenceWithRollup(todos, rollup, nil, defaultRanker().scoreNow())
+		rank.SortValues(todos, rollup, nil, rank.Default().ScoreNow())
 		if todos[0].ID != "small" {
 			t.Fatalf("want small first, got %s", todos[0].ID)
 		}
@@ -340,12 +341,12 @@ func TestSequenceTieBreakChain(t *testing.T) {
 	t.Run("created: burst entry order is kept", func(t *testing.T) {
 		// Aging off so the differing CreatedAt doesn't leak into the score —
 		// the tie must be broken by the CreatedAt key itself.
-		agingOff := ranker{biases: biases{Aging: false}}.scoreNow()
+		agingOff := rank.Ranker{Biases: rank.Biases{Aging: false}}.ScoreNow()
 		todos := []todo.Todo{
 			{ID: "later", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created.Add(time.Minute)},
 			{ID: "earlier", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created},
 		}
-		sortTodosBySequenceWithRollup(todos, nil, nil, agingOff)
+		rank.SortValues(todos, nil, nil, agingOff)
 		if todos[0].ID != "earlier" {
 			t.Fatalf("want earlier first, got %s", todos[0].ID)
 		}
@@ -356,7 +357,7 @@ func TestSequenceTieBreakChain(t *testing.T) {
 			{ID: "b", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created},
 			{ID: "a", Priority: todo.PriorityMedium, Size: todo.SizeMedium, CreatedAt: created},
 		}
-		sortTodosBySequenceWithRollup(todos, nil, nil, defaultRanker().scoreNow())
+		rank.SortValues(todos, nil, nil, rank.Default().ScoreNow())
 		if todos[0].ID != "a" {
 			t.Fatalf("want a first, got %s", todos[0].ID)
 		}

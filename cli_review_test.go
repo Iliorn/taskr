@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -174,7 +175,7 @@ func TestSortTodosByCLIModeOrdersAndRejectsUnknown(t *testing.T) {
 	base := buildReviewSet(now)
 
 	rows := append([]todo.Todo(nil), base...)
-	if err := sortTodosByCLIMode(rows, "age", nil, defaultRanker()); err != nil {
+	if err := sortTodosByCLIMode(rows, "age", nil, rank.Default()); err != nil {
 		t.Fatalf("sort age: %v", err)
 	}
 	if rows[0].Title != "Ramte an old wall" {
@@ -182,7 +183,7 @@ func TestSortTodosByCLIModeOrdersAndRejectsUnknown(t *testing.T) {
 	}
 
 	rows = append([]todo.Todo(nil), base...)
-	if err := sortTodosByCLIMode(rows, "idle", nil, defaultRanker()); err != nil {
+	if err := sortTodosByCLIMode(rows, "idle", nil, rank.Default()); err != nil {
 		t.Fatalf("sort idle: %v", err)
 	}
 	// Untouched for 40 days beats the freed task's 30 — idle reads ModifiedAt,
@@ -197,14 +198,14 @@ func TestSortTodosByCLIModeOrdersAndRejectsUnknown(t *testing.T) {
 
 	rows = append([]todo.Todo(nil), base...)
 	rows[1].Priority = todo.PriorityHigh
-	if err := sortTodosByCLIMode(rows, "pri", nil, defaultRanker()); err != nil {
+	if err := sortTodosByCLIMode(rows, "pri", nil, rank.Default()); err != nil {
 		t.Fatalf("sort pri: %v", err)
 	}
 	if rows[0].Priority != todo.PriorityHigh {
 		t.Errorf("pri sort put %v first, want high", rows[0].Priority)
 	}
 
-	if err := sortTodosByCLIMode(rows, "colour", nil, defaultRanker()); err == nil {
+	if err := sortTodosByCLIMode(rows, "colour", nil, rank.Default()); err == nil {
 		t.Error("an unknown --sort was accepted; it should name the valid modes instead")
 	}
 }
@@ -224,10 +225,10 @@ func TestCLISortsAreTotalOrders(t *testing.T) {
 	for _, mode := range cliSortNames() {
 		first := append([]todo.Todo(nil), rows...)
 		second := append([]todo.Todo(nil), rows[1], rows[2], rows[0])
-		if err := sortTodosByCLIMode(first, mode, nil, defaultRanker()); err != nil {
+		if err := sortTodosByCLIMode(first, mode, nil, rank.Default()); err != nil {
 			t.Fatalf("sort %s: %v", mode, err)
 		}
-		if err := sortTodosByCLIMode(second, mode, nil, defaultRanker()); err != nil {
+		if err := sortTodosByCLIMode(second, mode, nil, rank.Default()); err != nil {
 			t.Fatalf("sort %s: %v", mode, err)
 		}
 		for i := range first {

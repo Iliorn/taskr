@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -71,7 +72,7 @@ func TestMergeSurvivesConcurrentLocalWrite(t *testing.T) {
 	}
 	t.Cleanup(func() { mergeStoreTestHook = nil })
 
-	merged, changed, err := mergeIntoStore(h1, []todo.Todo{incoming}, defaultBiases())
+	merged, changed, err := mergeIntoStore(h1, []todo.Todo{incoming}, rank.DefaultBiases())
 	if err != nil {
 		t.Fatalf("mergeIntoStore: %v", err)
 	}
@@ -116,7 +117,7 @@ func TestMergeIntoStoreNoOpDoesNotWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	_, changed, err := mergeIntoStore(h, loaded, defaultBiases())
+	_, changed, err := mergeIntoStore(h, loaded, rank.DefaultBiases())
 	if err != nil {
 		t.Fatalf("mergeIntoStore: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -97,7 +98,7 @@ func dynamicUIStrings() []string {
 		out = append(out, g.title)
 	}
 	out = append(out, secDrill)
-	for _, d := range []biasLevel{biasRelaxed, biasBalanced, biasIntense} {
+	for _, d := range []rank.Level{rank.Relaxed, rank.Balanced, rank.Intense} {
 		out = append(out, d.String())
 	}
 	for _, p := range []todo.Priority{todo.PriorityHigh, todo.PriorityMedium, todo.PriorityLow} {
@@ -109,7 +110,7 @@ func dynamicUIStrings() []string {
 	out = append(out, "daily", "weekly", "monthly", "yearly", "weekdays")
 	// The explain overlay labels its rows with the dimension names the scoring
 	// code holds, so they reach tr() through a slice rather than a literal.
-	out = append(out, seqDimNames[:]...)
+	out = append(out, rank.DimNames[:]...)
 	// Parser keywords reach tr() through inputWord(), indexed off this slice —
 	// a source scan sees the helper, not the words. Their translations are what
 	// the grammars accept, so a new keyword without one is a keyword nobody can

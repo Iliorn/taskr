@@ -360,7 +360,7 @@ Notes:
     TUI usage is safe for reads; writes serialize via SQLite's busy-timeout.
     A running TUI live-reloads on external writes via a filesystem watcher,
     so CLI changes appear without restarting it.
-  - The sequencing engine's biases (Deadline/Priority/Momentum) are loaded
+  - The sequencing engine's rank.Biases (Deadline/Priority/Momentum) are loaded
     from ~/.taskr/settings.json, so 'top' and 'list' rank the same way as
     the TUI under the user's current bias settings.`)
 	return 0

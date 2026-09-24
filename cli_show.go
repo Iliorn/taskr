@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -83,7 +84,7 @@ func cliWhy(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	e := repo.ranker().explain(t, ptrs)
+	e := repo.ranker().Explain(t, ptrs)
 	if *asJSON {
 		return emitJSON(seqExplainJSONOf(e))
 	}
@@ -94,7 +95,7 @@ func cliWhy(args []string) int {
 }
 
 // seqExplainJSON is the wire shape of `taskr why --json`. The internal
-// seqExplain carries reason codes and a biasLevel, which mean nothing outside
+// rank.Explanation carries reason codes and a rank.Level, which mean nothing outside
 // the binary, so the JSON form resolves them to the same sentences the text
 // form prints.
 type seqFactorJSON struct {
@@ -124,7 +125,7 @@ type seqExplainJSON struct {
 	Shifts  []seqShiftJSON  `json:"shifts,omitempty"`
 }
 
-func seqExplainJSONOf(e seqExplain) seqExplainJSON {
+func seqExplainJSONOf(e rank.Explanation) seqExplainJSON {
 	out := seqExplainJSON{
 		Title: e.Title, Rank: e.Pos, Of: e.Of,
 		Score: e.Total, Ranked: e.Ranked, Boosted: e.Boosted,
@@ -138,7 +139,7 @@ func seqExplainJSONOf(e seqExplain) seqExplainJSON {
 	return out
 }
 
-func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo, rk ranker) {
+func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo, rk rank.Ranker) {
 	fmt.Printf("ID:       %s\n", t.ID)
 	fmt.Printf("Title:    %s\n", t.Title)
 	status := "pending"
@@ -174,14 +175,14 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo, rk ranke
 	fmt.Printf("Modified: %s\n", t.ModifiedAt.Format("2006-01-02 15:04"))
 
 	if t.Status == todo.Pending {
-		sc := rk.components(t)
+		sc := rk.Components(t)
 		// Spelled-out component names instead of single letters — the previous
 		// `D/P/M/A` was a stat-readout cliff for anyone not already steeped in
 		// the sequencing engine's terminology.
 		// Percent of the current field, with the points that produced it —
 		// `taskr why` spells out where each of them came from.
 		fmt.Printf("Score:    %s  (%.1f pts: Deadline %.1f · Priority %.1f · Momentum %.1f · Size %.1f · Age %.1f)\n",
-			rk.formatPercent(sc.Total), sc.Total,
+			rk.FormatPercent(sc.Total), sc.Total,
 			sc.Urgency, sc.Importance, sc.Momentum, sc.Size, sc.Age)
 	}
 	if len(subs) > 0 {
@@ -246,13 +247,13 @@ type statsSummary struct {
 	DoneToday           int `json:"done_today"`
 	DoneThisWeek        int `json:"done_this_week"`
 	TrackedTodayMinutes int `json:"tracked_today_minutes"`
-	// Sequence hit rate inputs: of the last seqHitWindow rank-stamped
-	// completions, how many closed while in the engine's top seqHitTopN.
+	// Sequence hit rate inputs: of the last rank.HitWindow rank-stamped
+	// completions, how many closed while in the engine's top rank.HitTopN.
 	SeqHitsRecent  int `json:"seq_hits_recent"`
 	SeqRatedRecent int `json:"seq_rated_recent"`
 	// Seq carries the --seq miss analysis in JSON output; nil (and omitted)
 	// unless the flag was passed.
-	Seq *seqAnalysis `json:"seq,omitempty"`
+	Seq *rank.Analysis `json:"seq,omitempty"`
 }
 
 func computeStats(todos []todo.Todo, now time.Time) statsSummary {
@@ -349,11 +350,11 @@ func cliStats(args []string) int {
 		})
 	}
 	s := computeStats(scoped, time.Now())
-	s.SeqHitsRecent, s.SeqRatedRecent = sequenceHitStats(todoPtrs(scoped), seqHitWindow)
+	s.SeqHitsRecent, s.SeqRatedRecent = rank.HitStats(todoPtrs(scoped), rank.HitWindow)
 	if *seq {
 		// Heat always reconstructs from the full set: completions outside the
 		// filter still warmed their projects/tags at the time.
-		a := analyzeSeqMisses(todoPtrs(scoped), todoPtrs(todos), seqHitWindow, repo.ranker().biases)
+		a := rank.AnalyzeMisses(todoPtrs(scoped), todoPtrs(todos), rank.HitWindow, repo.ranker().Biases)
 		s.Seq = &a
 	}
 	switch strings.ToLower(*format) {
@@ -388,11 +389,11 @@ func cliStats(args []string) int {
 		// doesn't advertise a 0/0 metric.
 		if s.SeqRatedRecent > 0 {
 			line += fmt.Sprintf(" · seq hit %d%% (%d/%d top-%d)",
-				100*s.SeqHitsRecent/s.SeqRatedRecent, s.SeqHitsRecent, s.SeqRatedRecent, seqHitTopN)
+				100*s.SeqHitsRecent/s.SeqRatedRecent, s.SeqHitsRecent, s.SeqRatedRecent, rank.HitTopN)
 		}
 		fmt.Println(line)
 		if s.Seq != nil {
-			fmt.Print("\n" + renderSeqAnalysisText(*s.Seq, repo.ranker().biases))
+			fmt.Print("\n" + renderSeqAnalysisText(*s.Seq, repo.ranker().Biases))
 		}
 		return 0
 	}
@@ -405,7 +406,7 @@ const seqMissDisplayCap = 5
 // renderSeqAnalysisText renders the stats --seq block: the hit/miss dimension
 // table, the bias suggestion, and the most recent misses. The hit rate itself
 // is already on the stats summary line above it, so it isn't repeated here.
-func renderSeqAnalysisText(a seqAnalysis, b biases) string {
+func renderSeqAnalysisText(a rank.Analysis, b rank.Biases) string {
 	if a.Rated == 0 {
 		return "no rank-stamped completions yet — the analysis needs a few finished tasks\n"
 	}
@@ -425,15 +426,15 @@ func renderSeqAnalysisText(a seqAnalysis, b biases) string {
 	}
 	sb.WriteString("             avg contribution at completion\n")
 	fmt.Fprintf(&sb, "%-10s  %6s  %6s  %6s\n", "dimension", "hits", "misses", "gap")
-	for d := range seqDimNames {
+	for d := range rank.DimNames {
 		marker := ""
 		if d == largest && largestAbs >= 0.05 {
 			marker = "  ◂ largest gap"
 		}
 		fmt.Fprintf(&sb, "%-10s  %6.1f  %6.1f  %+6.1f%s\n",
-			seqDimNames[d], a.HitAvg[d], a.MissAvg[d], a.Gap[d], marker)
+			rank.DimNames[d], a.HitAvg[d], a.MissAvg[d], a.Gap[d], marker)
 	}
-	if hint := seqSuggestion(a, b); hint != "" {
+	if hint := rank.Suggestion(a, b); hint != "" {
 		sb.WriteString("\n" + hint + "\n")
 	}
 	sb.WriteString("\nrecent misses:\n")
@@ -452,6 +453,6 @@ func renderSeqAnalysisText(a seqAnalysis, b biases) string {
 		}
 		sb.WriteString(strings.TrimRight(line, " ") + "\n")
 	}
-	sb.WriteString("\n(dimensions recomputed at each completion's timestamp from current task fields and biases)\n")
+	sb.WriteString("\n(dimensions recomputed at each completion's timestamp from current task fields and rank.Biases)\n")
 	return sb.String()
 }

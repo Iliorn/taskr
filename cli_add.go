@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -56,7 +57,7 @@ func cliAdd(args []string) int {
 	}
 	board := boardConfigFromSettings(settings)
 	repo := newSQLiteRepo()
-	repo.SetRanker(ranker{biases: biasesFromSettings(settings)})
+	repo.SetRanker(rank.Ranker{Biases: biasesFromSettings(settings)})
 
 	// Resolve everything that's shared across all created tasks exactly once
 	// (parsing and ref lookups), so batch add doesn't re-do it per line.

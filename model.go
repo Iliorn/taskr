@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -275,7 +276,7 @@ type boardState struct {
 type model struct {
 	Store  // embedded source of truth (tasks map, indexes, undo) — promotes m.tasks, m.add, m.pushUndo, etc.
 	repo   Repository
-	rank   ranker // bias knobs, activity heat and the 100% mark every score reads
+	rank   rank.Ranker // bias knobs, activity heat and the 100% mark every score reads
 	cursor int
 	tab    tab
 	pane   pane
@@ -515,7 +516,7 @@ func initialModel(repo Repository) model {
 	m := model{
 		Store:             store,
 		repo:              repo,
-		rank:              ranker{biases: biasesFromSettings(settings)},
+		rank:              rank.Ranker{Biases: biasesFromSettings(settings)},
 		boardCfg:          boardConfigFromSettings(settings),
 		textInput:         ti,
 		searchInput:       si,
@@ -1344,7 +1345,7 @@ func (m *model) closePendingSubtree(parentID string) []string {
 		if s.IsTimerRunning() {
 			m.stopTimer(s.ID)
 		}
-		captureSeqRankAtDone(m.rank, m.allTodos(), s)
+		rank.CaptureRankAtDone(m.rank, m.allTodos(), s)
 		s.Toggle()
 		closed = append(closed, s.ID)
 	}

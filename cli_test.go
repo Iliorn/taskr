@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -648,7 +649,7 @@ func TestCliDoneStampsSeqRank(t *testing.T) {
 		t.Errorf("SeqRankAtDone = %d, want >= 1 (stamped at completion)", probe.SeqRankAtDone)
 	}
 	// And the stat pipeline sees it.
-	if hits, rated := sequenceHitStats(todoPtrs(todos), seqHitWindow); rated < 1 || hits < 1 {
+	if hits, rated := rank.HitStats(todoPtrs(todos), rank.HitWindow); rated < 1 || hits < 1 {
 		t.Errorf("hit stats = %d/%d, want at least 1/1 (high-pri due-today closes as a top-5 hit)", hits, rated)
 	}
 }
@@ -744,7 +745,7 @@ func TestRankTopBySequenceLiftsBlockerAboveDependent(t *testing.T) {
 	dependent.DueDate = time.Now()
 	dependent.AddDependency(blocker.ID)
 
-	ranked := rankTopBySequence(todoPtrs([]todo.Todo{dependent, blocker}), defaultRanker())
+	ranked := rank.Default().Top(todoPtrs([]todo.Todo{dependent, blocker}))
 
 	pos := make(map[string]int, len(ranked))
 	for i := range ranked {

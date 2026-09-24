@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -1556,11 +1557,11 @@ func (m *model) isBiasSettingRow(row int) bool {
 func (m *model) cycleBias(row, direction int) {
 	switch row {
 	case settingBiasDeadline:
-		m.rank.biases.Deadline = cycleBiasLevel(m.rank.biases.Deadline, direction)
+		m.rank.Biases.Deadline = rank.CycleLevel(m.rank.Biases.Deadline, direction)
 	case settingBiasPriority:
-		m.rank.biases.Priority = cycleBiasLevel(m.rank.biases.Priority, direction)
+		m.rank.Biases.Priority = rank.CycleLevel(m.rank.Biases.Priority, direction)
 	case settingBiasMomentum:
-		m.rank.biases.Momentum = cycleBiasLevel(m.rank.biases.Momentum, direction)
+		m.rank.Biases.Momentum = rank.CycleLevel(m.rank.Biases.Momentum, direction)
 	default:
 		return
 	}
@@ -1576,7 +1577,7 @@ func (m *model) cycleBias(row, direction int) {
 // invalidate-persist-resync pattern so the new ranking is visible immediately
 // and persists across restarts.
 func (m *model) toggleAging() {
-	m.rank.biases.Aging = !m.rank.biases.Aging
+	m.rank.Biases.Aging = !m.rank.Biases.Aging
 	m.markCacheDirty()
 	m.persistSettings()
 	m.repo.SetRanker(m.rank)
@@ -1647,10 +1648,10 @@ func (m *model) persistSettings() {
 		ProjectOrder:      m.projectOrder,
 		Theme:             m.themeName,
 		Language:          string(activeLang),
-		SeqBiasDeadline:   m.rank.biases.Deadline,
-		SeqBiasPriority:   m.rank.biases.Priority,
-		SeqBiasMomentum:   m.rank.biases.Momentum,
-		SeqAgingDisabled:  !m.rank.biases.Aging,
+		SeqBiasDeadline:   m.rank.Biases.Deadline,
+		SeqBiasPriority:   m.rank.Biases.Priority,
+		SeqBiasMomentum:   m.rank.Biases.Momentum,
+		SeqAgingDisabled:  !m.rank.Biases.Aging,
 		AutoCloseParent:   m.autoCloseParent,
 		AutoCloseSubtasks: m.autoCloseSubtasks,
 		BoardDisabled:     !m.boardCfg.shown,

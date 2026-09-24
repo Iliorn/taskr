@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -506,7 +507,7 @@ func (m model) renderStatsList() string {
 		// How often a completed task sat in the engine's top-5 at close —
 		// the feedback loop for tuning the sequence biases. Hidden until
 		// rank-stamped completions exist.
-		if hits, rated := sequenceHitStats(scope, seqHitWindow); rated > 0 {
+		if hits, rated := rank.HitStats(scope, rank.HitWindow); rated > 0 {
 			stat(sb, tr("Seq hit (top-5)"), hits, rated, true)
 		}
 	})
@@ -1223,7 +1224,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		// number". Right-aligned in the field so every score ends in the same
 		// column and the % signs line up; the field's trailing listColGap is
 		// the gap to Due.
-		r.add(pal.meta, padRight(padLeft(m.rank.formatPercent(m.rankedScore(t)), cols.lastW-listColGap), cols.lastW))
+		r.add(pal.meta, padRight(padLeft(m.rank.FormatPercent(m.rankedScore(t)), cols.lastW-listColGap), cols.lastW))
 	}
 	if cols.showDue {
 		// Right-aligned for the same reason: "2d" and "20-09-27" share a right
@@ -1498,7 +1499,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingCheckUpdate:       tr("Check for updates"),
 	}
 	agingVal := tr("Off")
-	if m.rank.biases.Aging {
+	if m.rank.Biases.Aging {
 		agingVal = tr("On")
 	}
 	autoCloseVal := tr("Off")
@@ -1553,9 +1554,9 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		}
 	}
 	values := map[int]string{
-		settingBiasDeadline:      biasPickerValue(m.rank.biases.Deadline),
-		settingBiasPriority:      biasPickerValue(m.rank.biases.Priority),
-		settingBiasMomentum:      biasPickerValue(m.rank.biases.Momentum),
+		settingBiasDeadline:      biasPickerValue(m.rank.Biases.Deadline),
+		settingBiasPriority:      biasPickerValue(m.rank.Biases.Priority),
+		settingBiasMomentum:      biasPickerValue(m.rank.Biases.Momentum),
 		settingAging:             "‹ " + agingVal + " ›",
 		settingAutoCloseParent:   "‹ " + autoCloseVal + " ›",
 		settingAutoCloseSubtasks: "‹ " + autoCloseSubsVal + " ›",
@@ -1628,7 +1629,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 			// the whole account the pane gives of a bias change — a prose tagline
 			// for the mix said less than the five rows that actually move.
 			if g.preview {
-				if preview := m.renderSettingsTopPreview(m.rank.biases, m.rank.heat, m.frameTime, colW); preview != "" {
+				if preview := m.renderSettingsTopPreview(m.rank.Biases, m.rank.Heat, m.frameTime, colW); preview != "" {
 					lines = append(lines, strings.Split(strings.TrimRight(preview, "\n"), "\n")...)
 				}
 			}
@@ -1767,9 +1768,9 @@ const settingsPreviewN = 5
 // tasks ranked by the supplied biases/heat (pure — no global mutation). On
 // empty task sets it returns an empty string so the caller can skip it.
 // maxW is the column width available (content, no outer borders).
-func (m model) renderSettingsTopPreview(b biases, heat activityHeat, now time.Time, maxW int) string {
+func (m model) renderSettingsTopPreview(b rank.Biases, heat rank.Heat, now time.Time, maxW int) string {
 	all := m.allTodos()
-	rows := rankTopBySequenceWith(all, b, heat, now)
+	rows := rank.TopWith(all, b, heat, now)
 	if len(rows) == 0 {
 		return ""
 	}
@@ -1795,16 +1796,16 @@ func (m model) renderSettingsTopPreview(b biases, heat activityHeat, now time.Ti
 	// to a different set of weights.
 	previewMax := 0.0
 	for i := range rows {
-		if s := sequenceComponentsAt(now, &rows[i], b, heat).Total; s > previewMax {
+		if s := rank.ComponentsAt(now, &rows[i], b, heat).Total; s > previewMax {
 			previewMax = s
 		}
 	}
 	for i, t := range rows {
-		score := sequenceComponentsAt(now, &t, b, heat).Total
-		rank := fmt.Sprintf("%2d", i+1)
-		scoreStr := fmt.Sprintf("%4s", strconv.Itoa(percentOfField(score, previewMax))+"%")
+		score := rank.ComponentsAt(now, &t, b, heat).Total
+		pos := fmt.Sprintf("%2d", i+1)
+		scoreStr := fmt.Sprintf("%4s", strconv.Itoa(rank.PercentOfField(score, previewMax))+"%")
 		title := truncate(t.Title, titleMax)
-		line := fmt.Sprintf("  %s  %s  %s", rank, scoreStr, title)
+		line := fmt.Sprintf("  %s  %s  %s", pos, scoreStr, title)
 		sb.WriteString(dimStyle.Render(line) + "\n")
 	}
 	return sb.String()
@@ -1812,7 +1813,7 @@ func (m model) renderSettingsTopPreview(b biases, heat activityHeat, now time.Ti
 
 // biasPickerValue formats a bias for the Settings picker the same way the
 // theme/language pickers do: title-cased value between thin chevrons.
-func biasPickerValue(b biasLevel) string {
+func biasPickerValue(b rank.Level) string {
 	s := tr(b.String())
 	if s == "" {
 		return "‹ - ›"

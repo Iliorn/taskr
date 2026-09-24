@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -112,7 +113,7 @@ func cliDone(args []string) int {
 			t.StopTimer()
 			stopped = append(stopped, t)
 		}
-		captureSeqRankAtDone(repo.ranker(), todoPtrs(todos), t)
+		rank.CaptureRankAtDone(repo.ranker(), todoPtrs(todos), t)
 		t.Toggle()
 		closed[t.ID] = true
 		dirty = append(dirty, t)
@@ -138,7 +139,7 @@ func cliDone(args []string) int {
 					s.StopTimer()
 					stopped = append(stopped, s)
 				}
-				captureSeqRankAtDone(repo.ranker(), todoPtrs(todos), s)
+				rank.CaptureRankAtDone(repo.ranker(), todoPtrs(todos), s)
 				s.Toggle()
 				closed[s.ID] = true
 				cascaded = append(cascaded, s)

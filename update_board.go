@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -51,7 +52,7 @@ func (m *model) closePendingTask(t *todo.Todo) bool {
 	} else {
 		m.pushUndo("toggle done", t.ID)
 	}
-	captureSeqRankAtDone(m.rank, m.allTodos(), t)
+	rank.CaptureRankAtDone(m.rank, m.allTodos(), t)
 	t.Toggle()
 	ids := []string{t.ID}
 	if t.IsRecurring() {

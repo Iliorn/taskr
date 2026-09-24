@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -21,12 +22,12 @@ func loadForCLI() (*sqliteRepo, []todo.Todo, error) {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
 	repo := newSQLiteRepo()
-	repo.SetRanker(ranker{biases: biasesFromSettings(settings)})
+	repo.SetRanker(rank.Ranker{Biases: biasesFromSettings(settings)})
 	todos, err := repo.Load()
 	if err == nil {
 		// Momentum reads recent activity; snapshot it so CLI output ranks
 		// the same way the TUI does after its cache refresh.
-		repo.SetRanker(repo.ranker().refreshed(time.Now(), todoPtrs(todos)))
+		repo.SetRanker(repo.ranker().Refreshed(time.Now(), todoPtrs(todos)))
 	}
 	return repo, todos, err
 }
@@ -264,10 +265,10 @@ func unblockedSet(todos []todo.Todo, within time.Duration, now time.Time) map[st
 	return out
 }
 
-// buildBlockedSet is the CLI's view of dependencySets: same rule, over the
+// buildBlockedSet is the CLI's view of rank.DependencySets: same rule, over the
 // value slice the CLI load path hands out.
 func buildBlockedSet(todos []todo.Todo) map[string]bool {
-	blocked, _ := dependencySets(todoPtrs(todos))
+	blocked, _ := rank.DependencySets(todoPtrs(todos))
 	return blocked
 }
 
@@ -412,10 +413,10 @@ func cliSortNames() []string {
 // unfinished dependency below work that can be started, in the sequence order
 // only — an explicit --sort=due or --sort=size is an instruction to order by
 // that key alone.
-func sortTodosByCLIMode(rows []todo.Todo, mode string, blocked map[string]bool, rk ranker) error {
+func sortTodosByCLIMode(rows []todo.Todo, mode string, blocked map[string]bool, rk rank.Ranker) error {
 	switch mode {
 	case "", "seq":
-		sortTodosBySequenceWithRollup(rows, nil, blocked, rk.scoreNow())
+		rank.SortValues(rows, nil, blocked, rk.ScoreNow())
 	case "due":
 		sortTodosByMode(rows, taskSortDueDate, nil)
 	case "size":

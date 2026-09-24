@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/tasksync"
 	"github.com/Iliorn/taskr/todo"
 )
@@ -100,7 +101,7 @@ func TestSyncConcurrentLocalWriteSurvives(t *testing.T) {
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 
-	if _, err := runClientSync(ch, syncConfig{URL: ts.URL, Token: "tok"}, 5*time.Second, defaultBiases(), defaultBoardConfig().wire()); err != nil {
+	if _, err := runClientSync(ch, syncConfig{URL: ts.URL, Token: "tok"}, 5*time.Second, rank.DefaultBiases(), defaultBoardConfig().wire()); err != nil {
 		t.Fatalf("client sync: %v", err)
 	}
 

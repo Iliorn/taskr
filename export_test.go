@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -127,7 +128,7 @@ func TestExportImportRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseExportData: %v", err)
 	}
-	_, _, err = mergeIntoStore(fresh, tasks, defaultBiases())
+	_, _, err = mergeIntoStore(fresh, tasks, rank.DefaultBiases())
 	if err != nil {
 		t.Fatalf("mergeIntoStore: %v", err)
 	}
@@ -188,7 +189,7 @@ func TestImportLegacyBareArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseExportData: %v", err)
 	}
-	_, _, err = mergeIntoStore(h, tasks, defaultBiases())
+	_, _, err = mergeIntoStore(h, tasks, rank.DefaultBiases())
 	if err != nil {
 		t.Fatalf("mergeIntoStore: %v", err)
 	}
@@ -219,7 +220,7 @@ func TestImportIdempotent(t *testing.T) {
 	}
 
 	// First import: must change the store.
-	_, changed1, err := mergeIntoStore(h, tasks, defaultBiases())
+	_, changed1, err := mergeIntoStore(h, tasks, rank.DefaultBiases())
 	if err != nil {
 		t.Fatalf("first mergeIntoStore: %v", err)
 	}
@@ -232,7 +233,7 @@ func TestImportIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseExportData (second): %v", err)
 	}
-	_, changed2, err := mergeIntoStore(h, tasks2, defaultBiases())
+	_, changed2, err := mergeIntoStore(h, tasks2, rank.DefaultBiases())
 	if err != nil {
 		t.Fatalf("second mergeIntoStore: %v", err)
 	}
@@ -331,7 +332,7 @@ func TestCliImportStdinLargeSingleLine(t *testing.T) {
 	tomb.Deleted = true
 	tomb.DeletedAt = time.Now()
 	tomb.ModifiedAt = time.Now()
-	if _, _, err := mergeIntoStore(testStore(t), []todo.Todo{tomb}, defaultBiases()); err != nil {
+	if _, _, err := mergeIntoStore(testStore(t), []todo.Todo{tomb}, rank.DefaultBiases()); err != nil {
 		t.Fatalf("cleanup tombstone: %v", err)
 	}
 }

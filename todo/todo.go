@@ -135,6 +135,20 @@ func (s Size) Letter() string {
 	}
 }
 
+// Rank orders sizes Small < Medium < Large for sorting — smaller first matches
+// the quick-win reading everywhere sizes break a tie. The iota order of the
+// constants is storage order, not this one.
+func (s Size) Rank() int {
+	switch s {
+	case SizeSmall:
+		return 0
+	case SizeMedium:
+		return 1
+	default: // Large
+		return 2
+	}
+}
+
 // ── Comment ───────────────────────────────────────────────────────────────────
 
 type Comment struct {

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -459,7 +460,7 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Only invalidate caches and reset cursor when the query
 		// actually changed. Otherwise cursor-blink ticks would
 		// rebuild caches on every frame, reshuffling tied done
-		// tasks (see sortTodosBySequenceWithRollup tiebreakers).
+		// tasks (see rank.SortValues tiebreakers).
 		m.searchQuery = newQuery
 		m.cursor = 0
 		m.projectCursor = 0
@@ -726,7 +727,7 @@ func (m *model) confirmCloseParent() tea.Cmd {
 			if t.IsTimerRunning() {
 				m.stopTimer(t.ID)
 			}
-			captureSeqRankAtDone(m.rank, m.allTodos(), t)
+			rank.CaptureRankAtDone(m.rank, m.allTodos(), t)
 			t.Toggle()
 			ids := []string{t.ID}
 			if t.IsRecurring() {
