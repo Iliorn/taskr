@@ -17,6 +17,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 - Moving a card on the Board lights it up as it lands; a card moved into Done lands with a green ✓.
 - Board: press enter to pick up a card, ←/→ to carry it, and enter or esc to put it down.
+- Board cards are drawn as boxes in an even grid, without the table lines between columns.
 
 ### Fixed
 

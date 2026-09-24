@@ -152,7 +152,7 @@ func TestBoardRenderWideAndStacked(t *testing.T) {
 	m.termHeight = 30
 
 	out := ansi.Strip(m.renderBoardList())
-	for _, want := range []string{"Backlog (1)", "In progress (0)", "Review (1)", "Done (0)", cursorMark + "Alpha"} {
+	for _, want := range []string{"Backlog  1", "In progress  0", "Review  1", "Done  0", "┃ Alpha"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("wide board missing %q:\n%s", want, out)
 		}
@@ -167,7 +167,7 @@ func TestBoardRenderWideAndStacked(t *testing.T) {
 	// Narrow terminal degrades to the stacked, full-width form.
 	m.termWidth = 50
 	stacked := ansi.Strip(m.renderBoardList())
-	if !strings.Contains(stacked, "Backlog (1)") || !strings.Contains(stacked, "Review (1)") {
+	if !strings.Contains(stacked, "Backlog  1") || !strings.Contains(stacked, "Review  1") {
 		t.Errorf("stacked board missing headers:\n%s", stacked)
 	}
 }

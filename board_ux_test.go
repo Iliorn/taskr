@@ -279,45 +279,11 @@ func TestBoardVisibilityPersists(t *testing.T) {
 
 // ── Column widths ────────────────────────────────────────────────────────────
 
-// An equal split gave a board of one busy stage and three empty ones four
-// columns of the same width — clipping the only real cards while three columns
-// of blanks sat beside them.
-func TestBoardColumnsAreWidthedByWhatTheyHold(t *testing.T) {
-	busy := []todo.Todo{todo.New("A card whose title is a good deal longer than the others")}
-	titles := []string{"Backlog", "In progress", "Review", "Done"}
-	cols := [][]todo.Todo{busy, nil, nil, nil}
-
-	const availW = 100
-	got := boardColWidths(cols, titles, availW)
-	if len(got) != 4 {
-		t.Fatalf("want a width per column, got %d", len(got))
-	}
-	for i, w := range got {
-		if w < boardMinColW {
-			t.Errorf("column %d width %d is below the floor %d — an empty stage is still a place to drop a card",
-				i, w, boardMinColW)
-		}
-	}
-	if !(got[0] > got[1]) {
-		t.Errorf("the column with the long card should be wider than the empty ones: %v", got)
-	}
-	// The row fills the pane exactly: no ragged edge, no overflow.
-	sum := (len(cols) - 1) * boardColGap
-	for _, w := range got {
-		sum += w
-	}
-	if sum != availW {
-		t.Errorf("columns + gaps = %d, want exactly the available %d: %v", sum, availW, got)
-	}
-}
-
 // When there is not enough width to give every column its floor, the split
 // falls back to even columns rather than handing some column a negative width.
 func TestBoardColumnWidthsFallBackWhenCrowded(t *testing.T) {
-	titles := []string{"A", "B", "C", "D"}
-	cols := make([][]todo.Todo, 4)
 	availW := boardMinColW*2 + 3*boardColGap
-	got := boardColWidths(cols, titles, availW)
+	got := boardColWidths(4, availW)
 	sum := 3 * boardColGap
 	for _, w := range got {
 		if w <= 0 {
@@ -330,15 +296,12 @@ func TestBoardColumnWidthsFallBackWhenCrowded(t *testing.T) {
 	}
 }
 
-// A board whose columns are a different width every time a card is added reads
-// as clutter even when no row is clipped, so the grid is even until a column
-// would actually be clipped.
-func TestBoardColumnsAreAnEvenGridWhenNothingClips(t *testing.T) {
-	titles := []string{"Backlog", "In progress", "Review", "Done"}
-	cols := [][]todo.Todo{{todo.New("short")}, {todo.New("also short")}, nil, nil}
-
-	const availW = 120
-	got := boardColWidths(cols, titles, availW)
+// A board whose columns change width when a card is added or moved reads as
+// clutter, and shifts under a card being carried, so the grid is always even.
+func TestBoardColumnsAreAnEvenGrid(t *testing.T) {
+	cols := make([][]todo.Todo, 4)
+	const availW = 119 // not divisible: the remainder is spread, not dumped
+	got := boardColWidths(len(cols), availW)
 	lo, hi := got[0], got[0]
 	for _, w := range got {
 		if w < lo {
@@ -349,7 +312,7 @@ func TestBoardColumnsAreAnEvenGridWhenNothingClips(t *testing.T) {
 		}
 	}
 	if hi-lo > 1 {
-		t.Errorf("columns %v differ by %d; nothing needs the extra width, so the grid should be even", got, hi-lo)
+		t.Errorf("columns %v differ by %d; the grid should be even", got, hi-lo)
 	}
 	sum := (len(cols) - 1) * boardColGap
 	for _, w := range got {
@@ -378,46 +341,22 @@ func TestBoardHeadingsLineUpWithTheirCards(t *testing.T) {
 	}
 	header, cards := lines[0], lines[2]
 	for _, title := range []string{"In progress", "Beta"} {
-		if !strings.Contains(header+cards, title) {
+		if !strings.Contains(strings.Join(lines, "\n"), title) {
 			t.Fatalf("board is missing %q:\n%s", title, strings.Join(lines, "\n"))
 		}
 	}
 	// Display columns, not byte offsets: the card row carries the ▶ marker and
-	// the column dividers, which are three bytes each.
+	// the box-drawing borders, which are three bytes each.
 	col := func(line, sub string) int { return ansi.StringWidth(line[:strings.Index(line, sub)]) }
-	if h, c := col(header, "In progress"), col(cards, "Beta"); h != c {
-		t.Errorf("heading starts at column %d but its card at %d:\n%s", h, c, strings.Join(lines, "\n"))
+	if h, c := col(header, "In progress"), col(cards, "╭"); h != c {
+		t.Errorf("heading starts at column %d but its card's box at %d:\n%s", h, c, strings.Join(lines, "\n"))
 	}
 }
 
-// The columns are separated by a divider that runs the height of the pane, so
-// an empty stage still holds its place in the grid.
-func TestBoardDividersRunTheFullPane(t *testing.T) {
-	a := todo.New("alpha")
-	m := newTagModel(a)
-	m.tab = tabBoard
-	m.termWidth, m.termHeight = 120, 30
-	m.refreshCaches()
-
-	lines := strings.Split(ansi.Strip(m.renderBoardList()), "\n")
-	want := strings.Count(lines[2], boardColSep)
-	if want != len(activeStages)-1 {
-		t.Fatalf("card row has %d dividers, want one between each of %d columns", want, len(activeStages))
-	}
-	if n := len(lines); n < m.listVisible()-2 {
-		t.Errorf("board drew %d rows, want the pane's %d so the dividers reach the bottom", n, m.listVisible()-2)
-	}
-	for i, line := range lines[2:] {
-		if got := strings.Count(line, boardColSep); got != want {
-			t.Errorf("row %d has %d dividers, want %d: %q", i+2, got, want, line)
-		}
-	}
-}
-
-// A column with room wraps a long title onto a second row rather than clipping
-// it, and spaces the cards so the second row does not read as the next card. A
-// column too long for that falls back to one clipped row per card.
-func TestBoardCardsWrapWhenTheColumnHasRoom(t *testing.T) {
+// A column with room draws each card as a box with its title wrapped onto two
+// lines; a column too long for two-line boxes tries one-line boxes, and one too
+// long for boxes at all falls back to one clipped row per card.
+func TestBoardCardsAreBoxesWhileTheyFit(t *testing.T) {
 	long := todo.New("Draft the quarterly budget proposal for the board meeting")
 	short := todo.New("Buy filters")
 	m := newTagModel(long, short)
@@ -425,25 +364,39 @@ func TestBoardCardsWrapWhenTheColumnHasRoom(t *testing.T) {
 	m.termWidth, m.termHeight = 80, 30
 	m.refreshCaches()
 
-	cards := func(m model) []string {
+	// The first column's rows, trimmed: the board is laid out on a fixed grid,
+	// so the first column is the first colW cells of every row.
+	firstCol := func(m model) []string {
+		widths := boardColWidths(3, m.termWidth-8)
 		lines := strings.Split(ansi.Strip(m.renderBoardList()), "\n")
-		col := make([]string, 0, len(lines))
+		out := make([]string, 0, len(lines))
 		for _, l := range lines[2:] {
-			col = append(col, strings.TrimSpace(strings.SplitN(l, boardColSep, 2)[0]))
+			r := []rune(l)
+			if len(r) > widths[0] {
+				r = r[:widths[0]]
+			}
+			out = append(out, strings.TrimSpace(string(r)))
 		}
-		return col
+		return out
 	}
-	got := cards(m)
-	if !strings.HasSuffix(got[1], "for the") && !strings.Contains(got[1], "proposal") {
-		t.Fatalf("long title did not wrap onto a second row: %q", got[:4])
+	got := firstCol(m)
+	if !strings.HasPrefix(got[0], "┏") || !strings.HasPrefix(got[1], "▶ ┃ Draft") ||
+		!strings.HasPrefix(got[2], "┃") || !strings.HasPrefix(got[3], "┗") {
+		t.Fatalf("selected long card should be a heavy two-line box:\n%s", strings.Join(got[:4], "\n"))
 	}
-	if got[2] != "" || !strings.Contains(got[3], "Buy filters") {
-		t.Fatalf("wrapped cards are not spaced by a blank row: %q", got[:4])
+	if !strings.HasPrefix(got[4], "╭") || !strings.Contains(got[5], "Buy filters") || !strings.HasPrefix(got[6], "╰") {
+		t.Fatalf("the next card should be its own rounded box:\n%s", strings.Join(got[:7], "\n"))
 	}
 
-	m.termHeight = 10 // too short for two rows a card plus the gap
-	got = cards(m)
-	if !strings.HasSuffix(got[0], ellipsis) || !strings.Contains(got[1], "Buy filters") {
-		t.Fatalf("a crowded column should clip each card to one row: %q", got)
+	m.termHeight = 15 // room for one-line boxes only
+	got = firstCol(m)
+	if !strings.HasPrefix(got[1], "▶ ┃ Draft") || !strings.HasSuffix(got[1], ellipsis+" ┃") || !strings.HasPrefix(got[2], "┗") {
+		t.Fatalf("a shorter column should clip the title inside a one-line box:\n%s", strings.Join(got, "\n"))
+	}
+
+	m.termHeight = 8 // too short for boxes
+	got = firstCol(m)
+	if !strings.HasPrefix(got[0], "▶ Draft") || !strings.Contains(got[1], "Buy filters") {
+		t.Fatalf("a crowded column should fall back to plain rows:\n%s", strings.Join(got, "\n"))
 	}
 }

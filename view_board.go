@@ -16,12 +16,10 @@ import (
 // order, and the active search filter applies unchanged.
 
 const (
-	// boardColGap is the space between two columns: one column of divider with
-	// a space either side. Two bare spaces left the eye nothing to hang a
-	// column edge on, and "where does this column end" was a question a board
-	// of unequal columns kept asking.
+	// boardColGap is the space between two columns. The card boxes mark each
+	// column's edges, so the gap is empty; three cells keep two neighbouring
+	// boxes from reading as one.
 	boardColGap  = 3
-	boardColSep  = "│"
 	boardMinColW = 16 // below this per-column width the board degrades to a stacked list
 	// boardMinWindowCols is the fewest columns worth scrolling between. A board
 	// showing one or two columns of eleven has stopped being a board — the
@@ -189,7 +187,17 @@ func (m model) renderBoardList() string {
 	// boardColWidths gets the full pane width, not boardWindow's per-column
 	// share: that share is an integer division and drops the remainder, which
 	// is how the grid used to stop a few columns short of its own border.
-	widths := boardColWidths(cols[start:start+count], titles[start:start+count], availW)
+	widths := boardColWidths(count, availW)
+	// One layout for the whole board — the most compact any visible column
+	// needs — so a short window never draws boxes beside plain rows.
+	layout := boardCardLayout{boxed: true, lines: 2}
+	for c := start; c < start+count; c++ {
+		l := chooseBoardCardLayout(cols[c], widths[c-start], budget-2)
+		if !l.boxed || l.lines < layout.lines {
+			layout.lines = l.lines
+		}
+		layout.boxed = layout.boxed && l.boxed
+	}
 	rendered := make([][]string, 0, count)
 	for c := start; c < start+count; c++ {
 		cursor := -1
@@ -197,50 +205,26 @@ func (m model) renderBoardList() string {
 			cursor = selCursor
 		}
 		rendered = append(rendered,
-			m.renderBoardColumn(cols[c], titles[c], c == n-1, cursor, widths[c-start], budget))
+			m.renderBoardColumn(cols[c], titles[c], c == n-1, cursor, widths[c-start], budget, layout))
 	}
 	return joinBoardColumns(widths, budget, rendered...)
 }
 
-// boardColWidths splits the board's width across the visible columns. The
-// default is a uniform grid: equal columns are what make a board read as a
-// board, and a column whose width moves every time a card is added or renamed
-// reads as clutter even when every row is legible.
+// boardColWidths splits the board's width into an even grid across the
+// visible columns, the rounding remainder spread one column at a time so no
+// column sits more than a character off its neighbours.
 //
-// A column deviates from its equal share only when that share would clip it,
-// and then only with width reclaimed from the columns that want less than
-// theirs — so a board of one busy stage and three empty ones still spends its
-// width where the cards are, without the empty stages losing the floor
-// (boardMinColW) that keeps them a readable place to drop a card.
-//
-// The residue nobody wants goes back onto the grid a column at a time. Handing
-// it all to the hungriest column was how a board with a single long title
-// ended up one column of 58 beside three of 16.
-func boardColWidths(cols [][]todo.Todo, titles []string, availW int) []int {
-	n := len(cols)
+// Even whatever the columns hold. The grid used to trade width towards a
+// column whose longest title would clip, which was worth it while a card was
+// one clipped row; with titles wrapping inside boxes it bought little, and it
+// meant the columns changed width whenever a card moved — the whole board
+// shifting under a card being carried across it.
+func boardColWidths(n, availW int) []int {
 	widths := make([]int, n)
 	if n == 0 {
 		return widths
 	}
 	budget := availW - (n-1)*boardColGap
-	// want is the width that would clip nothing: the widest card (plus the
-	// cursor marker and the priority "!") or the heading with its count — which
-	// is indented to the card text, so it pays for the marker too.
-	want := make([]int, n)
-	for i := range cols {
-		want[i] = len([]rune(cursorGap)) + len([]rune(fmt.Sprintf("%s (%d)", titles[i], len(cols[i]))))
-		for j := range cols[i] {
-			w := len([]rune(cols[i][j].Title)) + len([]rune(cursorGap)) + 2 // marker + " !"
-			if w > want[i] {
-				want[i] = w
-			}
-		}
-		if want[i] < boardMinColW {
-			want[i] = boardMinColW
-		}
-	}
-	// The even grid, with the rounding remainder spread one column at a time so
-	// no column sits more than a character off its neighbours.
 	even, extra := budget/n, budget%n
 	for i := range widths {
 		widths[i] = even
@@ -248,104 +232,81 @@ func boardColWidths(cols [][]todo.Todo, titles []string, availW int) []int {
 			widths[i]++
 		}
 	}
-	if even < boardMinColW {
-		// Not enough width to trade: the even split is what boardWindow already
-		// decided fits, and any reshuffle here would push a column under the floor.
-		return widths
-	}
-	clips := false
-	for i := range widths {
-		if want[i] > widths[i] {
-			clips = true
-			break
-		}
-	}
-	if !clips {
-		// Every column fits in its share: leave the grid alone. Trading width
-		// nobody needs only makes the columns uneven for no gain — and uneven
-		// for a reason that moves whenever a title does.
-		return widths
-	}
-	spare := 0
-	for i := range widths {
-		if want[i] < widths[i] {
-			spare += widths[i] - want[i]
-			widths[i] = want[i]
-		}
-	}
-	// Largest shortfall first, so the busiest column is the one served.
-	for spare > 0 {
-		hungriest, shortfall := -1, 0
-		for i := range widths {
-			if s := want[i] - widths[i]; s > shortfall {
-				hungriest, shortfall = i, s
-			}
-		}
-		if hungriest < 0 {
-			break // nothing clips any more; the rest returns to the grid
-		}
-		give := shortfall
-		if give > spare {
-			give = spare
-		}
-		widths[hungriest] += give
-		spare -= give
-	}
-	for i := 0; spare > 0; i, spare = i+1, spare-1 {
-		widths[i%n]++
-	}
 	return widths
 }
 
-// joinBoardColumns lays the rendered columns side by side with a divider down
-// each gap, padded to height rows so the dividers run the length of the pane
-// instead of stopping under the last card — the column an empty stage occupies
-// is as much a part of the grid as a full one. The header row is left open and
-// the divider ties into the header rule below it, so the headings read as one
-// row rather than as cells.
+// joinBoardColumns lays the rendered columns side by side, each padded to its
+// width, over height rows. The gaps are plain space: the cards are boxes now,
+// and boxes already say where a column is — dividers down every gap on top of
+// them made the board a spreadsheet, fencing in rows that were mostly empty.
 func joinBoardColumns(widths []int, height int, columns ...[]string) string {
 	var b strings.Builder
+	gap := strings.Repeat(" ", boardColGap)
 	for row := 0; row < height; row++ {
+		var line strings.Builder
 		for c, col := range columns {
-			line := ""
+			cell := ""
 			if row < len(col) {
-				line = col[row]
+				cell = col[row]
 			}
 			if c == len(columns)-1 {
-				b.WriteString(strings.TrimRight(line, " "))
+				line.WriteString(cell)
 				continue
 			}
-			line = ansi.Truncate(line, widths[c], "")
-			if lw := ansi.StringWidth(line); lw < widths[c] {
-				line += strings.Repeat(" ", widths[c]-lw)
+			cell = ansi.Truncate(cell, widths[c], "")
+			if lw := ansi.StringWidth(cell); lw < widths[c] {
+				cell += strings.Repeat(" ", widths[c]-lw)
 			}
-			b.WriteString(line)
-			switch row {
-			case 0:
-				b.WriteString(strings.Repeat(" ", boardColGap))
-			case 1:
-				b.WriteString(dimStyle.Render("─┬─"))
-			default:
-				b.WriteString(dimStyle.Render(" " + boardColSep + " "))
-			}
+			line.WriteString(cell + gap)
 		}
+		b.WriteString(strings.TrimRight(line.String(), " "))
 		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// renderBoardColumn builds one column's lines: header with count, a rule, then
-// one card per row, clipped to the row budget with a "+N more" marker. cursor
-// is the selected card index, or -1 when the column isn't focused. doneCol
-// renders its cards dim — they're history, not work.
-func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, cursor, colW, budget int) []string {
+// boardCardLayout is how a column draws its cards, chosen per column by how
+// much room it has: boxes with the title wrapped onto two lines, boxes of one
+// line, or — for a column too long for boxes at all — the plain rows the board
+// used to draw, clipped with a "+N more" marker.
+type boardCardLayout struct {
+	boxed bool
+	lines int // title lines per card
+}
+
+func chooseBoardCardLayout(cards []todo.Todo, colW, room int) boardCardLayout {
+	if colW >= boardBoxMinW {
+		inner := colW - boardBoxChrome
+		for _, lines := range []int{2, 1} {
+			if boardCardLinesNeeded(cards, inner, lines)+2*len(cards) <= room {
+				return boardCardLayout{boxed: true, lines: lines}
+			}
+		}
+	}
+	return boardCardLayout{lines: 1}
+}
+
+// boardHeading is a column's heading: its name, and the card count dimmed
+// beside it rather than bracketed.
+func boardHeading(title string, n, w int) string {
+	count := fmt.Sprintf("  %d", n)
+	name := truncate(title, w-len([]rune(count)))
+	return statsHeaderStyle.Render(name) + dimStyle.Render(count)
+}
+
+// renderBoardColumn builds one column's lines: heading with count, a rule, then
+// the cards in the board's layout, clipped to the row budget. cursor is the selected card index, or
+// -1 when the column isn't focused. doneCol renders its cards dim — they're
+// history, not work.
+func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, cursor, colW, budget int, layout boardCardLayout) []string {
 	lines := make([]string, 0, budget)
-	// Indented to the card text: the marker column is blank on every row but the
-	// selected one, so a flush-left heading hangs out to the left of its own cards.
-	header := truncate(cursorGap+fmt.Sprintf("%s (%d)", title, len(cards)), colW)
-	lines = append(lines, statsHeaderStyle.Render(header))
-	// The focused column is marked by an accented rule under its header — the
-	// header text itself keeps the standard style so it stays legible.
+	// The heading starts where its cards do — after the marker column, which is
+	// blank on every row but the selected one — or it hangs out to the left of
+	// its own cards.
+	indent := cursorGap
+	lines = append(lines, indent+boardHeading(title, len(cards), colW-len(indent)))
+	// The focused column is marked by an accented rule under its heading — the
+	// heading text itself keeps the standard style so it stays legible.
 	rule := strings.Repeat("─", colW)
 	if f := m.boardColumnFlash(cards); f > 0 {
 		lines = append(lines, lipgloss.NewStyle().Foreground(blendHex(currentTheme.green, m.boardFlashColor(), f)).Render(rule))
@@ -355,21 +316,16 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 		lines = append(lines, dimStyle.Render(rule))
 	}
 	if len(cards) == 0 {
-		lines = append(lines, dimStyle.Render("  "+tr("empty")))
+		lines = append(lines, dimStyle.Render(indent+tr("empty")))
 		return lines
 	}
-	// A card takes a second line when the whole column still fits with it: a
-	// board is mostly empty rows, and clipping every title to one line beside
-	// them was the column spending nothing of what it had. Wrapped cards are
-	// spaced by a blank row, or a title's second line reads as the next card.
-	// All or nothing, so a column never mixes wrapped and clipped cards, and a
-	// column too long for that is exactly as it was.
-	room := budget - len(lines)
-	cardLines := 1
-	if need := boardCardLinesNeeded(cards, colW, 2) + len(cards) - 1; need <= room {
-		cardLines = 2
+	if layout.boxed {
+		for i := range cards {
+			lines = append(lines, m.renderBoardBox(&cards[i], doneCol, i == cursor, colW, layout.lines)...)
+		}
+		return lines
 	}
-	maxCards := room
+	maxCards := budget - len(lines)
 	overflow := 0
 	if len(cards) > maxCards {
 		overflow = len(cards) - (maxCards - 1) // reserve the last row for the marker
@@ -379,10 +335,7 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 			lines = append(lines, dimStyle.Render(fmt.Sprintf("  +%d %s", overflow, tr("more"))))
 			break
 		}
-		if cardLines > 1 && i > 0 {
-			lines = append(lines, "")
-		}
-		lines = append(lines, m.renderBoardCard(&cards[i], doneCol, i == cursor, colW, cardLines)...)
+		lines = append(lines, m.renderBoardCard(&cards[i], doneCol, i == cursor, colW, 1)...)
 	}
 	return lines
 }
@@ -406,36 +359,124 @@ func boardCardBadge(t *todo.Todo, doneCol bool) string {
 	return ""
 }
 
-// boardCardText wraps a card's title into at most maxLines lines, leaving room
-// on the last for the badge, so the "!" sits at the end of the title however
-// it wrapped rather than being the first thing a narrow column clips.
-func boardCardText(t *todo.Todo, doneCol bool, colW, maxLines int) (lines []string, badge string) {
+// boardCardText wraps a card's title into at most maxLines lines of textW,
+// leaving room on the last for the badge, so the "!" sits at the end of the
+// title however it wrapped rather than being the first thing a narrow column
+// clips.
+func boardCardText(t *todo.Todo, doneCol bool, textW, maxLines int) (lines []string, badge string) {
 	badge = boardCardBadge(t, doneCol)
-	textW := colW - len([]rune(cursorGap)) - len([]rune(badge))
+	textW -= len([]rune(badge))
 	if maxLines <= 1 || textW < 1 {
 		return []string{truncate(t.Title, textW)}, badge
 	}
 	return clampLines(wrapText(t.Title, textW), maxLines), badge
 }
 
-// boardCardLinesNeeded counts the rows a column's cards take at up to maxLines
-// each — a short title stays one line even when the column wraps.
-func boardCardLinesNeeded(cards []todo.Todo, colW, maxLines int) int {
+// boardCardLinesNeeded counts the title lines a column's cards take at up to
+// maxLines each — a short title stays one line even when the column wraps.
+func boardCardLinesNeeded(cards []todo.Todo, textW, maxLines int) int {
 	n := 0
 	for i := range cards {
-		lines, _ := boardCardText(&cards[i], false, colW, maxLines)
+		lines, _ := boardCardText(&cards[i], false, textW, maxLines)
 		n += len(lines)
 	}
 	return n
 }
 
-// renderBoardCard renders one card, one or two rows: cursor marker, title and
-// the "!" badge. Pending cards take the task list's status tone (overdue, timer
-// running, selected), so a late card reads as late on the Board too; the
-// selected card is padded to the column so the highlight is one block rather
-// than a ragged edge per line. Done-column cards are dim — history, not work.
+// Box geometry: the cursor marker column the plain rows have too, then a
+// border and a space of padding on each side of the title.
+const (
+	boardBoxChrome = 6
+	boardBoxMinW   = boardBoxChrome + 8
+)
+
+var (
+	boardBoxRounded = [6]string{"╭", "╮", "╰", "╯", "─", "│"}
+	boardBoxHeavy   = [6]string{"┏", "┓", "┗", "┛", "━", "┃"}
+)
+
+// renderBoardBox draws one card as a box. The border carries the card's state
+// the way the row tone does on the Tasks tab — red overdue, the timer colour
+// while tracked, dim in Done — and the selected card is drawn heavy in the
+// selection colour. A card that is held or has just landed is heavy in the
+// glow colour, fading to its resting border as the glow runs out.
+func (m model) renderBoardBox(t *todo.Todo, doneCol, selected bool, colW, maxLines int) []string {
+	inner := colW - boardBoxChrome
+	text, badge := boardCardText(t, doneCol, inner, maxLines)
+	flash := m.boardFlashLevel(t.ID)
+
+	edge, glyphs := boardBoxRestingColor(t, doneCol), boardBoxRounded
+	textStyle := normalStyle
+	switch {
+	case doneCol:
+		textStyle = dimStyle
+	case t.IsOverdue():
+		textStyle = overdueStyle
+	}
+	if selected {
+		glyphs, edge = boardBoxHeavy, currentTheme.green
+		textStyle = textStyle.Bold(true)
+	}
+	if flash > 0 {
+		glyphs, edge = boardBoxHeavy, blendHex(edge, m.boardFlashColor(), flash)
+		textStyle = textStyle.Bold(true)
+	}
+	border := lipgloss.NewStyle().Foreground(edge)
+	if selected || flash > 0 {
+		border = border.Bold(true)
+	}
+	if flash > 0 && m.boardGlowDone() {
+		text[0] = truncate("✓ "+text[0], inner-len([]rune(badge)))
+	}
+
+	// The ▶ sits in the margin beside the selected box's first line, where it
+	// sits on a plain row, so every list marks its cursor the same way.
+	boxW := colW - len([]rune(cursorGap))
+	lead := func(i int) string {
+		if selected && i == 0 {
+			return selectedStyle.Render(cursorMark)
+		}
+		return cursorGap
+	}
+	out := make([]string, 0, len(text)+2)
+	out = append(out, cursorGap+border.Render(glyphs[0]+strings.Repeat(glyphs[4], boxW-2)+glyphs[1]))
+	for i, line := range text {
+		body := textStyle.Render(line)
+		w := len([]rune(line))
+		if i == len(text)-1 && badge != "" {
+			body += overdueStyle.Render(badge)
+			w += len([]rune(badge))
+		}
+		if w < inner {
+			body += strings.Repeat(" ", inner-w)
+		}
+		out = append(out, lead(i)+border.Render(glyphs[5])+" "+body+" "+border.Render(glyphs[5]))
+	}
+	out = append(out, cursorGap+border.Render(glyphs[2]+strings.Repeat(glyphs[4], boxW-2)+glyphs[3]))
+	return out
+}
+
+// boardBoxRestingColor is a card's border colour when nothing is happening to
+// it: the one fact the Tasks tab would colour its row for, or dim.
+func boardBoxRestingColor(t *todo.Todo, doneCol bool) lipgloss.Color {
+	switch {
+	case doneCol:
+		return currentTheme.dim
+	case t.IsTimerRunning():
+		return currentTheme.teal
+	case t.IsOverdue():
+		return currentTheme.red
+	}
+	return currentTheme.dim
+}
+
+// renderBoardCard renders one card as plain rows — the layout of a column too
+// long for boxes, and of the stacked narrow-window board: cursor marker, title
+// and the "!" badge. Pending cards take the task list's status tone (overdue,
+// timer running, selected); the selected card is padded to the column so its
+// highlight is one block. Done-column cards are dim — history, not work.
 func (m model) renderBoardCard(t *todo.Todo, doneCol, selected bool, colW, maxLines int) []string {
-	text, badge := boardCardText(t, doneCol, colW, maxLines)
+	text, badge := boardCardText(t, doneCol, colW-len([]rune(cursorGap)), maxLines)
 	style := taskRowPalette(t, false, selected).status
 	if doneCol {
 		style = fastDim
@@ -480,7 +521,7 @@ func (m model) renderBoardStacked(cols [][]todo.Todo, titles []string) string {
 		if c > 0 {
 			sb.WriteString("\n")
 		}
-		sb.WriteString(statsHeaderStyle.Render(truncate(fmt.Sprintf("%s (%d)", titles[c], len(cols[c])), availW)) + "\n")
+		sb.WriteString(boardHeading(titles[c], len(cols[c]), availW) + "\n")
 		if len(cols[c]) == 0 {
 			sb.WriteString(dimStyle.Render("  "+tr("empty")) + "\n")
 			continue
