@@ -112,6 +112,17 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.flashError(invalidDateMsg())
 							return m, clearErrAfter()
 						}
+					case fieldCompleted:
+						if !completedFieldVisible(t) {
+							break
+						}
+						d, err := parseCompletedAt(val, t.CompletedAt, time.Now())
+						if err != nil {
+							m.flashError(err.Error())
+							return m, clearErrAfter()
+						}
+						m.pushUndo("set completion date", t.ID)
+						t.SetCompletedAt(d)
 					case fieldDueDate:
 						if val == "" {
 							// A parent deadline applies to its whole subtree, so capture

@@ -98,6 +98,13 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	defer putBuilder(left)
 	left.WriteString(renderField(tr("Start date"), startVal, fieldStartDate) + "\n")
 	left.WriteString(renderField(tr("Due date"), dueVal, fieldDueDate) + "\n")
+	if completedFieldVisible(t) {
+		completedVal := t.CompletedAt.Format("02-01-06 15:04")
+		if !(isDetailFocused && m.detail.field == fieldCompleted) {
+			completedVal = checkDoneStyle.Render(completedVal)
+		}
+		left.WriteString(renderField(tr("Completed on"), completedVal, fieldCompleted) + "\n")
+	}
 	left.WriteString(renderField(tr("Recurrence"), recurVal, fieldRecurrence) + "\n")
 	left.WriteString(renderField(tr("Priority"), t.Priority.Icon()+" "+trPriority(t.Priority), fieldPriority) + "\n")
 	left.WriteString(renderField(tr("Size"), trSize(t.Size), fieldSize) + "\n")
@@ -128,7 +135,6 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	}
 	plainVal := func(s string) string { return detailValueStyle.Render(s) }
 	timerVal := func(s string) string { return timerStyle.Render(s) }
-	doneVal := func(s string) string { return checkDoneStyle.Render(s) }
 
 	// Order within this block is derived-facts first, provenance last: Score
 	// explains the task's position in the list, the UUID and timestamps are
@@ -146,10 +152,6 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 			timeVal += tr(" ◉ tracking")
 		}
 		roField(tr("Time spent:"), timerVal, timeVal)
-	}
-
-	if t.Status == todo.Done && !t.CompletedAt.IsZero() {
-		roField(tr("Completed on:"), doneVal, t.CompletedAt.Format("02-01-06 15:04"))
 	}
 
 	// Score breakdown: surfaces *why* a task ranks where it does. Shown only

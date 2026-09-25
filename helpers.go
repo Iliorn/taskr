@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -1372,6 +1373,50 @@ func downloadVerifiedAsset(info releaseInfo, assetName, dst string) error {
 }
 
 // ── Date parsing ─────────────────────────────────────────────────────────────
+
+// parseCompletedAt reads a corrected completion time: any date parseDueDate
+// takes, optionally followed by HH:MM, or a bare HH:MM on the day already
+// recorded. A date without a time keeps the recorded time of day, since the
+// usual correction is "that was yesterday", not "at midnight". A completion
+// cannot lie in the future; a kept time that would put today's date there
+// falls back to now.
+func parseCompletedAt(input string, prev, now time.Time) (time.Time, error) {
+	input = strings.TrimSpace(input)
+	datePart, clock := input, ""
+	if i := strings.LastIndex(input, " "); i >= 0 {
+		if _, err := time.Parse("15:04", input[i+1:]); err == nil {
+			datePart, clock = strings.TrimSpace(input[:i]), input[i+1:]
+		}
+	} else if _, err := time.Parse("15:04", input); err == nil {
+		datePart, clock = "", input
+	}
+
+	prev = prev.In(now.Location())
+	day := prev
+	if datePart != "" {
+		d, err := parseDueDate(datePart)
+		if err != nil {
+			return time.Time{}, errors.New(invalidDateMsg())
+		}
+		day = d
+	} else if clock == "" {
+		return time.Time{}, errors.New(invalidDateMsg())
+	}
+
+	hour, minute := prev.Hour(), prev.Minute()
+	if clock != "" {
+		c, _ := time.Parse("15:04", clock)
+		hour, minute = c.Hour(), c.Minute()
+	}
+	at := time.Date(day.Year(), day.Month(), day.Day(), hour, minute, 0, 0, now.Location())
+	if at.After(now) {
+		if clock == "" && startOfDay(at).Equal(startOfDay(now)) {
+			return now, nil
+		}
+		return time.Time{}, errors.New(tr("Completion can't be in the future"))
+	}
+	return at, nil
+}
 
 // parseDueDate accepts dd-mm-yy, dd-mm-yyyy, and natural language shortcuts —
 // in English always, and in the active interface language too (lang_input.go),

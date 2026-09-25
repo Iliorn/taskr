@@ -291,6 +291,13 @@ func (t *Todo) Toggle() {
 	t.ModifiedAt = StampModified(t.ModifiedAt)
 }
 
+// SetCompletedAt corrects when a done task was finished, for a task ticked off
+// late. It leaves Status alone: reopening is Toggle's job.
+func (t *Todo) SetCompletedAt(d time.Time) {
+	t.CompletedAt = d
+	t.ModifiedAt = StampModified(t.ModifiedAt)
+}
+
 func (t *Todo) SetDueDate(d time.Time) {
 	t.DueDate = d
 	t.ModifiedAt = StampModified(t.ModifiedAt)

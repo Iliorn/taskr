@@ -191,6 +191,12 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// completedFieldVisible reports whether the detail pane shows the editable
+// "Completed on" row: only a done task has a completion time to correct.
+func completedFieldVisible(t *todo.Todo) bool {
+	return t != nil && t.Status == todo.Done && !t.CompletedAt.IsZero()
+}
+
 // detailSectionJump moves the detail cursor to the next/previous section
 // head.
 func (m *model) detailSectionJump(dir int) {
@@ -234,8 +240,13 @@ func (m *model) detailCursorUp() {
 		}
 	case fieldDueDate:
 		m.detail.field = fieldStartDate
+	case fieldCompleted:
+		m.detail.field = fieldDueDate
 	case fieldRecurrence:
 		m.detail.field = fieldDueDate
+		if completedFieldVisible(t) {
+			m.detail.field = fieldCompleted
+		}
 	case fieldPriority:
 		m.detail.field = fieldRecurrence
 	case fieldSize:
@@ -305,6 +316,11 @@ func (m *model) detailCursorDown() {
 	case fieldStartDate:
 		m.detail.field = fieldDueDate
 	case fieldDueDate:
+		m.detail.field = fieldRecurrence
+		if completedFieldVisible(t) {
+			m.detail.field = fieldCompleted
+		}
+	case fieldCompleted:
 		m.detail.field = fieldRecurrence
 	case fieldRecurrence:
 		m.detail.field = fieldPriority
@@ -517,6 +533,14 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 			m.textInput.SetValue("")
 		}
 		m.textInput.Placeholder = tr("Due date (dd-mm-yy, 'today', 'next week', '+3d')...")
+		m.textInput.Focus()
+	case fieldCompleted:
+		if !completedFieldVisible(t) {
+			return m, nil
+		}
+		m.mode = modeInput
+		m.textInput.SetValue(t.CompletedAt.Format("02-01-06 15:04"))
+		m.textInput.Placeholder = tr("Completed (dd-mm-yy hh:mm, 'today', 'yesterday')...")
 		m.textInput.Focus()
 	case fieldRecurrence:
 		// Cycle through canonical rules. Custom "every:Nd|w|m|y" rules are

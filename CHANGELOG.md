@@ -25,6 +25,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 ### Added
 
 - Projects: `s` changes the sort order and `f` shows the project's tasks on the Tasks tab.
+- A done task's "Completed on" date and time can be edited in the detail pane.
 
 ## [1.38.0] - 2026-09-24
 

@@ -87,6 +87,7 @@ type detailField int
 const (
 	fieldStartDate detailField = iota
 	fieldDueDate
+	fieldCompleted
 	fieldRecurrence
 	fieldPriority
 	fieldSize

@@ -499,7 +499,7 @@ var daTranslations = map[string]string{
 	"%s (%d entries)":                    "%s (%d poster)",
 	" ◉ tracking":                        " ◉ registrerer",
 	"Time spent:":                        "Tid brugt:",
-	"Completed on:":                      "Afsluttet:",
+	"Completed on":                       "Afsluttet",
 	"Tags:":                              "Mærker:",
 	"No tags. Press 'a' to add one.":     "Ingen mærker. Tryk 'a' for at tilføje et.",
 	"  Closed today (%d)":                "  Lukket i dag (%d)",
@@ -590,6 +590,8 @@ var daTranslations = map[string]string{
 	"Add subtask...":                          "Tilføj delopgave...",
 	"Edit comment...":                         "Rediger kommentar...",
 	"Start date (dd-mm-yy, 'today', 'next week', '+3d')...": "Startdato (dd-mm-yy, 'today', 'next week', '+3d')...",
+	"Completed (dd-mm-yy hh:mm, 'today', 'yesterday')...":   "Afsluttet (dd-mm-yy tt:mm, 'today', 'yesterday')...",
+	"Completion can't be in the future":                     "Afslutning kan ikke ligge i fremtiden",
 	"Due date (dd-mm-yy, 'today', 'next week', '+3d')...":   "Forfaldsdato (dd-mm-yy, 'today', 'next week', '+3d')...",
 
 	// ── Settings group headings ──
@@ -1114,7 +1116,7 @@ var deTranslations = map[string]string{
 	"%s (%d entries)":                    "%s (%d Einträge)",
 	" ◉ tracking":                        " ◉ läuft",
 	"Time spent:":                        "Aufgewendet:",
-	"Completed on:":                      "Erledigt am:",
+	"Completed on":                       "Erledigt am",
 	"Tags:":                              "Schlagwörter:",
 	"No tags. Press 'a' to add one.":     "Keine Schlagwörter. 'a' fügt eines hinzu.",
 	"  Closed today (%d)":                "  Heute geschlossen (%d)",
@@ -1205,6 +1207,8 @@ var deTranslations = map[string]string{
 	"Add subtask...":                          "Teilaufgabe hinzufügen…",
 	"Edit comment...":                         "Kommentar bearbeiten…",
 	"Start date (dd-mm-yy, 'today', 'next week', '+3d')...": "Startdatum (dd-mm-yy, 'today', 'next week', '+3d')…",
+	"Completed (dd-mm-yy hh:mm, 'today', 'yesterday')...":   "Erledigt am (dd-mm-yy hh:mm, 'today', 'yesterday')…",
+	"Completion can't be in the future":                     "Erledigt kann nicht in der Zukunft liegen",
 	"Due date (dd-mm-yy, 'today', 'next week', '+3d')...":   "Fälligkeit (dd-mm-yy, 'today', 'next week', '+3d')…",
 
 	// ── Settings group headings ──

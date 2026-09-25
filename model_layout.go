@@ -21,7 +21,11 @@ func (m model) estimateDetailCursorLine() int {
 	// Title moved to the border; content starts at the first field. The Stage
 	// row is conditional, so the rows below it shift — walk the render order
 	// rather than hard-coding an offset per field.
-	rows := []detailField{fieldStartDate, fieldDueDate, fieldRecurrence, fieldPriority, fieldSize}
+	rows := []detailField{fieldStartDate, fieldDueDate}
+	if completedFieldVisible(t) {
+		rows = append(rows, fieldCompleted)
+	}
+	rows = append(rows, fieldRecurrence, fieldPriority, fieldSize)
 	if m.boardCfg.stageFieldVisible(t) {
 		rows = append(rows, fieldStage)
 	}
@@ -411,7 +415,7 @@ func (m model) detailMainHeight(t *todo.Todo) int {
 	if len(t.TimeEntries) > 0 || m.descendantTimeSpent(t.ID) > 0 {
 		h++
 	}
-	if t.Status == todo.Done && !t.CompletedAt.IsZero() {
+	if completedFieldVisible(t) {
 		h++
 	}
 	if t.Status == todo.Pending {
