@@ -11,6 +11,12 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Fixed
+
+- West of UTC, a typed date like `05-10-26` no longer saves as the day before.
+
 ## [1.39.0] - 2026-09-27
 
 ### Changed

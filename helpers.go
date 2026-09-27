@@ -1469,10 +1469,10 @@ func parseDueDateAt(s string, now time.Time) (time.Time, error) {
 		}
 	}
 
-	if t, err := time.Parse("02-01-06", s); err == nil {
+	if t, err := time.ParseInLocation("02-01-06", s, now.Location()); err == nil {
 		return t, nil
 	}
-	if t, err := time.Parse("02-01-2006", s); err == nil {
+	if t, err := time.ParseInLocation("02-01-2006", s, now.Location()); err == nil {
 		return t, nil
 	}
 	return time.Time{}, fmt.Errorf("invalid date: use dd-mm-yy, %q, %q, %q, %q, or '+Nd/+Nw/+Nm'",

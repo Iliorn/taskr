@@ -74,8 +74,8 @@ func TestParseDueDate(t *testing.T) {
 		{"relative +2w", "+2w", today.AddDate(0, 0, 14), false},
 		{"relative +1m", "+1m", today.AddDate(0, 1, 0), false},
 		{"relative +10d", "+10d", today.AddDate(0, 0, 10), false},
-		{"dd-mm-yy", "15-06-25", time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC), false},
-		{"dd-mm-yyyy", "15-06-2025", time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC), false},
+		{"dd-mm-yy", "15-06-25", time.Date(2025, 6, 15, 0, 0, 0, 0, time.Local), false},
+		{"dd-mm-yyyy", "15-06-2025", time.Date(2025, 6, 15, 0, 0, 0, 0, time.Local), false},
 		{"invalid", "not-a-date", time.Time{}, true},
 		{"empty", "", time.Time{}, true},
 		{"garbage", "xyz123", time.Time{}, true},
@@ -362,4 +362,23 @@ func TestSequenceTieBreakChain(t *testing.T) {
 			t.Fatalf("want a first, got %s", todos[0].ID)
 		}
 	})
+}
+
+// A typed date is a calendar day where the user is, not in UTC: read as UTC
+// midnight, it lands on the previous evening anywhere west of Greenwich.
+func TestParseDueDateTypedDateIsLocal(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("no tzdata:", err)
+	}
+	now := time.Date(2026, 9, 27, 12, 0, 0, 0, ny)
+	for _, in := range []string{"05-10-26", "05-10-2026"} {
+		got, err := parseDueDateAt(in, now)
+		if err != nil {
+			t.Fatalf("%q: %v", in, err)
+		}
+		if want := time.Date(2026, 10, 5, 0, 0, 0, 0, ny); !got.Equal(want) {
+			t.Errorf("%q = %v, want %v", in, got, want)
+		}
+	}
 }
