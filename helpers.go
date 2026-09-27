@@ -1394,7 +1394,7 @@ func parseCompletedAt(input string, prev, now time.Time) (time.Time, error) {
 	prev = prev.In(now.Location())
 	day := prev
 	if datePart != "" {
-		d, err := parseDueDate(datePart)
+		d, err := parseDueDateAt(datePart, now)
 		if err != nil {
 			return time.Time{}, errors.New(invalidDateMsg())
 		}
@@ -1422,8 +1422,13 @@ func parseCompletedAt(input string, prev, now time.Time) (time.Time, error) {
 // in English always, and in the active interface language too (lang_input.go),
 // so a Danish screen takes `imorgen` as readily as `tomorrow`.
 func parseDueDate(s string) (time.Time, error) {
+	return parseDueDateAt(s, time.Now())
+}
+
+// parseDueDateAt is parseDueDate with relative words ("yesterday", "+3d",
+// weekday names) counted from now.
+func parseDueDateAt(s string, now time.Time) (time.Time, error) {
 	lower := canonicalInputWord(strings.ToLower(strings.TrimSpace(s)))
-	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	switch lower {
