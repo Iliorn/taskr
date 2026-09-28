@@ -414,7 +414,7 @@ func cliRemind(args []string) int {
 	fmt.Println(title)
 	fmt.Println(body)
 	if err := sendDesktopNotification(title, body); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr remind: desktop notification failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "taskr: desktop notification unavailable — %v\n", err)
 		return 1
 	}
 	return 0

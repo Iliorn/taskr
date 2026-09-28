@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -32,10 +33,7 @@ func desktopNotify(title, body string) error {
 		return fmt.Errorf("%s not found%s", cmd.Args[0], notifyInstallHint(runtime.GOOS))
 	}
 	if out, err := cmd.CombinedOutput(); err != nil {
-		if msg := strings.TrimSpace(string(out)); msg != "" {
-			return fmt.Errorf("%s: %w: %s", cmd.Args[0], err, msg)
-		}
-		return fmt.Errorf("%s: %w", cmd.Args[0], err)
+		return fmt.Errorf("%s: %s", cmd.Args[0], notifyFailureReason(out, err))
 	}
 	return nil
 }
@@ -71,6 +69,31 @@ func encodePowerShell(script string) string {
 	}
 	return base64.StdEncoding.EncodeToString(b)
 }
+
+// notifyFailureReason turns a failed notifier's output into one line. The
+// tools answer in their own formats — Windows PowerShell writes its errors as
+// a CLIXML document — and a reminder is no place for a page of markup. The one
+// cause worth naming is a PowerShell an organisation has put in Constrained
+// Language Mode, which blocks the WinRT calls a toast needs; anything else is
+// the first readable line, clipped.
+func notifyFailureReason(out []byte, err error) string {
+	text := string(out)
+	if strings.Contains(text, "language mode") {
+		return "Windows PowerShell is in Constrained Language Mode (set by your organisation), which blocks toast notifications"
+	}
+	text = strings.Replace(text, "#< CLIXML", "", 1)
+	text = clixmlTags.ReplaceAllString(text, "\n")
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.Join(strings.Fields(strings.ReplaceAll(line, "_x000D__x000A_", " ")), " ")
+		if line != "" {
+			return truncate(line, 160)
+		}
+	}
+	return err.Error()
+}
+
+// clixmlTags matches the markup of a PowerShell CLIXML error document.
+var clixmlTags = regexp.MustCompile(`<[^>]*>`)
 
 func notifyInstallHint(goos string) string {
 	switch goos {

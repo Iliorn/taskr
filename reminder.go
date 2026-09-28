@@ -42,8 +42,12 @@ const (
 
 type reminderTickMsg struct{ at time.Time }
 
-// reminderSentMsg reports the desktop notification's outcome to the TUI.
-type reminderSentMsg struct{ err error }
+// reminderSentMsg reports the desktop notification's outcome to the TUI, with
+// the reminder's heading so a failed pop-up can still show it in the app.
+type reminderSentMsg struct {
+	title string
+	err   error
+}
 
 func reminderTick() tea.Cmd {
 	return tea.Tick(reminderTickInterval, func(t time.Time) tea.Msg { return reminderTickMsg{at: t} })
@@ -218,7 +222,7 @@ func (m *model) checkReminder(now time.Time) (send tea.Cmd, flashed bool) {
 	m.flashInfo(title)
 	return func() tea.Msg {
 		saveRemindedOn(day)
-		return reminderSentMsg{err: sendDesktopNotification(title, body)}
+		return reminderSentMsg{title: title, err: sendDesktopNotification(title, body)}
 	}, true
 }
 

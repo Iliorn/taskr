@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"encoding/base64"
 	"encoding/binary"
 	"slices"
@@ -293,5 +294,36 @@ func TestNotifyCommandKeepsTextOutOfTheScript(t *testing.T) {
 	}
 	if !slices.Contains(win.Env, "TASKR_NOTIFY_TITLE="+title) || !slices.Contains(win.Env, "TASKR_NOTIFY_BODY="+body) {
 		t.Error("windows command does not carry the texts in its environment")
+	}
+}
+
+// A notifier that fails says why in one line. Windows PowerShell answers with a
+// CLIXML document, and one locked into Constrained Language Mode by an
+// organisation cannot build a toast at all — that case is named outright.
+func TestNotifyFailureIsOneLine(t *testing.T) {
+	clm := []byte(`#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><S S="Error">Method invocation is supported only on core types in this language mode._x000D__x000A_</S><S S="Error">At line:2 char:1_x000D__x000A_</S></Objs>`)
+	got := notifyFailureReason(clm, errors.New("exit status 1"))
+	if !strings.Contains(got, "Constrained Language Mode") || strings.Contains(got, "\n") {
+		t.Errorf("constrained PowerShell reads %q", got)
+	}
+
+	other := []byte(`#< CLIXML
+<Objs Version="1.1.0.1"><S S="Error">Something else went wrong_x000D__x000A_</S></Objs>`)
+	if got := notifyFailureReason(other, errors.New("exit status 1")); got != "Something else went wrong" {
+		t.Errorf("CLIXML error reads %q, want its message", got)
+	}
+	if got := notifyFailureReason(nil, errors.New("exit status 1")); got != "exit status 1" {
+		t.Errorf("a silent failure reads %q, want the exit status", got)
+	}
+}
+
+// A pop-up that cannot be shown still leaves the reminder on screen in the app.
+func TestReminderSurvivesAFailedPopUp(t *testing.T) {
+	m := modelWithTasks(t)
+	next, _ := m.Update(reminderSentMsg{title: "taskr: 1 overdue", err: errors.New("no toast")})
+	m = next.(model)
+	if !strings.Contains(m.err, "taskr: 1 overdue") || !strings.Contains(m.err, "unavailable") {
+		t.Errorf("toast = %q, want the reminder and a note that the pop-up failed", m.err)
 	}
 }

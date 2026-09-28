@@ -17,6 +17,10 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 - Projects works like Tags: enter walks the tasks under the project list, timeline beside them.
 
+### Fixed
+
+- A desktop pop-up that can't be shown no longer hides the reminder; its reason is one line.
+
 ## [1.40.0] - 2026-09-28
 
 ### Added

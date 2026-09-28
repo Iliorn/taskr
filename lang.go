@@ -661,8 +661,8 @@ var daTranslations = map[string]string{
 	"nothing due": "intet forfalder",
 
 	// ── Reminders ──
-	"%d due today":                    "%d forfalder i dag",
-	"Desktop notification failed: %v": "Skrivebordsnotifikation mislykkedes: %v",
+	"%d due today":               "%d forfalder i dag",
+	"desktop pop-up unavailable": "skrivebords-pop-up utilgængelig",
 
 	// ── List header / panel titles ──
 	"Active tasks":        "Aktive opgaver",
@@ -1289,8 +1289,8 @@ var deTranslations = map[string]string{
 	"nothing due": "nichts fällig",
 
 	// ── Reminders ──
-	"%d due today":                    "%d heute fällig",
-	"Desktop notification failed: %v": "Desktop-Benachrichtigung fehlgeschlagen: %v",
+	"%d due today":               "%d heute fällig",
+	"desktop pop-up unavailable": "Desktop-Pop-up nicht verfügbar",
 
 	// ── List header / panel titles ──
 	"Active tasks":        "Aktive Aufgaben",

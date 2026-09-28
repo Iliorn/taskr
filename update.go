@@ -199,7 +199,10 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case reminderSentMsg:
 		if msg.err != nil {
-			m.flashError(fmt.Sprintf(tr("Desktop notification failed: %v"), msg.err))
+			// The reminder is the news, not the pop-up: keep it on screen and
+			// say only that the desktop could not show it. The reason is
+			// `taskr remind --now`'s to print, where there is room for it.
+			m.flashInfo(msg.title + " · " + tr("desktop pop-up unavailable"))
 			return m, clearErrAfter()
 		}
 		return m, nil
