@@ -29,6 +29,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - A task opened inside a tag or project follows the Detail pane setting, as on the Tasks tab.
 
 - Moving the cursor stays instant with thousands of tasks, on every tab.
+- The Calendar's month panel is as tall as what it shows instead of running to the bottom.
 
 ### Fixed
 

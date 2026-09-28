@@ -8,6 +8,7 @@ import (
 
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ── Day activities ────────────────────────────────────────────────────────────
@@ -238,7 +239,14 @@ func (m model) buildCalendarContent(w, outerH int) string {
 		truncateLines(lines, contentW)
 		return lines
 	}
-	calLines = fitLines(calLines, innerH, calPanelWidth-2)
+	// The month panel is as tall as what it shows — the grid and the day's
+	// and month's totals — rather than stretched to the window: the empty
+	// rows under it would frame nothing. The timeline keeps the full height,
+	// since it scrolls through the day.
+	for len(calLines) > 0 && strings.TrimSpace(ansi.Strip(calLines[len(calLines)-1])) == "" {
+		calLines = calLines[:len(calLines)-1]
+	}
+	calLines = fitLines(calLines, min(len(calLines)+1, innerH), calPanelWidth-2)
 	tlLines = fitLines(tlLines, innerH, tlW-2)
 
 	// Accent border on the pane that owns keystrokes — same contract as the
