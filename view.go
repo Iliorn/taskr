@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1708,16 +1709,6 @@ func (m model) renderStatsDetail() string {
 		b.WriteString("  " + dimStyle.Render(tr("No completions in this range.")) + "\n")
 		return b.String()
 	}
-	// Stretch the vertical scale when any bucket overflows chartH, so a busy
-	// day collapses to half-height (with a ▄ cap for odd counts) instead of
-	// capping immediately with a `+`. One step (×2) keeps the chart honest.
-	blockScale := 1
-	for _, bk := range buckets {
-		if bk.count > chartH {
-			blockScale = 2
-			break
-		}
-	}
 	// Pick a bar width that fills the available width (capped so a handful of
 	// bars don't become absurdly fat), with a 1-column gap between bars.
 	avail := innerW - 2
@@ -1740,13 +1731,34 @@ func (m model) renderStatsDetail() string {
 	}
 	chartW := n*bw + (n - 1)
 	leftMargin := 2 + (avail-chartW)/2 // centre the chart in the pane
+
+	// Every week is numbered. One-column bars leave no room for two digits
+	// side by side, so the numbers alternate between two label rows, and the
+	// second row comes out of the bars' height so the chart stays as tall.
+	labelRows := 1
+	if weekly && bw < 2 && chartH > 1 {
+		labelRows = 2
+		chartH--
+	}
+
+	// Stretch the vertical scale when any bucket overflows chartH, so a busy
+	// day collapses to half-height (with a ▄ cap for odd counts) instead of
+	// capping immediately with a `+`. One step (×2) keeps the chart honest.
+	blockScale := 1
+	for _, bk := range buckets {
+		if bk.count > chartH {
+			blockScale = 2
+			break
+		}
+	}
+
 	if leftMargin < 2 {
 		leftMargin = 2
 	}
 
 	// Compose into a grid (gi: -1 = dim/structural, >=0 = gradient index), then
 	// render each row grouping same-styled runs.
-	rows := chartH + 2 // bars + baseline + labels
+	rows := chartH + 1 + labelRows // bars + baseline + labels
 	grid := make([][]statsCell, rows)
 	for r := range grid {
 		grid[r] = make([]statsCell, chartW)
@@ -1841,13 +1853,25 @@ func (m model) renderStatsDetail() string {
 	// axis style (statsAxisStyle) — distinct from baseline ─ / dotted ·
 	// separators which stay dim (gi=-1) to keep the chart structural
 	// elements visually quiet.
-	label := grid[rows-1]
+	label := grid[chartH+1]
 	if weekly {
-		for k := 0; k < n; k += 4 {
+		// "w42" where the bar is wide enough to hold it, the bare number
+		// where it is not. A label that would run off the right edge is
+		// pulled back inside it.
+		for k := 0; k < n; k++ {
 			_, wk := buckets[k].start.ISOWeek()
-			for j, ch := range []rune(fmt.Sprintf("w%d", wk)) {
-				if c := barStart(k) + j; c < chartW {
-					label[c] = statsCell{ch, -2, -1}
+			lbl := fmt.Sprintf("w%d", wk)
+			if len(lbl) > bw {
+				lbl = strconv.Itoa(wk)
+			}
+			row := label
+			if labelRows == 2 && (n-1-k)%2 == 1 {
+				row = grid[chartH+2]
+			}
+			start := min(barStart(k), chartW-len(lbl))
+			for j, ch := range lbl {
+				if c := start + j; c >= 0 && c < chartW {
+					row[c] = statsCell{ch, -2, -1}
 				}
 			}
 		}

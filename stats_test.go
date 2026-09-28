@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -558,5 +559,49 @@ func TestStatsRespectsSearchFilter(t *testing.T) {
 	}
 	if !regexp.MustCompile(`Today\s+1`).MatchString(filteredOut) {
 		t.Errorf("filtered velocity should still count the tagged completion:\n%s", filteredOut)
+	}
+}
+
+// Every bar of the 26-week histogram carries its week number, at every width:
+// "w42" when the bars are wide, the bare number when they are narrow, and on
+// one-column bars alternating between two label rows so neighbours stay apart.
+func TestStatsWeeklyHistogramNumbersEveryWeek(t *testing.T) {
+	now := time.Now()
+	var todos []todo.Todo
+	for i := 0; i < 60; i++ {
+		td := todo.New(fmt.Sprintf("t%d", i))
+		td.Status = todo.Done
+		td.CompletedAt = now.AddDate(0, 0, -i*3)
+		todos = append(todos, td)
+	}
+	for _, w := range []int{60, 80, 100, 120, 160} {
+		m := newTagModel(todos...)
+		m.termWidth, m.termHeight = w, 40
+		m.tab = tabStats
+		m.statsRange = statsRange6Months
+		m.refreshCaches()
+		_, buckets, _, _ := m.statsActivity()
+		out := ansi.Strip(m.renderStatsDetail())
+		labels := map[string]bool{}
+		for _, f := range strings.Fields(out[strings.LastIndex(out, "─")+len("─"):]) {
+			labels[strings.TrimPrefix(f, "w")] = true
+		}
+		// The narrowest widths show only the most recent weeks that fit.
+		shown := 0
+		for k := len(buckets) - 1; k >= 0; k-- {
+			_, wk := buckets[k].start.ISOWeek()
+			if !labels[strconv.Itoa(wk)] {
+				break
+			}
+			shown++
+		}
+		if shown < min(len(buckets), 20) {
+			t.Errorf("width %d: only the last %d weeks are numbered:\n%s", w, shown, out)
+		}
+		for _, line := range strings.Split(out, "\n") {
+			if lw := ansi.StringWidth(line); lw > w-8 {
+				t.Errorf("width %d: line is %d wide, over %d: %q", w, lw, w-8, line)
+			}
+		}
 	}
 }
