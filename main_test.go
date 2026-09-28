@@ -154,7 +154,7 @@ func TestStorageStaysInsideTheTestHome(t *testing.T) {
 	for _, path := range []string{
 		taskrDir(), dbPath(), getStoragePath(), settingsPath(),
 		syncConfigPath(), syncStatePath(), syncLogPath(), serveStatePath(),
-		undoPersistPath(), lastAddedPath(), notesFilePath("some-task-id"),
+		undoPersistPath(), lastAddedPath(), remindedPath(), notesFilePath("some-task-id"),
 	} {
 		if !strings.HasPrefix(path, testHome+string(filepath.Separator)) {
 			t.Errorf("%q is outside the test home %q", path, testHome)

@@ -115,6 +115,11 @@ type appSettings struct {
 	// keystroke — settings.json is rewritten atomically on every save.
 	Search string `json:"search,omitempty"`
 
+	// Reminder is the time of the daily due-date reminder, "HH:MM", or "off".
+	// Absent means the default (see reminder.go). A word rather than minutes
+	// for the same reason as DetailPosition: the file is hand-edited.
+	Reminder string `json:"reminder,omitempty"`
+
 	// Keys rebinds actions to keys: {"done": "D", "search": "s"}. Keyed by the
 	// action ids in keymap.go, which is why they exist — see keys.go for what
 	// can be rebound and how a broken entry is handled (dropped with a warning,

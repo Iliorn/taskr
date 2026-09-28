@@ -645,6 +645,7 @@ var daTranslations = map[string]string{
 	"Aging increases score":     "Alder øger scoren",
 	"Auto-close parent":         "Luk forælder automatisk",
 	"Auto-close subtasks":       "Luk delopgaver automatisk",
+	"Daily reminder":            "Daglig påmindelse",
 	"Kanban board":              "Kanban-tavle",
 	"Detail pane":               "Detaljerude",
 	"Right":                     "Højre",
@@ -652,6 +653,10 @@ var daTranslations = map[string]string{
 	"Bottom":                    "Bund",
 	"Top 5 with these weights:": "Top 5 med disse vægte:",
 	"Score resync failed: %v":   "Genberegning af score mislykkedes: %v",
+
+	// ── Reminders ──
+	"%d due today":                    "%d forfalder i dag",
+	"Desktop notification failed: %v": "Skrivebordsnotifikation mislykkedes: %v",
 
 	// ── List header / panel titles ──
 	"Active tasks":        "Aktive opgaver",
@@ -1262,6 +1267,7 @@ var deTranslations = map[string]string{
 	"Aging increases score":     "Alter erhöht Punktzahl",
 	"Auto-close parent":         "Eltern autom. schließen",
 	"Auto-close subtasks":       "Teilaufg. autom. schließen",
+	"Daily reminder":            "Tägliche Erinnerung",
 	"Kanban board":              "Kanban-Tafel",
 	"Detail pane":               "Detailbereich",
 	"Right":                     "Rechts",
@@ -1269,6 +1275,10 @@ var deTranslations = map[string]string{
 	"Bottom":                    "Unten",
 	"Top 5 with these weights:": "Top 5 mit diesen Gewichten:",
 	"Score resync failed: %v":   "Punkte-Neuberechnung fehlgeschlagen: %v",
+
+	// ── Reminders ──
+	"%d due today":                    "%d heute fällig",
+	"Desktop notification failed: %v": "Desktop-Benachrichtigung fehlgeschlagen: %v",
 
 	// ── List header / panel titles ──
 	"Active tasks":        "Aktive Aufgaben",

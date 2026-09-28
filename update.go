@@ -187,6 +187,22 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case syncDoneMsg:
 		return m.handleSyncDone(msg)
+	case reminderTickMsg:
+		cmds := []tea.Cmd{reminderTick()}
+		send, flashed := m.checkReminder(msg.at)
+		if send != nil {
+			cmds = append(cmds, send)
+		}
+		if flashed {
+			cmds = append(cmds, clearErrAfter())
+		}
+		return m, tea.Batch(cmds...)
+	case reminderSentMsg:
+		if msg.err != nil {
+			m.flashError(fmt.Sprintf(tr("Desktop notification failed: %v"), msg.err))
+			return m, clearErrAfter()
+		}
+		return m, nil
 	case serverProbeMsg:
 		// Only flag "external" when we aren't the one serving in-process.
 		m.serverExternal = msg.reachable && m.inprocServer == nil
@@ -1660,6 +1676,7 @@ func (m *model) persistSettings() {
 		SyncBoardDisabled: !m.boardCfg.sync,
 		Search:            m.persistedSearch(),
 		DetailPosition:    m.detailPos.String(),
+		Reminder:          formatReminder(m.reminderAt),
 		Keys:              activeKeys,
 	}); err != nil {
 		m.flashError(fmt.Sprintf(tr("Error saving settings: %v"), err))
@@ -1971,6 +1988,8 @@ func (m *model) settingsAdjust(dir int) tea.Cmd {
 		m.cycleLang(dir)
 	case settingDetailPos:
 		m.cycleDetailPos(dir)
+	case settingReminder:
+		m.cycleReminder(dir)
 	case settingSyncAuto:
 		m.toggleSyncAuto()
 	case settingSyncBoard:

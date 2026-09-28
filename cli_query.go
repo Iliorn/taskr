@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Iliorn/taskr/todo"
 )
@@ -358,6 +359,59 @@ func cliTop(args []string) int {
 	for i := range rows {
 		fmt.Printf("%-8s %5s  %s\n", rows[i].ID[:8],
 			rk.FormatPercent(rk.Score(&rows[i])), truncate(rows[i].Title, 60))
+	}
+	return 0
+}
+
+// ── remind ───────────────────────────────────────────────────────────────────
+
+// remindClock is the CLI reminder's clock, injectable for tests.
+var remindClock = time.Now
+
+// cliRemind is the daily reminder for a scheduler to run: it does what the
+// TUI's minute tick does, so running it every few minutes from cron or a
+// systemd timer reminds once, at the time set in Settings, whether or not the
+// TUI is open. --now shows the reminder immediately and leaves the daily one
+// alone, which is also how to check notifications work on a machine.
+func cliRemind(args []string) int {
+	fs := flag.NewFlagSet("remind", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	immediate := fs.Bool("now", false, "remind now, whatever the time, the Settings switch or today's reminder")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintln(os.Stderr, "usage: taskr remind [--now]")
+		return 2
+	}
+	now := remindClock()
+	if !*immediate {
+		settings, _ := loadSettings()
+		if !reminderDue(now, reminderFromSettings(settings.Reminder), loadRemindedOn()) {
+			return 0
+		}
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load: %v\n", err)
+		return 1
+	}
+	if !*immediate {
+		saveRemindedOn(now.Format(reminderDayLayout))
+	}
+	overdue, today := reminderTasks(todoPtrs(todos), now)
+	if len(overdue)+len(today) == 0 {
+		if *immediate {
+			fmt.Println("Nothing is due today or overdue.")
+		}
+		return 0
+	}
+	title, body := reminderMessage(overdue, today)
+	fmt.Println(title)
+	fmt.Println(body)
+	if err := sendDesktopNotification(title, body); err != nil {
+		fmt.Fprintf(os.Stderr, "taskr remind: desktop notification failed: %v\n", err)
+		return 1
 	}
 	return 0
 }

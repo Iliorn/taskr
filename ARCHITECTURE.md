@@ -215,6 +215,16 @@ everything.
   and records the path for `main` to print after `Run` returns. `msg` is
   formatted (`msgKind`) only on the panic path, keeping the guard
   allocation-neutral (`BenchmarkView`, `BenchmarkSearchKeystroke`).
+- **`reminder.go` / `notify.go`** — the daily reminder. At the Settings time
+  (`reminder` in settings.json, default 09:00) a desktop notification lists
+  the overdue tasks and those due today. Due dates are calendar days, so it is
+  one reminder a day rather than a per-task alarm. The TUI checks on a minute
+  tick against the wall clock, so a machine waking from sleep catches up;
+  `taskr remind` runs the same check for cron or a timer. Both record the day
+  in a state-dir sidecar (`remindedPath`), and a launch after the time counts
+  as the reminder (`settleReminderAtLaunch`). `notify.go` shells out to the
+  platform's own tool (notify-send, osascript, Windows PowerShell's toast
+  API), passing text as arguments or environment, never inside a script.
 - **`layout.go` / `styles.go` / `constants.go`** — width/height math, theming,
   magic numbers.
 

@@ -56,6 +56,7 @@ const (
 	settingServerToken
 	settingVersion
 	settingCheckUpdate
+	settingReminder
 	numSettingsRows
 )
 
@@ -397,6 +398,10 @@ type model struct {
 	updateStatus      string
 	autoCloseParent   bool
 	autoCloseSubtasks bool
+	// reminderAt is the daily reminder's time in minutes after midnight, or
+	// reminderOff; remindedOn is the day this device last reminded.
+	reminderAt int
+	remindedOn string
 
 	// Persistence
 	dirty         bool
@@ -540,6 +545,8 @@ func initialModel(repo Repository) model {
 		autoCloseSubtasks: settings.AutoCloseSubtasks,
 		themeName:         th.name,
 		detailPos:         detailPosFromSettings(settings.DetailPosition),
+		reminderAt:        reminderFromSettings(settings.Reminder),
+		remindedOn:        loadRemindedOn(),
 		// The top of the one settings pane. The zero value is a row ID, not a
 		// position, and it happens to be the first bias knob — which opened
 		// the tab with the cursor parked in the middle of the list.
@@ -597,6 +604,7 @@ func initialModel(repo Repository) model {
 		}
 	}
 	m.calendar.selected = startOfDay(time.Now())
+	m.settleReminderAtLaunch(time.Now())
 	if t := m.runningTask(); t != nil {
 		m.timerTickOn = true
 		if e := t.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
@@ -622,7 +630,7 @@ func (m model) Init() tea.Cmd {
 	// Keep a periodic sync tick running for the whole session so enabling sync
 	// from Settings mid-session takes effect; only sync immediately on launch
 	// when it's already configured.
-	cmds = append(cmds, syncTick())
+	cmds = append(cmds, syncTick(), reminderTick())
 	if m.autoSync {
 		cmds = append(cmds, m.backgroundSync())
 	}

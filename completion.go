@@ -63,6 +63,7 @@ var cliCommandSpecs = []cliCommandSpec{
 	{name: "doctor", summary: "report this installation's health", flags: []string{"json"}},
 	{name: "update", summary: "install the latest release", flags: []string{"check", "y"}},
 	{name: "suggest", summary: "suggest dependency links between tasks", flags: []string{"list"}},
+	{name: "remind", summary: "notify what is due today and overdue", flags: []string{"now"}},
 	{name: "completion", summary: "print a shell completion script"},
 	{name: "man", summary: "print the man page (roff)"},
 	{name: "help", summary: "show the command reference"},

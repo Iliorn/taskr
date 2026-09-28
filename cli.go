@@ -30,7 +30,7 @@ func isCLICommand(arg string) bool {
 		"show", "why", "edit", "delete", "rm", "undelete", "comment",
 		"stats", "start", "stop", "log", "export", "import", "subtask",
 		"search", "tags", "projects", "serve", "sync", "undo",
-		"doctor", "update", "suggest", "completion", "man", "help", "-h", "--help", "--version",
+		"doctor", "update", "suggest", "remind", "completion", "man", "help", "-h", "--help", "--version",
 		// Retired, but still routed so muscle memory gets an explanation
 		// instead of the TUI opening on top of the typed command.
 		"learnings":
@@ -128,6 +128,8 @@ func dispatchCLI(args []string) int {
 		return cliDoctor(rest)
 	case "suggest":
 		return cliSuggest(rest)
+	case "remind":
+		return cliRemind(rest)
 	case "--version":
 		fmt.Println(appVersion)
 		return 0
@@ -259,6 +261,11 @@ Tracking:
                                        (no-op if already tracking ref)
   taskr stop [<ref>]                   stop the tracker (no ref = whichever's running)
   taskr log <ref> <45m|10:00-11:30>    backfill a time entry (duration ends now; range is today)
+
+Reminders:
+  taskr remind [--now]                 desktop notification of what is due today and overdue, once a day at
+                                       the time set in Settings (run it every few minutes from cron or a
+                                       timer); --now reminds immediately
 
 Comments:
   taskr comment <ref> "text"           append a comment

@@ -1330,6 +1330,7 @@ var settingsGroups = []settingsGroup{
 		settingAutoCloseSubtasks,
 		settingShowBoard,
 		settingStages,
+		settingReminder,
 	}},
 	{title: "Sequencer", preview: true, rows: []int{
 		settingBiasDeadline,
@@ -1497,6 +1498,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingServerToken:       tr("Server token"),
 		settingVersion:           tr("Version"),
 		settingCheckUpdate:       tr("Check for updates"),
+		settingReminder:          tr("Daily reminder"),
 	}
 	agingVal := tr("Off")
 	if m.rank.Biases.Aging {
@@ -1575,6 +1577,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingServerToken:       serverTokenVal,
 		settingVersion:           appVersion,
 		settingCheckUpdate:       tr("press enter to check"),
+		settingReminder:          "‹ " + reminderDisplay(m.reminderAt) + " ›",
 	}
 
 	// One label column across every group, so the values line up down the
