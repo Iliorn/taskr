@@ -1693,6 +1693,7 @@ func (m *model) persistSettings() {
 		Keys:              activeKeys,
 
 		SubtaskTagsDisabled: !m.subtaskTags,
+		ReminderOff:         !m.reminderOn,
 	}); err != nil {
 		m.flashError(fmt.Sprintf(tr("Error saving settings: %v"), err))
 	}
@@ -2007,6 +2008,8 @@ func (m *model) settingsAdjust(dir int) tea.Cmd {
 	case settingDetailPos:
 		m.cycleDetailPos(dir)
 	case settingReminder:
+		m.toggleReminder()
+	case settingReminderTime:
 		m.cycleReminder(dir)
 	case settingSubtaskTags:
 		m.subtaskTags = !m.subtaskTags

@@ -119,10 +119,13 @@ type appSettings struct {
 	// Negative like BoardDisabled, so the zero value keeps copying them.
 	SubtaskTagsDisabled bool `json:"subtask_tags_disabled,omitempty"`
 
-	// Reminder is the time of the daily due-date reminder, "HH:MM", or "off".
-	// Absent means the default (see reminder.go). A word rather than minutes
-	// for the same reason as DetailPosition: the file is hand-edited.
-	Reminder string `json:"reminder,omitempty"`
+	// Reminder is the time of the daily due-date reminder, "HH:MM"; absent
+	// means the default (see reminder.go). A word rather than minutes for the
+	// same reason as DetailPosition: the file is hand-edited. ReminderOff
+	// switches the reminder off and keeps the time for when it comes back on;
+	// a Reminder of "off", from before the switch existed, reads as off too.
+	Reminder    string `json:"reminder,omitempty"`
+	ReminderOff bool   `json:"reminder_off,omitempty"`
 
 	// Keys rebinds actions to keys: {"done": "D", "search": "s"}. Keyed by the
 	// action ids in keymap.go, which is why they exist — see keys.go for what

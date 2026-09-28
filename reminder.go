@@ -79,11 +79,21 @@ func formatReminder(at int) string {
 	return fmt.Sprintf("%02d:%02d", at/60, at%60)
 }
 
-// reminderChoices are the stops ←/→ step through in Settings: off, then every
-// hour of a waking day. A hand-edited time between two stops steps to the
-// neighbouring one.
+// storedReminder reads the reminder's time and switch from settings: the
+// time always a real one, so switching the reminder back on finds it.
+func storedReminder(s appSettings) (at int, on bool) {
+	at, on = reminderFromSettings(s.Reminder), !s.ReminderOff
+	if at == reminderOff {
+		at, on = defaultReminderAt, false
+	}
+	return at, on
+}
+
+// reminderChoices are the stops ←/→ step through on the Settings time row:
+// every hour of a waking day. A hand-edited time between two stops steps to
+// the neighbouring one.
 func reminderChoices() []int {
-	out := []int{reminderOff}
+	var out []int
 	for h := 5; h <= 22; h++ {
 		out = append(out, h*60)
 	}
@@ -91,7 +101,7 @@ func reminderChoices() []int {
 }
 
 // nextReminder steps the reminder time by dir (+1 later, -1 earlier), wrapping
-// from the last hour to off and back.
+// from the last hour to the first and back.
 func nextReminder(at, dir int) int {
 	choices := reminderChoices()
 	if dir > 0 {
@@ -194,7 +204,7 @@ func saveRemindedOn(day string) {
 // reminder: the list the user is opening already shows what is due, so a
 // notification on top of it would only repeat the screen.
 func (m *model) settleReminderAtLaunch(now time.Time) {
-	if reminderDue(now, m.reminderAt, m.remindedOn) {
+	if reminderDue(now, m.reminderTime(), m.remindedOn) {
 		m.remindedOn = now.Format(reminderDayLayout)
 		saveRemindedOn(m.remindedOn)
 	}
@@ -206,7 +216,7 @@ func (m *model) settleReminderAtLaunch(now time.Time) {
 // with nothing due is recorded too, so a task given today's date later in the
 // day does not set off a reminder at an odd hour.
 func (m *model) checkReminder(now time.Time) (send tea.Cmd, flashed bool) {
-	if !reminderDue(now, m.reminderAt, m.remindedOn) {
+	if !reminderDue(now, m.reminderTime(), m.remindedOn) {
 		return nil, false
 	}
 	day := now.Format(reminderDayLayout)
@@ -226,16 +236,23 @@ func (m *model) checkReminder(now time.Time) (send tea.Cmd, flashed bool) {
 	}, true
 }
 
-// cycleReminder is the Settings row's ←/→.
-func (m *model) cycleReminder(dir int) {
-	m.reminderAt = nextReminder(m.reminderAt, dir)
+// reminderTime is when today's reminder is due, or reminderOff when the
+// Settings switch is off.
+func (m model) reminderTime() int {
+	if !m.reminderOn {
+		return reminderOff
+	}
+	return m.reminderAt
+}
+
+// toggleReminder is the "Daily reminder" row: on or off, the time kept.
+func (m *model) toggleReminder() {
+	m.reminderOn = !m.reminderOn
 	m.persistSettings()
 }
 
-// reminderDisplay is the Settings row's value.
-func reminderDisplay(at int) string {
-	if at < 0 {
-		return tr("Off")
-	}
-	return formatReminder(at)
+// cycleReminder is the "Reminder time" row's ←/→.
+func (m *model) cycleReminder(dir int) {
+	m.reminderAt = nextReminder(m.reminderAt, dir)
+	m.persistSettings()
 }

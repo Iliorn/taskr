@@ -58,6 +58,7 @@ const (
 	settingCheckUpdate
 	settingReminder
 	settingSubtaskTags
+	settingReminderTime
 	numSettingsRows
 )
 
@@ -401,9 +402,10 @@ type model struct {
 	autoCloseSubtasks bool
 	// subtaskTags: a new subtask copies its parent's tags.
 	subtaskTags bool
-	// reminderAt is the daily reminder's time in minutes after midnight, or
-	// reminderOff; remindedOn is the day this device last reminded.
+	// reminderAt is the daily reminder's time in minutes after midnight, kept
+	// while reminderOn is off; remindedOn is the day this device last reminded.
 	reminderAt int
+	reminderOn bool
 	remindedOn string
 
 	// Persistence
@@ -549,7 +551,6 @@ func initialModel(repo Repository) model {
 		subtaskTags:       !settings.SubtaskTagsDisabled,
 		themeName:         th.name,
 		detailPos:         detailPosFromSettings(settings.DetailPosition),
-		reminderAt:        reminderFromSettings(settings.Reminder),
 		remindedOn:        loadRemindedOn(),
 		// The top of the one settings pane. The zero value is a row ID, not a
 		// position, and it happens to be the first bias knob — which opened
@@ -608,6 +609,7 @@ func initialModel(repo Repository) model {
 		}
 	}
 	m.calendar.selected = startOfDay(time.Now())
+	m.reminderAt, m.reminderOn = storedReminder(settings)
 	m.settleReminderAtLaunch(time.Now())
 	if t := m.runningTask(); t != nil {
 		m.timerTickOn = true

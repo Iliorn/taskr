@@ -143,11 +143,16 @@ board" hides the tab and the Stage row.
 
 ## The daily reminder
 
-Once a day, at the time set in Settings → "Daily reminder" (09:00 unless you
+Once a day, at the time set in Settings → "Reminder time" (09:00 unless you
 change it), taskr shows a desktop notification listing what is overdue and
-what is due today. `←/→` on that row change the hour or turn it off. Opening
-taskr after the reminder time counts as that day's reminder, since the list
-on screen already says the same thing.
+what is due today. Settings → "Daily reminder" turns it off and on again,
+keeping the time. Opening taskr after the reminder time counts as that day's
+reminder, since the list on screen already says the same thing.
+
+When the desktop can't show the pop-up — on a work PC whose PowerShell is
+locked down by the organisation, for example — the app still shows the
+reminder in its status line, and `taskr remind --now` prints it with a line
+saying why the pop-up was unavailable.
 
 The app sends it while it is running. To be reminded when it isn't, have
 your system run `taskr remind` every few minutes; it does nothing until the

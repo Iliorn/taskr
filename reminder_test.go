@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"errors"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +12,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // reminderDay is the fixed "today" of these tests, in local time because due
@@ -62,16 +63,14 @@ func TestReminderSettingRoundTrips(t *testing.T) {
 	}
 }
 
-func TestReminderStepsWrapThroughOff(t *testing.T) {
+func TestReminderTimeStepsByTheHourAndWraps(t *testing.T) {
 	cases := []struct{ at, dir, want int }{
 		{9 * 60, 1, 10 * 60},
 		{9 * 60, -1, 8 * 60},
 		{8*60 + 30, 1, 9 * 60}, // a hand-edited time steps to the neighbouring hour
 		{8*60 + 30, -1, 8 * 60},
-		{22 * 60, 1, reminderOff},
-		{reminderOff, 1, 5 * 60},
-		{reminderOff, -1, 22 * 60},
-		{5 * 60, -1, reminderOff},
+		{22 * 60, 1, 5 * 60},
+		{5 * 60, -1, 22 * 60},
 	}
 	for _, c := range cases {
 		if got := nextReminder(c.at, c.dir); got != c.want {
@@ -209,22 +208,58 @@ func TestReminderLaunchAfterTheTimeCountsAsReminded(t *testing.T) {
 	}
 }
 
+// Settings has a switch for the reminder and, while it is on, a row for its
+// time; switching it off keeps the time for when it comes back.
 func TestScriptReminderSettingPersists(t *testing.T) {
 	m := settingsModel(t)
-	m.settingsCursor = settingReminder
+	m.settingsCursor = settingReminderTime
 	m = sendKey(t, m, "right")
 	if m.reminderAt != 10*60 {
 		t.Fatalf("reminderAt = %s after →, want 10:00", formatReminder(m.reminderAt))
 	}
-	s, err := loadSettings()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s.Reminder != "10:00" {
+	if s, _ := loadSettings(); s.Reminder != "10:00" {
 		t.Errorf("settings.json reminder = %q, want 10:00", s.Reminder)
 	}
 	if !strings.Contains(m.View(), "10:00") {
 		t.Error("the Settings pane does not show the new time")
+	}
+
+	m.settingsCursor = settingReminder
+	m = sendKey(t, m, "enter")
+	if m.reminderOn || m.reminderTime() != reminderOff {
+		t.Fatal("enter on Daily reminder did not switch it off")
+	}
+	if s, _ := loadSettings(); !s.ReminderOff || s.Reminder != "10:00" {
+		t.Errorf("settings.json = off %v at %q, want off, time kept", s.ReminderOff, s.Reminder)
+	}
+	if m.settingsRowVisible(settingReminderTime) || strings.Contains(ansi.Strip(m.View()), "10:00") {
+		t.Error("the time row should be hidden while the reminder is off")
+	}
+	if send, _ := m.checkReminder(time.Now().Add(24 * time.Hour)); send != nil {
+		t.Error("a reminder that is off still reminded")
+	}
+
+	m = sendKey(t, m, "enter")
+	if !m.reminderOn || m.reminderAt != 10*60 {
+		t.Errorf("switched back on at %s, want 10:00", formatReminder(m.reminderAt))
+	}
+}
+
+// A settings.json from before the switch wrote "off" for the time.
+func TestStoredReminderReadsTheOldOff(t *testing.T) {
+	for _, c := range []struct {
+		s      appSettings
+		at     int
+		wantOn bool
+	}{
+		{appSettings{}, defaultReminderAt, true},
+		{appSettings{Reminder: "07:00"}, 7 * 60, true},
+		{appSettings{Reminder: "07:00", ReminderOff: true}, 7 * 60, false},
+		{appSettings{Reminder: "off"}, defaultReminderAt, false},
+	} {
+		if at, on := storedReminder(c.s); at != c.at || on != c.wantOn {
+			t.Errorf("storedReminder(%+v) = %s %v, want %s %v", c.s, formatReminder(at), on, formatReminder(c.at), c.wantOn)
+		}
 	}
 }
 

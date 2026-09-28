@@ -391,7 +391,11 @@ func cliRemind(args []string) int {
 	now := remindClock()
 	if !*immediate {
 		settings, _ := loadSettings()
-		if !reminderDue(now, reminderFromSettings(settings.Reminder), loadRemindedOn()) {
+		at, on := storedReminder(settings)
+		if !on {
+			at = reminderOff
+		}
+		if !reminderDue(now, at, loadRemindedOn()) {
 			return 0
 		}
 	}

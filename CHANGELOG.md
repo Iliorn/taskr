@@ -16,6 +16,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 ### Changed
 
 - Projects works like Tags: enter walks the tasks under the project list, timeline beside them.
+- Settings has a Daily reminder switch, with the reminder's time on its own row.
 
 ### Fixed
 
