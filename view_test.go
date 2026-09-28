@@ -564,7 +564,7 @@ func TestSelectedRowHighlightReachesThePaneEdge(t *testing.T) {
 
 	m := modelWithTasks(t, tagged, bare, parent, sub)
 	m.termWidth = 100
-	m.expandedTasks[parent.ID] = true
+	m.setExpanded(parent.ID, true)
 	m.refreshCaches()
 
 	selStyle := newFastStyle(selectedRowStyle)
@@ -1289,7 +1289,7 @@ func TestTaskRowsMarkTheCursorByHighlightAlone(t *testing.T) {
 			t.Errorf("task list lacks %q:\n%s", want, out)
 		}
 	}
-	m.expandedTasks[parent.ID] = true
+	m.setExpanded(parent.ID, true)
 	out = rows()
 	if !strings.Contains(out, "- [ ] Plan the trip") || !strings.Contains(out, "└ [ ] Book flights") {
 		t.Errorf("expanded parent should show - and its subtask:\n%s", out)

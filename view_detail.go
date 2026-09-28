@@ -698,6 +698,14 @@ func writeGanttBar(b *strings.Builder, barRunes []rune, barColors []int) {
 }
 
 func (m model) renderGantt(tasks []todo.Todo) string {
+	return m.renderGanttN(tasks, 0)
+}
+
+// renderGanttN is renderGantt stopped at maxLines lines (0 draws them all):
+// the pane under the Projects list shows only its share of the height, and
+// sizing it asks for the chart on every key, so the rows past the edge would
+// be drawn only to be cut.
+func (m model) renderGanttN(tasks []todo.Todo, maxLines int) string {
 	if len(tasks) == 0 {
 		return dimStyle.Render(tr("  No tasks in this project."))
 	}
@@ -772,6 +780,9 @@ func (m model) renderGantt(tasks []todo.Todo) string {
 	barColors := bufs.color[:chartW]
 
 	for i, t := range tasks {
+		if maxLines > 0 && i+2 >= maxLines { // the two header rows above
+			break
+		}
 		isSelected := i == m.cursor && m.projectTaskMode
 		checkbox := "[ ]"
 		if t.Status == todo.Done {

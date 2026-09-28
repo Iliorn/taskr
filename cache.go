@@ -27,6 +27,15 @@ type cacheState struct {
 	// alphabetical, for the pickers and completions.
 	tagGroups     map[string]*groupSummary
 	projectGroups map[string]*groupSummary
+	// groupLists memoizes groupTaskList per group (groupListMemo): a drill-in
+	// list is read several times per key — the clamp, the anchor, the pane's
+	// sizing and its render — and each build walks and ranks the whole set.
+	// Cleared with the other derived data, and when a fold changes.
+	groupLists map[string][]todo.Todo
+	// dayActs memoizes activitiesForDay for the one day it was last asked
+	// about (dayActsFor); nil means not built. Cleared with groupLists.
+	dayActs       []dayActivity
+	dayActsFor    calDay
 	tagNames      []string
 	projectNames  []string
 	tagLastUsed   map[string]time.Time   // tag → latest ModifiedAt of a task using it
@@ -56,6 +65,7 @@ type cacheState struct {
 
 func (m *model) refreshCaches() {
 	m.frameTime = time.Now()
+	m.cache.groupLists, m.cache.dayActs = nil, nil
 
 	all := m.allTodos()
 
@@ -246,25 +256,9 @@ func (m *model) refreshTagRenderCache() {
 	for k := range m.cache.taskTagRender {
 		delete(m.cache.taskTagRender, k)
 	}
-	// tagRender dedups the expensive renderTagsPart by tag-set (joined key) so
-	// it runs once per distinct tag set; taskTagRender then maps each task's ID
-	// to that rendered string, so the row renderer can look tags up by ID with
-	// no per-frame strings.Join. Iterate the two lists in place —
-	// append(active, done...) would scribble into active's spare capacity.
-	for _, list := range [2][]todo.Todo{m.cache.active, m.cache.done} {
-		for _, t := range list {
-			if len(t.Tags) == 0 {
-				continue
-			}
-			key := strings.Join(t.Tags, ",")
-			rendered, ok := m.cache.tagRender[key]
-			if !ok {
-				rendered = renderTagsPart(t.Tags)
-				m.cache.tagRender[key] = rendered
-			}
-			m.cache.taskTagRender[t.ID] = rendered
-		}
-	}
+	// Both fill on demand in getRenderedTagsForTask: only the rows on screen
+	// need their chips, and rendering every task's up front made each tab
+	// switch (which refreshes the filtered lists) pay for thousands.
 }
 
 // refreshSubtaskProgress rebuilds the parent → (done, total) counts in a single
@@ -329,10 +323,11 @@ func (m *model) renderRowTags(t *todo.Todo, avail int, selected bool) (string, i
 	return " " + m.getRenderedTagsForTask(t), full
 }
 
-// getRenderedTagsForTask returns a task's rendered tags via the by-ID cache
-// (populated by refreshTagRenderCache), avoiding the per-frame strings.Join that
-// getRenderedTags pays to build its key. Falls back to rendering directly for a
-// task not in the active/done lists.
+// getRenderedTagsForTask returns a task's rendered tags via the by-ID cache,
+// so a row drawn again costs a map lookup rather than the strings.Join that
+// getRenderedTags pays to build its key. A miss renders through tagRender,
+// which dedups by tag set, and remembers the result under the task's ID until
+// refreshTagRenderCache clears both.
 func (m *model) getRenderedTagsForTask(t *todo.Todo) string {
 	if len(t.Tags) == 0 {
 		return ""
@@ -340,7 +335,14 @@ func (m *model) getRenderedTagsForTask(t *todo.Todo) string {
 	if r, ok := m.cache.taskTagRender[t.ID]; ok {
 		return r
 	}
-	return renderTagsPart(t.Tags)
+	key := strings.Join(t.Tags, ",")
+	rendered, ok := m.cache.tagRender[key]
+	if !ok {
+		rendered = renderTagsPart(t.Tags)
+		m.cache.tagRender[key] = rendered
+	}
+	m.cache.taskTagRender[t.ID] = rendered
+	return rendered
 }
 
 func (m model) getRenderedTags(tags []string) string {

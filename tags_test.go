@@ -271,7 +271,7 @@ func TestTagTaskListOrder(t *testing.T) {
 		t.Errorf("folded, tagTaskList = %v, want %v", got, want)
 	}
 
-	m.expandedTasks[alpha.ID] = true
+	m.setExpanded(alpha.ID, true)
 	got := titles(m.tagTaskList("home"))
 	if len(got) != 4 || got[0] != "Beta urgent" || got[1] != "Alpha routine" ||
 		!slices.Contains(got[2:], "Subtask") || !slices.Contains(got[2:], "Untagged step") {

@@ -28,6 +28,8 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Task titles inside a tag or project get the room they need instead of being cut short.
 - A task opened inside a tag or project follows the Detail pane setting, as on the Tasks tab.
 
+- Moving the cursor stays instant with thousands of tasks, on every tab.
+
 ### Fixed
 
 - A long list no longer scrolls the selected task out of sight, with the detail open or not.

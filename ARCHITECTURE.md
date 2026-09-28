@@ -262,6 +262,16 @@ engine's `LessTie`, …) that ends at `ID`, so each is a total order and
 `sort.Slice` suffices. `cache.subProgress` is built in one pass; a missing key
 means "no subtasks", so the warm signal is the map being non-nil.
 
+A cursor step must cost well under a frame whatever the set's size, so what a
+key reads several times is built once. The drill-in lists
+(`groupListMemo` → `cache.groupLists`) and the calendar's day
+(`activitiesForDay` → `cache.dayActs`) are memoized and cleared with the rest
+of the derived data; a fold goes through `setExpanded`, the one writer of
+`expandedTasks`, which clears the group lists too. Tag chips render on demand
+per row (`getRenderedTagsForTask`), not for every task on each refresh, and
+the Projects pane's timeline stops at the pane's height (`renderGanttN`).
+`BenchmarkCursorMove` times one step plus its frame on every surface.
+
 ### Cursors are clamped in one place
 
 `clampCursors` runs once at the tail of every `dispatch` and pulls each list

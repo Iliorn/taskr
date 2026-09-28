@@ -374,7 +374,7 @@ func chooseBoardCardLayout(cards []todo.Todo, colW, room int) boardCardLayout {
 		return boardCardLayout{lines: 1}
 	}
 	inner := colW - boardBoxChrome
-	if boardCardLinesNeeded(cards, inner, 2)+2*len(cards) <= room {
+	if boardCardsFit(cards, inner, 2, room) {
 		return boardCardLayout{boxed: true, lines: 2}
 	}
 	return boardCardLayout{boxed: true, lines: 1}
@@ -433,8 +433,11 @@ func (m model) renderBoardColumn(cards []todo.Todo, title string, doneCol bool, 
 // boardColumnHoldsCarry reports whether the held card is over this column, so
 // the column's rule lights with it.
 func (m model) boardColumnHoldsCarry(cards []todo.Todo) bool {
+	if m.mode != modeBoardCarry || m.board.carryID == "" {
+		return false
+	}
 	for i := range cards {
-		if m.carrying(cards[i].ID) {
+		if cards[i].ID == m.board.carryID {
 			return true
 		}
 	}
@@ -462,15 +465,17 @@ func boardCardText(t *todo.Todo, doneCol bool, textW, maxLines int) (lines []str
 	return clampLines(wrapText(t.Title, textW), maxLines), badge
 }
 
-// boardCardLinesNeeded counts the title lines a column's cards take at up to
-// maxLines each — a short title stays one line even when the column wraps.
-func boardCardLinesNeeded(cards []todo.Todo, textW, maxLines int) int {
-	n := 0
-	for i := range cards {
+// boardCardsFit reports whether a column's cards fit room rows as boxes of up
+// to maxLines title lines: each box is its title lines plus two borders. It
+// stops wrapping titles once the count passes room, so a long column costs a
+// few cards' worth of wrapping rather than all of them on every key.
+func boardCardsFit(cards []todo.Todo, textW, maxLines, room int) bool {
+	need := 2 * len(cards)
+	for i := 0; i < len(cards) && need <= room; i++ {
 		lines, _ := boardCardText(&cards[i], false, textW, maxLines)
-		n += len(lines)
+		need += len(lines)
 	}
-	return n
+	return need <= room
 }
 
 // Box geometry: the cursor marker column the plain rows have too, then a

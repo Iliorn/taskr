@@ -1205,7 +1205,7 @@ func (m model) projectPane(projects []string, maxLines int) (lines []string, tit
 	}
 	title = projectTimelineTitle(project)
 	if hasDatedOpenTask(tasks) {
-		lines = strings.Split(m.renderGantt(tasks), "\n")
+		lines = strings.Split(m.renderGanttN(tasks, maxLines), "\n")
 	} else if project != "" {
 		lines = m.groupPaneLines(m.cache.projectGroups[project], tasks, -1, nil, maxLines, false)
 		title = "@" + project

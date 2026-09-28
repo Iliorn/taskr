@@ -836,7 +836,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.settingsAdjust(+1)
 			} else if m.foldsSubtasks() {
 				if t := m.currentTodo(); t != nil && m.subtaskCount(t.ID) > 0 {
-					m.expandedTasks[t.ID] = true
+					m.setExpanded(t.ID, true)
 				}
 			}
 		case "left":
@@ -855,7 +855,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if t.ParentID != "" {
 						parentID = t.ParentID
 					}
-					delete(m.expandedTasks, parentID)
+					m.setExpanded(parentID, false)
 					m.followTask(parentID)
 				}
 			}

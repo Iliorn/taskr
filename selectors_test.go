@@ -395,7 +395,7 @@ func TestVisibleActiveTasksFlatten(t *testing.T) {
 	}
 
 	// Expanded → subtasks interleaved beneath their parent.
-	m.expandedTasks["p"] = true
+	m.setExpanded("p", true)
 	got = idsOf(m.visibleActiveTasks())
 	if len(got) != 4 || got[0] != "p" || got[1] != "c1" || got[2] != "c2" || got[3] != "o" {
 		t.Fatalf("expanded visible = %v, want [p c1 c2 o]", got)
@@ -463,7 +463,7 @@ func TestVisibleActiveHelpersMatchFull(t *testing.T) {
 	}
 
 	check("collapsed")
-	m.expandedTasks["p"] = true
+	m.setExpanded("p", true)
 	check("expanded")
 }
 

@@ -836,6 +836,7 @@ func (m *model) markModified(ids ...string) {
 
 func (m *model) markCacheDirty() {
 	m.cache.dirty = true
+	m.cache.groupLists, m.cache.dayActs = nil, nil
 	m.invalidateDetailCache()
 }
 
@@ -1583,11 +1584,45 @@ func projectFilterMatch(search string) func(string) bool {
 // tagTaskList and getProjectTasks are groupTaskList for one tag or project:
 // the list a row's enter opens, which the pane under the list previews.
 func (m model) tagTaskList(tag string) []todo.Todo {
-	return m.groupTaskList(func(t *todo.Todo) bool { return inTagGroup(t, tag) })
+	return m.groupListMemo("#"+tag, func(t *todo.Todo) bool { return inTagGroup(t, tag) })
 }
 
 func (m model) getProjectTasks(project string) []todo.Todo {
-	return m.groupTaskList(func(t *todo.Todo) bool { return inProjectGroup(t, project) })
+	return m.groupListMemo("@"+project, func(t *todo.Todo) bool { return inProjectGroup(t, project) })
+}
+
+// setExpanded folds or unfolds id's subtasks. The one writer of
+// expandedTasks, because the memoized group lists show unfolded subtasks and
+// have to be rebuilt when a fold changes.
+func (m *model) setExpanded(id string, open bool) {
+	if open {
+		m.expandedTasks[id] = true
+	} else {
+		delete(m.expandedTasks, id)
+	}
+	if m.cache != nil {
+		m.cache.groupLists = nil
+	}
+}
+
+// groupListMemo is groupTaskList through cache.groupLists. The slice is
+// shared between readers, so it is read-only: copy a row before changing it.
+func (m model) groupListMemo(key string, match func(*todo.Todo) bool) []todo.Todo {
+	if m.cache == nil {
+		return m.groupTaskList(match)
+	}
+	if m.showFinishedGroups {
+		key += "|finished"
+	}
+	if list, ok := m.cache.groupLists[key]; ok {
+		return list
+	}
+	list := m.groupTaskList(match)
+	if m.cache.groupLists == nil {
+		m.cache.groupLists = make(map[string][]todo.Todo)
+	}
+	m.cache.groupLists[key] = list
+	return list
 }
 
 // currentTagTasks is tagTaskList for the tag under the Tags-tab cursor.

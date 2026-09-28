@@ -50,12 +50,22 @@ func (a dayActivity) duration() time.Duration {
 	return a.stop.Sub(a.start)
 }
 
-func dayKey(t time.Time) string {
+// calDay is a local calendar day, comparable and usable as a map key. The
+// calendar compares a day against every time entry on every frame, so it is
+// three integers rather than a formatted string.
+type calDay struct {
+	year  int
+	month time.Month
+	day   int
+}
+
+func dayKey(t time.Time) calDay {
 	// Times come back from storage in UTC; the calendar grid is laid out
-	// in the user's local zone, so format the date in local time too —
+	// in the user's local zone, so take the date in local time too —
 	// otherwise an entry started at 01:00 local (= 23:00 UTC yesterday)
 	// gets keyed to the wrong day.
-	return t.Local().Format("2006-01-02")
+	y, mo, d := t.Local().Date()
+	return calDay{y, mo, d}
 }
 
 // activitiesForDay returns every time entry started on the given day plus
@@ -64,6 +74,20 @@ func dayKey(t time.Time) string {
 // Result is ordered by timestamp.
 func (m model) activitiesForDay(day time.Time) []dayActivity {
 	key := dayKey(day)
+	// Read by the timeline, its title, the roll-ups and the entry cursor's
+	// clamp on every key; each build walks every task and time entry. The
+	// slice is shared, so it is read-only.
+	if m.cache != nil && m.cache.dayActsFor == key && m.cache.dayActs != nil {
+		return m.cache.dayActs
+	}
+	acts := m.buildActivitiesForDay(key)
+	if m.cache != nil {
+		m.cache.dayActsFor, m.cache.dayActs = key, acts
+	}
+	return acts
+}
+
+func (m model) buildActivitiesForDay(key calDay) []dayActivity {
 	var acts []dayActivity
 	for _, t := range m.tasks {
 		parentTitle := ""
@@ -144,13 +168,16 @@ func (m model) activitiesForDay(day time.Time) []dayActivity {
 		}
 		return acts[i].entryID < acts[j].entryID
 	})
+	if acts == nil {
+		acts = []dayActivity{} // non-nil, so an empty day is memoized too
+	}
 	return acts
 }
 
 // trackedPerDay sums tracked time per day for entries started in [from, to].
-func (m model) trackedPerDay(from, to time.Time) map[string]time.Duration {
+func (m model) trackedPerDay(from, to time.Time) map[calDay]time.Duration {
 	end := to.AddDate(0, 0, 1)
-	totals := make(map[string]time.Duration)
+	totals := make(map[calDay]time.Duration)
 	for _, t := range m.tasks {
 		for _, e := range t.TimeEntries {
 			if e.StartedAt.Before(from) || !e.StartedAt.Before(end) {
@@ -165,9 +192,9 @@ func (m model) trackedPerDay(from, to time.Time) map[string]time.Duration {
 // dueDaysInRange marks days in [from, to] that have at least one unfinished
 // task due, so the month grid can hint upcoming deadlines without the user
 // landing on each day.
-func (m model) dueDaysInRange(from, to time.Time) map[string]bool {
+func (m model) dueDaysInRange(from, to time.Time) map[calDay]bool {
 	end := to.AddDate(0, 0, 1)
-	days := make(map[string]bool)
+	days := make(map[calDay]bool)
 	for _, t := range m.tasks {
 		if t.DueDate.IsZero() || t.Status == todo.Done {
 			continue
