@@ -11,7 +11,7 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
-## [Unreleased]
+## [1.40.0] - 2026-09-28
 
 ### Added
 
@@ -28,7 +28,6 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Moving a task to another project takes its subtasks along.
 - Task titles inside a tag or project get the room they need instead of being cut short.
 - A task opened inside a tag or project follows the Detail pane setting, as on the Tasks tab.
-
 - Moving the cursor stays instant with thousands of tasks, on every tab.
 - The Calendar's month panel is as tall as what it shows instead of running to the bottom.
 
