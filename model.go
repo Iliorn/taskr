@@ -59,6 +59,8 @@ const (
 	settingReminder
 	settingSubtaskTags
 	settingReminderTime
+	settingExportFolder
+	settingImportFile
 	numSettingsRows
 )
 
@@ -135,6 +137,8 @@ const (
 	modeEditServerListen
 	modeEditServerToken
 	modeEditStages
+	modeEditExportFolder
+	modeImportFile
 	modePalette
 	// modeExplain is the "why this rank" overlay: a read-only screen over the
 	// current task, like modeHelp, that any key dismisses.
@@ -407,6 +411,12 @@ type model struct {
 	reminderAt int
 	reminderOn bool
 	remindedOn string
+	// exportFolder is where taskr-export.json is kept current ("" = off);
+	// exportDirty/exportScheduled/lastExport pace the writes (exportSoon).
+	exportFolder    string
+	exportDirty     bool
+	exportScheduled bool
+	lastExport      time.Time
 
 	// Persistence
 	dirty         bool
@@ -610,6 +620,10 @@ func initialModel(repo Repository) model {
 	}
 	m.calendar.selected = startOfDay(time.Now())
 	m.reminderAt, m.reminderOn = storedReminder(settings)
+	// A launch refreshes the export: the store may have changed since the last
+	// session wrote it (a sync, a CLI edit). Init schedules the write.
+	m.exportFolder = settings.ExportFolder
+	m.exportDirty = m.exportFolder != ""
 	m.settleReminderAtLaunch(time.Now())
 	if t := m.runningTask(); t != nil {
 		m.timerTickOn = true
@@ -637,6 +651,9 @@ func (m model) Init() tea.Cmd {
 	// from Settings mid-session takes effect; only sync immediately on launch
 	// when it's already configured.
 	cmds = append(cmds, syncTick(), reminderTick())
+	if m.exportDirty {
+		cmds = append(cmds, tea.Tick(exportDebounce, func(time.Time) tea.Msg { return exportTickMsg{} }))
+	}
 	if m.autoSync {
 		cmds = append(cmds, m.backgroundSync())
 	}
@@ -743,6 +760,7 @@ func (m *model) closeWatcher() {
 // quit path closes that window. Best-effort: a save error here can't be shown
 // in the TUI anymore, so we surface it on stderr.
 func (m *model) flushPendingWrites() {
+	m.flushExport()
 	dirty, tombstones := m.Store.drainDirty()
 	if len(dirty) == 0 && len(tombstones) == 0 {
 		return

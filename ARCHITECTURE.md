@@ -222,6 +222,14 @@ everything.
   and records the path for `main` to print after `Run` returns. `msg` is
   formatted (`msgKind`) only on the panic path, keeping the guard
   allocation-neutral (`BenchmarkView`, `BenchmarkSearchKeystroke`).
+- **`exportsettings.go`** — Settings → Export. The auto-export keeps
+  `exportFileName` current in a folder: scheduled after a save or an
+  external reload (`exportSoon`), soon after the first change and then at
+  most once per `exportInterval`, since the folder is usually synced and each
+  write is an upload; written atomically off the loop, and on quit by
+  `flushPendingWrites`. The import runs `importTasks`, the core `taskr
+  import` shares, after saving pending edits, as one undo step naming every
+  task in the file. Path prompts complete with `completePath`.
 - **`reminder.go` / `notify.go`** — the daily reminder. At the Settings time
   (`reminder` in settings.json, default 09:00) a desktop notification lists
   the overdue tasks and those due today. Due dates are calendar days, so it is

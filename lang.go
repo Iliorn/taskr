@@ -654,6 +654,22 @@ var daTranslations = map[string]string{
 	"Top 5 with these weights:": "Top 5 med disse vægte:",
 	"Score resync failed: %v":   "Genberegning af score mislykkedes: %v",
 
+	// ── Settings: export and import ──
+	"Export":                         "Eksport",
+	"Auto-export folder":             "Mappe til autoeksport",
+	"Import from file":               "Importér fra fil",
+	"press enter to choose a file":   "tryk enter for at vælge en fil",
+	"Path to a taskr export (.json)": "Sti til en taskr-eksport (.json)",
+	"Auto-export off":                "Autoeksport slået fra",
+	"Not a folder: %s":               "Ikke en mappe: %s",
+	"Exporting to %s":                "Eksporterer til %s",
+	"Import failed: %v":              "Import mislykkedes: %v",
+	"Auto-export failed: %v":         "Autoeksport mislykkedes: %v",
+	"Folder to keep taskr-export.json in (blank turns it off)":  "Mappe til taskr-export.json (tom slår den fra)",
+	"Nothing to import: every task in the file is already here": "Intet at importere: alle opgaver i filen er her allerede",
+	"Imported %d new, %d updated · u undoes it":                 "Importeret %d nye, %d opdaterede · u fortryder",
+	"tab completes the name · enter confirms · esc cancels":     "tab fuldfører navnet · enter bekræfter · esc annullerer",
+
 	// ── Adding tasks ──
 	"A task needs a title": "En opgave skal have en titel",
 
@@ -1282,6 +1298,22 @@ var deTranslations = map[string]string{
 	"Bottom":                    "Unten",
 	"Top 5 with these weights:": "Top 5 mit diesen Gewichten:",
 	"Score resync failed: %v":   "Punkte-Neuberechnung fehlgeschlagen: %v",
+
+	// ── Settings: export and import ──
+	"Export":                         "Export",
+	"Auto-export folder":             "Auto-Export-Ordner",
+	"Import from file":               "Aus Datei importieren",
+	"press enter to choose a file":   "Enter drücken, um eine Datei zu wählen",
+	"Path to a taskr export (.json)": "Pfad zu einem taskr-Export (.json)",
+	"Auto-export off":                "Auto-Export aus",
+	"Not a folder: %s":               "Kein Ordner: %s",
+	"Exporting to %s":                "Exportiere nach %s",
+	"Import failed: %v":              "Import fehlgeschlagen: %v",
+	"Auto-export failed: %v":         "Auto-Export fehlgeschlagen: %v",
+	"Folder to keep taskr-export.json in (blank turns it off)":  "Ordner für taskr-export.json (leer schaltet ihn ab)",
+	"Nothing to import: every task in the file is already here": "Nichts zu importieren: alle Aufgaben der Datei sind schon da",
+	"Imported %d new, %d updated · u undoes it":                 "%d neu, %d aktualisiert importiert · u macht es rückgängig",
+	"tab completes the name · enter confirms · esc cancels":     "Tab vervollständigt · Enter bestätigt · Esc bricht ab",
 
 	// ── Adding tasks ──
 	"A task needs a title": "Eine Aufgabe braucht einen Titel",

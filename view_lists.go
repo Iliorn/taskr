@@ -1357,6 +1357,10 @@ var settingsGroups = []settingsGroup{
 		settingServerListen,
 		settingServerToken,
 	}},
+	{title: "Export", rows: []int{
+		settingExportFolder,
+		settingImportFile,
+	}},
 	{title: "About", rows: []int{
 		settingVersion,
 		settingCheckUpdate,
@@ -1405,7 +1409,8 @@ func (m model) settingsRowVisible(id int) bool {
 // one without pressing anything.
 func settingsEditsText(id int) bool {
 	switch id {
-	case settingStages, settingSyncServer, settingSyncToken, settingServerListen, settingServerToken:
+	case settingStages, settingSyncServer, settingSyncToken, settingServerListen, settingServerToken,
+		settingExportFolder, settingImportFile:
 		return true
 	}
 	return false
@@ -1509,6 +1514,8 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingCheckUpdate:       tr("Check for updates"),
 		settingReminder:          tr("Daily reminder"),
 		settingReminderTime:      tr("Reminder time"),
+		settingExportFolder:      tr("Auto-export folder"),
+		settingImportFile:        tr("Import from file"),
 		settingSubtaskTags:       tr("Subtasks copy tags"),
 	}
 	agingVal := tr("Off")
@@ -1598,6 +1605,8 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingCheckUpdate:       tr("press enter to check"),
 		settingReminder:          "‹ " + reminderVal + " ›",
 		settingReminderTime:      "‹ " + formatReminder(m.reminderAt) + " ›",
+		settingExportFolder:      exportFolderDisplay(m.exportFolder),
+		settingImportFile:        tr("press enter to choose a file"),
 		settingSubtaskTags:       "‹ " + subtaskTagsVal + " ›",
 	}
 

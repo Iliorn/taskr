@@ -13,6 +13,11 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+### Added
+
+- Settings → Export keeps a JSON export of all tasks current in a folder you choose.
+- Settings → Import from file merges a taskr export in, as one undo step.
+
 ### Changed
 
 - Projects works like Tags: enter walks the tasks under the project list, timeline beside them.

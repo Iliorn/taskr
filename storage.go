@@ -127,6 +127,10 @@ type appSettings struct {
 	Reminder    string `json:"reminder,omitempty"`
 	ReminderOff bool   `json:"reminder_off,omitempty"`
 
+	// ExportFolder is where the TUI keeps taskr-export.json current
+	// (exportsettings.go); empty means no auto-export.
+	ExportFolder string `json:"export_folder,omitempty"`
+
 	// Keys rebinds actions to keys: {"done": "D", "search": "s"}. Keyed by the
 	// action ids in keymap.go, which is why they exist — see keys.go for what
 	// can be rebound and how a broken entry is handled (dropped with a warning,

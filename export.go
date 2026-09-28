@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
 )
 
@@ -69,29 +71,65 @@ Import is idempotent: running it a second time with the same file changes nothin
 		fmt.Fprintf(os.Stderr, "taskr import: open store: %v\n", err)
 		return 1
 	}
-
-	// Snapshot the pre-merge set so the summary can report how many tasks the
-	// merge actually changed (new or edited), not just a live-count delta —
-	// an import that only edits existing tasks leaves the count unchanged but
-	// still did work.
-	before, err := loadTodosForSync(db)
+	res, err := importTasks(db, tasks, storedBiases())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr import: load current: %v\n", err)
+		fmt.Fprintf(os.Stderr, "taskr import: %v\n", err)
 		return 1
 	}
-
-	merged, changed, err := mergeIntoStore(db, tasks, storedBiases())
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr import: merge: %v\n", err)
-		return 1
-	}
-
-	nChanged := 0
-	if changed {
-		nChanged = len(changedTasks(before, merged))
-	}
-	fmt.Printf("imported %d task(s), %d changed\n", len(tasks), nChanged)
+	fmt.Printf("imported %d task(s), %d changed\n", len(tasks), res.added+res.updated)
 	return 0
+}
+
+// importResult counts what an import did to the store: tasks it did not have,
+// and tasks it had in an older version.
+type importResult struct{ added, updated int }
+
+// importTasks merges an export's tasks into the store — the sync merge, so it
+// never replaces anything wholesale and a second import of the same file
+// changes nothing. The CLI's `taskr import` and the Settings import share it,
+// so the two cannot disagree about what a file does.
+func importTasks(h *sql.DB, tasks []todo.Todo, b rank.Biases) (importResult, error) {
+	// Snapshot the pre-merge set so the result reports what the merge actually
+	// changed (new or edited), not a live-count delta: an import that only
+	// edits existing tasks leaves the count unchanged but still did work.
+	before, err := loadTodosForSync(h)
+	if err != nil {
+		return importResult{}, fmt.Errorf("load current: %w", err)
+	}
+	merged, changed, err := mergeIntoStore(h, tasks, b)
+	if err != nil {
+		return importResult{}, fmt.Errorf("merge: %w", err)
+	}
+	var res importResult
+	if !changed {
+		return res, nil
+	}
+	known := make(map[string]bool, len(before))
+	for i := range before {
+		known[before[i].ID] = true
+	}
+	for _, t := range changedTasks(before, merged) {
+		if known[t.ID] {
+			res.updated++
+		} else {
+			res.added++
+		}
+	}
+	return res, nil
+}
+
+// exportFileName is the file the Settings auto-export keeps current in the
+// folder it is given.
+const exportFileName = "taskr-export.json"
+
+// exportJSON is the export document for tasks as `taskr export` writes it:
+// the versioned envelope, indented, with a trailing newline.
+func exportJSON(tasks []todo.Todo, at time.Time) ([]byte, error) {
+	data, err := json.MarshalIndent(exportEnvelope{Version: 1, ExportedAt: at.UTC(), Tasks: tasks}, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(data, '\n'), nil
 }
 
 // parseExportData sniffs the leading non-whitespace byte to distinguish a

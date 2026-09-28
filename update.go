@@ -197,6 +197,17 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, clearErrAfter())
 		}
 		return m, tea.Batch(cmds...)
+	case exportTickMsg:
+		return m, m.exportTick()
+	case exportDoneMsg:
+		if msg.err != nil {
+			m.exportDirty = true // retried with the next change
+			m.flashError(fmt.Sprintf(tr("Auto-export failed: %v"), msg.err))
+			return m, clearErrAfter()
+		}
+		return m, nil
+	case importDoneMsg:
+		return m.handleImportDone(msg)
 	case reminderSentMsg:
 		if msg.err != nil {
 			// The reminder is the news, not the pop-up: keep it on screen and
@@ -234,12 +245,12 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// window. The save goroutine doesn't need to update this.
 				m.watcher.recordSelfSave()
 			}
-			return m, func() tea.Msg {
+			return m, tea.Batch(func() tea.Msg {
 				if err := repo.Save(dirty, tombstones); err != nil {
 					return saveErrMsg{err}
 				}
 				return saveDoneMsg{}
-			}
+			}, m.exportSoon())
 		}
 		return m, nil
 	case dbChangedMsg:
@@ -321,7 +332,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.markCacheDirty()
 		m.refreshCaches()
 		m.followTask(taskID)
-		return m, nil
+		return m, m.exportSoon() // another process changed the store
 	}
 
 	// All handler paths feed through the common tail below so the dirty
@@ -363,6 +374,10 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newModel, cmd = m.updatePalette(msg)
 	case modeEditStages:
 		newModel, cmd = m.updateEditStages(msg)
+	case modeEditExportFolder:
+		newModel, cmd = m.updateEditExportFolder(msg)
+	case modeImportFile:
+		newModel, cmd = m.updateImportFile(msg)
 	case modeEditSyncURL:
 		newModel, cmd = m.updateEditSyncURL(msg)
 	case modeEditSyncToken:
@@ -1694,6 +1709,7 @@ func (m *model) persistSettings() {
 
 		SubtaskTagsDisabled: !m.subtaskTags,
 		ReminderOff:         !m.reminderOn,
+		ExportFolder:        m.exportFolder,
 	}); err != nil {
 		m.flashError(fmt.Sprintf(tr("Error saving settings: %v"), err))
 	}
@@ -1931,6 +1947,10 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 
 func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 	switch m.settingsCursor {
+	case settingExportFolder:
+		return m.openExportFolderEditor()
+	case settingImportFile:
+		return m.openImportPrompt()
 	case settingStages:
 		m.mode = modeEditStages
 		m.textInput.SetValue(m.boardCfg.stagesDisplay())

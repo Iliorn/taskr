@@ -201,6 +201,24 @@ schtasks /create /sc minute /mo 15 /tn "taskr remind" /tr "\"%LOCALAPPDATA%\Prog
 window for a moment; if that is a bother, leaving the app running does the
 same job.
 
+## Export and import
+
+Settings → Export keeps a copy of all your tasks, finished ones included, in
+a folder you choose — handy in a OneDrive or Dropbox folder as a backup, or
+for another tool to read.
+
+- **Auto-export folder** — press enter, type or paste the folder (`tab`
+  completes folder names), and enter again. taskr writes
+  `taskr-export.json` there straight away, then keeps it current: within a
+  minute of a change, and again when you quit. Clear the path to turn it off.
+- **Import from file** — press enter and give the path to a taskr export
+  (`tab` completes). Its tasks are merged in: new ones are added, ones you
+  already have take the newer version, and nothing is deleted, so importing
+  the same file twice changes nothing. `u` takes the whole import back.
+
+The file is the same one `taskr export --include-done` prints, so the
+[command line](cli.md#export-and-import) reads and writes it too.
+
 ## Custom keybindings
 
 Every binding has an action name, so rebinding one is a line in

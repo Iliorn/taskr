@@ -633,7 +633,8 @@ func (m model) footerContentFor(w int) string {
 		modeAddSubtask, modeEditSubtask,
 		modeEditProjectInline, modeEditTimeEntry, modeAddTimeEntry,
 		modeEditSyncURL, modeEditSyncToken,
-		modeEditServerListen, modeEditServerToken, modeEditStages:
+		modeEditServerListen, modeEditServerToken, modeEditStages,
+		modeEditExportFolder, modeImportFile:
 		field := inputStyle.Width(w).Render(m.textInput.View())
 		if m.mode == modeInput && m.pane == paneList {
 			// Quick-add: on a blank input show the syntax reference (the keywords
@@ -651,6 +652,9 @@ func (m model) footerContentFor(w int) string {
 					helpStyle.Render("    "+truncate(quickAddHint(), w))
 			}
 			return field + "\n" + renderQuickAddPreview(m.textInput.Value(), w)
+		}
+		if m.mode == modeEditExportFolder || m.mode == modeImportFile {
+			return field + "\n" + helpStyle.Render("    "+truncate(tr("tab completes the name · enter confirms · esc cancels"), w))
 		}
 		if m.mode == modeEditStages {
 			// The last column holds the completed tasks whatever it is called,
