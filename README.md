@@ -9,513 +9,84 @@ A fast, keyboard-driven task manager for the terminal — built with Go and [Bub
 
 ---
 
-## Features
+taskr keeps your tasks in one fast list you drive entirely from the keyboard,
+and tells you which one to do next. It runs on Linux, macOS and Windows,
+keeps everything in a local file, and can sync between your machines through
+a small server you run yourself — no account, no cloud service.
 
-- **Tasks** — add, complete, delete, rename, set priority, size (S/M/L), due dates, start dates
-- **Sequencing engine** — a weighted score (deadline + priority + momentum + size + age) decides the next-best task automatically; cycle `s` to switch between Sequence / Due / Size sort. The Score column reads as a percentage of the current field (100% = the highest-scoring pending task), so it says how close to the top something is instead of quoting an unbounded number. Tune the weights in Settings (Relaxed / Balanced / Intense for each dimension), and press `w` on any task to see the points behind the percentage, their causes, the margins to the rows either side, and the moments the ranking moves on its own
-- **Dependency-aware ordering** — a task that blocks others inherits their urgency, so the prerequisite for an urgent task surfaces right above it (critical-path behaviour). In the list, `↥` marks a blocker (something depends on it) and `↧` marks a blocked task (waiting on an unfinished dependency)
-- **Calendar** — per-day activity timeline with project/tag roll-ups and a tracked-time heatmap; edit or delete entries in place
-- **Projects** — group tasks, Gantt timeline view. `enter` drills into a project's tasks, where the task keys (`d` done, `t` track, `p` priority, `r` rename, `x` delete, `enter` details) all work; `a` starts a new task already in that project, `x` on the project row clears the grouping off its tasks
-- **Tags** — tag tasks, rename/merge/delete globally, and work the tag's tasks in place: `enter` drills into them with the same task keys as the Tasks tab, `a` adds a task already carrying the tag, `f` shows the tag's tasks on the Tasks tab as a filter
-- **Board** — kanban view of your pending tasks: one column per stage, the last of which holds the completed ones. Every column name is yours to define, that last one included — edit them in Settings → "Board columns" (comma-separated), or in `"stages"` in `settings.json` (see [Data](#data) for where that lives); default Backlog / In progress / Review / Done. Renaming a column takes its cards with it. The last column is *done-ness itself* rather than a stage you can assign, so calling it "Shipped" changes the heading and nothing else: a card moved into it is completed exactly like `d` would, and neither the Stage row nor `--stage` can put a task there. `←/→` switch columns, `H`/`L` move the selected card between stages — into the last column completes the task, out of it reopens it (confirmed). `/` filters the cards with the same grammar the Tasks tab uses, so `#tag`, `@project` or plain text narrows every column at once. With more stages than fit — ten columns need a 204-column terminal — the board becomes a window that scrolls: `←/→` move the focus and bring the view along one column at a time, and the panel title says which slice you are on (`Workflow ‹ 3–8/11 ›`). Below three visible columns it falls back to the stacked list instead, which shows every stage at once. A task's stage is also editable from the detail pane: `←/→` on the **Stage** row move it between columns, the way the arrows change a value in Settings. Not using kanban at all? Settings → "Kanban board" removes the tab and the field together. Also `taskr edit <ref> --stage <name>` from the CLI
-- **Stats** — productivity overview with an activity heatmap
-- **Time tracking** — start/stop a timer per task (`t`), live elapsed display, runaway-timer guard
-- **Detail view** — per-task comments, dependencies, subtasks, notes (opens `$EDITOR`), plus a live score breakdown so you can see why a task ranks where it does
-- **Search** — live filter across tasks, projects and tags; fuzzy title matching (notes are matched as a substring) plus field filters (`#tag @project p:high due:<fri overdue`); the Stats tab follows the active filter, so `#tag` scopes every stat to that tag
-- **Command palette** — `ctrl+k` finds any action by name (fuzzy, ranked) and shows the key that performs it, so nothing is gated behind remembering a letter; an action belonging to another tab switches there first
-- **Undo** — multi-level undo for all mutations
-- **Settings** — three sequencing-bias knobs, theme, language (English / Dansk / Deutsch — the quick-add and search keywords speak it too), board columns, version, in-app self-update (tab 7)
+## What it does
 
-## Installation
+- **Tells you what's next.** Tasks are ranked by deadline, priority, what
+  you've been working on, size and age, and a task blocking something urgent
+  rises with it. Press `w` on any task to see why it ranks where it does.
+- **Tasks with the details you need** — due and start dates, priority, size,
+  tags, projects, subtasks, dependencies, comments, notes and repeating tasks.
+- **Quick entry.** `Buy milk #shopping due:friday p:high @home` sets it all in
+  one line.
+- **Several ways to look at the same tasks:** a calendar with tracked time,
+  projects with a timeline, tags, a kanban board, and a stats page.
+- **Time tracking** — start and stop a timer per task with `t`.
+- **A daily reminder** — a desktop notification of what's due today and
+  what's overdue.
+- **Sync** between computers, **undo** for every change, a **command palette**
+  (`ctrl+k`) so you never need to remember a key, and a **command line** for
+  scripting.
+- **In English, Danish or German**, with themes and rebindable keys.
 
-**macOS with Homebrew (recommended):**
+## Install
 
-```sh
-brew install iliorn/tap/taskr
-```
+| | |
+|---|---|
+| macOS | `brew install iliorn/tap/taskr` |
+| Windows | `scoop install https://github.com/Iliorn/taskr/releases/latest/download/taskr.json` |
+| Arch Linux | `yay -S taskr-bin` |
+| Linux / Windows binary | download from [Releases](https://github.com/iliorn/taskr/releases) |
+| Anywhere Go runs | `go install github.com/Iliorn/taskr@latest` |
 
-This builds the tagged source and installs the `taskr` terminal command. Update
-it with `brew update && brew upgrade taskr`; Taskr detects Homebrew installations
-and will point you to that command instead of trying to overwrite Homebrew's
-managed files.
+Once installed, taskr updates itself: Settings → "Update to latest release".
+[docs/install.md](docs/install.md) covers building from source and checking
+a download.
 
-**From source:**
+## Getting started
 
-```sh
-git clone https://github.com/iliorn/taskr
-cd taskr
-go mod tidy
-go build -ldflags "-X main.appVersion=$(git describe --tags --abbrev=0)" -o taskr .
-mv taskr ~/.local/bin/   # or anywhere on your PATH
-```
-
-**With Go:**
-
-```sh
-go install github.com/Iliorn/taskr@latest
-```
-
-Builds from source on any platform Go supports, including architectures the
-release page doesn't carry. It reports the module version it was installed at
-(`taskr --version`), because the Go toolchain stamps that into the binary even
-though no release tag was baked in with `-ldflags`.
-
-This is also the install with the strongest integrity guarantee. Go verifies
-every module against `sum.golang.org`, a public append-only transparency log —
-a hash that has been recorded there cannot be changed afterwards, not even by
-me. The release binaries carry a `SHA256SUMS` file, which is a weaker promise:
-it proves your download matches what the release workflow published, not that
-the publisher was honest. See [SECURITY.md](SECURITY.md#the-update-path) for
-what each check does and does not cover.
-
-**Verifying a release binary:**
-
-```sh
-curl -LO https://github.com/Iliorn/taskr/releases/latest/download/SHA256SUMS
-sha256sum -c SHA256SUMS --ignore-missing
-```
-
-That proves your download matches what the release published. To also prove
-*who* published it, verify the build provenance — every release binary is
-signed by the release workflow through Sigstore and recorded in a public
-transparency log:
-
-```sh
-gh attestation verify taskr --repo Iliorn/taskr
-```
-
-It names the workflow, commit and run that produced the file, and it is not
-something a stolen token can forge after the fact. See
-[SECURITY.md](SECURITY.md#the-update-path) for what each check covers.
-
-Release builds pass `-trimpath` with `CGO_ENABLED=0` and the Go version pinned
-in `go.mod`, so they are reproducible: check out the tag, run the same
-`go build` the [release workflow](.github/workflows/release.yml) does, and the
-hashes should match.
-
-**Arch Linux (AUR):**
-
-```sh
-yay -S taskr-bin        # or: paru -S taskr-bin
-```
-
-Installs the published binary along with the shell completions and the man
-page. The `PKGBUILD` is generated by the release workflow and attached to each
-release, so its checksums always match the release it describes.
-
-**Windows with Scoop:**
-
-```sh
-scoop install https://github.com/Iliorn/taskr/releases/latest/download/taskr.json
-```
-
-That URL always resolves to the newest release, so it never needs updating.
-Upgrade with `scoop update taskr`.
-
-**Pre-built binary** (Linux / Windows):
-
-Download the latest release from the [Releases](https://github.com/iliorn/taskr/releases) page:
-
-| Asset | Platform |
-|-------|----------|
-| `taskr` | Linux x64 |
-| `taskr-linux-arm64` | Linux arm64 (Raspberry Pi, ARM servers/VMs) |
-| `taskr.exe` | Windows x64 |
-| `SHA256SUMS` | checksums for the three binaries |
-| `taskr.json` | Scoop manifest (Windows) |
-| `PKGBUILD` | Arch Linux package recipe |
-
-Verify a download with `sha256sum --check --ignore-missing SHA256SUMS`.
-
-On Windows, notes editing uses `EDITOR` if set (`setx EDITOR hx`), falling back to notepad. On Linux and Windows, self-update (Settings tab → "Update to latest release") downloads the release asset straight from the GitHub API — no extra tooling required — and verifies its SHA-256 against the `SHA256SUMS` published with the release before installing it. It fails closed: a release without that file, without an entry for your platform's binary, or a download that hashes to something else installs nothing. (That is an integrity check, not a signature — it catches a truncated download or a proxy rewriting the response, not someone who can edit the release itself.) macOS and other Homebrew installations are pointed at `brew upgrade taskr` instead, since the binary there is a managed file.
-
-## Usage
-
-```sh
-taskr
-```
-
-### Keyboard shortcuts
+Run `taskr`. Press `a` to add a task, `d` to mark it done, `enter` to open
+it, `?` to see every key, and `ctrl+k` to find any action by name.
 
 | Key | Action |
 |-----|--------|
 | `a` | Add task |
-| `d` | Toggle done |
-| `t` | Start/stop time tracking |
-| `D` | Set / clear the due date (same prompt as the detail field) |
-| `r` | Rename |
-| `x` / `del` | Delete |
-| `n` | Edit notes in `$EDITOR` |
-| `f` | Focus mode (today + overdue) |
-| `h` | Toggle history |
-| `s` | Cycle sort: Sequence → Due → Size |
-| `w` | Why this rank — the points behind the percentage, their causes, the margins either side, what moves it next |
-| `/` | Search / filter |
-| `enter` | Open detail view |
+| `d` | Done |
+| `enter` | Details (comments, subtasks, dependencies, notes) |
+| `t` | Start/stop the timer |
+| `D` | Set the due date |
+| `/` | Search |
+| `f` | Focus: only today and overdue |
 | `u` | Undo |
-| `↑`/`↓` or `j`/`k` | Move the cursor (every list, the detail pane, the board, the calendar, settings) |
-| `tab` / `shift+tab` | Next / previous tab |
-| `1–7` | Jump straight to a tab (7 = Settings) |
-| `ctrl+k` | Command palette — find any action by name |
-| `?` | Show all shortcuts (`/` filters them) |
-
-On the Tags and Projects tabs, `enter` walks in one level at a time — row → its tasks → the selected task's detail — and `esc` walks back out the same way. While you're inside, the row-level keys act on the task under the cursor, exactly as they do on the Tasks tab.
-
-### Custom keybindings
-
-Every binding carries an action id, so rebinding one is a line in
-`settings.json` — `~/.config/taskr/settings.json` on a new Linux install, `~/.taskr/settings.json` on an older one (`taskr doctor` prints the path):
-
-```json
-{
-  "keys": {
-    "done": "D",
-    "search": "s",
-    "sort": "/"
-  }
-}
-```
-
-The keys are action ids (the full list is the `?` overlay — every row with a
-single-key binding), the values are keys. A rebind moves the action: the old key
-stops working, so it is free for something else, and the footer hints, the help
-overlay and the command palette all show the new key. Entries that name an
-unknown action, use a key that isn't a single key, or collide with another
-binding in the same view are ignored with a warning rather than leaving the
-action unreachable — as is `ctrl+c`, which always quits. Bindings written as a
-pair or a range (`←/→`, `H/L`) can't be rebound.
-
-### Quick-add syntax
-
-```
-Buy groceries #shopping due:friday p:high size:s @personal
-```
-
-Supports `#tag`, `due:date`, `p:high/medium/low`, `size:s/m/l`, `@project` inline when adding a task. Typing `#` or `@` offers your existing tags/projects (most recently used first) as chips under the field — `tab` inserts the highlighted one, `↑/↓` pick a different one — so you don't have to remember the exact spelling. Projects whose name contains a space aren't offered, since quick-add tokenises on whitespace; add those from the detail pane's `@` picker. Tags are lowercase slugs; whitespace entered in the tag editor is normalized to `-` (for example, `Deep Work` becomes `#deep-work`).
-
-### Search syntax
-
-The `/` filter tokenises on whitespace and ANDs the tokens together, reusing the quick-add vocabulary:
-
-```
-@work p:high due:<friday        # high-priority Work tasks due before Friday
-#urgent overdue                 # overdue tasks tagged urgent
-grcrs                           # fuzzy title match → "Buy groceries"
-```
-
-Supported tokens: `#tag`, `@project`, `p:high/medium/low`, `due:<date` / `due:>date` / `due:date` (`<=`/`>=` too), and the bare keyword `overdue`. Anything left over fuzzy-matches the title (a subsequence, so `dply` finds "Deploy release" — every letter must appear in order, which is why `grcrs` finds "Buy groceries" and `grcry` does not) or matches the notes as a plain substring — fuzzy matching over a whole note would hit almost anything.
-
-### Date formats
-
-`today` · `tomorrow` · `next week` · `monday` · `15-06-25` · `+3d` · `+2w` · `+1m`
-
-### Typing in your own language
-
-With the interface set to Dansk or Deutsch, the quick-add and search grammars
-accept that language's words too — `frist:imorgen p:høj størrelse:lille`,
-`fällig:freitag p:hoch überfällig` — and the help overlay and the input hints
-advertise those spellings rather than the English ones. The words come from the
-same translation table the interface renders from, so what is on screen is what
-parses.
-
-English keeps working everywhere, whatever the language is set to, and only
-input is localized: recurrence rules, tags and every other stored value stay in
-their canonical English form, so installs in different languages sync without
-translating anything. The CLI stays English on both sides — its help and output
-are English, so its input is too.
-
-## CLI
-
-`taskr` ships with a small command-line surface for scripting. Bare `taskr` still launches the TUI; pass a subcommand to drop into CLI mode:
-
-```sh
-taskr add "Buy milk" --size=s --due=tomorrow --p=high --tag=shopping
-taskr list                       # pending top-level tasks (table)
-taskr list --json --focus        # JSON, today + overdue only
-taskr list --stale=30d --sort=idle --wide   # backlog review: nothing touched in a month,
-                                 # longest-untouched first, with AGE and IDLE columns
-taskr list --unblocked-since=14d # tasks freed recently: every blocker done, the last one this fortnight
-taskr search RAM --word          # whole-word match ("RAM" won't match "Ramte"); --re for a regexp
-taskr top -n=5                   # top 5 by sequence score (percent of the current field)
-taskr show milk                  # full detail (incl. score breakdown + subtask IDs)
-taskr why milk                   # why it ranks there: each factor's cause, the margins to the
-                                 # tasks either side, and when the ranking shifts on its own
-taskr edit milk --p=high --add-tag=urgent --due=tomorrow
-taskr edit deploy --add-dep=sign-off   # depend on another task (refused if it would loop)
-taskr edit deploy --remove-dep=sign-off
-taskr edit a1b2 c3d4 e5f6 --project=hoth   # one change across several tasks (--title stays single-ref)
-taskr done milk                  # mark a task done
-taskr reopen milk                # move it back to pending (the counterpart to done)
-taskr delete milk                # soft delete (alias: taskr rm)
-taskr subtask milk "find receipt"   # create a subtask of "milk"
-taskr add "Deploy release" --depends="sign-off"   # block the new task until "sign-off" is done
-taskr start milk                 # start the time tracker
-taskr stop                       # stop the running tracker (no ref needed)
-taskr comment milk "blocked on review"
-taskr comment milk --edit=1 "still blocked, asked Sam"
-taskr comment milk --delete=2
-taskr stats                      # one-line summary
-taskr stats --tag=work           # same, scoped to tasks carrying a tag (also --project / --search)
-taskr stats --seq                # sequence miss analysis: which score dimension buried the
-                                 # tasks you finished anyway, plus a bias-tuning hint
-taskr stats --format=waybar      # Waybar-shaped JSON for a status-bar widget
-taskr export > backup.json       # versioned JSON snapshot of every live task
-taskr export --include-done > full.json  # include completed tasks
-taskr import backup.json         # merge an export file into the local store
-taskr import - < backup.json     # same, reading from stdin
-taskr completion fish > ~/.config/fish/completions/taskr.fish
-taskr man > ~/.local/share/man/man1/taskr.1
-taskr help
-```
-
-### The `--json` output is a contract
-
-`list`, `search`, `top`, `show`, `why`, `add`, `tags`, `projects`, `doctor`,
-`stats --format=json|waybar` and `export` all emit machine-readable JSON, and
-that shape is treated as an interface, not an implementation detail:
-
-- **Fields are not renamed or removed in a patch or minor release.** New fields
-  may be added at any time, so parse defensively — read the keys you need and
-  ignore the rest.
-- **A removal or rename waits for a major version** and is called out in the
-  [changelog](CHANGELOG.md).
-- The shape of every one of those commands is pinned by golden files
-  (`testdata/json_contract/`) that a test compares on every CI run, so a field
-  cannot disappear through a refactor without someone deciding to let it. The
-  test reports exactly which key paths appeared and vanished.
-
-Two shapes worth knowing about when you script against them: timestamps are
-always present (Go's `omitempty` does not apply to time values, so an unset
-date is the zero time `0001-01-01T00:00:00Z`, not a missing key), and `size` is
-absent for medium-sized tasks, which is the default.
-
-### Shell completion and man page
-
-`taskr completion bash|zsh|fish` prints a completion script; `taskr man` prints a
-roff man page. Both are generated from the same command table the CLI dispatches
-on, so they can't fall behind a new subcommand or flag — a test compares the
-table against the flags each command actually defines. Task refs complete from
-the live store (via `taskr list`), so tab-completing `taskr done ` offers your
-open tasks.
-
-```sh
-# bash
-taskr completion bash > /etc/bash_completion.d/taskr
-# zsh
-taskr completion zsh > "${fpath[1]}/_taskr"
-# fish
-taskr completion fish > ~/.config/fish/completions/taskr.fish
-# man page
-taskr man > ~/.local/share/man/man1/taskr.1
-```
-
-**Task references** can be either a UUID prefix (`60b9`) or a case-insensitive substring of the title (`milk`). ID-prefix takes precedence so scripts stay deterministic. Ambiguous references fail with exit code 2 and list every match with its short ID for easy disambiguation:
-
-```
-$ taskr done milk
-title "milk" matches 2 tasks:
-    21a164e1  Buy milk
-    2ffe832a  Buy more milk
-```
-
-Flags can appear before or after the reference. `taskr top --json` and `taskr show --json` are the recommended hooks for scripts and other tools. The CLI reads the same `settings.json` as the TUI, so ranking matches your current bias settings.
-
-The TUI and CLI share the SQLite store. Concurrent reads are safe; writes serialize via SQLite's busy-timeout. A running TUI watches the data directory and live-reloads when the CLI (or a sync from another device) mutates the database, so scripted changes show up without restarting — a reload is briefly deferred while you're mid-edit so it can't clobber in-flight input.
-
-## Export / import
-
-`taskr export` writes a versioned JSON envelope to stdout:
-
-```json
-{
-  "version": 1,
-  "exported_at": "2026-07-10T12:00:00Z",
-  "tasks": [ ... ]
-}
-```
-
-Each task in `tasks` is a `todo.Todo` object with these key fields:
-
-| Field | Type | Notes |
-|-------|------|-------|
-| `id` | string (UUID) | stable identifier, used as the merge key |
-| `title` | string | |
-| `status` | int | 0 = pending, 1 = done |
-| `priority` | int | 0 = low, 1 = medium, 2 = high |
-| `size` | int | 0 = medium, 1 = small, 2 = large |
-| `created_at` / `modified_at` | RFC 3339 | LWW conflict resolution uses `modified_at` |
-| `due_date` | RFC 3339 (omitempty) | |
-| `project` | string (omitempty) | |
-| `tags` | string array (omitempty) | |
-| `dependencies` | string array (omitempty) | IDs of tasks this one is blocked by |
-| `comments` | array (omitempty) | each has `id`, `text`, `created_at` |
-| `deleted` / `deleted_at` | bool / RFC 3339 | soft-delete tombstones for sync |
-| `parent_id` | string (omitempty) | set on subtasks |
-
-`taskr import <file>` (or `taskr import -` for stdin) merges the file's tasks into
-the local store using the same tombstone-aware, idempotent merge engine that powers
-device sync. Import **never replaces** the store — it folds the imported tasks in —
-so running `export | import` is always safe and importing the same file twice is a
-no-op. Both the versioned envelope and a legacy bare JSON array are accepted.
-
-### When something feels slow
-
-**On Windows**, a keystroke arriving after a pause used to wait up to 16 ms
-before taskr heard about it: Bubble Tea reads the console by polling it in a
-loop with a 16 ms sleep between attempts, and during a burst the loop spins
-instead of sleeping — so the first key felt late and the rest did not. taskr
-now opens `CONIN$` as its own file, which selects Bubble Tea's other input
-path: a blocking read of the console's escape-sequence stream that returns the
-moment a key arrives. `TASKR_WIN_CONSOLE_INPUT=1` goes back to the polling
-reader if the escape-sequence path ever misbehaves on a particular console.
-Because resize events only arrive on the polling path, the Windows build asks
-the console for its size four times a second instead.
-
-If input still feels laggy, try `TASKR_NO_WATCH=1 taskr`. The filesystem watcher is the only thing
-taskr does continuously against the operating system — a watch on the data directory
-that wakes on every write, including the app's own — and it is the first
-variable worth removing. If that fixes it, the cost is in the watch (a synced
-or network home directory, an antivirus scanning the database on every write);
-the trade-off is that the TUI stops noticing `taskr add` from another shell
-until it next reloads.
-
-If it doesn't, measure:
-
-`TASKR_TRACE=1 taskr` writes one line per frame to `trace.log` in the state directory
-(`TASKR_TRACE=/path/to/file` picks another location). Each line carries the
-wall clock, the gap since the previous frame, how long `Update` and `View`
-took, the GC cycle count, and which message caused it:
-
-```
-# time                     gap_ms  update_ms  view_ms  gc  msg
-12:53:42.841      1.0      0.066    0.915   8  key down
-12:53:42.863     15.9      0.641    1.632   9  main.reloadedMsg
-```
-
-Quitting writes a summary, which is usually the whole report:
-
-```
-# summary over 412 frames (ms)
-#   update  p50   0.090   p95   0.140   max   1.900
-#   view    p50   0.900   p95   1.300   max   4.100
-```
-
-That separates the three things a delay can be: our own compute (`update_ms`
-or `view_ms` is large), a garbage collection (the frame is slow *and* `gc`
-moved), or everything outside the app — terminal, ssh, the input reader — in
-which case the frame is fast and the time sits in `gap_ms`. Tracing is off
-unless the variable is set, and a full buffer drops entries rather than
-slowing the loop.
-
-## Data
-
-Tasks live in a SQLite database (WAL mode). Where it and the rest of taskr's
-files go depends on what it finds, in this order:
-
-1. **`TASKR_HOME`**, if set — everything in that one directory. For people who
-   would rather have a single path to back up than a tidy split.
-2. **`~/.taskr/`**, if that directory already exists — every version before
-   v1.32 put everything there, and it keeps working exactly as it did. Nothing
-   moves, nothing is migrated. Move the directory yourself if you want the
-   layout below.
-3. Otherwise the **platform convention**:
-
-| | Linux / BSD | macOS | Windows |
-|---|---|---|---|
-| Config — `settings.json`, `sync.json` | `$XDG_CONFIG_HOME`, default `~/.config/taskr` | `~/Library/Application Support/taskr` | `%APPDATA%\taskr` |
-| Data — `tasks.db` | `$XDG_DATA_HOME`, default `~/.local/share/taskr` | `~/Library/Application Support/taskr` | `%LOCALAPPDATA%\taskr` |
-| State — undo history, sync state, logs | `$XDG_STATE_HOME`, default `~/.local/state/taskr` | `~/Library/Application Support/taskr` | `%LOCALAPPDATA%\taskr` |
-| Cache — the `$EDITOR` scratch file | `$XDG_CACHE_HOME`, default `~/.cache/taskr` | `~/Library/Caches/taskr` | `%LOCALAPPDATA%\taskr` |
-
-An explicitly exported `XDG_*` variable wins on every platform, including macOS
-and Windows — if you set it, you meant it. `taskr doctor` prints the directories
-it resolved, which is the quickest way to see which of the three rules applied.
-
-On first launch a legacy `tasks.json` next to the database is imported and then
-left in place as a backup.
-
-A store that a **newer taskr** has already migrated will not open with an older
-binary — it says which schema it found and which one it knows, rather than
-coming up on an empty list over a full database. Update taskr, or restore the
-`tasks.db-pre-migration-*.bak` the upgrade wrote next to it.
-
-If taskr ever crashes, it writes `crash-<timestamp>.log` to the state directory
-above — the stack trace plus the build, platform, terminal size and what was on
-screen — and flushes any edits the 300ms save debounce still owed before it
-exits. The newest five are kept. Attaching one to an issue is the whole bug
-report.
-
-## Sync
-
-taskr can sync tasks across devices through a small **self-hosted** server — one
-authoritative merge point, no third-party service. The same binary is both client
-and server.
-
-### Run a server
-
-On the machine that should host the canonical store (e.g. a home server reachable
-over Tailscale/LAN):
-
-```sh
-taskr serve --listen 100.x.y.z:8765 --token "$(openssl rand -hex 32)"
-# or: TASKR_SYNC_TOKEN=… taskr serve --listen 100.x.y.z:8765
-```
-
-A token is **mandatory** — taskr refuses to run unauthenticated. `--listen`
-defaults to `127.0.0.1:8765`; bind to a Tailscale/LAN address to reach it from
-other devices. Tailscale already encrypts the link; anywhere else, give the
-server a certificate and it serves https itself:
-
-```sh
-taskr serve --listen 0.0.0.0:8765 --tls-cert cert.pem --tls-key key.pem
-taskr sync --url https://tasks.example.com:8765 --save
-```
-
-The pair is re-read when the files change, so a certificate renewed in place
-(`tailscale cert`, Let's Encrypt) is picked up without a restart. The server
-persists to its own `tasks.db` and exposes:
-
-- `POST /v1/sync` — full-snapshot sync (Bearer token)
-- `GET  /v1/health` — liveness check
-- `GET  /v1/events` — Server-Sent Events "doorbell" so clients pull in real time
-
-Sync bodies are gzip-compressed (about 87% smaller), negotiated per server so
-clients and servers of different versions keep working together.
-
-To keep it running, wrap it in a `systemd --user` unit with the token in an
-`EnvironmentFile` (mode 600) and enable lingering.
-
-### Point a client at it
-
-```sh
-taskr sync --url http://100.x.y.z:8765 --token "<token>" --save
-```
-
-`--save` writes the URL + token to `sync.json` in the config directory so future syncs need no
-flags; `TASKR_SYNC_URL` / `TASKR_SYNC_TOKEN` work too. Once configured, the TUI
-auto-syncs (on launch/exit, on a periodic tick, and live via SSE), and CLI
-mutations sync best-effort in the background. Set `"auto_sync": false` in
-`sync.json` to require manual `taskr sync`. The local SQLite store is always the
-source of truth — network failures never block the UI.
-
-You can also manage all of this from the **Settings tab**: toggle auto-sync, edit
-the server URL/token inline (token masked), run "Sync now", and (v1.17+) flip the
-local instance into server mode.
-
-### How merge works
-
-Sync is UUID-keyed with last-writer-wins on scalars (by `ModifiedAt`), union of
-child collections (comments/time-entries) by UUID, and soft-delete
-tombstones so a deletion propagates instead of the row reappearing. Edit-vs-delete
-conflicts surface as a brief toast, and the losing version is appended to
-`sync.log` in the state directory for recovery. Clock-based LWW assumes roughly synced clocks
-(NTP); only tasks sync, not `settings.json`.
+| `tab` / `1–7` | Switch tab |
+| `?` | All shortcuts |
+
+When adding a task, `#tag`, `@project`, `due:friday`, `p:high` and `size:s`
+fill in the details, and the same words work in search: `/` then
+`@work overdue` shows your overdue work tasks. Dates can be `today`,
+`tomorrow`, `monday`, `+3d`, `15-06-25` and more.
+
+## Learn more
+
+- [Using taskr](docs/guide.md) — every tab, search, the board, the daily
+  reminder, and custom keys
+- [Command line](docs/cli.md) — `taskr add`, `list`, `done`, JSON output,
+  export and import
+- [Sync between devices](docs/sync.md) — running a server and connecting
+  your machines
+- [Files and troubleshooting](docs/troubleshooting.md) — where data lives,
+  backups, crashes, and slowness
+- [Changelog](CHANGELOG.md) — what changed in each release
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the build/test commands and the
-conventions worth knowing before a pull request;
-[ARCHITECTURE.md](ARCHITECTURE.md) is the architecture tour. Notable changes are in [CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for building and testing, and
+[ARCHITECTURE.md](ARCHITECTURE.md) for how taskr is put together.
+Security issues: [SECURITY.md](SECURITY.md).
 
 ## License
 
