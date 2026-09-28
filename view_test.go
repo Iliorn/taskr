@@ -1206,7 +1206,8 @@ func TestTheHelpAndThePaletteFindEachOther(t *testing.T) {
 // — ▶ in the lists, > on the board, → in Settings and the pickers — which read
 // as three kinds of selection rather than one idea drawn three ways. Every
 // surface renders cursorMark now, and a new list that invents its own glyph
-// fails here.
+// fails here. Task rows are the one exception, pinned by
+// TestTaskRowsMarkTheCursorByHighlightAlone.
 func TestEveryListMarksItsCursorTheSameWay(t *testing.T) {
 	a := todo.New("alpha")
 	a.AddTag("home")
@@ -1221,7 +1222,6 @@ func TestEveryListMarksItsCursorTheSameWay(t *testing.T) {
 		name string
 		set  func(*model)
 	}{
-		{"task list", func(m *model) { m.switchTab(tabTasks) }},
 		{"detail pane", func(m *model) {
 			m.switchTab(tabTasks)
 			m.pane = paneDetail
@@ -1263,6 +1263,45 @@ func TestEveryListMarksItsCursorTheSameWay(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// Task rows show the cursor by their full-width highlight alone, and their
+// gutter holds the subtask fold sign, set apart from the status box.
+func TestTaskRowsMarkTheCursorByHighlightAlone(t *testing.T) {
+	parent := todo.New("Plan the trip")
+	sub := todo.New("Book flights")
+	sub.ParentID = parent.ID
+	plain := todo.New("Water the plants")
+	done := todo.New("Old errand")
+	done.Status = todo.Done
+	done.CompletedAt = time.Now()
+
+	m := modelWithTasks(t, parent, sub, plain, done)
+	rows := func() string {
+		m.markCacheDirty()
+		m.ensureCache()
+		return ansi.Strip(m.View())
+	}
+	out := rows()
+	for _, want := range []string{"+ [ ] Plan the trip", "  [ ] Water the plants"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("task list lacks %q:\n%s", want, out)
+		}
+	}
+	m.expandedTasks[parent.ID] = true
+	out = rows()
+	if !strings.Contains(out, "- [ ] Plan the trip") || !strings.Contains(out, "└ [ ] Book flights") {
+		t.Errorf("expanded parent should show - and its subtask:\n%s", out)
+	}
+	m.cursor = 1 // the subtask row
+	if out = rows(); strings.Contains(out, strings.TrimSpace(cursorMark)) {
+		t.Errorf("a selected subtask row drew %q:\n%s", strings.TrimSpace(cursorMark), out)
+	}
+	m.showHistory = true
+	m.cursor = 0
+	if out = rows(); !strings.Contains(out, "Old errand") || strings.Contains(out, strings.TrimSpace(cursorMark)) {
+		t.Errorf("the history list should show the done task without %q:\n%s", strings.TrimSpace(cursorMark), out)
 	}
 }
 

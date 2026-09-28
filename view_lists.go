@@ -940,11 +940,7 @@ func (m model) renderHistoryList() string {
 
 func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, cols listCols) string {
 	titleW := cols.titleW
-	cursorStr := cursorGap
 	selected := index == cursor && active
-	if selected {
-		cursorStr = cursorMark
-	}
 	dueVal := ""
 	if !t.DueDate.IsZero() {
 		dueVal = t.DueDate.Format("02-01-06")
@@ -962,7 +958,7 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 		rowStyle, metaStyle = fastSelectedRow, fastSelectedDim
 	}
 	var r rowBuf
-	r.add(rowStyle, cursorStr+"[")
+	r.add(rowStyle, cursorGap+"[")
 	r.add(fastCheckDone, "✓")
 	r.add(rowStyle, "] ")
 	r.add(rowStyle, titleCol)
@@ -997,9 +993,6 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 	}
 	cursorStr := cursorGap
 	selected := flatIndex == cursor && active
-	if selected {
-		cursorStr = cursorMark
-	}
 	check := "[ ]"
 	if sub.Status == todo.Done {
 		check = "[✓]"
@@ -1163,11 +1156,7 @@ func taskRowPalette(t *todo.Todo, hasOverdueDep, selected bool) rowPalette {
 
 func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
 	titleW := cols.titleW
-	cursorStr := cursorGap
 	selected := index == cursor && active
-	if selected {
-		cursorStr = cursorMark
-	}
 	// The status box holds one fact: where this task stands. Overdue outranks
 	// started because it is the one that wants a decision — you already know
 	// you started it. Blocked is not in here any more: the sort puts blocked
@@ -1181,10 +1170,9 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	case len(t.TimeEntries) > 0:
 		checkbox = "[>]" // in progress: time has been logged against it
 	}
-	// +/- rather than a triangle: the row already opens with the ▶ cursor, and
-	// a second triangle one cell later read as a second cursor — two arrows on
-	// the same row, one of which does not move. The tree convention says the
-	// same thing without borrowing the cursor's shape.
+	// The gutter holds the fold sign: + for a task whose subtasks are hidden,
+	// - for one showing them. Task rows carry no cursor mark (see cursorMark):
+	// the gutter is the one place the sign has room, set apart from the box.
 	foldIcon := " "
 	if m.subtaskCount(t.ID) > 0 {
 		if m.expandedTasks[t.ID] {
@@ -1216,7 +1204,7 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	label := fitTaskRowLabel(prefix, text, badges, titleW-listColGap)
 
 	var r rowBuf
-	r.add(pal.status, cursorStr+checkbox+foldIcon)
+	r.add(pal.status, foldIcon+" "+checkbox+" ")
 	r.add(pal.status, padRight(label, titleW))
 	if cols.showLast {
 		// Score reads as a percent of the current field (rank/score.go): "82%"

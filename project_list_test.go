@@ -98,9 +98,9 @@ func TestProjectDrillUsesTaskRenderer(t *testing.T) {
 		t.Errorf("h should list the done task:\n%s", out)
 	}
 
-	// The cursor marker must appear (cursor starts at 0 = Alpha task).
-	if !strings.Contains(out, "▶") {
-		t.Errorf("drilled-in view missing cursor marker ▶")
+	// Drawn by the task renderer: status box in the gutter, then the title.
+	if !strings.Contains(out, "  [ ] Alpha task") {
+		t.Errorf("drilled-in view does not draw task rows:\n%s", out)
 	}
 
 	// The Gantt "Timeline" header should appear in the right column.

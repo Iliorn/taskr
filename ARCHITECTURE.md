@@ -559,9 +559,11 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
 - **A task row is two tones.** `renderTaskLineWithSet` builds rows through
   `rowBuf`, which counts width on the unstyled text and coalesces runs by SGR
   prefix/suffix. `taskRowPalette` gives `status` (normal/overdue/blocked/timer,
-  with the selection background) to cursor, checkbox and title, and `meta`
+  with the selection background) to gutter, checkbox and title, and `meta`
   (dim) to Score, Size and Project. The Due cell takes the status tone only
   when the task is late, so red in that column means the date is the problem.
+  Task rows (active, subtask, history) draw no `cursorMark`: the full-width
+  selection band marks the row, and the gutter holds the fold sign (`+`/`-`).
 - **Titles clip; badges don't.** `taskRowLabel` splits a label into prefix,
   title text and badges (`!`, `↥`, `↧`, `↻`, `(1/2)`); `fitTaskRowLabel` clips
   only the text. `refreshTaskColMetrics` sizes the column from the same

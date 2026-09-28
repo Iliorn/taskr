@@ -11,9 +11,11 @@ const (
 
 	// cursorMark is the one marker for "the row you are on", and cursorGap the
 	// blank of the same width for the rows you are not. Every list the app
-	// draws uses them — task rows, history, subtasks, tags, projects, the
-	// calendar timeline, every section of the detail pane, board cards, the
-	// Settings rows, the pickers and the palette.
+	// draws uses them — tags, projects, the calendar timeline, every section
+	// of the detail pane, board cards, the Settings rows, the pickers and the
+	// palette. Task rows (active, subtask and history) are the exception: the
+	// selected one is highlighted across the pane's full width, which says
+	// "you are here" on its own, and their gutter holds the subtask fold sign.
 	//
 	// They were once three different glyphs (▶ in the lists, > on the board, →
 	// in Settings and the pickers), which read as three different kinds of

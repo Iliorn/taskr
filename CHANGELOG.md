@@ -21,6 +21,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 ### Changed
 
 - The 26-week Stats chart numbers every week, not every fourth.
+- Task rows show `+`/`-` for subtasks left of the status box; the highlight alone marks the cursor.
 
 ## [1.39.1] - 2026-09-28
 
