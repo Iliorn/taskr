@@ -140,9 +140,10 @@ func TestTagDetailCapsAndOrders(t *testing.T) {
 
 	content := strings.TrimRight(strings.Join(m.buildTagDetailLines(), "\n"), "\n")
 	got := len(strings.Split(content, "\n"))
-	maxVisible := m.termHeight*detailMaxHeightPct/100 - 2
-	if got > maxVisible {
-		t.Errorf("detail produced %d lines, exceeds cap %d:\n%s", got, maxVisible, content)
+	// The pane's own share of the height, which View windows it to: a line
+	// past it is cut behind a scroll marker, and the notice with it.
+	if _, paneLines := m.tagStackRows(); got > paneLines {
+		t.Errorf("detail produced %d lines, exceeds the pane's %d:\n%s", got, paneLines, content)
 	}
 	if !strings.Contains(content, "more") {
 		t.Errorf("expected an 'and N more' notice, got:\n%s", content)

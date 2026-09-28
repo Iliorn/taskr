@@ -338,6 +338,31 @@ func (m model) listVisible() int {
 	return minListHeight
 }
 
+// taskListRows is how many rows a task list shows under its column header —
+// the Tasks list, its history, and a tag's or project's list — measured the
+// way View lays the screen out: the window less the header, the footer as
+// drawn, a stacked task detail, and the panel's two borders, the blank row
+// under its title and the column header. The renderers draw this many rows and
+// the scroll clamps keep the cursor inside them, so the selected row can never
+// sit below the panel's edge.
+func (m model) taskListRows() int {
+	footer := 0
+	if f := m.footerContentFor(m.termWidth - 6); f != "" {
+		footer = strings.Count(f, "\n") + 1
+	}
+	return max(m.termHeight-minHeaderLines-footer-m.stackedTaskDetailLines()-4, 1)
+}
+
+// stackedTaskDetailLines is the height of a task detail stacked under the list:
+// its document up to the viewport View windows it to, plus the panel's
+// borders and title row. Zero when the detail sits beside the list or is shut.
+func (m model) stackedTaskDetailLines() int {
+	if !m.detailVisible() || (m.tab != tabTasks && !m.drillDetailOpen()) {
+		return 0
+	}
+	return min(m.detailContentHeight(), m.detailViewportHeight()) + detailBorderLines
+}
+
 func (m model) estimateListHeight() int {
 	headerH := minHeaderLines
 	if m.err != "" {
@@ -355,12 +380,6 @@ func (m model) estimateListHeight() int {
 	detailH := 0
 	if m.detailVisible() && m.tab != tabStats {
 		detailH = 13
-		if m.tab == tabTasks || m.drillDetailOpen() {
-			// A task's stacked detail is as tall as its document, up to the
-			// viewport View windows it to, plus the panel's borders and title
-			// row — so the list above it is sized to the rows it really gets.
-			detailH = min(m.detailContentHeight(), m.detailViewportHeight()) + detailBorderLines
-		}
 	}
 	available := m.termHeight - headerH - footerHeight - detailH - 3
 	if available < minListHeight {
@@ -432,19 +451,10 @@ func (m model) projectListOuter(listH int) int {
 
 // drillTaskVisibleRows is the number of task rows a drill-in list shows when it
 // is the list panel: the drilled-in project, and a tag's or project's list
-// beside or above an opened task. The panel's inner height equals
-// estimateListHeight() (same formula as buildListContent's content height,
-// including the shared blank row below the border title, and less a stacked
-// detail when one is open), and the renderer emits one header line above the
-// task rows, so the task row count is estimateListHeight()-1. Both
-// renderDrillTaskList and the drill offset clamp read this helper, so the two
-// windows agree exactly and no off-by-one is possible.
+// beside or above an opened task. It is taskListRows, as the panel is the
+// Tasks list's; both renderDrillTaskList and the drill offset clamp read it.
 func (m model) drillTaskVisibleRows() int {
-	rows := m.estimateListHeight() - 1
-	if rows < 1 {
-		rows = 1
-	}
-	return rows
+	return m.taskListRows()
 }
 
 func (m model) maxDetailHeight() int {

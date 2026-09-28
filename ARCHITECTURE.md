@@ -272,6 +272,14 @@ added there. `invariants_test.go` drives randomized keys (fixed seeds) and
 checks this plus the store's invariants (`subtaskOf` ↔ `ParentID`,
 `runningTimers` ↔ open time entries, no self-dependency) after every key.
 
+It also scrolls each list's window (`listOffset`) to the cursor, against the
+rows the list really draws: `taskListRows` for the task lists, measured the
+way View lays the screen out (header, footer as drawn, a stacked detail, the
+panel's chrome). The renderers draw that many rows, so a list and its clamp
+cannot disagree about where the panel ends and leave the selected row just
+below it. `scroll_test.go` walks every list, and random keys, checking the
+selected row is in the frame.
+
 The **drill-in lists** (Tags/Projects → enter, `drillTaskList`) are not cached;
 they re-derive on every read, so `updateList` captures the task ID before a key
 and re-follows it after. One level up, the group itself is pinned by name

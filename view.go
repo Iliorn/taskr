@@ -2075,6 +2075,20 @@ func (m model) groupPaneLines(s *groupSummary, tasks []todo.Todo, sel int, extra
 	lines := append(m.groupPaneHead(s, m.termWidth-8), extra...)
 	lines = append(lines, "")
 	fold := m.groupFoldNote(s)
+	// On a short pane the summary above gives way, last line first, until the
+	// column header fits with a few rows around the cursor (one row when the
+	// list is only a preview) and the line under them that says what is not
+	// shown. The counts line goes last.
+	want := min(len(tasks), 1)
+	if sel >= 0 {
+		want = min(len(tasks), 3)
+	}
+	if len(tasks) > want || fold != "" {
+		want++
+	}
+	for len(lines) > 1 && maxLines-len(lines)-1 < want {
+		lines = lines[:len(lines)-1]
+	}
 	if len(tasks) == 0 {
 		lines = append(lines, dimStyle.Render(tr("  Nothing open here.")))
 		if fold != "" {
@@ -2090,7 +2104,7 @@ func (m model) groupPaneLines(s *groupSummary, tasks []todo.Todo, sel int, extra
 	start, shown := 0, min(len(tasks), budget)
 	more := 0
 	if len(tasks) > budget {
-		shown = max(budget-1, 1) // a line for the "and N more" notice
+		shown = max(budget-1, 1) // a line for the "and N more" notice, when there is one to spare
 		if sel >= shown {
 			start = sel - shown + 1
 		}
@@ -2099,9 +2113,9 @@ func (m model) groupPaneLines(s *groupSummary, tasks []todo.Todo, sel int, extra
 	}
 	lines = append(lines, m.renderGroupTaskRows(tasks, start, shown, sel, showProject)...)
 	switch {
-	case more > 0:
+	case more > 0 && len(lines) < maxLines:
 		lines = append(lines, dimStyle.Render(fmt.Sprintf(tr("  … and %d more"), more)))
-	case fold != "":
+	case more == 0 && fold != "" && len(lines) < maxLines:
 		lines = append(lines, fold)
 	}
 	return lines

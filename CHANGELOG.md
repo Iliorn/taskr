@@ -30,7 +30,10 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ### Fixed
 
-- With the detail pane at the bottom, the list above it keeps the opened task in view.
+- A long list no longer scrolls the selected task out of sight, with the detail open or not.
+- Inside a tag on a short window, its tasks take the room before its summary does.
+- Opening a project with only a few tasks no longer shows an empty list.
+- Leaving a tag's task list keeps that tag in view in the list above.
 
 ## [1.39.1] - 2026-09-28
 

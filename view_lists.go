@@ -829,7 +829,7 @@ func (m model) renderTaskList() string {
 	// Cursor/total and sort status are shown in the Overview border title.
 	renderListHeader(b, m.termWidth, false, cols, "")
 
-	maxVisible := m.estimateListHeight()
+	maxVisible := m.taskListRows()
 	startIdx := m.listOffset
 	if startIdx > total {
 		startIdx = 0
@@ -932,7 +932,7 @@ func (m model) renderHistoryList() string {
 	// Cursor/total and sort status are shown in the History border title.
 	renderListHeader(b, m.termWidth, true, cols, "")
 
-	maxVisible := m.estimateListHeight()
+	maxVisible := m.taskListRows()
 	startIdx := m.listOffset
 	endIdx := startIdx + maxVisible
 	if endIdx > len(completed) {
