@@ -15,7 +15,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ### Changed
 
-- Projects works like Tags: enter walks the tasks under the project list, with the timeline beside them.
+- Projects works like Tags: enter walks the tasks under the project list, timeline beside them.
 
 ## [1.40.0] - 2026-09-28
 
