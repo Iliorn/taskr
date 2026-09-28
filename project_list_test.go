@@ -187,7 +187,7 @@ func TestProjectDrillCursorScrolls(t *testing.T) {
 	// The Gantt preview (right column) legitimately shows all task labels
 	// regardless of scroll position, so we check only the left column directly.
 	projects := m.allProjectsForList()
-	taskListLines := m.renderProjectDrillTaskList(m.getProjectTasks(projects[m.projectCursor]), nil)
+	taskListLines := m.renderDrillTaskList(m.getProjectTasks(projects[m.projectCursor]), nil, false, m.drillTaskVisibleRows())
 	leftCol := strings.Join(taskListLines, "\n")
 	if strings.Contains(leftCol, "Task 00") {
 		t.Errorf("first task 'Task 00' should have scrolled out of the task-list column, but it's still visible:\n%s", leftCol)

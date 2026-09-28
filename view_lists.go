@@ -1283,22 +1283,25 @@ func (m model) renderProjectListContent(projects []string) string {
 	})
 }
 
-// renderProjectDrillTaskList renders the task list of the drilled-in Projects
-// view, windowed to the rows the clamp keeps the cursor in, with the done
-// tasks' fold line under the last row when there is room for it. m.termWidth
-// is already narrowed to the column's share by the caller.
-func (m model) renderProjectDrillTaskList(tasks []todo.Todo, s *groupSummary) []string {
+// renderDrillTaskList renders a drill-in task list as the list panel (the
+// drilled-in project, or a tag's or project's list beside an opened task),
+// windowed to the rows the clamp keeps the cursor in, with the done tasks'
+// fold line under the last row when there is room for it. The Project column
+// is shown where the rows can differ in it. visible is drillTaskVisibleRows
+// read on the full model: m.termWidth is already narrowed to the column's
+// share by the caller, and a narrowed copy answers height questions for a
+// layout that is not the one on screen.
+func (m model) renderDrillTaskList(tasks []todo.Todo, s *groupSummary, showProject bool, visible int) []string {
 	fold := m.groupFoldNote(s)
 	if len(tasks) == 0 {
-		lines := []string{dimStyle.Render(tr("  Nothing open in this project."))}
+		lines := []string{dimStyle.Render(tr("  Nothing open here."))}
 		if fold != "" {
 			lines = append(lines, fold)
 		}
 		return lines
 	}
-	visible := m.projectDrillTaskVisibleRows()
 	start := min(m.listOffset, len(tasks))
-	lines := m.renderGroupTaskRows(tasks, start, visible, m.cursor, false)
+	lines := m.renderGroupTaskRows(tasks, start, visible, m.cursor, showProject)
 	if fold != "" && start+visible >= len(tasks) && len(tasks)-start < visible {
 		lines = append(lines, fold)
 	}

@@ -26,6 +26,11 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Inside a tag or project, `←/→` fold and unfold subtasks, and unfolding shows all of them.
 - Moving a task to another project takes its subtasks along.
 - Task titles inside a tag or project get the room they need instead of being cut short.
+- A task opened inside a tag or project follows the Detail pane setting, as on the Tasks tab.
+
+### Fixed
+
+- With the detail pane at the bottom, the list above it keeps the opened task in view.
 
 ## [1.39.1] - 2026-09-28
 

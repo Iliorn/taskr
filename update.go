@@ -1085,14 +1085,16 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tabProjects:
 		if m.projectTaskMode {
-			// Drilled in: clamp against projectDrillTaskVisibleRows so the window
+			// Drilled in: clamp against drillTaskVisibleRows so the window
 			// size matches the renderer (which subtracts 1 row for the header).
-			m.clampListOffsetVisible(m.cursor, m.currentProjectTaskLen(), m.projectDrillTaskVisibleRows())
+			m.clampListOffsetVisible(m.cursor, m.currentProjectTaskLen(), m.drillTaskVisibleRows())
 		} else {
 			m.clampListOffsetVisible(m.projectCursor, len(m.allProjectsForList()), m.projectListVisibleRows())
 		}
 	case tabTags:
-		m.clampListOffsetVisible(m.tagTabCursor, len(m.getFilteredTagsForTab()), m.tagListVisibleRows())
+		if !m.drillDetailOpen() { // clampCursors windows the list beside an opened task
+			m.clampListOffsetVisible(m.tagTabCursor, len(m.getFilteredTagsForTab()), m.tagListVisibleRows())
+		}
 	}
 	return m, flashCmd
 }
@@ -1214,6 +1216,11 @@ func (m *model) clampCursors() {
 	m.clampDetailScroll()
 	if tasks, drilled := m.drillTaskList(); drilled {
 		clamp(&m.cursor, len(tasks))
+		if m.drillDetailOpen() {
+			// The list beside or above an opened task is windowed by
+			// listOffset, which the tag list was using a moment ago.
+			m.clampListOffsetVisible(m.cursor, len(tasks), m.drillTaskVisibleRows())
+		}
 		return // the drill owns m.cursor while it is open
 	}
 	// Turning the server off takes its detail rows off the pane; a cursor left
@@ -1224,6 +1231,11 @@ func (m *model) clampCursors() {
 	switch m.tab {
 	case tabTasks:
 		clamp(&m.cursor, m.currentTaskListLen())
+		if m.detailVisible() && !m.showHistory {
+			// Opening the detail under the list shrinks it; keep the open
+			// task among the rows it still shows.
+			m.clampListOffsetVisible(m.cursor, m.visibleActiveLen(), m.estimateListHeight()-1)
+		}
 	case tabCalendar:
 		clamp(&m.calendar.entryCursor, len(m.activitiesForDay(m.calendar.selected)))
 	case tabBoard:

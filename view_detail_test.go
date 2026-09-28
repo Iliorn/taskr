@@ -608,3 +608,93 @@ func TestGanttMarksUndatedTasksByPriority(t *testing.T) {
 		}
 	}
 }
+
+// detail_position is one setting for every tab: a task opened from the Tasks
+// list, a tag's list or a project's list takes the same place on screen.
+func TestDetailPositionIsTheSameOnEveryTab(t *testing.T) {
+	task := todo.New("Plan the trip")
+	task.Project = "house"
+	task.AddTag("home")
+	open := map[tab]func(model) model{
+		tabTasks: func(m model) model { return sendKey(t, m, "enter") },
+		tabTags:  func(m model) model { return sendKey(t, sendKey(t, m, "enter"), "enter") },
+		tabProjects: func(m model) model {
+			return sendKey(t, sendKey(t, m, "enter"), "enter")
+		},
+	}
+	for _, pos := range []detailPos{detailRight, detailLeft, detailBottom} {
+		for _, tb := range []tab{tabTasks, tabTags, tabProjects} {
+			m := modelWithTasks(t, task)
+			m.termWidth, m.termHeight = 130, 30
+			m.detailPos = pos
+			m.switchTab(tb)
+			m = open[tb](m)
+			if m.pane != paneDetail {
+				t.Fatalf("%v: enter did not open the detail", tb)
+			}
+			lines := strings.Split(ansi.Strip(m.View()), "\n")
+			// The panel titles: the detail's is the task, the list's says Overview.
+			detailRow, detailCol, listRow, listCol := -1, -1, -1, -1
+			for i, l := range lines {
+				if c := strings.Index(l, "╭─ Plan the trip"); c >= 0 && detailRow < 0 {
+					detailRow, detailCol = i, c
+				}
+				if c := strings.Index(l, "╭─ Overview"); c >= 0 && listRow < 0 {
+					listRow, listCol = i, c
+				}
+			}
+			if detailRow < 0 || listRow < 0 {
+				t.Fatalf("pos=%s tab=%v: panels not found:\n%s", pos, tb, strings.Join(lines, "\n"))
+			}
+			var ok bool
+			switch pos {
+			case detailRight:
+				ok = detailRow == listRow && detailCol > listCol
+			case detailLeft:
+				ok = detailRow == listRow && detailCol < listCol
+			case detailBottom:
+				ok = detailRow > listRow
+			}
+			if !ok {
+				t.Errorf("pos=%s tab=%v: detail at row %d col %d, list at row %d col %d",
+					pos, tb, detailRow, detailCol, listRow, listCol)
+			}
+		}
+	}
+}
+
+// A long list keeps the opened task in view: a tag's or project's list at every
+// detail placement, and the Tasks list above a detail at the bottom, which
+// shrinks it as it opens.
+func TestOpenedTaskStaysInViewInALongList(t *testing.T) {
+	var tasks []todo.Todo
+	for i := range 40 {
+		td := todo.New(fmt.Sprintf("Task %02d", i))
+		td.AddTag("home")
+		td.Project = "house"
+		tasks = append(tasks, td)
+	}
+	for _, pos := range []detailPos{detailRight, detailLeft, detailBottom} {
+		for _, tb := range []tab{tabTasks, tabTags, tabProjects} {
+			if tb == tabTasks && pos != detailBottom {
+				continue
+			}
+			m := modelWithTasks(t, tasks...)
+			m.termWidth, m.termHeight = 130, 30
+			m.detailPos = pos
+			m.switchTab(tb)
+			if tb != tabTasks {
+				m = sendKey(t, m, "enter")
+			}
+			for range 35 {
+				m = sendKey(t, m, "down")
+			}
+			want := m.currentTodo().Title
+			m = sendKey(t, m, "enter")
+			out := ansi.Strip(m.View())
+			if strings.Count(out, want) < 2 { // the list row and the detail's title
+				t.Errorf("pos=%s tab=%v: %q is not in the list beside its detail:\n%s", pos, tb, want, out)
+			}
+		}
+	}
+}

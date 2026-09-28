@@ -328,14 +328,14 @@ func (m model) View() string {
 	// panel is hidden until the user explicitly opens it. In side-by-side
 	// mode the Tasks detail renders inside buildListContent's right column
 	// instead of as a stacked panel.
-	switch m.tab {
-	case tabTasks:
+	// A task opened from a tag's or project's list follows the Tasks tab.
+	switch {
+	case m.tab == tabTasks || m.drillDetailOpen():
 		showDetail = showDetail && m.pane == paneDetail && !m.sideBySide()
-	case tabProjects:
-		// When drilled into a project, the right column of buildProjectDrillContent
-		// handles both browsing (Gantt) and the open-task case (task detail), so no
-		// stacked panel is needed. Outside drill mode, a stacked panel is shown when
-		// the user has pressed Enter (pane == paneDetail).
+	case m.tab == tabProjects:
+		// Drilled into a project, the right column of buildProjectDrillContent
+		// holds the timeline, so no stacked panel is needed. Outside drill
+		// mode, a stacked panel is shown when the user has pressed Enter.
 		showDetail = showDetail && m.pane == paneDetail && !m.projectTaskMode
 	}
 
@@ -363,7 +363,7 @@ func (m model) View() string {
 			// unclipped line pushes the whole box past the terminal edge on a
 			// narrow window — every other pane clips for the same reason.
 			detailBody := strings.Split(m.applyDetailScroll(detailContent), "\n")
-			if m.tab == tabTags {
+			if m.tab == tabTags && !m.drillDetailOpen() {
 				// The stacked tag pane takes its share of the height whole, so
 				// the list above it is only as tall as its rows (tagStackRows).
 				_, paneLines := m.tagStackRows()
@@ -928,10 +928,9 @@ func (m model) renderKeyHints(w int) string {
 
 func (m model) buildDetailContent() string {
 	switch {
-	// A task opened out of the tag drill takes the pane over — same as the
-	// Projects tab, where the right column swaps the Gantt for the task
-	// detail. Without this the pane would keep showing the tag summary while
-	// the detail keyset was live.
+	// A task opened out of the tag drill shows its detail, wherever
+	// detail_position puts it; without this the pane would keep showing the
+	// tag summary while the detail keyset was live.
 	case m.tab == tabTags && m.pane == paneDetail && m.currentTodo() != nil:
 		t := m.currentTodo()
 		return m.renderDetailPage1(t) + "\n" +
@@ -958,9 +957,61 @@ func (m model) buildDetailContent() string {
 	}
 }
 
+// drillListLines is the tag's or project's task list the cursor is walking,
+// drawn as a list panel of visible rows (see drillDetailOpen).
+func (m model) drillListLines(visible int) []string {
+	tasks, _ := m.drillTaskList()
+	var sum *groupSummary
+	if m.tab == tabTags {
+		if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) {
+			sum = m.cache.tagGroups[tags[m.tagTabCursor]]
+		}
+		return m.renderDrillTaskList(tasks, sum, true, visible)
+	}
+	if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
+		sum = m.cache.projectGroups[projects[m.projectCursor]]
+	}
+	return m.renderDrillTaskList(tasks, sum, false, visible)
+}
+
+// drillListTitle names the drill list's panel after its group, as the
+// drilled-in project's list is.
+func (m model) drillListTitle() string {
+	if m.tab == tabTags {
+		tags := m.getFilteredTagsForTab()
+		switch {
+		case m.tagTabCursor >= len(tags):
+			return tr("Overview")
+		case tags[m.tagTabCursor] == untaggedKey:
+			return tr("Overview") + " · " + tr("(untagged)")
+		}
+		return tr("Overview") + " · #" + tags[m.tagTabCursor]
+	}
+	if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
+		return projectTasksTitle(projects[m.projectCursor])
+	}
+	return projectTasksTitle("")
+}
+
 // ── List content builder ──────────────────────────────────────────────────────
 
 func (m model) buildListContent(w, outerH int) string {
+	if m.drillDetailOpen() {
+		if m.sideBySide() {
+			return m.buildSideBySide(w, outerH)
+		}
+		// Detail at the bottom: the group's list is the list panel, and View
+		// stacks the detail under it as on the Tasks tab.
+		innerH := max(panelContentHeight(outerH), 0)
+		lines := m.drillListLines(m.drillTaskVisibleRows())
+		for len(lines) < innerH {
+			lines = append(lines, "")
+		}
+		lines = lines[:innerH]
+		truncateLines(lines, w-2)
+		panel := listPanelStyle.Width(w).Render(strings.Join(lines, "\n"))
+		return withBorderTitle(panel, m.drillListTitle(), w, false)
+	}
 	if m.tab == tabProjects {
 		return m.buildProjectListContent(w, outerH)
 	}
@@ -1018,6 +1069,12 @@ func (m model) buildSideBySide(w, outerH int) string {
 	// the right column, so size the list copy as the list pane.
 	lm.pane = paneList
 	listLines := lm.buildListLines()
+	listTitle := m.listPanelTitle()
+	if m.drillDetailOpen() {
+		// The copy's pane is the list's, so it no longer counts as open; ask
+		// the real model and render the drill list through the narrowed copy.
+		listLines, listTitle = lm.drillListLines(m.drillTaskVisibleRows()), m.drillListTitle()
+	}
 
 	dm := m
 	dm.termWidth = detailW + 6
@@ -1049,7 +1106,7 @@ func (m model) buildSideBySide(w, outerH int) string {
 	}
 	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
 	detailPanel := detailStyle.Width(detailW).Render(strings.Join(detailLines, "\n"))
-	listPanel = withBorderTitle(listPanel, m.listPanelTitle(), listW, !detailFocused)
+	listPanel = withBorderTitle(listPanel, listTitle, listW, !detailFocused)
 	detailPanel = withBorderTitle(detailPanel, m.detailPanelTitle(), detailW, detailFocused)
 	// Only the order changes with the placement: both columns are already
 	// sized and clipped, so mirroring the layout is one swap rather than a
@@ -1160,40 +1217,25 @@ func (m model) projectPane(projects []string, maxLines int) (lines []string, tit
 	return lines[:end], title
 }
 
-// buildProjectDrillContent renders the drilled-in project view as two columns:
-// the task list (left, using the same row renderer as the Tasks tab) and,
-// in the right column, either the timeline strip (when browsing the list,
-// pane == paneList; see renderGanttStrip — bars only, aligned row-for-row with
-// the list) or the task detail (when the user has pressed Enter on a task,
-// pane == paneDetail). Mirrors buildSideBySide's contract — each column
-// is rendered through a model copy whose termWidth is the column's share, and
-// the focused pane carries the accent border.
 // buildProjectDrillNarrow is the single-column drilled-in project view for
-// windows too small to carry the Gantt beside the task list: the list (or the
-// open task's detail) takes the whole width, with no floor to overflow past.
+// windows too small to carry the timeline beside the task list, or projects
+// with nothing dated to draw: the list takes the whole width, with no floor to
+// overflow past. An opened task is laid out by drillDetailOpen's path instead.
 func (m model) buildProjectDrillNarrow(projects []string, w, innerH int) string {
 	if w < 0 {
 		w = 0 // borders only; a floor here would push the box past the window
 	}
 	cm := m
 	cm.termWidth = w + 6 // the column renderers take termWidth-6 as their width
-	var lines []string
 	title := projectTasksTitle("")
+	var tasks []todo.Todo
+	var sum *groupSummary
 	if m.projectCursor < len(projects) {
 		title = projectTasksTitle(projects[m.projectCursor])
+		tasks = m.getProjectTasks(projects[m.projectCursor])
+		sum = m.cache.projectGroups[projects[m.projectCursor]]
 	}
-	if m.pane == paneDetail {
-		lines = strings.Split(cm.applyDetailScrollN(cm.buildDetailContent(), innerH), "\n")
-		title = cm.detailPanelTitle()
-	} else {
-		var tasks []todo.Todo
-		var sum *groupSummary
-		if m.projectCursor < len(projects) {
-			tasks = m.getProjectTasks(projects[m.projectCursor])
-			sum = m.cache.projectGroups[projects[m.projectCursor]]
-		}
-		lines = cm.renderProjectDrillTaskList(tasks, sum)
-	}
+	lines := cm.renderDrillTaskList(tasks, sum, false, m.drillTaskVisibleRows())
 	if len(lines) > innerH {
 		lines = lines[:innerH]
 	}
@@ -1205,6 +1247,11 @@ func (m model) buildProjectDrillNarrow(projects []string, w, innerH int) string 
 	return withBorderTitle(panel, title, w, true)
 }
 
+// buildProjectDrillContent renders the drilled-in project view as two columns:
+// the task list (left, using the same row renderer as the Tasks tab) and the
+// timeline strip on the right (renderGanttStrip — bars only, aligned
+// row-for-row with the list). Mirrors buildSideBySide's contract: each column
+// is rendered through a model copy whose termWidth is the column's share.
 func (m model) buildProjectDrillContent(projects []string, w, outerH int) string {
 	innerH := panelContentHeight(outerH)
 	var tasks []todo.Todo
@@ -1217,8 +1264,8 @@ func (m model) buildProjectDrillContent(projects []string, w, outerH int) string
 	}
 	// Without dated open work the timeline strip has nothing ahead of it to
 	// draw, so the list takes the whole width instead of sharing it with an
-	// empty column. An opened task still gets the right column for its detail.
-	if w < projDrillMinWidth || (m.pane != paneDetail && !hasDatedOpenTask(tasks)) {
+	// empty column.
+	if w < projDrillMinWidth || !hasDatedOpenTask(tasks) {
 		return m.buildProjectDrillNarrow(projects, w, innerH)
 	}
 
@@ -1241,25 +1288,14 @@ func (m model) buildProjectDrillContent(projects []string, w, outerH int) string
 	// taskListCols and renderTaskLineWithSet see the correct terminal width.
 	lm := m
 	lm.termWidth = listW + 6 // View hands buildListContent w = termWidth-6
-	listLines := lm.renderProjectDrillTaskList(tasks, sum)
+	listLines := lm.renderDrillTaskList(tasks, sum, false, m.drillTaskVisibleRows())
 
-	// Right column: task detail when the user has opened a task (pane ==
-	// paneDetail), Gantt chart otherwise (pane == paneList, always-on preview).
+	// Beside the list the timeline is a strip: no label column, and windowed
+	// to the rows the list is showing, so the two columns read as one table
+	// split by a border instead of two panes listing the same tasks.
 	dm := m
 	dm.termWidth = ganttW + 6
-	var rightLines []string
-	if m.pane == paneDetail {
-		if m.currentTodo() != nil {
-			rightLines = strings.Split(dm.applyDetailScrollN(dm.buildDetailContent(), innerH), "\n")
-		} else {
-			rightLines = []string{"", dimStyle.Render(tr("  No task selected."))}
-		}
-	} else {
-		// Beside the list the timeline is a strip: no label column, and windowed
-		// to the rows the list is showing, so the two columns read as one table
-		// split by a border instead of two panes listing the same tasks.
-		rightLines = dm.renderGanttStrip(tasks, ganttW-2, m.listOffset, m.projectDrillTaskVisibleRows())
-	}
+	rightLines := dm.renderGanttStrip(tasks, ganttW-2, m.listOffset, m.drillTaskVisibleRows())
 
 	fitLines := func(lines []string, h, contentW int) []string {
 		if len(lines) > h {
@@ -1274,25 +1310,10 @@ func (m model) buildProjectDrillContent(projects []string, w, outerH int) string
 	listLines = fitLines(listLines, innerH, listW-2)
 	rightLines = fitLines(rightLines, innerH, ganttW-2)
 
-	// Focused-pane accent border: list gets the accent when browsing; the right
-	// column gets it when the user is viewing a task's detail.
-	listStyle := listPanelFocusedStyle
-	ganttStyle := detailPanelStyle
-	if m.pane == paneDetail {
-		listStyle = listPanelStyle
-		ganttStyle = detailPanelFocusedStyle
-	}
-
-	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
-	rightPanel := ganttStyle.Width(ganttW).Render(strings.Join(rightLines, "\n"))
-	listPanel = withBorderTitle(listPanel, projectTasksTitle(project), listW, m.pane == paneList)
-	// The right border names either the opened task or the selected project's
-	// timeline, matching the contextual title on the left task pane.
-	if m.pane == paneDetail {
-		rightPanel = withBorderTitle(rightPanel, m.detailPanelTitle(), ganttW, true)
-	} else {
-		rightPanel = withBorderTitle(rightPanel, projectTimelineTitle(project), ganttW, false)
-	}
+	listPanel := listPanelFocusedStyle.Width(listW).Render(strings.Join(listLines, "\n"))
+	rightPanel := detailPanelStyle.Width(ganttW).Render(strings.Join(rightLines, "\n"))
+	listPanel = withBorderTitle(listPanel, projectTasksTitle(project), listW, true)
+	rightPanel = withBorderTitle(rightPanel, projectTimelineTitle(project), ganttW, false)
 	return lipgloss.JoinHorizontal(lipgloss.Top, listPanel, rightPanel)
 }
 

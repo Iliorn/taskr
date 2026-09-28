@@ -837,7 +837,7 @@ func (m model) renderGanttStrip(tasks []todo.Todo, chartW, from, count int) []st
 	barRunes := bufs.bar[:chartW]
 	barColors := bufs.color[:chartW]
 
-	// Same clamp as renderProjectDrillTaskList's, so the two windows start on
+	// Same clamp as renderDrillTaskList's, so the two windows start on
 	// the same task even when the offset is stale.
 	if from < 0 || from > len(tasks) {
 		from = 0

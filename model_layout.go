@@ -120,7 +120,7 @@ func detailScrollWindow(offset, cursor, visible, total int) int {
 // never a cursor scrolled out of sight.
 func (m model) detailViewportHeight() int {
 	h := m.termHeight*detailMaxHeightPct/100 - 2
-	if m.sideBySide() || (m.tab == tabProjects && m.projectTaskMode) {
+	if m.sideBySide() {
 		// A full-height column beside the list: the window less the fixed
 		// header and footer, less the panel's two borders and the blank row
 		// under its border title. Deliberately not listVisible(), which
@@ -253,19 +253,29 @@ func trDetailPos(p detailPos) string {
 	return tr("Right")
 }
 
-// sideBySide reports whether the current tab renders list and detail as two
-// columns (list full-height on one side, the task detail on the other). Only
-// the Tasks tab does; below the width threshold it falls back to the stacked
-// enter-to-open detail, and so does every width once the user has put the
-// detail at the bottom. Tags and Projects always stack their pane under the
-// list (splitStack): it holds a task list or a timeline, which read best at
-// full width. Which side the detail takes is buildSideBySide's business; here
-// it is only two columns or one, because that is the question every height
-// helper is asking.
+// sideBySide reports whether the current view renders list and detail as two
+// columns (list full-height on one side, the task detail on the other). The
+// Tasks tab does, and so does a task opened from a tag's or project's list
+// (drillDetailOpen), which is laid out the same way; below the width threshold
+// both fall back to the stacked enter-to-open detail, and so does every width
+// once the user has put the detail at the bottom. The Tags and Projects rows
+// otherwise stack their pane under the list (splitStack): it holds a task list
+// or a timeline, which read best at full width. Which side the detail takes is
+// buildSideBySide's business; here it is only two columns or one, because that
+// is the question every height helper is asking.
 func (m model) sideBySide() bool {
 	return m.detailPos != detailBottom &&
-		m.tab == tabTasks &&
+		(m.tab == tabTasks || m.drillDetailOpen()) &&
 		m.termWidth >= sideBySideMinWidth
+}
+
+// drillDetailOpen reports whether a task opened from a tag's or project's task
+// list has the detail pane. That view is the Tasks tab's layout with the
+// group's list in the list's place, so detail_position means one thing on
+// every tab.
+func (m model) drillDetailOpen() bool {
+	_, drilled := m.drillTaskList()
+	return drilled && m.pane == paneDetail
 }
 
 // detailVisible reports whether the detail pane will be rendered as its own
@@ -277,15 +287,18 @@ func (m model) detailVisible() bool {
 	if m.mode != modeNormal {
 		return false
 	}
+	if m.drillDetailOpen() {
+		return !m.sideBySide()
+	}
 	switch m.tab {
 	case tabTasks:
 		return m.pane == paneDetail && !m.sideBySide()
 	case tabTags:
 		return true // always-on preview, stacked under the list
 	case tabProjects:
-		// When drilled in, buildProjectDrillContent's right column shows either the
-		// Gantt (paneList) or the task detail (paneDetail), so no stacked panel is
-		// needed. Outside drill mode, show the stacked panel when pane == paneDetail.
+		// Drilled in, the right column holds the timeline and an opened task
+		// is drillDetailOpen's. Outside drill mode, show the stacked panel when
+		// pane == paneDetail.
 		return m.pane == paneDetail && !m.projectTaskMode
 	case tabSettings, tabBoard:
 		return false
@@ -342,6 +355,12 @@ func (m model) estimateListHeight() int {
 	detailH := 0
 	if m.detailVisible() && m.tab != tabStats {
 		detailH = 13
+		if m.tab == tabTasks || m.drillDetailOpen() {
+			// A task's stacked detail is as tall as its document, up to the
+			// viewport View windows it to, plus the panel's borders and title
+			// row — so the list above it is sized to the rows it really gets.
+			detailH = min(m.detailContentHeight(), m.detailViewportHeight()) + detailBorderLines
+		}
 	}
 	available := m.termHeight - headerH - footerHeight - detailH - 3
 	if available < minListHeight {
@@ -411,15 +430,16 @@ func (m model) projectListOuter(listH int) int {
 	return splitStack(listH, len(projects)+1+detailBorderLines, paneNeed)
 }
 
-// projectDrillTaskVisibleRows is the number of task rows shown in the left
-// column of the drilled-in Projects view. The left panel inner height equals
+// drillTaskVisibleRows is the number of task rows a drill-in list shows when it
+// is the list panel: the drilled-in project, and a tag's or project's list
+// beside or above an opened task. The panel's inner height equals
 // estimateListHeight() (same formula as buildListContent's content height,
-// including the shared blank row below the border title),
-// and the renderer emits one header line above the task rows, so the task row
-// count is estimateListHeight()-1. Both renderProjectDrillTaskList and the
-// projectTaskMode offset clamp read this helper, so the two windows agree
-// exactly and no off-by-one is possible.
-func (m model) projectDrillTaskVisibleRows() int {
+// including the shared blank row below the border title, and less a stacked
+// detail when one is open), and the renderer emits one header line above the
+// task rows, so the task row count is estimateListHeight()-1. Both
+// renderDrillTaskList and the drill offset clamp read this helper, so the two
+// windows agree exactly and no off-by-one is possible.
+func (m model) drillTaskVisibleRows() int {
 	rows := m.estimateListHeight() - 1
 	if rows < 1 {
 		rows = 1
