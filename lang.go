@@ -654,6 +654,9 @@ var daTranslations = map[string]string{
 	"Top 5 with these weights:": "Top 5 med disse vægte:",
 	"Score resync failed: %v":   "Genberegning af score mislykkedes: %v",
 
+	// ── Adding tasks ──
+	"A task needs a title": "En opgave skal have en titel",
+
 	// ── Reminders ──
 	"%d due today":                    "%d forfalder i dag",
 	"Desktop notification failed: %v": "Skrivebordsnotifikation mislykkedes: %v",
@@ -1275,6 +1278,9 @@ var deTranslations = map[string]string{
 	"Bottom":                    "Unten",
 	"Top 5 with these weights:": "Top 5 mit diesen Gewichten:",
 	"Score resync failed: %v":   "Punkte-Neuberechnung fehlgeschlagen: %v",
+
+	// ── Adding tasks ──
+	"A task needs a title": "Eine Aufgabe braucht einen Titel",
 
 	// ── Reminders ──
 	"%d due today":                    "%d heute fällig",

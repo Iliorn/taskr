@@ -409,3 +409,43 @@ func TestCLIShowPrintsEverySection(t *testing.T) {
 		t.Errorf("a done task has no score to show:\n%s", out)
 	}
 }
+
+// A title made of nothing but tokens (or nothing at all) is refused rather
+// than stored as a task with no name to find it by.
+func TestCLIAddRefusesAnEmptyTitle(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	for _, args := range [][]string{{""}, {"   "}, {"#work", "p:high"}} {
+		var code int
+		captureStderr(t, func() { code = cliAdd(args) })
+		if code != 2 {
+			t.Errorf("add %q: exit %d, want 2", args, code)
+		}
+	}
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(todos) != 0 {
+		t.Errorf("stored %d task(s) without a title", len(todos))
+	}
+}
+
+// Output a script depends on refuses a bad request instead of printing
+// something else: a misspelled stats format, a top with no rows.
+func TestCLIRefusesBadOutputRequests(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	for _, c := range []struct {
+		run  func([]string) int
+		args []string
+	}{
+		{cliStats, []string{"--format=bogus"}},
+		{cliTop, []string{"-n=0"}},
+		{cliTop, []string{"-n=-3"}},
+	} {
+		var code int
+		captureStderr(t, func() { code = c.run(c.args) })
+		if code != 2 {
+			t.Errorf("%v: exit %d, want 2", c.args, code)
+		}
+	}
+}

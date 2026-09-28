@@ -335,6 +335,14 @@ func cliStats(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	switch strings.ToLower(*format) {
+	case "text", "json", "waybar":
+	default:
+		// A status-bar script that misspells the format would otherwise get
+		// the text line and fail to parse it, far from the cause.
+		fmt.Fprintf(os.Stderr, "taskr stats: unknown --format %q (use text|json|waybar)\n", *format)
+		return 2
+	}
 	repo, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)

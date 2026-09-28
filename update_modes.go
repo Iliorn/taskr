@@ -18,6 +18,12 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch key.String() {
 		case "enter":
 			val := m.textInput.Value()
+			if m.pane == paneList && strings.TrimSpace(val) != "" && parseQuickAdd(val).title == "" {
+				// Only tokens, nothing to call the task: keep the field open so
+				// the title can go in front of them.
+				m.flashError(tr("A task needs a title"))
+				return m, clearErrAfter()
+			}
 			m.mode = modeNormal
 			if m.pane == paneList {
 				if val != "" {

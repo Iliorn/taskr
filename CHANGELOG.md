@@ -34,6 +34,8 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Inside a tag on a short window, its tasks take the room before its summary does.
 - Opening a project with only a few tasks no longer shows an empty list.
 - Leaving a tag's task list keeps that tag in view in the list above.
+- A task can no longer be added without a title, from the app or `taskr add`.
+- `taskr stats --format` and `taskr top -n` refuse values they can't honour instead of guessing.
 
 ## [1.39.1] - 2026-09-28
 

@@ -143,6 +143,10 @@ func cliAdd(args []string) int {
 	anyTokenDeps := false
 	for i, ti := range titles {
 		parsedTitles[i] = parseQuickAdd(ti)
+		if parsedTitles[i].title == "" {
+			fmt.Fprintf(os.Stderr, "taskr add: title required (%q has nothing but tokens)\n", strings.TrimSpace(ti))
+			return 2
+		}
 		if len(parsedTitles[i].deps) > 0 {
 			anyTokenDeps = true
 		}

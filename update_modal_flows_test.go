@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -437,4 +438,22 @@ func tagRowIndex(t *testing.T, m model, tag string) int {
 	}
 	t.Fatalf("tag %q is not on the Tags tab; rows are %v", tag, m.getFilteredTagsForTab())
 	return 0
+}
+
+// Quick-add with only tokens has nothing to call the task: the field stays
+// open with a hint, and nothing is stored.
+func TestScriptQuickAddNeedsATitle(t *testing.T) {
+	m := modelWithTasks(t)
+	m = sendKey(t, m, "a")
+	m = script(t, m, "#work", "enter")
+	if n := len(m.allTodos()); n != 0 {
+		t.Fatalf("stored %d task(s) from a title-less quick-add", n)
+	}
+	if m.mode != modeInput || !strings.Contains(m.err, "title") {
+		t.Errorf("mode = %v, toast = %q; want the field still open and a hint", m.mode, m.err)
+	}
+	m = script(t, m, " home", "enter") // a title may follow the tokens
+	if tasks := m.allTodos(); len(tasks) != 1 || tasks[0].Title != "Home" || !slices.Contains(tasks[0].Tags, "work") {
+		t.Errorf("finishing the title stored %+v", tasks)
+	}
 }

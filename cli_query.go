@@ -291,6 +291,10 @@ func cliTop(args []string) int {
 	if err := fs.Parse(flagArgs); err != nil {
 		return 2
 	}
+	if *n < 1 {
+		fmt.Fprintln(os.Stderr, "taskr top: -n must be at least 1")
+		return 2
+	}
 	repo, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
