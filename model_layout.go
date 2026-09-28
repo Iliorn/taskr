@@ -151,21 +151,10 @@ func (m *model) clampDetailScroll() {
 
 // ── List offset clamping ──────────────────────────────────────────────────────
 
-func (m *model) clampListOffset(listLen int) {
-	m.clampListOffsetFor(m.cursor, listLen)
-}
-
-// clampListOffsetFor scrolls m.listOffset so the given cursor row stays within
-// the visible window. The Tasks/Projects lists track m.cursor; the Tags and
-// Lists that keep their own cursor pass it in here.
-func (m *model) clampListOffsetFor(cursor, listLen int) {
-	m.clampListOffsetVisible(cursor, listLen, m.listVisible())
-}
-
 // clampListOffsetVisible keeps listOffset so `cursor` stays within the next
-// `visible` rows. Most tabs fill the whole list area (visible = listVisible),
-// but the Projects tab's list shares space with the Gantt preview, so it passes
-// its own smaller count via projectListVisibleRows.
+// `visible` rows: the rows the list's renderer draws, which each caller in
+// clampCursors passes (taskListRows, tagListVisibleRows,
+// projectListVisibleRows).
 func (m *model) clampListOffsetVisible(cursor, listLen, visible int) {
 	if visible < 1 {
 		visible = 1
