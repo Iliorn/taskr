@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -237,8 +238,9 @@ func TestTagsTabNarrowNoWrap(t *testing.T) {
 }
 
 // tagTaskList is what both the tag pane and the drill cursor read, so its
-// order is a contract: open tasks ranked highest first, an open subtask in the
-// tag right under its open parent, and the done tasks only when shown, last.
+// order is a contract: open tasks ranked highest first, subtasks folded under
+// their parent as on the Tasks tab (all of them once unfolded, tagged or
+// not), and the done tasks only when shown, last.
 func TestTagTaskListOrder(t *testing.T) {
 	beta := todo.New("Beta urgent")
 	beta.AddTag("home")
@@ -252,8 +254,9 @@ func TestTagTaskListOrder(t *testing.T) {
 	sub := todo.NewSubtask("Subtask", alpha.ID)
 	sub.AddTag("home")
 	bareSub := todo.NewSubtask("Bare subtask", elsewhere.ID)
+	untaggedStep := todo.NewSubtask("Untagged step", alpha.ID)
 
-	m := modelWithTasks(t, beta, alpha, finished, elsewhere, sub, bareSub)
+	m := modelWithTasks(t, beta, alpha, finished, elsewhere, sub, bareSub, untaggedStep)
 
 	titles := func(tasks []todo.Todo) []string {
 		var out []string
@@ -262,13 +265,21 @@ func TestTagTaskListOrder(t *testing.T) {
 		}
 		return out
 	}
-	want := []string{"Beta urgent", "Alpha routine", "Subtask"}
+	want := []string{"Beta urgent", "Alpha routine"}
 	if got := titles(m.tagTaskList("home")); !reflect.DeepEqual(got, want) {
-		t.Errorf("tagTaskList = %v, want %v", got, want)
+		t.Errorf("folded, tagTaskList = %v, want %v", got, want)
 	}
-	if nested := groupNestedRows(m.tagTaskList("home")); !reflect.DeepEqual(nested, []bool{false, false, true}) {
-		t.Errorf("nesting = %v, want only the subtask indented", nested)
+
+	m.expandedTasks[alpha.ID] = true
+	got := titles(m.tagTaskList("home"))
+	if len(got) != 4 || got[0] != "Beta urgent" || got[1] != "Alpha routine" ||
+		!slices.Contains(got[2:], "Subtask") || !slices.Contains(got[2:], "Untagged step") {
+		t.Errorf("unfolded, tagTaskList = %v, want both of Alpha's subtasks under it", got)
 	}
+	if nested := m.groupNestedRows(m.tagTaskList("home")); !reflect.DeepEqual(nested, []bool{false, false, true, true}) {
+		t.Errorf("nesting = %v, want the two subtasks indented", nested)
+	}
+	want = got
 
 	m.showFinishedGroups = true
 	want = append(want, "Aardvark done")

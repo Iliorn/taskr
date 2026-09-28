@@ -179,10 +179,21 @@ func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, show
 	b := getBuilder()
 	defer putBuilder(b)
 
+	nested := m.groupNestedRows(tasks)
 	contentMax, tagsMax, projectMax := 0, 0, 0
 	hasDue := false
 	for i := range tasks {
-		contentMax = max(contentMax, runeLen(tasks[i].Title))
+		// The width each row draws: a task row's whole label (badges
+		// included), a subtask row's title behind its indent.
+		if nested[i] {
+			w := runeLen(tasks[i].Title) + subtaskIndentW
+			if tasks[i].IsTimerRunning() {
+				w += 2 // the ⧗ in front of the title
+			}
+			contentMax = max(contentMax, w)
+		} else {
+			contentMax = max(contentMax, taskRowLabelWidth(m.taskRowLabel(&tasks[i])))
+		}
 		tagsMax = max(tagsMax, tagsRenderWidth(tasks[i].Tags))
 		hasDue = hasDue || !tasks[i].DueDate.IsZero()
 		if showProject {
@@ -196,7 +207,6 @@ func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, show
 	}
 	renderListHeaderTitled(b, m.termWidth, false, cols, pos, tr("Tasks"))
 
-	nested := groupNestedRows(tasks)
 	siblings := make(map[string]int)
 	for i := range tasks {
 		if nested[i] {
@@ -978,12 +988,16 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	return line + tagsStr + "\n"
 }
 
+// subtaskIndentW is how much narrower a subtask row's title is than its
+// parent's: the indent and tree connector drawn in front of it.
+const subtaskIndentW = 4
+
 func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols listCols, flatIndex, cursor int, active bool) string {
 	connector := "├"
 	if subIndex == subTotal-1 {
 		connector = "└"
 	}
-	titleW := cols.titleW - 4
+	titleW := cols.titleW - subtaskIndentW
 	if titleW < 10 {
 		titleW = 10
 	}
@@ -1316,6 +1330,7 @@ var settingsGroups = []settingsGroup{
 	{title: "General", rows: []int{
 		settingAutoCloseParent,
 		settingAutoCloseSubtasks,
+		settingSubtaskTags,
 		settingShowBoard,
 		settingStages,
 		settingReminder,
@@ -1487,6 +1502,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingVersion:           tr("Version"),
 		settingCheckUpdate:       tr("Check for updates"),
 		settingReminder:          tr("Daily reminder"),
+		settingSubtaskTags:       tr("Subtasks copy tags"),
 	}
 	agingVal := tr("Off")
 	if m.rank.Biases.Aging {
@@ -1503,6 +1519,10 @@ func (m model) renderSettingsSection(w int) (string, int) {
 	autoCloseSubsVal := tr("Off")
 	if m.autoCloseSubtasks {
 		autoCloseSubsVal = tr("On")
+	}
+	subtaskTagsVal := tr("Off")
+	if m.subtaskTags {
+		subtaskTagsVal = tr("On")
 	}
 	syncAutoVal := "‹ " + tr("needs server") + " ›"
 	if m.syncCfg.ready() {
@@ -1566,6 +1586,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingVersion:           appVersion,
 		settingCheckUpdate:       tr("press enter to check"),
 		settingReminder:          "‹ " + reminderDisplay(m.reminderAt) + " ›",
+		settingSubtaskTags:       "‹ " + subtaskTagsVal + " ›",
 	}
 
 	// One label column across every group, so the values line up down the

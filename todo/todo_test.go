@@ -801,7 +801,7 @@ func TestInheritContextFrom(t *testing.T) {
 	parent.DueDate = time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 
 	child := NewSubtask("Child", parent.ID)
-	child.InheritContextFrom(&parent)
+	child.InheritContextFrom(&parent, true)
 
 	if child.Project != "alpha" {
 		t.Errorf("project = %q, want alpha", child.Project)
@@ -815,7 +815,7 @@ func TestInheritContextFrom(t *testing.T) {
 
 	// Nil parent is a no-op.
 	orphan := NewSubtask("Orphan", "no-parent")
-	orphan.InheritContextFrom(nil)
+	orphan.InheritContextFrom(nil, true)
 	if orphan.Project != "" || len(orphan.Tags) != 0 {
 		t.Errorf("nil parent should leave subtask untouched, got project=%q tags=%v",
 			orphan.Project, orphan.Tags)
@@ -824,9 +824,16 @@ func TestInheritContextFrom(t *testing.T) {
 	// Parent with no due date leaves child undated.
 	undatedParent := New("Undated parent")
 	undatedChild := NewSubtask("Child", undatedParent.ID)
-	undatedChild.InheritContextFrom(&undatedParent)
+	undatedChild.InheritContextFrom(&undatedParent, true)
 	if !undatedChild.DueDate.IsZero() {
 		t.Errorf("undated parent should leave subtask undated, got %v", undatedChild.DueDate)
+	}
+
+	// Tags are the caller's choice; the rest of the context comes regardless.
+	untagged := NewSubtask("Untagged", parent.ID)
+	untagged.InheritContextFrom(&parent, false)
+	if len(untagged.Tags) != 0 || untagged.Project != "alpha" {
+		t.Errorf("tags=false: tags = %v, project = %q; want no tags, project alpha", untagged.Tags, untagged.Project)
 	}
 }
 

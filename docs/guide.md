@@ -25,7 +25,18 @@ version; the [CLI reference](cli.md) covers the `taskr <command>` side.
   Deutsch), the daily reminder, board columns, sync, and in-app update.
 
 On Tags and Projects, `enter` walks in one level at a time — row → its tasks
-→ the selected task's detail — and `esc` walks back out the same way.
+→ the selected task's detail — and `esc` walks back out the same way. Inside,
+`→` unfolds a task's subtasks and `←` folds them, as on the Tasks tab.
+
+## Subtasks
+
+A subtask is a full task with a parent. `+` in front of a task means it has
+subtasks folded away, `-` that they are showing; `→`/`←` unfold and fold them
+on the Tasks tab and inside a tag or project. A new subtask starts with its
+parent's project, deadline and tags, and never outranks its parent's
+priority. Moving a parent to another project takes its subtasks along. If you
+would rather tag each step yourself, turn off Settings → "Subtasks copy
+tags".
 
 ## Keyboard shortcuts
 

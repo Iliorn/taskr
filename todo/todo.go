@@ -255,13 +255,15 @@ func NewSubtask(title string, parentID string) Todo {
 	return t
 }
 
-// InheritContextFrom copies the parent's Project, Tags, and DueDate into t,
-// and caps t's priority at the parent's. Callers use this when creating a
-// subtask so it picks up the same context (project board, tag filters,
-// deadline) as the parent without the user having to retype it. The priority
-// cap is part of that context: a fresh subtask defaults to Medium, which would
-// otherwise land a brand-new child above a parent the user parked at Low.
-func (t *Todo) InheritContextFrom(parent *Todo) {
+// InheritContextFrom copies the parent's Project and DueDate into t, and its
+// Tags when tags is true, and caps t's priority at the parent's. Callers use
+// this when creating a subtask so it picks up the same context (project board,
+// tag filters, deadline) as the parent without the user having to retype it.
+// Tags are the caller's choice because a tag often describes one task rather
+// than the work it belongs to. The priority cap is part of that context: a
+// fresh subtask defaults to Medium, which would otherwise land a brand-new
+// child above a parent the user parked at Low.
+func (t *Todo) InheritContextFrom(parent *Todo, tags bool) {
 	if parent == nil {
 		return
 	}
@@ -271,8 +273,10 @@ func (t *Todo) InheritContextFrom(parent *Todo) {
 	if parent.Project != "" {
 		t.Project = parent.Project
 	}
-	for _, tag := range parent.Tags {
-		t.AddTag(tag)
+	if tags {
+		for _, tag := range parent.Tags {
+			t.AddTag(tag)
+		}
 	}
 	if !parent.DueDate.IsZero() {
 		t.DueDate = parent.DueDate

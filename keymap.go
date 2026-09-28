@@ -106,7 +106,7 @@ var keymap = []binding{
 	{ctxTasksList, "w", "why", "why this rank — the score, its causes, what moves it", secTasks, true, false},
 	{ctxTasksList, "s", "sort", "cycle sort order", secTasks, true, true},
 	{ctxTasksList, "h", "history", "toggle history", secTasks, true, false},
-	{ctxTasksList, "←/→", "foldsub", "expand/collapse subtasks", secTasks, true, false},
+	{ctxTasksList | ctxDrill, "←/→", "foldsub", "expand/collapse subtasks", secTasks, true, false},
 	{ctxTasksList, "/", "search", "search", secTasks, true, true},
 
 	// ── Tasks detail pane ────────────────────────────────────────────────

@@ -57,6 +57,7 @@ const (
 	settingVersion
 	settingCheckUpdate
 	settingReminder
+	settingSubtaskTags
 	numSettingsRows
 )
 
@@ -398,6 +399,8 @@ type model struct {
 	updateStatus      string
 	autoCloseParent   bool
 	autoCloseSubtasks bool
+	// subtaskTags: a new subtask copies its parent's tags.
+	subtaskTags bool
 	// reminderAt is the daily reminder's time in minutes after midnight, or
 	// reminderOff; remindedOn is the day this device last reminded.
 	reminderAt int
@@ -543,6 +546,7 @@ func initialModel(repo Repository) model {
 		historySort:       settings.HistorySort,
 		autoCloseParent:   settings.AutoCloseParent,
 		autoCloseSubtasks: settings.AutoCloseSubtasks,
+		subtaskTags:       !settings.SubtaskTagsDisabled,
 		themeName:         th.name,
 		detailPos:         detailPosFromSettings(settings.DetailPosition),
 		reminderAt:        reminderFromSettings(settings.Reminder),
@@ -1403,6 +1407,18 @@ func (m *model) cyclePriority(t *todo.Todo) bool {
 	}
 	m.markModified(ids...)
 	return capped
+}
+
+// setProject puts t, and every subtask under it, in project ("" takes them out
+// of one) as one undo step.
+func (m *model) setProject(t *todo.Todo, project, undoDesc string) {
+	m.pushUndo(undoDesc, descendantIDsFrom(m.subtaskIDs, t.ID)...)
+	t.SetProject(project)
+	ids := []string{t.ID}
+	for _, child := range propagateDescendantsProject(m.subtaskIDs, m.get, t) {
+		ids = append(ids, child.ID)
+	}
+	m.markModified(ids...)
 }
 
 // propagateDueToSubtasks copies parentID's due date (including a cleared zero

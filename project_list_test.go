@@ -322,3 +322,56 @@ func TestProjectDrillTimelineIsAStripNotASecondList(t *testing.T) {
 		}
 	}
 }
+
+// Inside a project, subtasks fold as they do on the Tasks tab: → shows all of
+// a task's subtasks, whether or not they carry the project, and ← on one of
+// them folds the parent and puts the cursor back on it. The rows are sized to
+// what they draw, so neither the (0/2) badge nor a subtask title is clipped.
+func TestScriptProjectDrillFoldsSubtasks(t *testing.T) {
+	parent := todo.New("Plan the trip")
+	parent.Project = "house"
+	inProject := todo.NewSubtask("Book flights", parent.ID)
+	inProject.Project = "house"
+	noProject := todo.NewSubtask("Find a hotel near the station", parent.ID)
+	fence := todo.New("Fix the fence")
+	fence.Project = "house"
+
+	m := modelWithTasks(t, parent, inProject, noProject, fence)
+	m.termWidth, m.termHeight = 110, 30
+	m.switchTab(tabProjects)
+	m = sendKey(t, m, "enter")
+	rows := func() []string {
+		tasks, _ := m.drillTaskList()
+		var out []string
+		for _, task := range tasks {
+			out = append(out, task.Title)
+		}
+		return out
+	}
+	if got := rows(); len(got) != 2 {
+		t.Fatalf("folded rows = %v, want the parent and the fence", got)
+	}
+	if cur := m.currentTodo(); cur == nil || cur.ID != parent.ID {
+		t.Fatalf("cursor not on the parent to start with")
+	}
+
+	m = sendKey(t, m, "right")
+	if got := rows(); len(got) != 4 {
+		t.Fatalf("unfolded rows = %v, want both subtasks under the parent", got)
+	}
+	out := ansi.Strip(m.View())
+	for _, want := range []string{"- [ ] Plan the trip (0/2)", "Book flights", "Find a hotel near the station"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("unfolded view lacks %q:\n%s", want, out)
+		}
+	}
+
+	m = sendKey(t, m, "down")
+	m = sendKey(t, m, "left")
+	if got := rows(); len(got) != 2 {
+		t.Errorf("← on a subtask left rows = %v, want the parent folded", got)
+	}
+	if cur := m.currentTodo(); cur == nil || cur.ID != parent.ID {
+		t.Errorf("← on a subtask should return the cursor to its parent")
+	}
+}

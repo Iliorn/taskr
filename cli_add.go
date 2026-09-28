@@ -407,13 +407,14 @@ func cliSubtask(args []string) int {
 		titles = []string{strings.Join(positionals[1:], " ")}
 	}
 	subs := make([]*todo.Todo, 0, len(titles))
+	withTags := storedSubtaskTags()
 	for _, title := range titles {
 		title = strings.TrimSpace(title)
 		if title == "" {
 			continue
 		}
 		s := todo.NewSubtask(title, parent.ID)
-		s.InheritContextFrom(parent)
+		s.InheritContextFrom(parent, withTags)
 		subs = append(subs, &s)
 	}
 	if len(subs) == 0 {

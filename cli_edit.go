@@ -85,7 +85,7 @@ func cliEdit(args []string) int {
 	}
 	var saveSet []*todo.Todo
 	var edited []*todo.Todo
-	var allPropagated, allBumped, allCapped []*todo.Todo
+	var allPropagated, allBumped, allCapped, allMoved []*todo.Todo
 	for _, t := range targets {
 		changed, code := editOneTask(t, todos, editFields{
 			title: *title, priority: *priority, size: *size, stage: *stage,
@@ -94,7 +94,7 @@ func cliEdit(args []string) int {
 			addTag: *addTag, removeTag: *removeTag,
 			addDep: *addDep, removeDep: *removeDep,
 			note: noteText, appendNote: appendText, clearNote: *clearNote,
-		}, &saveSet, &allPropagated, &allBumped, &allCapped)
+		}, &saveSet, &allPropagated, &allBumped, &allCapped, &allMoved)
 		if code != 0 {
 			return code
 		}
@@ -128,6 +128,13 @@ func cliEdit(args []string) int {
 	for _, c := range allCapped {
 		fmt.Fprintf(os.Stderr, "capped  %s  %s  priority → %s\n", c.ID[:8], c.Title, c.Priority.String())
 	}
+	for _, c := range allMoved {
+		if c.Project == "" {
+			fmt.Fprintf(os.Stderr, "cleared  %s  %s  project\n", c.ID[:8], c.Title)
+		} else {
+			fmt.Fprintf(os.Stderr, "moved  %s  %s  project → %s\n", c.ID[:8], c.Title, c.Project)
+		}
+	}
 	return 0
 }
 
@@ -149,7 +156,7 @@ type editFields struct {
 // (and any due-date propagation to the two side-effect lists). It returns a
 // non-zero exit code on a usage error, having reported it — the caller returns
 // before any Save, so a failure on the third ref leaves nothing persisted.
-func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propagatedOut, bumpedOut, cappedOut *[]*todo.Todo) (bool, int) {
+func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propagatedOut, bumpedOut, cappedOut, movedOut *[]*todo.Todo) (bool, int) {
 	changed := false
 	priorityEdited := false
 	title, priority, size, stage := &f.title, &f.priority, &f.size, &f.stage
@@ -213,6 +220,12 @@ func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propaga
 	} else if *project != "" {
 		t.SetProject(*project)
 		changed = true
+	}
+	if *clearProject || *project != "" {
+		children, get := sliceTaskLookups(todos)
+		moved := propagateDescendantsProject(children, get, t)
+		*saveSet = append(*saveSet, moved...)
+		*movedOut = append(*movedOut, moved...)
 	}
 	if *addTag != "" {
 		for _, tag := range strings.Split(*addTag, ",") {

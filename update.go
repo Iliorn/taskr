@@ -737,6 +737,15 @@ func (m *model) openExplain() bool {
 
 // ── List pane ─────────────────────────────────────────────────────────────────
 
+// foldsSubtasks reports whether ←/→ fold and unfold subtasks here: the Tasks
+// list and the task lists inside a tag or project, which fold alike.
+func (m model) foldsSubtasks() bool {
+	if _, drilled := m.drillTaskList(); drilled {
+		return true
+	}
+	return m.tab == tabTasks && !m.showHistory
+}
+
 func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// The Tasks list is served from a cache that markModified refreshes after
 	// it has noted which task the cursor was on. A drill-in list has no such
@@ -825,7 +834,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.moveCalendarDay(1)
 			} else if m.tab == tabSettings {
 				return m, m.settingsAdjust(+1)
-			} else if m.tab == tabTasks && !m.showHistory {
+			} else if m.foldsSubtasks() {
 				if t := m.currentTodo(); t != nil && m.subtaskCount(t.ID) > 0 {
 					m.expandedTasks[t.ID] = true
 				}
@@ -837,7 +846,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.moveCalendarDay(-1)
 			} else if m.tab == tabSettings {
 				return m, m.settingsAdjust(-1)
-			} else if m.tab == tabTasks && !m.showHistory {
+			} else if m.foldsSubtasks() {
 				if t := m.currentTodo(); t != nil {
 					// On a subtask: collapse the containing parent and
 					// return the cursor to it, so ← always "moves out"
@@ -1678,6 +1687,8 @@ func (m *model) persistSettings() {
 		DetailPosition:    m.detailPos.String(),
 		Reminder:          formatReminder(m.reminderAt),
 		Keys:              activeKeys,
+
+		SubtaskTagsDisabled: !m.subtaskTags,
 	}); err != nil {
 		m.flashError(fmt.Sprintf(tr("Error saving settings: %v"), err))
 	}
@@ -1990,6 +2001,9 @@ func (m *model) settingsAdjust(dir int) tea.Cmd {
 		m.cycleDetailPos(dir)
 	case settingReminder:
 		m.cycleReminder(dir)
+	case settingSubtaskTags:
+		m.subtaskTags = !m.subtaskTags
+		m.persistSettings()
 	case settingSyncAuto:
 		m.toggleSyncAuto()
 	case settingSyncBoard:

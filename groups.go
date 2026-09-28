@@ -213,10 +213,12 @@ func hiddenFinishedGroups(sums map[string]*groupSummary, showFinished bool, matc
 }
 
 // groupTaskList is the task list behind a group's row, in the order the
-// drilled-in list walks it: open tasks first, highest ranked first, each
-// followed by its own open subtasks in the group; then, only when finished
-// work is shown, the done tasks newest first. A subtask whose parent is not
-// open in the group stands as a row of its own.
+// drilled-in list walks it: open tasks first, highest ranked first; then, only
+// when finished work is shown, the done tasks newest first. Subtasks fold the
+// way they do on the Tasks tab, sharing its expandedTasks: an unfolded
+// parent is followed by all of its subtasks, whichever group those carry, and
+// a folded one hides them. A subtask whose parent is not open in the group
+// stands as a row of its own.
 func (m model) groupTaskList(match func(*todo.Todo) bool) []todo.Todo {
 	var open, done []*todo.Todo
 	inOpen := make(map[string]bool)
@@ -250,17 +252,18 @@ func (m model) groupTaskList(match func(*todo.Todo) bool) []todo.Todo {
 	})
 
 	out := make([]todo.Todo, 0, len(open)+len(done))
-	var walk func(t *todo.Todo)
-	walk = func(t *todo.Todo) {
+	listed := make(map[string]bool)
+	for _, t := range roots {
 		out = append(out, *t)
+		if !m.expandedTasks[t.ID] {
+			continue
+		}
 		for _, id := range m.subtaskIDs(t.ID) {
-			if inOpen[id] {
-				walk(m.get(id))
+			if sub := m.get(id); sub != nil {
+				out = append(out, *sub)
+				listed[id] = true
 			}
 		}
-	}
-	for _, t := range roots {
-		walk(t)
 	}
 	if m.showFinishedGroups {
 		sort.Slice(done, func(i, j int) bool {
@@ -270,24 +273,24 @@ func (m model) groupTaskList(match func(*todo.Todo) bool) []todo.Todo {
 			return done[i].ID < done[j].ID
 		})
 		for _, t := range done {
-			out = append(out, *t)
+			if !listed[t.ID] {
+				out = append(out, *t)
+			}
 		}
 	}
 	return out
 }
 
 // groupNestedRows reports, per row of a groupTaskList, whether it is drawn
-// indented under the open parent listed above it.
-func groupNestedRows(tasks []todo.Todo) []bool {
-	openRows := make(map[string]bool, len(tasks))
+// indented as a subtask of the unfolded parent above it. An unfolded parent's
+// subtasks are listed straight after it and nowhere else, so a row is nested
+// exactly when it continues that run.
+func (m model) groupNestedRows(tasks []todo.Todo) []bool {
 	nested := make([]bool, len(tasks))
-	for i := range tasks {
-		t := &tasks[i]
-		if t.Status == todo.Done {
-			continue
-		}
-		nested[i] = t.ParentID != "" && openRows[t.ParentID]
-		openRows[t.ID] = true
+	for i := 1; i < len(tasks); i++ {
+		p, prev := tasks[i].ParentID, &tasks[i-1]
+		nested[i] = p != "" && m.expandedTasks[p] &&
+			(prev.ID == p || (nested[i-1] && prev.ParentID == p))
 	}
 	return nested
 }

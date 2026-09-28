@@ -203,7 +203,7 @@ func TestNewSubtaskInheritsTheParentCap(t *testing.T) {
 	parent.Priority = todo.PriorityLow
 
 	sub := todo.NewSubtask("child", parent.ID) // defaults to medium
-	sub.InheritContextFrom(&parent)
+	sub.InheritContextFrom(&parent, true)
 	if got := sub.Priority; got != todo.PriorityLow {
 		t.Errorf("new subtask priority = %v, want low (capped at the parent)", got)
 	}

@@ -127,6 +127,28 @@ func propagateDescendantsDue(children func(string) []string, get func(string) *t
 	return changed
 }
 
+// A subtask belongs to its parent's project: it is a step of that work.
+// Creating one copies the project (InheritContextFrom), and a parent moved to
+// another project — or out of one — takes its whole subtree along.
+
+// propagateDescendantsProject copies parent's project, including a cleared
+// one, to every live descendant and returns the ones it changed.
+func propagateDescendantsProject(children func(string) []string, get func(string) *todo.Todo, parent *todo.Todo) []*todo.Todo {
+	if parent == nil {
+		return nil
+	}
+	var changed []*todo.Todo
+	for _, id := range descendantIDsFrom(children, parent.ID)[1:] {
+		child := get(id)
+		if child == nil || child.Deleted || child.Project == parent.Project {
+			continue
+		}
+		child.SetProject(parent.Project)
+		changed = append(changed, child)
+	}
+	return changed
+}
+
 // stopOtherRunningTimers stops every running timer except exceptID, returning
 // the touched tasks for the save set. This is the single-running-timer
 // invariant the TUI's toggleTimer enforces, shared by the CLI paths

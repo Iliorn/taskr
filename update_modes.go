@@ -193,7 +193,7 @@ func (m model) updateAddSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// so undo will delete it (the ID is in entry.ids but has no
 					// captured partial), then add to the store.
 					sub := todo.NewSubtask(val, t.ID)
-					sub.InheritContextFrom(m.get(t.ID))
+					sub.InheritContextFrom(m.get(t.ID), m.subtaskTags)
 					m.pushUndo("add subtask", sub.ID)
 					m.add(sub)
 					m.detail.subtaskCursor = m.subtaskCount(t.ID) - 1
@@ -611,9 +611,7 @@ func (m model) updateSearchProject(msg tea.Msg) (tea.Model, tea.Cmd) {
 					projToSet = m.projSearch.query
 				}
 				if projToSet != "" {
-					m.pushUndo("set project", t.ID)
-					t.SetProject(projToSet)
-					m.markModified(t.ID)
+					m.setProject(t, projToSet, "set project")
 				}
 			}
 			m.mode = modeNormal
@@ -1026,9 +1024,7 @@ func (m *model) confirmDeleteProjectGlobal() tea.Cmd {
 
 func (m *model) confirmDeleteProject() tea.Cmd {
 	if t := m.currentTodo(); t != nil {
-		m.pushUndo("remove project", t.ID)
-		t.SetProject("")
-		m.markModified(t.ID)
+		m.setProject(t, "", "remove project")
 	}
 	return nil
 }

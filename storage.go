@@ -115,6 +115,10 @@ type appSettings struct {
 	// keystroke — settings.json is rewritten atomically on every save.
 	Search string `json:"search,omitempty"`
 
+	// SubtaskTagsDisabled stops a new subtask copying its parent's tags.
+	// Negative like BoardDisabled, so the zero value keeps copying them.
+	SubtaskTagsDisabled bool `json:"subtask_tags_disabled,omitempty"`
+
 	// Reminder is the time of the daily due-date reminder, "HH:MM", or "off".
 	// Absent means the default (see reminder.go). A word rather than minutes
 	// for the same reason as DetailPosition: the file is hand-edited.
@@ -172,6 +176,13 @@ func biasesFromSettings(s appSettings) rank.Biases {
 func storedBiases() rank.Biases {
 	s, _ := loadSettings()
 	return biasesFromSettings(s)
+}
+
+// storedSubtaskTags reads whether new subtasks copy their parent's tags, for
+// the CLI, which has no model to hold it.
+func storedSubtaskTags() bool {
+	s, _ := loadSettings()
+	return !s.SubtaskTagsDisabled
 }
 
 func settingsPath() string {

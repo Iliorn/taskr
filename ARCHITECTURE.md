@@ -186,7 +186,11 @@ everything.
   shared. Each tab only says how a task maps to its groups
   (`tagGroupKeys`/`inTagGroup`, `projectGroupKeys`/`inProjectGroup`); the two
   halves must agree, or a row counts a different list from the one enter
-  opens. Summaries are built in `refreshCaches` (`refreshGroups`). Both lists
+  opens. Inside a group, subtasks fold as on the Tasks tab, through the same
+  `expandedTasks` and the same ←/→ (`foldsSubtasks`): an unfolded parent is
+  followed by all of its subtasks, in the group or not, and
+  `groupNestedRows` indents exactly that run. Summaries are built in
+  `refreshCaches` (`refreshGroups`). Both lists
   draw through `renderGroupRows` and their panes through `groupPaneLines`.
   Stacked, the list and its pane split the height by need (`splitStack`):
   each gets its rows while both fit, and two full panels get half each.
@@ -527,12 +531,15 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   handler (usually `update_modes.go`) and a render branch.
 - **Subtasks and dependencies share the task set** (a subtask is a full `Todo`
   with a `ParentID`), so global operations loop the whole set
-  (`renameTagGlobally`, `summarizeGroups`). Two fields are tree-scoped and
-  travel opposite ways: a deadline runs *up* (`extendAncestorsDue`), priority
-  runs *down* (`clampPriorityToParent`, `clampDescendantsPriority`) — raising a
-  child never lifts a parked parent, and the TUI says the child was capped.
-  Both live in `taskops.go` and are called from the TUI (`cyclePriority`) and
-  the CLI (`editOneTask`) alike.
+  (`renameTagGlobally`, `summarizeGroups`). Three fields are tree-scoped: a
+  deadline runs *up* (`extendAncestorsDue`), priority runs *down*
+  (`clampPriorityToParent`, `clampDescendantsPriority`) — raising a child
+  never lifts a parked parent, and the TUI says the child was capped — and a
+  project runs *down* too (`propagateDescendantsProject`), since a subtask is
+  a step of its parent's work. All live in `taskops.go` and are called from
+  the TUI (`cyclePriority`, `setProject`) and the CLI (`editOneTask`) alike.
+  A new subtask copies the parent's context (`InheritContextFrom`); its tags
+  only while settings `subtask_tags_disabled` is off.
 - **Detail placement is one predicate.** `detailPos` (settings
   `detail_position`: `right`/`left`/`bottom`) feeds `sideBySide()`; bottom
   makes it false at every width, and left swaps the two sized panels at the end
