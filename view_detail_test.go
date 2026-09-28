@@ -30,22 +30,15 @@ func renderStandaloneDetailPanel(m model) string {
 	return withBorderTitle(rendered, m.detailPanelTitle(), w, focused)
 }
 
-// TestRenderGanttNarrowNoPanic guards the Gantt "today:" marker against an
-// out-of-bounds write: when the localized label is wider than the (floored)
-// chart, the insert position goes negative. It must clip rather than panic, in
-// every language. See the insertPos clamp in renderGantt.
-//
-// The Gantt is a fixed two-panel chart with its own minimum width, so (like the
-// Projects tab in TestNarrowNoWrapTranslated) the no-wrap contract is only asserted
-// at widths where it is designed to fit; the no-panic guarantee holds at every
-// width down to the smallest terminals.
-func TestRenderGanttNarrowNoPanic(t *testing.T) {
+// TestGanttStripNarrowNoPanic guards the timeline's "today" marker against an
+// out-of-bounds write: when the localized label is wider than the chart, the
+// insert position goes negative. It must clip rather than panic, in every
+// language, and no line may be wider than the strip it was given.
+func TestGanttStripNarrowNoPanic(t *testing.T) {
 	for _, lang := range []language{langEN, langDA} {
 		applyLang(string(lang))
-		for _, width := range []int{16, 20, 24, 30, 40, 50, 70, 80, 120} {
+		for _, width := range []int{1, 4, 8, 12, 20, 36, 60} {
 			m := newTestModel()
-			m.termWidth = width
-			m.termHeight = 30
 			// Tasks whose start/due straddle "today" so the marker is placed.
 			tasks := []todo.Todo{
 				todo.New("Task one"),
@@ -59,14 +52,10 @@ func TestRenderGanttNarrowNoPanic(t *testing.T) {
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
-						t.Fatalf("lang=%s width=%d: renderGantt panicked: %v", lang, width, r)
+						t.Fatalf("lang=%s width=%d: renderGanttStrip panicked: %v", lang, width, r)
 					}
 				}()
-				out := m.renderGantt(tasks)
-				if width < 70 {
-					return // below the chart's minimum fit width
-				}
-				for _, line := range strings.Split(out, "\n") {
+				for _, line := range m.renderGanttStrip(tasks, width, 0, len(tasks), 0) {
 					if w := ansi.StringWidth(line); w > width {
 						t.Errorf("lang=%s width=%d: line %d cells exceeds width: %q", lang, width, w, line)
 					}
@@ -592,19 +581,19 @@ func TestGanttMarksUndatedTasksByPriority(t *testing.T) {
 	// be drawn at, and must stay blank rather than pick one.
 	tasks = append(tasks, mkTodo("blank", "Never dated", todo.Pending))
 
-	lines := strings.Split(strings.TrimRight(m.renderGantt(tasks), "\n"), "\n")
-	if len(lines) != len(tasks)+2 { // date axis + today divider + one row per task
-		t.Fatalf("renderGantt emitted %d lines, want %d:\n%s", len(lines), len(tasks)+2, strings.Join(lines, "\n"))
+	lines := m.renderGanttStrip(tasks, 60, 0, len(tasks), -1)
+	if len(lines) != len(tasks)+1 { // the axis + one row per task
+		t.Fatalf("renderGanttStrip emitted %d lines, want %d:\n%s", len(lines), len(tasks)+1, strings.Join(lines, "\n"))
 	}
-	if !strings.Contains(lines[2], "◆") {
-		t.Errorf("high-priority completed task has no diamond marker: %q", lines[2])
+	if !strings.Contains(lines[1], "◆") {
+		t.Errorf("high-priority completed task has no diamond marker: %q", lines[1])
 	}
-	if !strings.Contains(lines[3], "•") {
-		t.Errorf("medium-priority completed task has no dot marker: %q", lines[3])
+	if !strings.Contains(lines[2], "•") {
+		t.Errorf("medium-priority completed task has no dot marker: %q", lines[2])
 	}
 	for _, glyph := range []string{"◆", "•", "█"} {
-		if strings.Contains(lines[4], glyph) {
-			t.Errorf("task with no moment drew %q on the timeline: %q", glyph, lines[4])
+		if strings.Contains(lines[3], glyph) {
+			t.Errorf("task with no moment drew %q on the timeline: %q", glyph, lines[3])
 		}
 	}
 }

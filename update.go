@@ -1191,19 +1191,22 @@ func (m *model) clampCursors() {
 	m.followPinnedGroups()
 	clamp(&m.tagTabCursor, len(m.getFilteredTagsForTab()))
 	clamp(&m.projectCursor, len(m.allProjectsForList()))
-	// Before the drill's early return: the drilled-in project view shows the
-	// detail pane in its right column too.
+	// Before the drill's early return: a task opened from a drill list has
+	// the detail pane too.
 	m.clampDetailScroll()
 	if tasks, drilled := m.drillTaskList(); drilled {
 		clamp(&m.cursor, len(tasks))
-		if m.tab == tabProjects || m.drillDetailOpen() {
-			// A drill list drawn as the list panel is windowed by listOffset,
-			// which the tag or project list was using a moment ago.
+		switch {
+		case m.drillDetailOpen():
+			// The list beside an opened task is the list panel, windowed by
+			// listOffset, which the tag or project list was using a moment ago.
 			m.clampListOffsetVisible(m.cursor, len(tasks), m.drillTaskVisibleRows())
-		} else {
-			// A tag's list sits in the pane, which windows itself around the
-			// cursor; listOffset stays the tag list's above it.
+		case m.tab == tabTags:
+			// The group's list sits in the pane, which windows itself around
+			// the cursor; listOffset stays the group list's above it.
 			m.clampListOffsetVisible(m.tagTabCursor, len(m.getFilteredTagsForTab()), m.tagListVisibleRows())
+		default:
+			m.clampListOffsetVisible(m.projectCursor, len(m.allProjectsForList()), m.projectListVisibleRows())
 		}
 		return // the drill owns m.cursor while it is open
 	}

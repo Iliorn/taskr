@@ -5,9 +5,8 @@ import "time"
 // ── Layout & rendering constants ──────────────────────────────────────────────
 
 const (
-	ganttLabelWidthDivisor = 5
-	detailMaxHeightPct     = 55
-	overlayWidthPct        = 60
+	detailMaxHeightPct = 55
+	overlayWidthPct    = 60
 
 	// cursorMark is the one marker for "the row you are on", and cursorGap the
 	// blank of the same width for the rows you are not. Every list the app
@@ -57,14 +56,11 @@ const (
 	statsChartMinH = 3
 	statsChartMaxH = 12
 
-	minGanttBarWidth   = 10
-	maxGanttBarWidth   = 60
-	minGanttLabelWidth = 20
-	maxGanttLabelWidth = 40
-	minChartWidth      = 10
-	minOverlayWidth    = 50
-	minTitleColWidth   = 20
-	minInnerWidth      = 20
+	minGanttBarWidth = 10
+	maxGanttBarWidth = 60
+	minOverlayWidth  = 50
+	minTitleColWidth = 20
+	minInnerWidth    = 20
 
 	// Tasks-tab side-by-side layout: at or above
 	// sideBySideMinWidth the list keeps full height on the left and the detail
@@ -72,19 +68,16 @@ const (
 	// falls back to its stacked layout. The detail column takes sideDetailColPct
 	// of the content width, clamped so neither column gets unusably narrow.
 	sideBySideMinWidth = 110
-	// projDrillMinWidth is the narrowest window where the drilled-in project
-	// view can hold its Gantt column beside the task list (the Gantt floor plus
-	// the list floor plus the borders between them). Below it the Gantt is
-	// dropped and the task list takes the window, the same way the Calendar
-	// drops its month grid — two floored columns joined on a narrow window is
-	// how lines end up wider than the terminal.
-	projDrillMinWidth = sideDetailColMin + minInnerWidth + 4
+	// projStripMinWidth is the narrowest pane that holds the project timeline
+	// beside its task list (the timeline's floor, the list's floor and the
+	// gap between them). Below it the timeline is dropped and the list takes
+	// the pane, the way the Calendar drops its month grid: two floored columns
+	// joined on a narrow window is how lines end up wider than the terminal.
+	projStripMinWidth = sideDetailColMin + minInnerWidth + projStripGap
+	projStripGap      = 3
 	sideDetailColPct  = 38
 	sideDetailColMin  = 36
 	sideDetailColMax  = 56
-
-	ganttSuffixWidth  = 16
-	ganttChartPadding = 8
 
 	commentPrefixLen    = 22
 	detailLabelColWidth = 14

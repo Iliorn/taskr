@@ -295,10 +295,10 @@ func TestPersistentPanelsUseContextualBorderTitles(t *testing.T) {
 	projects := modelWithTasks(t, projectTask)
 	projects.tab = tabProjects
 	assertTitle("projects", plainView(projects), "Overview")
-	assertTitle("project timeline", plainView(projects), "Timeline · alpha")
+	assertTitle("project pane", plainView(projects), "@alpha")
 	projects.projectTaskMode = true
-	assertTitle("project drill tasks", plainView(projects), "Overview · @alpha")
-	assertTitle("project drill timeline", plainView(projects), "Timeline · alpha")
+	assertTitle("project list, drilled in", plainView(projects), "Overview")
+	assertTitle("project pane, drilled in", plainView(projects), "@alpha")
 
 	calendar := modelWithTasks(t)
 	calendar.tab = tabCalendar

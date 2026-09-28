@@ -191,14 +191,17 @@ everything.
   followed by all of its subtasks, in the group or not, and
   `groupNestedRows` indents exactly that run. Summaries are built in
   `refreshCaches` (`refreshGroups`). Both lists
-  draw through `renderGroupRows` and their panes through `groupPaneLines`.
-  Stacked, the list and its pane split the height by need (`splitStack`):
-  each gets its rows while both fit, and two full panels get half each.
-  `tagStackRows`/`projectListOuter` are read by the render and the offset
-  clamp alike, so the rows drawn are the rows the cursor is kept in. The
-  Projects pane shows the timeline only when an open task has a date
-  (`hasDatedOpenTask`), and the timeline always reaches today
-  (`ganttDateWindow`).
+  draw through `renderGroupRows` and their panes through `groupPane`: the
+  group's summary over its task list, which enter walks in place — the group
+  list stays above it on both tabs. Stacked, the list and its pane split the
+  height by need (`splitStack`): each gets its rows while both fit, and two
+  full panels get half each. `tagStackRows`/`projectListOuter` are read by
+  the render and the offset clamp alike, so the rows drawn are the rows the
+  cursor is kept in. The one difference is the Projects pane's rows
+  (`projectPaneRows`): when an open task has a date (`hasDatedOpenTask`) and
+  the pane is at least `projStripMinWidth` wide, a timeline strip
+  (`renderGanttStrip`) runs beside the task rows, bar for row, and it always
+  reaches today (`ganttDateWindow`).
 - **`board.go` / `view_board.go` / `update_board.go` / `board_carry.go`** —
   the kanban tab; see *The board*.
 - **`input.go`** and **`console.go`** (each with `_windows`/`_other`
@@ -269,7 +272,7 @@ key reads several times is built once. The drill-in lists
 of the derived data; a fold goes through `setExpanded`, the one writer of
 `expandedTasks`, which clears the group lists too. Tag chips render on demand
 per row (`getRenderedTagsForTask`), not for every task on each refresh, and
-the Projects pane's timeline stops at the pane's height (`renderGanttN`).
+the Projects pane's timeline is drawn only for the rows the pane shows.
 `BenchmarkCursorMove` times one step plus its frame on every surface.
 
 ### Cursors are clamped in one place
@@ -580,7 +583,7 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   window, so `truncate`/`padRight`/`padLeft`/`padCenter` clamp negative widths
   to zero. Two-column layouts need a narrow fallback, not floors
   (`buildCalendarNarrow` below `calSideBySideMinWidth`,
-  `buildProjectDrillNarrow` below `projDrillMinWidth`, `renderBoardStacked`).
+  the Projects pane's timeline below `projStripMinWidth`, `renderBoardStacked`).
   `smallterm_test.go` sweeps every tab × state × size from 0×0 for panics and
   the no-wrap contract.
 - **Group same-style runs.** Coalesce consecutive same-styled cells into one

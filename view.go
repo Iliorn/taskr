@@ -251,13 +251,6 @@ func (m model) projectListTitle() string {
 	return groupListTitle(m.projectOrder, hidden)
 }
 
-func projectTimelineTitle(project string) string {
-	if project == "" {
-		return tr("Timeline")
-	}
-	return tr("Timeline") + " · " + project
-}
-
 func projectTasksTitle(project string) string {
 	if project == "" {
 		return tr("Overview")
@@ -333,9 +326,8 @@ func (m model) View() string {
 	case m.tab == tabTasks || m.drillDetailOpen():
 		showDetail = showDetail && m.pane == paneDetail && !m.sideBySide()
 	case m.tab == tabProjects:
-		// Drilled into a project, the right column of buildProjectDrillContent
-		// holds the timeline, so no stacked panel is needed. Outside drill
-		// mode, a stacked panel is shown when the user has pressed Enter.
+		// The project's pane is drawn with the project list; a task opened
+		// from it is drillDetailOpen's, above.
 		showDetail = showDetail && m.pane == paneDetail && !m.projectTaskMode
 	}
 
@@ -974,8 +966,7 @@ func (m model) drillListLines(visible int) []string {
 	return m.renderDrillTaskList(tasks, sum, false, visible)
 }
 
-// drillListTitle names the drill list's panel after its group, as the
-// drilled-in project's list is.
+// drillListTitle names the drill list's panel after its group.
 func (m model) drillListTitle() string {
 	if m.tab == tabTags {
 		tags := m.getFilteredTagsForTab()
@@ -1136,17 +1127,9 @@ func (m model) buildProjectListContent(w, listH int) string {
 		return withBorderTitle(panel, m.projectListTitle(), w, false)
 	}
 
-	// ── Drilled-in view: task list (left) + right column (right) ────────────
-	// When the user has pressed Enter to drill into a project, render the
-	// same list+detail side-by-side contract as the Tasks/Tags tabs:
-	// left column = task rows (same renderer as the Tasks tab), right column =
-	// Gantt chart when browsing (pane == paneList) or the task detail when the
-	// user has pressed Enter on a task (pane == paneDetail).
-	if m.projectTaskMode {
-		return m.buildProjectDrillContent(projects, w, listH)
-	}
-
-	// ── Project list + the pane previewing the selected project, stacked ────
+	// ── Project list + the selected project's pane, stacked ────────────────
+	// Drilled in, the cursor walks the pane's task list and the project list
+	// stays above it, as on the Tags tab.
 	listOuter := m.projectListOuter(listH)
 	projMaxH := panelContentHeight(listOuter)
 	projLines := strings.Split(m.renderProjectListContent(projects), "\n")
@@ -1180,8 +1163,12 @@ func (m model) buildProjectListContent(w, listH int) string {
 		ganttLines = append(ganttLines, "")
 	}
 	truncateLines(ganttLines, w-2)
-	ganttRendered := listPanelStyle.Width(w).Render(strings.Join(ganttLines, "\n"))
-	ganttRendered = withBorderTitle(ganttRendered, paneTitle, w, false)
+	paneStyle := listPanelStyle
+	if m.projectTaskMode {
+		paneStyle = listPanelFocusedStyle
+	}
+	ganttRendered := paneStyle.Width(w).Render(strings.Join(ganttLines, "\n"))
+	ganttRendered = withBorderTitle(ganttRendered, paneTitle, w, m.projectTaskMode)
 
 	b := getBuilder()
 	defer putBuilder(b)
@@ -1191,130 +1178,64 @@ func (m model) buildProjectListContent(w, listH int) string {
 	return b.String()
 }
 
-// projectPane is the pane under the project list, previewing the selected
-// project: its timeline when it has open work with dates to put on one, and
-// otherwise what the Tags tab shows under a tag — its counts and the tasks
-// enter opens, windowed to maxLines. Trailing blank lines are trimmed, so its
-// length is the height the pane needs.
+// projectPane is the pane under the project list: the selected project's
+// summary and its task list — the one the cursor walks once enter drills in —
+// with the timeline beside the rows when there is dated open work to put on
+// one (projectPaneRows).
 func (m model) projectPane(projects []string, maxLines int) (lines []string, title string) {
-	project := ""
-	var tasks []todo.Todo
-	if m.projectCursor < len(projects) {
-		project = projects[m.projectCursor]
-		tasks = m.getProjectTasks(project)
+	if m.projectCursor >= len(projects) {
+		return nil, ""
 	}
-	title = projectTimelineTitle(project)
-	if hasDatedOpenTask(tasks) {
-		lines = strings.Split(m.renderGanttN(tasks, maxLines), "\n")
-	} else if project != "" {
-		lines = m.groupPaneLines(m.cache.projectGroups[project], tasks, -1, nil, maxLines, false)
-		title = "@" + project
+	project := projects[m.projectCursor]
+	tasks := m.getProjectTasks(project)
+	sel := -1
+	if m.projectTaskMode {
+		sel = m.cursor
 	}
+	lines = m.groupPane(m.cache.projectGroups[project], tasks, sel, nil, maxLines, func(start, shown int) []string {
+		return m.projectPaneRows(tasks, start, shown, sel)
+	})
 	end := len(lines)
 	for end > 0 && strings.TrimSpace(lines[end-1]) == "" {
 		end--
 	}
-	return lines[:end], title
+	return lines[:end], "@" + project
 }
 
-// buildProjectDrillNarrow is the single-column drilled-in project view for
-// windows too small to carry the timeline beside the task list, or projects
-// with nothing dated to draw: the list takes the whole width, with no floor to
-// overflow past. An opened task is laid out by drillDetailOpen's path instead.
-func (m model) buildProjectDrillNarrow(projects []string, w, innerH int) string {
-	if w < 0 {
-		w = 0 // borders only; a floor here would push the box past the window
+// projectPaneRows draws a project's column header and task rows, with the
+// timeline beside them when the project has dated open work and the pane is
+// wide enough for both. The timeline is bars only, row for row with the list,
+// so the list's titles and due dates are its labels and the selected row's
+// guide carries the eye across the gap.
+func (m model) projectPaneRows(tasks []todo.Todo, start, shown, sel int) []string {
+	w := m.termWidth - 8
+	if w < projStripMinWidth || !hasDatedOpenTask(tasks) {
+		return m.renderGroupTaskRows(tasks, start, shown, sel, false)
 	}
-	cm := m
-	cm.termWidth = w + 6 // the column renderers take termWidth-6 as their width
-	title := projectTasksTitle("")
-	var tasks []todo.Todo
-	var sum *groupSummary
-	if m.projectCursor < len(projects) {
-		title = projectTasksTitle(projects[m.projectCursor])
-		tasks = m.getProjectTasks(projects[m.projectCursor])
-		sum = m.cache.projectGroups[projects[m.projectCursor]]
-	}
-	lines := cm.renderDrillTaskList(tasks, sum, false, m.drillTaskVisibleRows())
-	if len(lines) > innerH {
-		lines = lines[:innerH]
-	}
-	for len(lines) < innerH {
-		lines = append(lines, "")
-	}
-	truncateLines(lines, w-2)
-	panel := listPanelFocusedStyle.Width(w).Render(strings.Join(lines, "\n"))
-	return withBorderTitle(panel, title, w, true)
-}
-
-// buildProjectDrillContent renders the drilled-in project view as two columns:
-// the task list (left, using the same row renderer as the Tasks tab) and the
-// timeline strip on the right (renderGanttStrip — bars only, aligned
-// row-for-row with the list). Mirrors buildSideBySide's contract: each column
-// is rendered through a model copy whose termWidth is the column's share.
-func (m model) buildProjectDrillContent(projects []string, w, outerH int) string {
-	innerH := panelContentHeight(outerH)
-	var tasks []todo.Todo
-	var sum *groupSummary
-	project := ""
-	if m.projectCursor < len(projects) {
-		project = projects[m.projectCursor]
-		tasks = m.getProjectTasks(project)
-		sum = m.cache.projectGroups[project]
-	}
-	// Without dated open work the timeline strip has nothing ahead of it to
-	// draw, so the list takes the whole width instead of sharing it with an
-	// empty column.
-	if w < projDrillMinWidth || !hasDatedOpenTask(tasks) {
-		return m.buildProjectDrillNarrow(projects, w, innerH)
-	}
-
-	// Column widths: Gantt needs a reasonable minimum to be legible; the task
-	// list takes the remainder. Mirror the sideDetailCol constants but keep the
-	// Gantt wider since the bar chart needs more horizontal room than text detail.
-	ganttW := w * sideDetailColPct / 100
-	if ganttW < sideDetailColMin {
-		ganttW = sideDetailColMin
-	}
-	if ganttW > sideDetailColMax {
-		ganttW = sideDetailColMax
-	}
-	listW := w - ganttW - 4 // 4 = inter-panel gap absorbed by the border chars
-	if listW < minInnerWidth {
-		listW = minInnerWidth
-	}
-
-	// Task list — rendered through a model copy sized to the left column so
-	// taskListCols and renderTaskLineWithSet see the correct terminal width.
+	stripW := min(max(w*sideDetailColPct/100, sideDetailColMin), sideDetailColMax)
+	listW := w - stripW - projStripGap
 	lm := m
-	lm.termWidth = listW + 6 // View hands buildListContent w = termWidth-6
-	listLines := lm.renderDrillTaskList(tasks, sum, false, m.drillTaskVisibleRows())
-
-	// Beside the list the timeline is a strip: no label column, and windowed
-	// to the rows the list is showing, so the two columns read as one table
-	// split by a border instead of two panes listing the same tasks.
-	dm := m
-	dm.termWidth = ganttW + 6
-	rightLines := dm.renderGanttStrip(tasks, ganttW-2, m.listOffset, m.drillTaskVisibleRows())
-
-	fitLines := func(lines []string, h, contentW int) []string {
-		if len(lines) > h {
-			lines = lines[:h]
+	lm.termWidth = listW + 8 // the row renderers draw termWidth-8 cells
+	left := lm.renderGroupTaskRows(tasks, start, shown, sel, false)
+	right := m.renderGanttStrip(tasks, stripW, start, shown, sel)
+	sep := dimStyle.Render(" │ ")
+	out := make([]string, max(len(left), len(right)))
+	for i := range out {
+		l, r := "", ""
+		if i < len(left) {
+			l = left[i]
 		}
-		for len(lines) < h {
-			lines = append(lines, "")
+		if i < len(right) {
+			r = right[i]
 		}
-		truncateLines(lines, contentW)
-		return lines
+		if lw := ansi.StringWidth(l); lw > listW {
+			l = ansi.Truncate(l, listW, "")
+		} else {
+			l += strings.Repeat(" ", listW-lw)
+		}
+		out[i] = l + sep + r
 	}
-	listLines = fitLines(listLines, innerH, listW-2)
-	rightLines = fitLines(rightLines, innerH, ganttW-2)
-
-	listPanel := listPanelFocusedStyle.Width(listW).Render(strings.Join(listLines, "\n"))
-	rightPanel := detailPanelStyle.Width(ganttW).Render(strings.Join(rightLines, "\n"))
-	listPanel = withBorderTitle(listPanel, projectTasksTitle(project), listW, true)
-	rightPanel = withBorderTitle(rightPanel, projectTimelineTitle(project), ganttW, false)
-	return lipgloss.JoinHorizontal(lipgloss.Top, listPanel, rightPanel)
+	return out
 }
 
 // ── Help ──────────────────────────────────────────────────────────────────────
@@ -2072,6 +1993,16 @@ func (m model) cooccurringTagsLine(tag string, tasks []todo.Todo, availW int) st
 // tasks in the order enter walks them, windowed to maxLines around sel (-1
 // when nothing is selected), and the done tasks' fold line.
 func (m model) groupPaneLines(s *groupSummary, tasks []todo.Todo, sel int, extra []string, maxLines int, showProject bool) []string {
+	return m.groupPane(s, tasks, sel, extra, maxLines, func(start, shown int) []string {
+		return m.renderGroupTaskRows(tasks, start, shown, sel, showProject)
+	})
+}
+
+// groupPane lays out the pane under a Tags or Projects list: the group's
+// summary, then its task list windowed around sel, drawn by rows — the column
+// header and tasks[start:start+shown] — so a tab can draw more beside each row
+// (the Projects timeline) and still be windowed and sized the same way.
+func (m model) groupPane(s *groupSummary, tasks []todo.Todo, sel int, extra []string, maxLines int, rows func(start, shown int) []string) []string {
 	lines := append(m.groupPaneHead(s, m.termWidth-8), extra...)
 	lines = append(lines, "")
 	fold := m.groupFoldNote(s)
@@ -2111,7 +2042,7 @@ func (m model) groupPaneLines(s *groupSummary, tasks []todo.Todo, sel int, extra
 		start = max(min(start, len(tasks)-shown), 0)
 		more = len(tasks) - start - shown
 	}
-	lines = append(lines, m.renderGroupTaskRows(tasks, start, shown, sel, showProject)...)
+	lines = append(lines, rows(start, shown)...)
 	switch {
 	case more > 0 && len(lines) < maxLines:
 		lines = append(lines, dimStyle.Render(fmt.Sprintf(tr("  … and %d more"), more)))

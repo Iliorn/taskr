@@ -1283,8 +1283,8 @@ func (m model) renderProjectListContent(projects []string) string {
 	})
 }
 
-// renderDrillTaskList renders a drill-in task list as the list panel (the
-// drilled-in project, or a tag's or project's list beside an opened task),
+// renderDrillTaskList renders a drill-in task list as the list panel (a tag's
+// or project's list beside or above an opened task),
 // windowed to the rows the clamp keeps the cursor in, with the done tasks'
 // fold line under the last row when there is room for it. The Project column
 // is shown where the rows can differ in it. visible is drillTaskVisibleRows

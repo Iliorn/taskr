@@ -285,9 +285,8 @@ func (m model) detailVisible() bool {
 	case tabTags:
 		return true // always-on preview, stacked under the list
 	case tabProjects:
-		// Drilled in, the right column holds the timeline and an opened task
-		// is drillDetailOpen's. Outside drill mode, show the stacked panel when
-		// pane == paneDetail.
+		// The pane under the project list is drawn by the list itself, and a
+		// task opened from it is drillDetailOpen's.
 		return m.pane == paneDetail && !m.projectTaskMode
 	case tabSettings, tabBoard:
 		return false
@@ -439,8 +438,7 @@ func (m model) projectListOuter(listH int) int {
 }
 
 // drillTaskVisibleRows is the number of task rows a drill-in list shows when it
-// is the list panel: the drilled-in project, and a tag's or project's list
-// beside or above an opened task. It is taskListRows, as the panel is the
+// is the list panel: a tag's or project's list beside or above an opened task. It is taskListRows, as the panel is the
 // Tasks list's; both renderDrillTaskList and the drill offset clamp read it.
 func (m model) drillTaskVisibleRows() int {
 	return m.taskListRows()

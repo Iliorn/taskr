@@ -697,140 +697,17 @@ func writeGanttBar(b *strings.Builder, barRunes []rune, barColors []int) {
 	}
 }
 
-func (m model) renderGantt(tasks []todo.Todo) string {
-	return m.renderGanttN(tasks, 0)
-}
-
-// renderGanttN is renderGantt stopped at maxLines lines (0 draws them all):
-// the pane under the Projects list shows only its share of the height, and
-// sizing it asks for the chart on every key, so the rows past the edge would
-// be drawn only to be cut.
-func (m model) renderGanttN(tasks []todo.Todo, maxLines int) string {
-	if len(tasks) == 0 {
-		return dimStyle.Render(tr("  No tasks in this project."))
-	}
-	today := m.frameTime
-	minDate, maxDate, totalDays := ganttDateWindow(tasks, today)
-
-	labelW := m.termWidth / ganttLabelWidthDivisor
-	if labelW < minGanttLabelWidth {
-		labelW = minGanttLabelWidth
-	}
-	if labelW > maxGanttLabelWidth {
-		labelW = maxGanttLabelWidth
-	}
-
-	chartW := m.termWidth - labelW - ganttSuffixWidth - ganttChartPadding
-	if chartW < minChartWidth {
-		chartW = minChartWidth
-	}
-
-	todayPos := ganttColumn(today, minDate, totalDays, chartW)
-	if todayPos < 0 || todayPos >= chartW {
-		todayPos = -1
-	}
-
-	b := getBuilder()
-	defer putBuilder(b)
-
-	leftDate := minDate.Format("02-01")
-	rightDate := maxDate.Format("02-01")
-	innerSpaces := chartW - len(leftDate) - len(rightDate)
-	if innerSpaces < 1 {
-		innerSpaces = 1
-	}
-	timelineHeader := leftDate + strings.Repeat(" ", innerSpaces) + rightDate
-	// The Timeline label now lives on the panel border; keep this first row as
-	// the chart's date-axis header rather than repeating the box title.
-	headerLabel := strings.Repeat(" ", labelW)
-	b.WriteString(headerStyle.Render(headerLabel+timelineHeader) + "\n")
-
-	todayLabel := tr("today:") + today.Format("02-01")
-	divider := make([]rune, chartW)
-	for i := range divider {
-		divider[i] = '─'
-	}
-	if todayPos >= 0 {
-		insertPos := todayPos - len([]rune(todayLabel))/2
-		if insertPos < 0 {
-			insertPos = 0
-		}
-		if insertPos+len([]rune(todayLabel)) > chartW {
-			insertPos = chartW - len([]rune(todayLabel))
-		}
-		// The label can be wider than the chart on very narrow terminals (more
-		// likely with longer localized strings), which drives insertPos negative;
-		// floor it and clip writes to the divider bounds.
-		if insertPos < 0 {
-			insertPos = 0
-		}
-		for i, ch := range []rune(todayLabel) {
-			if insertPos+i >= chartW {
-				break
-			}
-			divider[insertPos+i] = ch
-		}
-	}
-	b.WriteString(dimStyle.Render("  "+strings.Repeat("─", labelW-2)) +
-		ganttTodayStyle.Render(string(divider)) + "\n")
-
-	bufs := getGanttBuffers(chartW)
-	defer putGanttBuffers(bufs)
-	barRunes := bufs.bar[:chartW]
-	barColors := bufs.color[:chartW]
-
-	for i, t := range tasks {
-		if maxLines > 0 && i+2 >= maxLines { // the two header rows above
-			break
-		}
-		isSelected := i == m.cursor && m.projectTaskMode
-		checkbox := "[ ]"
-		if t.Status == todo.Done {
-			checkbox = "[✓]"
-		}
-		titleTrunc := labelW - 6
-		if titleTrunc < 5 {
-			titleTrunc = 5
-		}
-		// No "|" frame around the bar: the ruler above already marks where the
-		// chart starts and ends, and on a task with no dates the frame was all
-		// the row drew — two stray bars around an empty span.
-		label := checkbox + " " + padRight(truncate(t.Title, titleTrunc), titleTrunc) + "  "
-
-		kind, at := fillGanttBar(t, minDate, totalDays, chartW, todayPos, barRunes, barColors)
-		datesSuffix := ""
-		switch kind {
-		case ganttSpan:
-			datesSuffix = fmt.Sprintf("  %s→%s", t.StartDate.Format("02-01"), t.DueDate.Format("02-01"))
-		case ganttPoint:
-			// One date, so one date is what the suffix says — writing it as a
-			// span would invent the end the task does not have.
-			datesSuffix = fmt.Sprintf("  %c %s", ganttMarkerRune(t), at.Format("02-01"))
-		}
-
-		if isSelected {
-			b.WriteString(selectedStyle.Render(label))
-			writeGanttBar(b, barRunes, barColors)
-			b.WriteString(selectedStyle.Render(datesSuffix) + "\n")
-		} else {
-			b.WriteString(label)
-			writeGanttBar(b, barRunes, barColors)
-			b.WriteString(datesSuffix + "\n")
-		}
-	}
-	return b.String()
-}
-
-// renderGanttStrip is the timeline as it is drawn beside the drilled-in task
-// list: bars only, one row per task, windowed to the same rows the list is
-// showing so row N on the left is row N on the right. It drops the labelled
+// renderGanttStrip is the timeline as it is drawn beside a project's task list
+// (projectPaneRows): bars only, one row per task, windowed to the same rows
+// the list is showing so row N on the left is row N on the right; sel is the
+// cursor's row, or -1. It drops the labelled
 // chart's title column and its start→due suffix on purpose — the column to its
 // left already names every task in the same order and carries the due date, so
 // at the drill's ~40-cell column the labels spent half the pane restating the
 // list and left a 10-cell stub of a chart. The axis is one line rather than two
 // (dates and today marker share it) because the list header beside it is one
 // line, and the rows have to start level.
-func (m model) renderGanttStrip(tasks []todo.Todo, chartW, from, count int) []string {
+func (m model) renderGanttStrip(tasks []todo.Todo, chartW, from, count, sel int) []string {
 	if len(tasks) == 0 || chartW < 1 {
 		return []string{dimStyle.Render(tr("  No tasks in this project."))}
 	}
@@ -848,7 +725,7 @@ func (m model) renderGanttStrip(tasks []todo.Todo, chartW, from, count int) []st
 	barRunes := bufs.bar[:chartW]
 	barColors := bufs.color[:chartW]
 
-	// Same clamp as renderDrillTaskList's, so the two windows start on
+	// Same clamp as the list's, so the two windows start on
 	// the same task even when the offset is stale.
 	if from < 0 || from > len(tasks) {
 		from = 0
@@ -860,7 +737,7 @@ func (m model) renderGanttStrip(tasks []todo.Todo, chartW, from, count int) []st
 		// The selected row gets a dotted rule through its empty cells: with no
 		// labels on this side, that is what carries the eye from the highlighted
 		// title on the left across to its bar.
-		if i == m.cursor {
+		if i == sel {
 			for j := range barRunes {
 				if barColors[j] == ganttCellEmpty {
 					barRunes[j] = '·'

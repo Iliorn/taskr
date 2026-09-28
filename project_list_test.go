@@ -103,9 +103,11 @@ func TestProjectDrillUsesTaskRenderer(t *testing.T) {
 		t.Errorf("drilled-in view does not draw task rows:\n%s", out)
 	}
 
-	// The Gantt "Timeline" header should appear in the right column.
-	if !strings.Contains(out, "Timeline") {
-		t.Errorf("drilled-in view missing Gantt header 'Timeline'")
+	// The dated task carries the timeline beside its row, past the divider.
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "[ ] Alpha task") && strings.Count(line, "│") < 3 { // two borders and the divider
+			t.Errorf("the dated task's row has no timeline beside it: %q", line)
+		}
 	}
 
 	// No-wrap contract: the full View() output must not exceed termWidth.
@@ -129,22 +131,29 @@ func TestProjectWithoutDatesSkipsTheTimeline(t *testing.T) {
 	m.termWidth, m.termHeight = 120, 30
 	w, outerH := m.termWidth-6, m.termHeight-4
 
-	if out := m.buildProjectListContent(w, outerH); strings.Contains(out, "Timeline") || !strings.Contains(out, "Undated task") {
-		t.Errorf("overview pane should list the tasks, not a timeline:\n%s", out)
+	undatedRowHasStrip := func(out string) bool {
+		for _, line := range strings.Split(out, "\n") {
+			if strings.Contains(line, "[ ] Undated task") {
+				return strings.Count(line, "│") > 2 // the pane's two borders, plus the timeline's divider
+			}
+		}
+		t.Fatalf("no task row for the undated task:\n%s", out)
+		return false
+	}
+	if out := m.buildProjectListContent(w, outerH); undatedRowHasStrip(out) {
+		t.Errorf("the pane should list the tasks without an empty timeline:\n%s", out)
 	}
 	m = sendKey(t, m, "enter")
-	if out := m.buildProjectListContent(w, outerH); strings.Contains(out, "Timeline") {
-		t.Errorf("drilled-in view should not carry an empty timeline strip:\n%s", out)
+	if out := m.buildProjectListContent(w, outerH); undatedRowHasStrip(out) {
+		t.Errorf("drilled in, the pane should not carry an empty timeline:\n%s", out)
 	}
 }
 
-// TestProjectDrillCursorScrolls guards that the drilled-in task-list cursor
-// and listOffset scroll together, so the cursor task stays in the visible
-// window as the user navigates down.
+// TestProjectDrillCursorScrolls guards that the drilled-in task list scrolls
+// with the cursor inside the pane under the project list, so the cursor's task
+// stays on screen as the user walks down past the pane's height.
 func TestProjectDrillCursorScrolls(t *testing.T) {
-	// Use a terminal small enough that the task list requires scrolling.
-	// With termHeight=20 and the header/footer overhead, listVisible is
-	// roughly 14 rows, so 30 tasks forces scrolling.
+	// A terminal small enough that the pane cannot show all 30 tasks.
 	const n = 30
 	var tasks []todo.Todo
 	for i := 0; i < n; i++ {
@@ -154,43 +163,24 @@ func TestProjectDrillCursorScrolls(t *testing.T) {
 	}
 	m := modelWithTasks(t, tasks...)
 	m.tab = tabProjects
-	m.termHeight = 20 // small enough to require scroll
+	m.termHeight = 20
 
-	// Drill into the project.
 	m = sendKey(t, m, "enter")
 	if !m.projectTaskMode {
 		t.Fatal("enter on project should set projectTaskMode = true")
 	}
-
-	visible := m.listVisible()
-	if visible >= n {
-		// Guard: if all rows fit the test can't verify scrolling — report a
-		// useful message instead of a false negative.
-		t.Skipf("listVisible=%d >= n=%d, no scrolling needed; increase n or reduce termHeight", visible, n)
-	}
-
-	// Navigate down past the visible window so scrolling is required.
 	for i := 0; i < n-1; i++ {
 		m = sendKey(t, m, "down")
 	}
 	if m.cursor != n-1 {
 		t.Fatalf("cursor = %d, want %d after navigating to last task", m.cursor, n-1)
 	}
-
-	// The last task must appear in the full rendered view.
-	last := fmt.Sprintf("Task %02d", n-1)
-	fullView := m.View()
-	if !strings.Contains(fullView, last) {
-		t.Errorf("cursor task %q missing from drilled-in view after scrolling:\n%s", last, fullView)
+	out := ansi.Strip(m.View())
+	if last := fmt.Sprintf("[ ] Task %02d", n-1); !strings.Contains(out, last) {
+		t.Errorf("cursor task %q missing from the pane after scrolling:\n%s", last, out)
 	}
-	// The first task must have scrolled out of the task-list (left column).
-	// The Gantt preview (right column) legitimately shows all task labels
-	// regardless of scroll position, so we check only the left column directly.
-	projects := m.allProjectsForList()
-	taskListLines := m.renderDrillTaskList(m.getProjectTasks(projects[m.projectCursor]), nil, false, m.drillTaskVisibleRows())
-	leftCol := strings.Join(taskListLines, "\n")
-	if strings.Contains(leftCol, "Task 00") {
-		t.Errorf("first task 'Task 00' should have scrolled out of the task-list column, but it's still visible:\n%s", leftCol)
+	if strings.Contains(out, "[ ] Task 00") {
+		t.Errorf("the first task should have scrolled out of the pane:\n%s", out)
 	}
 }
 
@@ -248,20 +238,10 @@ func TestProjectDrillDetailShowsTaskNotGantt(t *testing.T) {
 		t.Fatal("second enter should open detail pane")
 	}
 
-	// Render the inner content panel (same call as View() delegates to).
-	w := m.termWidth - 6
-	outerH := m.termHeight - 4
-	out := m.buildProjectListContent(w, outerH)
-
-	// The task title must appear in the right column (via buildDetailContent).
-	if !strings.Contains(out, "Detail target") {
-		t.Errorf("detail pane should show task title 'Detail target':\n%s", out)
-	}
-
-	// The Gantt timeline header must NOT appear — it belongs in the right
-	// column when browsing (pane == paneList), not when the detail is open.
-	if strings.Contains(out, "Timeline") {
-		t.Errorf("detail pane should not show Gantt 'Timeline' header:\n%s", out)
+	// The detail panel is titled with the task and holds its fields.
+	out := ansi.Strip(m.View())
+	if !strings.Contains(out, "╭─ Detail target") || !strings.Contains(out, tr("Priority")) {
+		t.Errorf("the task's detail should be on screen:\n%s", out)
 	}
 }
 
@@ -292,15 +272,16 @@ func TestProjectDrillTimelineIsAStripNotASecondList(t *testing.T) {
 	}
 
 	out := m.buildProjectListContent(m.termWidth-6, m.termHeight-4)
+	// Task rows read "] Title"; the project list above names one in Next up.
 	for _, title := range titles {
-		if n := strings.Count(out, title); n != 1 {
-			t.Errorf("%q appears %d times in the drilled-in view, want 1 (the timeline must not repeat the list):\n%s", title, n, out)
+		if n := strings.Count(out, "] "+title); n != 1 {
+			t.Errorf("%q has %d task rows in the drilled-in view, want 1 (the timeline must not repeat the list):\n%s", title, n, out)
 		}
 	}
 
 	lineWith := func(title string) string {
 		for _, line := range strings.Split(out, "\n") {
-			if strings.Contains(line, title) {
+			if strings.Contains(line, "] "+title) {
 				return line
 			}
 		}
