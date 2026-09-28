@@ -384,11 +384,9 @@ func TestSideBySideDetailFocusKeepsFullListHeight(t *testing.T) {
 	}
 }
 
-// The Tags tab's detail is always-on either way; side-by-side only moves it
-// from the stacked panel below the list into the right column at wide widths.
-// detailVisible gates the stacked panel, so it must flip with the threshold
-// while the summary line stays rendered at both widths.
-func TestTagsSideBySide(t *testing.T) {
+// The Tags tab's pane stacks under the list at every width, like the
+// Projects tab's: it holds a task list, which reads best at full width.
+func TestTagsPaneStacksAtEveryWidth(t *testing.T) {
 	task := todo.New("fix the fence")
 	task.AddTag("home")
 	m := modelWithTasks(t, task)
@@ -396,21 +394,14 @@ func TestTagsSideBySide(t *testing.T) {
 	m.termHeight = 40
 
 	summary := strings.TrimSpace(fmt.Sprintf(tr("  %d open · %d overdue · %d done"), 1, 0, 0))
-
-	m.termWidth = sideBySideMinWidth + 10
-	if !strings.Contains(m.View(), summary) {
-		t.Error("side-by-side: tag detail should render in the right column")
-	}
-	if m.detailVisible() {
-		t.Error("side-by-side: the stacked tag panel should be off")
-	}
-
-	m.termWidth = sideBySideMinWidth - 10
-	if !strings.Contains(m.View(), summary) {
-		t.Error("stacked fallback: tag detail should render below the list")
-	}
-	if !m.detailVisible() {
-		t.Error("stacked fallback: detailVisible should report the stacked panel")
+	for _, w := range []int{sideBySideMinWidth + 10, sideBySideMinWidth - 10} {
+		m.termWidth = w
+		if m.sideBySide() || !m.detailVisible() {
+			t.Errorf("width %d: sideBySide=%v detailVisible=%v, want the stacked pane", w, m.sideBySide(), m.detailVisible())
+		}
+		if !strings.Contains(m.View(), summary) {
+			t.Errorf("width %d: tag summary not rendered below the list", w)
+		}
 	}
 }
 

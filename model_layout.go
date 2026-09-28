@@ -254,16 +254,17 @@ func trDetailPos(p detailPos) string {
 }
 
 // sideBySide reports whether the current tab renders list and detail as two
-// columns (list full-height on one side, always-on detail preview on the
-// other). The list tabs with a selected-item detail — Tasks, Tags — share the
-// shape; below the width threshold each falls back to its stacked layout
-// (enter-to-open for Tasks, always-on below the list for Tags), and so does
-// every width once the user has put the detail at the bottom. Which side the
-// detail takes is buildSideBySide's business; here it is only two columns or
-// one, because that is the question every height helper is asking.
+// columns (list full-height on one side, the task detail on the other). Only
+// the Tasks tab does; below the width threshold it falls back to the stacked
+// enter-to-open detail, and so does every width once the user has put the
+// detail at the bottom. Tags and Projects always stack their pane under the
+// list (splitStack): it holds a task list or a timeline, which read best at
+// full width. Which side the detail takes is buildSideBySide's business; here
+// it is only two columns or one, because that is the question every height
+// helper is asking.
 func (m model) sideBySide() bool {
 	return m.detailPos != detailBottom &&
-		(m.tab == tabTasks || m.tab == tabTags) &&
+		m.tab == tabTasks &&
 		m.termWidth >= sideBySideMinWidth
 }
 
@@ -280,8 +281,7 @@ func (m model) detailVisible() bool {
 	case tabTasks:
 		return m.pane == paneDetail && !m.sideBySide()
 	case tabTags:
-		// Always-on preview: stacked panel below the threshold, right column above.
-		return !m.sideBySide()
+		return true // always-on preview, stacked under the list
 	case tabProjects:
 		// When drilled in, buildProjectDrillContent's right column shows either the
 		// Gantt (paneList) or the task detail (paneDetail), so no stacked panel is

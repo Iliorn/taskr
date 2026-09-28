@@ -330,8 +330,6 @@ func (m model) View() string {
 	switch m.tab {
 	case tabTasks:
 		showDetail = showDetail && m.pane == paneDetail && !m.sideBySide()
-	case tabTags:
-		showDetail = showDetail && !m.sideBySide()
 	case tabProjects:
 		// When drilled into a project, the right column of buildProjectDrillContent
 		// handles both browsing (Gantt) and the open-task case (task detail), so no
@@ -933,7 +931,7 @@ func (m model) buildDetailContent() string {
 	// Projects tab, where the right column swaps the Gantt for the task
 	// detail. Without this the pane would keep showing the tag summary while
 	// the detail keyset was live.
-	case m.tagTaskOpen():
+	case m.tab == tabTags && m.pane == paneDetail && m.currentTodo() != nil:
 		t := m.currentTodo()
 		return m.renderDetailPage1(t) + "\n" +
 			m.renderDetailPage2(t) + "\n" +
@@ -957,12 +955,6 @@ func (m model) buildDetailContent() string {
 			m.renderDetailPage2(t) + "\n" +
 			m.renderDetailPage3(t)
 	}
-}
-
-// tagTaskOpen reports whether the Tags tab's pane shows a task opened out of
-// the tag drill rather than the tag itself.
-func (m model) tagTaskOpen() bool {
-	return m.tab == tabTags && m.pane == paneDetail && m.currentTodo() != nil
 }
 
 // ── List content builder ──────────────────────────────────────────────────────
@@ -994,7 +986,7 @@ func (m model) buildListContent(w, outerH int) string {
 	return withBorderTitle(panel, m.listPanelTitle(), w, false)
 }
 
-// buildSideBySide renders the side-by-side list tabs (Tasks/Tags) as
+// buildSideBySide renders the Tasks tab side by side as
 // two columns: the list keeps full height on the left and the detail pane is an
 // always-on preview of the cursor item on the right. Mirrors buildCalendarContent's
 // approach — each
@@ -1030,13 +1022,8 @@ func (m model) buildSideBySide(w, outerH int) string {
 	dm.termWidth = detailW + 6
 	var detailLines []string
 	switch {
-	case m.tab == tabTasks && m.currentTodo() == nil:
+	case m.currentTodo() == nil:
 		detailLines = []string{"", dimStyle.Render(tr("  No task selected."))}
-	case m.tab == tabTags && !m.tagTaskOpen():
-		// The tag pane has the whole column. It is windowed here rather than by
-		// buildTagDetailLines, which dm's narrowed width would take for the
-		// stacked layout.
-		detailLines = dm.tagPaneLines(innerH)
 	default:
 		detailLines = strings.Split(dm.applyDetailScrollN(dm.buildDetailContent(), innerH), "\n")
 	}
@@ -1055,9 +1042,7 @@ func (m model) buildSideBySide(w, outerH int) string {
 	detailLines = fitLines(detailLines, innerH, detailW-2)
 
 	listStyle, detailStyle := listPanelFocusedStyle, detailPanelStyle
-	// Drilling into a tag moves the cursor into the right column, so the accent
-	// border has to move with it.
-	detailFocused := m.pane == paneDetail || (m.tab == tabTags && m.tagTaskMode)
+	detailFocused := m.pane == paneDetail
 	if detailFocused {
 		listStyle, detailStyle = listPanelStyle, detailPanelFocusedStyle
 	}
@@ -1953,8 +1938,7 @@ func (m model) buildListLines() []string {
 }
 
 // buildTagDetailLines is the pane stacked under the tag list, windowed to its
-// share of the height (tagStackRows). Beside the list, buildSideBySide gives
-// it the whole column instead.
+// share of the height (tagStackRows).
 func (m model) buildTagDetailLines() []string {
 	_, maxLines := m.tagStackRows()
 	return m.tagPaneLines(maxLines)

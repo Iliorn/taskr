@@ -64,9 +64,9 @@ const (
 	minTitleColWidth   = 20
 	minInnerWidth      = 20
 
-	// List-tab side-by-side layout (Tasks/Tags): at or above
+	// Tasks-tab side-by-side layout: at or above
 	// sideBySideMinWidth the list keeps full height on the left and the detail
-	// pane becomes an always-on preview column on the right; below it each tab
+	// pane becomes an always-on preview column on the right; below it the tab
 	// falls back to its stacked layout. The detail column takes sideDetailColPct
 	// of the content width, clamped so neither column gets unusably narrow.
 	sideBySideMinWidth = 110
