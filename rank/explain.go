@@ -108,6 +108,9 @@ type Explanation struct {
 	Above    *Neighbour
 	Below    *Neighbour
 	Shifts   []Shift
+	// StartsOn is the start date when it falls on a later day (StartsLater):
+	// the ranking sinks the task below today's work whatever it scores.
+	StartsOn time.Time
 }
 
 // ── Ranking with its effective scores ─────────────────────────────────────────
@@ -117,7 +120,7 @@ type Explanation struct {
 // max(own score, rollup) — a parent lifted by a subtask, or a blocker lifted by
 // what it blocks, ranks on the inherited number, so quoting the own-score as
 // the margin to a neighbour would be quoting the wrong one.
-func Ranking(todos []*todo.Todo, score func(*todo.Todo) float64) ([]todo.Todo, map[string]float64) {
+func Ranking(todos []*todo.Todo, now time.Time, score func(*todo.Todo) float64) ([]todo.Todo, map[string]float64) {
 	rollup := DescendantRollup(todos, score)
 	rollup = DependencyRollup(todos, rollup, score)
 	rows := make([]todo.Todo, 0, len(todos))
@@ -129,7 +132,7 @@ func Ranking(todos []*todo.Todo, score func(*todo.Todo) float64) ([]todo.Todo, m
 	// Same partition the live list applies, or `taskr top` and the explain
 	// view would rank a blocked task the list has already pushed to the bottom.
 	blocked, _ := DependencySets(todos)
-	SortValues(rows, rollup, blocked, score)
+	SortValues(rows, rollup, Sunk(blocked, todos, now), score)
 	eff := make(map[string]float64, len(rows))
 	for i := range rows {
 		eff[rows[i].ID] = ScoreOf(&rows[i], rollup, score)
@@ -282,7 +285,7 @@ func Forecast(now time.Time, t *todo.Todo, all []*todo.Todo, b Biases, heat Heat
 // RankingAt ranks the whole set with an explicit clock and heat snapshot —
 // the same ordering the Tasks tab shows, evaluated at another moment.
 func RankingAt(now time.Time, all []*todo.Todo, b Biases, heat Heat) []todo.Todo {
-	rows, _ := Ranking(all, func(t *todo.Todo) float64 {
+	rows, _ := Ranking(all, now, func(t *todo.Todo) float64 {
 		return ComponentsAt(now, t, b, heat).Total
 	})
 	return rows
@@ -315,9 +318,12 @@ func ExplainAt(now time.Time, t *todo.Todo, all []*todo.Todo, b Biases, heat Hea
 		return e
 	}
 	e.Factors = FactorsAt(now, t, b, heat)
+	if StartsLater(t, now) {
+		e.StartsOn = t.StartDate
+	}
 
 	score := func(x *todo.Todo) float64 { return ComponentsAt(now, x, b, heat).Total }
-	rows, eff := Ranking(all, score)
+	rows, eff := Ranking(all, now, score)
 	e.Of = len(rows)
 	// eff already carries the lifts, so the overlay's 100% is the list's 100%.
 	e.FieldMax = MaxRanked(all, eff, score)

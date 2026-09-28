@@ -2,6 +2,7 @@ package main
 
 import (
 	"strings"
+	"time"
 
 	"github.com/Iliorn/taskr/rank"
 	"github.com/Iliorn/taskr/todo"
@@ -202,19 +203,19 @@ func todoMatchesFocus(t todo.Todo, focus bool) bool {
 // descendants for ranking only — the displayed score stays the parent's own —
 // so a high-priority subtask pulls its parent up rather than hiding beneath a
 // calmer one.
-func selectActiveDone(todos []*todo.Todo, score func(*todo.Todo) float64, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
+func selectActiveDone(todos []*todo.Todo, now time.Time, score func(*todo.Todo) float64, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
 	var rollup map[string]float64
 	if sortMode == taskSortSequence {
 		rollup = rank.Lifts(todos, score)
 	}
-	return selectActiveDoneRanked(todos, rollup, score, search, focus, sortMode, historyMode)
+	return selectActiveDoneRanked(todos, rollup, now, score, search, focus, sortMode, historyMode)
 }
 
 // selectActiveDoneRanked takes the lift map from its caller. The model computes
 // it once per data change and caches it: it depends on the task set, not on the
 // filter, so recomputing it inside the per-keystroke search path walked every
 // task twice for an answer that had not changed.
-func selectActiveDoneRanked(todos []*todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
+func selectActiveDoneRanked(todos []*todo.Todo, rollup map[string]float64, now time.Time, score func(*todo.Todo) float64, search string, focus bool, sortMode taskSortMode, historyMode historySortMode) (active, done []todo.Todo) {
 	match := compileSearch(search)
 	// Split and sort as pointers, then materialize once at the end. The caches
 	// hold values — they outlive this call and are read while the store mutates
@@ -234,20 +235,21 @@ func selectActiveDoneRanked(todos []*todo.Todo, rollup map[string]float64, score
 	}
 	// Active tasks rank by taskSort; the done list has its own history sort,
 	// since the active modes (score, size) carry no meaning once tasks close.
-	// Blocked work sinks below everything that can be started today (see
-	// rank.SortPtrs). Derived from the whole slice, not from activeP:
-	// the task holding one up may be a subtask, or filtered out of view.
+	// Blocked work, and work not due to start until a later day, sinks below
+	// everything that can be started today (see rank.SortPtrs). The blocked set
+	// is derived from the whole slice, not from activeP: the task holding one
+	// up may be a subtask, or filtered out of view.
 	switch sortMode {
 	case taskSortSequence:
 		blocked, _ := rank.DependencySets(todos)
-		rank.SortPtrs(activeP, rollup, blocked, score)
+		rank.SortPtrs(activeP, rollup, rank.Sunk(blocked, activeP, now), score)
 	case taskSortDueDate:
 		sortTodoPtrs(activeP, lessByDueDate)
 	case taskSortSize:
 		sortTodoPtrs(activeP, lessBySize)
 	default:
 		blocked, _ := rank.DependencySets(todos)
-		rank.SortPtrs(activeP, nil, blocked, score)
+		rank.SortPtrs(activeP, nil, rank.Sunk(blocked, activeP, now), score)
 	}
 	sortTodoPtrs(doneP, historyLess(historyMode))
 	return todoValues(activeP), todoValues(doneP)

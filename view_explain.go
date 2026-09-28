@@ -133,6 +133,15 @@ func seqHeadline(e rank.Explanation) string {
 	return fmt.Sprintf(tr("#%d of %d by sequence · %s"), e.Pos, e.Of, formatPercentOf(e.Total, e.FieldMax))
 }
 
+// seqStartsLine says why a task with a later start date sits below work that
+// scores less: the position comes from the date, not the score beside it.
+func seqStartsLine(e rank.Explanation) string {
+	if e.StartsOn.IsZero() {
+		return ""
+	}
+	return fmt.Sprintf(tr("starts %s — ranked below the work you can start today"), e.StartsOn.Format("02-01-06"))
+}
+
 // seqScaleLine says what 100% currently costs. Normalizing against the live
 // field means the mark moves when the top task is finished; naming it turns
 // that from a number quietly changing under the user into a stated fact.
@@ -213,6 +222,9 @@ func (m model) explainBodyRows(e rank.Explanation, width int) []string {
 	if e.Boosted {
 		add("  " + helpStyle.Render(truncate(fmt.Sprintf(
 			tr("ranked on %.1f — lifted by a subtask or by work waiting on it"), e.Ranked), width-2)))
+	}
+	if s := seqStartsLine(e); s != "" {
+		add("  " + helpStyle.Render(truncate(s, width-2)))
 	}
 	if m.taskSort != taskSortSequence {
 		add("  " + dimStyle.Render(truncate(tr("the list is on another sort right now — this is the Sequence ranking"), width-2)))
@@ -346,6 +358,9 @@ func explainPlainLines(e rank.Explanation) []string {
 	}
 	if e.Boosted {
 		lines = append(lines, "  "+fmt.Sprintf(tr("ranked on %.1f — lifted by a subtask or by work waiting on it"), e.Ranked))
+	}
+	if s := seqStartsLine(e); s != "" {
+		lines = append(lines, "  "+s)
 	}
 	if e.Done {
 		return lines

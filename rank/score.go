@@ -594,7 +594,7 @@ func (r Ranker) FormatPercent(score float64) string {
 // The result is the same critical-path ordering (subtask + dependency rollups
 // applied) as the live path — only the scoring inputs differ.
 func TopWith(todos []*todo.Todo, b Biases, heat Heat, now time.Time) []todo.Todo {
-	return TopBy(todos, func(t *todo.Todo) float64 {
+	return TopBy(todos, now, func(t *todo.Todo) float64 {
 		return ComponentsAt(now, t, b, heat).Total
 	})
 }
@@ -617,7 +617,8 @@ func CaptureRankAtDone(r Ranker, todos []*todo.Todo, t *todo.Todo) {
 	if t.ParentID != "" {
 		return
 	}
-	for i, row := range TopBy(todos, r.ScoreNow()) {
+	now := time.Now()
+	for i, row := range TopBy(todos, now, r.ScoreAt(now)) {
 		if row.ID == t.ID {
 			t.SeqRankAtDone = i + 1
 			return

@@ -799,6 +799,7 @@ var daTranslations = map[string]string{
 	"%s · not in the ranking (subtasks rank with their parent)":            "%s · uden for rangeringen (delopgaver rangerer med deres forælder)",
 	"done — done tasks score 0 and leave the ranking":                      "færdig — færdige opgaver scorer 0 og forlader rangeringen",
 	"ranked on %.1f — lifted by a subtask or by work waiting on it":        "rangeret på %.1f — løftet af en delopgave eller af arbejde, der venter på den",
+	"starts %s — ranked below the work you can start today":                "starter %s — rangeret under det arbejde, du kan starte i dag",
 	"the list is on another sort right now — this is the Sequence ranking": "listen er sorteret anderledes lige nu — dette er sekvensrangeringen",
 	"%.1f points short of #%d %s":                                          "%.1f point fra at overhale #%d %s",
 	"%.1f points clear of #%d %s":                                          "%.1f point foran #%d %s",
@@ -812,7 +813,7 @@ var daTranslations = map[string]string{
 	"in %dm":                                                               "om %dm",
 	"in %dh":                                                               "om %dt",
 	"in %dd":                                                               "om %dd",
-	"esc or w to close  ·  tune the weights in Settings → Sequencer": "esc eller w lukker  ·  justér vægtene i Indstillinger → Sekvensering",
+	"esc or w to close  ·  tune the weights in Settings → Sequencer":       "esc eller w lukker  ·  justér vægtene i Indstillinger → Sekvensering",
 
 	// ── Why this rank: the sentence behind each score factor ──
 	"no due date":     "ingen forfaldsdato",
@@ -1444,6 +1445,7 @@ var deTranslations = map[string]string{
 	"%s · not in the ranking (subtasks rank with their parent)":            "%s · nicht in der Rangliste (Teilaufgaben zählen bei ihrer Hauptaufgabe)",
 	"done — done tasks score 0 and leave the ranking":                      "erledigt — erledigte Aufgaben zählen 0 und verlassen die Rangliste",
 	"ranked on %.1f — lifted by a subtask or by work waiting on it":        "eingestuft mit %.1f — angehoben durch eine Teilaufgabe oder durch wartende Arbeit",
+	"starts %s — ranked below the work you can start today":                "beginnt am %s — eingestuft unter der Arbeit, die du heute anfangen kannst",
 	"the list is on another sort right now — this is the Sequence ranking": "die Liste ist gerade anders sortiert — dies ist die Sequenz-Rangliste",
 	"%.1f points short of #%d %s":                                          "%.1f Punkte fehlen zu #%d %s",
 	"%.1f points clear of #%d %s":                                          "%.1f Punkte Vorsprung vor #%d %s",
@@ -1457,7 +1459,7 @@ var deTranslations = map[string]string{
 	"in %dm":                                                               "in %dm",
 	"in %dh":                                                               "in %dh",
 	"in %dd":                                                               "in %dT",
-	"esc or w to close  ·  tune the weights in Settings → Sequencer": "esc oder w schließt  ·  Gewichte in Einstellungen → Sequenzierung",
+	"esc or w to close  ·  tune the weights in Settings → Sequencer":       "esc oder w schließt  ·  Gewichte in Einstellungen → Sequenzierung",
 
 	// ── Why this rank: the sentence behind each score factor ──
 	"no due date":     "kein Fälligkeitsdatum",

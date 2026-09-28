@@ -189,6 +189,9 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSyncDone(msg)
 	case reminderTickMsg:
 		cmds := []tea.Cmd{reminderTick()}
+		if !startOfDay(m.cache.builtAt).Equal(startOfDay(msg.at)) {
+			m.markCacheDirty()
+		}
 		send, flashed := m.checkReminder(msg.at)
 		if send != nil {
 			cmds = append(cmds, send)

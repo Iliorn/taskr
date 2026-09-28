@@ -35,7 +35,7 @@ func TestSelectActiveDoneFilterAndSort(t *testing.T) {
 	sub.ParentID = "a" // subtasks are excluded from the top-level lists
 	todos := []todo.Todo{a, b, c, sub}
 
-	active, done := selectActiveDone(todoPtrs(todos), rank.Default().ScoreNow(), "", false, taskSortDueDate, historySortCompleted)
+	active, done := selectActiveDone(todoPtrs(todos), time.Now(), rank.Default().ScoreNow(), "", false, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 2 || got[0] != "b" || got[1] != "a" {
 		t.Fatalf("active = %v, want [b a] (sorted by due date, subtask excluded)", got)
 	}
@@ -60,13 +60,13 @@ func TestSelectActiveDoneHistorySort(t *testing.T) {
 	todos := []todo.Todo{a, b, c}
 
 	// Completed mode: most recent first, regardless of the active sort mode.
-	_, done := selectActiveDone(todoPtrs(todos), rank.Default().ScoreNow(), "", false, taskSortSequence, historySortCompleted)
+	_, done := selectActiveDone(todoPtrs(todos), time.Now(), rank.Default().ScoreNow(), "", false, taskSortSequence, historySortCompleted)
 	if got := ids(done); len(got) != 3 || got[0] != "c" || got[1] != "b" || got[2] != "a" {
 		t.Fatalf("history completed = %v, want [c b a] (most recent first)", got)
 	}
 
 	// Alpha mode: title A→Z.
-	_, done = selectActiveDone(todoPtrs(todos), rank.Default().ScoreNow(), "", false, taskSortSize, historySortAlpha)
+	_, done = selectActiveDone(todoPtrs(todos), time.Now(), rank.Default().ScoreNow(), "", false, taskSortSize, historySortAlpha)
 	if got := ids(done); len(got) != 3 || got[0] != "b" || got[1] != "c" || got[2] != "a" {
 		t.Fatalf("history alpha = %v, want [b c a] (apple, mango, zebra)", got)
 	}
@@ -87,7 +87,7 @@ func TestDependencyBoostLiftsBlockerAboveDependent(t *testing.T) {
 		t.Fatalf("precondition: blocker raw score should be below urgent")
 	}
 
-	active, _ := selectActiveDone(todoPtrs([]todo.Todo{blocker, urgent}), rank.Default().ScoreNow(), "", false, taskSortSequence, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{blocker, urgent}), time.Now(), rank.Default().ScoreNow(), "", false, taskSortSequence, historySortCompleted)
 	if got := ids(active); len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Fatalf("active = %v, want [a b] (blocker lifted above its dependent)", got)
 	}
@@ -105,7 +105,7 @@ func TestDependencyBoostTransitiveChain(t *testing.T) {
 	c.Priority = todo.PriorityHigh
 	c.Dependencies = []string{"b"}
 
-	active, _ := selectActiveDone(todoPtrs([]todo.Todo{a, b, c}), rank.Default().ScoreNow(), "", false, taskSortSequence, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{a, b, c}), time.Now(), rank.Default().ScoreNow(), "", false, taskSortSequence, historySortCompleted)
 	if got := ids(active); len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {
 		t.Fatalf("active = %v, want [a b c] (chain lifted in dependency order)", got)
 	}
@@ -146,7 +146,7 @@ func TestDependencyFanOutBonus(t *testing.T) {
 	}
 
 	// And the ranking reflects it: wide sorts above narrow.
-	active, _ := selectActiveDone(todoPtrs(todos), rank.Default().ScoreNow(), "", false, taskSortSequence, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs(todos), time.Now(), rank.Default().ScoreNow(), "", false, taskSortSequence, historySortCompleted)
 	wideAt, narrowAt := -1, -1
 	for i, id := range ids(active) {
 		switch id {
@@ -168,7 +168,7 @@ func TestDependencyBoostCycleSafe(t *testing.T) {
 	b := mkTodo("b", "b", todo.Pending)
 	b.Dependencies = []string{"a"}
 	// Just assert it returns; a non-terminating walk would hang the test.
-	selectActiveDone(todoPtrs([]todo.Todo{a, b}), rank.Default().ScoreNow(), "", false, taskSortSequence, historySortCompleted)
+	selectActiveDone(todoPtrs([]todo.Todo{a, b}), time.Now(), rank.Default().ScoreNow(), "", false, taskSortSequence, historySortCompleted)
 }
 
 // The dependency picker must hide tasks that would close a loop: the current
@@ -207,7 +207,7 @@ func TestLoopingDepCandidates(t *testing.T) {
 func TestSelectActiveDoneSearch(t *testing.T) {
 	p1 := mkTodo("a", "buy milk", todo.Pending)
 	p2 := mkTodo("b", "walk dog", todo.Pending)
-	active, _ := selectActiveDone(todoPtrs([]todo.Todo{p1, p2}), rank.Default().ScoreNow(), "milk", false, taskSortDueDate, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{p1, p2}), time.Now(), rank.Default().ScoreNow(), "milk", false, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 1 || got[0] != "a" {
 		t.Fatalf("search active = %v, want [a]", got)
 	}
@@ -229,13 +229,13 @@ func TestSelectActiveDoneStableUnderShuffle(t *testing.T) {
 	base := []todo.Todo{mkDone("a"), mkDone("b"), mkDone("c"), mkDone("d")}
 
 	for _, mode := range []taskSortMode{taskSortSequence, taskSortDueDate, taskSortSize} {
-		_, want := selectActiveDone(todoPtrs(base), rank.Default().ScoreNow(), "", false, mode, historySortCompleted)
+		_, want := selectActiveDone(todoPtrs(base), time.Now(), rank.Default().ScoreNow(), "", false, mode, historySortCompleted)
 		for shuffle, perm := range [][]int{{3, 2, 1, 0}, {1, 3, 0, 2}, {2, 0, 3, 1}} {
 			in := make([]todo.Todo, len(base))
 			for i, p := range perm {
 				in[i] = base[p]
 			}
-			_, got := selectActiveDone(todoPtrs(in), rank.Default().ScoreNow(), "", false, mode, historySortCompleted)
+			_, got := selectActiveDone(todoPtrs(in), time.Now(), rank.Default().ScoreNow(), "", false, mode, historySortCompleted)
 			if w, g := ids(want), ids(got); !equalStrings(w, g) {
 				t.Errorf("mode=%v shuffle=%d: got %v, want %v", mode, shuffle, g, w)
 			}
@@ -262,7 +262,7 @@ func TestSelectActiveDoneFocusFilter(t *testing.T) {
 	future := mkTodo("f", "future", todo.Pending)
 	future.DueDate = now.AddDate(0, 0, 10)
 	// focus filter keeps only overdue/due-today
-	active, _ := selectActiveDone(todoPtrs([]todo.Todo{overdue, future}), rank.Default().ScoreNow(), "", true, taskSortDueDate, historySortCompleted)
+	active, _ := selectActiveDone(todoPtrs([]todo.Todo{overdue, future}), time.Now(), rank.Default().ScoreNow(), "", true, taskSortDueDate, historySortCompleted)
 	if got := ids(active); len(got) != 1 || got[0] != "o" {
 		t.Fatalf("focus active = %v, want [o]", got)
 	}
@@ -667,5 +667,32 @@ func TestBlockedWorkSinksBelowStartableWork(t *testing.T) {
 	m.refreshCaches()
 	if first := m.cache.active[0]; first.ID != urgent.ID {
 		t.Errorf("once unblocked the overdue task should lead, got %q", first.Title)
+	}
+}
+
+// A start date on a later day sinks the task the same way, without the
+// blocked glyph: nothing is holding it up but the calendar.
+func TestLaterStartSinksBelowStartableWork(t *testing.T) {
+	urgent := todo.New("book the venue")
+	urgent.Priority = todo.PriorityHigh
+	urgent.DueDate = time.Now().Add(-48 * time.Hour)
+	urgent.SetStartDate(time.Now().AddDate(0, 0, 2))
+	calm := todo.New("tidy the notes")
+	calm.Priority = todo.PriorityLow
+
+	m := modelWithTasks(t, urgent, calm)
+	m.taskSort = taskSortSequence
+	m.refreshCaches()
+
+	if last := m.cache.active[1]; last.ID != urgent.ID {
+		t.Errorf("the task starting in two days should sort last, got %q", last.Title)
+	}
+	if m.cache.blockedSet[urgent.ID] {
+		t.Error("a later start date put the task in the blocked set")
+	}
+	m.get(urgent.ID).SetStartDate(time.Now())
+	m.refreshCaches()
+	if first := m.cache.active[0]; first.ID != urgent.ID {
+		t.Errorf("starting today, the overdue task should lead, got %q", first.Title)
 	}
 }

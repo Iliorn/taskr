@@ -410,13 +410,14 @@ func cliSortNames() []string {
 // it is total and the output is reproducible between runs, matching the
 // house rule for the comparators in storage.go.
 // blocked (nil when the caller has none on hand) sinks work waiting on an
-// unfinished dependency below work that can be started, in the sequence order
-// only — an explicit --sort=due or --sort=size is an instruction to order by
+// unfinished dependency below work that can be started, and so does a start
+// date on a later day, in the sequence order only — an explicit --sort=due or --sort=size is an instruction to order by
 // that key alone.
 func sortTodosByCLIMode(rows []todo.Todo, mode string, blocked map[string]bool, rk rank.Ranker) error {
 	switch mode {
 	case "", "seq":
-		rank.SortValues(rows, nil, blocked, rk.ScoreNow())
+		now := time.Now()
+		rank.SortValues(rows, nil, rank.Sunk(blocked, todoPtrs(rows), now), rk.ScoreAt(now))
 	case "due":
 		sortTodosByMode(rows, taskSortDueDate, nil)
 	case "size":

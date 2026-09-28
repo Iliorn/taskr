@@ -70,6 +70,32 @@ func DependencySets(all []*todo.Todo) (blocked, blocker map[string]bool) {
 	return blocked, blocker
 }
 
+// StartsLater reports whether t is pending with a start date on a later day
+// than now. Start dates are calendar days, like due dates, so a task set to
+// start tomorrow comes back at midnight rather than at the time of day
+// SetStartDate stamped on it.
+func StartsLater(t *todo.Todo, now time.Time) bool {
+	return t.Status != todo.Done && !t.StartDate.IsZero() &&
+		startOfDay(t.StartDate).After(startOfDay(now))
+}
+
+// Sunk is the set the sequence sort ranks below the work that can be picked up
+// today: blocked (from DependencySets), plus every task in todos that
+// StartsLater. blocked is not modified; the cache still renders it as the
+// dependency marker, which a start date is not.
+func Sunk(blocked map[string]bool, todos []*todo.Todo, now time.Time) map[string]bool {
+	out := make(map[string]bool, len(blocked))
+	for id, b := range blocked {
+		out[id] = b
+	}
+	for _, t := range todos {
+		if StartsLater(t, now) {
+			out[t.ID] = true
+		}
+	}
+	return out
+}
+
 // DescendantRollup walks the full task slice and returns, per top-level
 // ID, the max score observed across all of its transitive subtasks.
 // Pure: builds its own parent index in one pass and follows ParentID chains
@@ -245,29 +271,30 @@ func LessTie(a, b *todo.Todo) bool {
 // the comparator reads a float field instead of hashing an ID into a score map
 // on every comparison.
 //
-// blocked (nil when the caller has no dependency set on hand) partitions ahead
-// of the score: work waiting on an unfinished dependency sorts below work that
-// can be started, however urgent it is. A list whose top is always something
+// sunk (nil when the caller has no such set on hand; usually Sunk's result)
+// partitions ahead of the score: work waiting on an unfinished dependency, or
+// not due to start until a later day, sorts below work that can be started,
+// however urgent it is. A list whose top is always something
 // you can pick up right now is the whole point of the ranking — and it is what
 // lets the row drop its blocked marker from the status column, since position
 // now carries the fact. Within each half the ordering is unchanged, so a
 // blocker still outranks what it holds up.
-func SortPtrs(todos []*todo.Todo, rollup map[string]float64, blocked map[string]bool, score func(*todo.Todo) float64) {
+func SortPtrs(todos []*todo.Todo, rollup map[string]float64, sunk map[string]bool, score func(*todo.Todo) float64) {
 	if len(todos) <= 1 {
 		return
 	}
 	type scored struct {
-		t       *todo.Todo
-		score   float64
-		blocked bool
+		t     *todo.Todo
+		score float64
+		sunk  bool
 	}
 	rows := make([]scored, len(todos))
 	for i, t := range todos {
-		rows[i] = scored{t, ScoreOf(t, rollup, score), blocked[t.ID]}
+		rows[i] = scored{t, ScoreOf(t, rollup, score), sunk[t.ID]}
 	}
 	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].blocked != rows[j].blocked {
-			return rows[j].blocked
+		if rows[i].sunk != rows[j].sunk {
+			return rows[j].sunk
 		}
 		if rows[i].score != rows[j].score {
 			return rows[i].score > rows[j].score
@@ -286,14 +313,14 @@ func SortPtrs(todos []*todo.Todo, rollup map[string]float64, blocked map[string]
 // parent doesn't disappear into the bottom of the list. Passing nil
 // preserves the original behaviour (used by callers that don't have the
 // child set on hand, e.g. on-disk loads).
-func SortValues(todos []todo.Todo, rollup map[string]float64, blocked map[string]bool, score func(*todo.Todo) float64) {
+func SortValues(todos []todo.Todo, rollup map[string]float64, sunk map[string]bool, score func(*todo.Todo) float64) {
 	if len(todos) <= 1 {
 		return
 	}
 	// Sort the pointers, then permute the values once: the same ordering with
 	// 8-byte swaps instead of 416-byte ones.
 	ptrs := todoPtrs(todos)
-	SortPtrs(ptrs, rollup, blocked, score)
+	SortPtrs(ptrs, rollup, sunk, score)
 	sorted := make([]todo.Todo, len(todos))
 	for i, t := range ptrs {
 		sorted[i] = *t
@@ -310,17 +337,18 @@ func SortValues(todos []todo.Todo, rollup map[string]float64, blocked map[string
 // -n limit. `taskr top`'s displayed SCORE stays each task's own score (matching
 // the TUI); only the ordering reflects the boost.
 func (r Ranker) Top(todos []*todo.Todo) []todo.Todo {
-	return TopBy(todos, r.ScoreNow())
+	now := time.Now()
+	return TopBy(todos, now, r.ScoreAt(now))
 }
 
 // TopBy is the shared implementation behind Top and TopWith. It accepts an
 // arbitrary score function so callers can supply knob values that are not
 // live yet (the preview path) or the live ranker (the CLI and TUI paths). The rollup and sort logic — subtask inheritance, critical-path
 // dependency boost, fan-out bonus, cycle-safe DFS — is identical for both.
-func TopBy(todos []*todo.Todo, score func(*todo.Todo) float64) []todo.Todo {
+func TopBy(todos []*todo.Todo, now time.Time, score func(*todo.Todo) float64) []todo.Todo {
 	// Ranking (explain.go) is the same fold; it also hands back the
 	// effective score each row sorted by, which only the explain view needs.
-	rows, _ := Ranking(todos, score)
+	rows, _ := Ranking(todos, now, score)
 	return rows
 }
 

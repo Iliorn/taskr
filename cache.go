@@ -50,6 +50,10 @@ type cacheState struct {
 	// than scanned per frame for the reason the row metrics are: View runs on
 	// every keystroke, and the done list is the one that only ever grows.
 	closedToday []todo.Todo
+	// builtAt is when refreshCaches last ran. The overdue set and the sequence
+	// order's start-date partition are true for a calendar day, so the minute
+	// tick rebuilds once the day has turned.
+	builtAt time.Time
 
 	// Tasks-tab column-sizing metrics for the active list: the widest rendered
 	// row content and the widest tag cell. Derived from the active set + overdue
@@ -65,6 +69,7 @@ type cacheState struct {
 
 func (m *model) refreshCaches() {
 	m.frameTime = time.Now()
+	m.cache.builtAt = m.frameTime
 	m.cache.groupLists, m.cache.dayActs = nil, nil
 
 	all := m.allTodos()
@@ -93,7 +98,7 @@ func (m *model) refreshCaches() {
 
 	m.rebuildDependencySets(all)
 
-	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.rank.ScoreNow(), m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
+	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.frameTime, m.rank.ScoreAt(m.frameTime), m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 
 	m.refreshUsageRecency(all)
 	m.refreshGroups(all)
@@ -217,7 +222,7 @@ func (m model) rankedScore(t *todo.Todo) float64 {
 // entire task set on every keypress for no reason.
 func (m *model) refreshFilteredCaches() {
 	all := m.allTodos()
-	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.rank.ScoreNow(), m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
+	m.cache.active, m.cache.done = selectActiveDoneRanked(all, m.cache.rankScore, m.frameTime, m.rank.ScoreAt(m.frameTime), m.searchQuery, m.focusFilter, m.taskSort, m.historySort)
 	m.refreshTagRenderCache()
 	m.refreshTaskColMetrics()
 	m.refreshClosedToday()
