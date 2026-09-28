@@ -10,16 +10,15 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"git.sr.ht/~jackmordaunt/go-toast/v2/wintoast"
 )
 
 // Desktop notifications go through what each platform already has, so taskr
-// needs no cgo: notify-send on Linux and the BSDs, osascript on macOS, and on
-// Windows the toast API called directly over COM (wintoast). Windows does not
-// go through PowerShell: an organisation can lock PowerShell into Constrained
-// Language Mode, which blocks the WinRT calls a toast script makes, while a
-// program calling the API itself is an ordinary desktop app.
+// needs no cgo and no notification library: notify-send on Linux and the
+// BSDs, osascript on macOS, and on Windows the toast API called directly over
+// COM (notify_windows.go). Windows does not go through PowerShell: an
+// organisation can lock PowerShell into Constrained Language Mode, which
+// blocks the WinRT calls a toast script makes, while a program calling the
+// API itself is an ordinary desktop app.
 
 // sendDesktopNotification is a variable so tests can capture a notification
 // instead of showing one.
@@ -74,30 +73,6 @@ func notifyInstallHint(goos string) string {
 		return ""
 	}
 	return " — install libnotify (Debian/Ubuntu: apt install libnotify-bin)"
-}
-
-// Windows shows a toast only for an app it knows by an AppUserModelID.
-// wintoast registers taskr's under the current user
-// (HKCU\Software\Classes\AppUserModelId\taskr: a display name, and the class
-// its click callback would use, fixed here so it is taskr's own). That is the
-// per-user registration any desktop app makes and needs no administrator.
-const (
-	toastAppID = "taskr"
-	toastGUID  = "{9A35CAD8-E3DC-4CBA-A96C-6BE92FDAC825}"
-)
-
-func windowsToast(title, body string) error {
-	// The runtime is initialised once for the process; holding the thread for
-	// the call keeps the registration and the push on the one it started on.
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	if err := wintoast.SetAppData(wintoast.AppData{AppID: toastAppID, GUID: toastGUID}); err != nil {
-		return fmt.Errorf("registering taskr for notifications: %w", err)
-	}
-	if err := wintoast.Push(toastAppID, toastXML(title, body)); err != nil {
-		return fmt.Errorf("toast: %w", err)
-	}
-	return nil
 }
 
 // toastXML is the toast's content: the heading and the body as the two text
