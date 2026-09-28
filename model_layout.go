@@ -350,19 +350,65 @@ func (m model) estimateListHeight() int {
 	return available
 }
 
-// projectListVisibleRows is how many project rows the Projects tab shows. The
-// list panel gets a third of the list area (the Gantt preview takes the rest),
+// splitStack divides area rows between a Tags or Projects list and the pane
+// stacked under it, both counted in outer panel rows. Each gets what it needs
+// when that fits. When it doesn't, the list keeps its need up to half the
+// area, and past half only what the pane leaves over: a few groups hand the
+// room to the tasks under them, a short pane hands it to a long list, and two
+// full panels split evenly. Returns the list's share; the pane gets the rest.
+func splitStack(area, listNeed, paneNeed int) int {
+	list := min(listNeed, max(area/2, area-paneNeed))
+	return max(list, minListPanelLines+detailBorderLines)
+}
+
+// stackArea is the height the stacked group list and its pane share: the
+// window less the header, the key hints, and the timer line above them.
+func (m model) stackArea() int {
+	h := m.termHeight - minHeaderLines - footerHeight
+	if m.anyTimerRunning() {
+		h--
+	}
+	return h
+}
+
+// tagStackRows is the stacked Tags tab's split: how many tag rows the list
+// shows (its panel less the column header) and how many lines the pane under
+// it has. View, renderTagList and the offset clamp all read it, so the rows
+// drawn are the rows the cursor is kept inside.
+func (m model) tagStackRows() (listRows, paneLines int) {
+	area := m.stackArea()
+	paneNeed := len(m.tagPaneLines(area)) + detailBorderLines
+	listOuter := splitStack(area, len(m.getFilteredTagsForTab())+1+detailBorderLines, paneNeed)
+	return max(panelContentHeight(listOuter)-1, 1), max(area-listOuter-detailBorderLines, minDetailHeight)
+}
+
+// tagListVisibleRows is how many tag rows the Tags tab shows: its share of a
+// stacked split while the pane sits under it, and otherwise the whole list.
+func (m model) tagListVisibleRows() int {
+	if m.detailVisible() {
+		rows, _ := m.tagStackRows()
+		return rows
+	}
+	return m.estimateListHeight()
+}
+
+// projectListVisibleRows is how many project rows the Projects tab shows: the
+// list panel's share of the list area (splitStack against the pane under it),
 // less one line for the header. Both the render window (renderProjectListContent)
 // and the offset clamp read this, so the project cursor can't scroll below the
 // visible rows. The Projects tab hides the task detail pane, so estimateListHeight
 // (detailH = 0 there) stays at or below the layout's actual list height, which
 // keeps the rendered window from being clipped by the panel's own height cap.
 func (m model) projectListVisibleRows() int {
-	rows := m.estimateListHeight()/3 - 1
-	if rows < minListPanelLines-1 {
-		rows = minListPanelLines - 1
-	}
-	return rows
+	return panelContentHeight(m.projectListOuter(m.estimateListHeight())) - 1
+}
+
+// projectListOuter is the project list panel's outer height within listH.
+func (m model) projectListOuter(listH int) int {
+	projects := m.allProjectsForList()
+	pane, _ := m.projectPane(projects, listH)
+	paneNeed := len(pane) + detailBorderLines
+	return splitStack(listH, len(projects)+1+detailBorderLines, paneNeed)
 }
 
 // projectDrillTaskVisibleRows is the number of task rows shown in the left

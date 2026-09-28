@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Iliorn/taskr/todo"
@@ -151,5 +153,51 @@ func TestListHeightFillsWhenDetailHidden(t *testing.T) {
 	if sbsWith != sbsWithout {
 		t.Errorf("side-by-side: list height should be pane-independent: focused=%d unfocused=%d",
 			sbsWith, sbsWithout)
+	}
+}
+
+func TestSplitStackGivesEachPanelWhatItNeeds(t *testing.T) {
+	cases := []struct {
+		name                     string
+		area, listNeed, paneNeed int
+		wantList                 int
+	}{
+		{"both fit: the list hugs its rows", 40, 8, 20, 8},
+		{"few groups, long pane: the pane takes the rest", 40, 8, 90, 8},
+		{"many groups, short pane: the list takes the rest", 40, 90, 12, 28},
+		{"both overflow: half each", 40, 90, 90, 20},
+		{"never below the panel floor", 40, 2, 90, minListPanelLines + detailBorderLines},
+	}
+	for _, c := range cases {
+		if got := splitStack(c.area, c.listNeed, c.paneNeed); got != c.wantList {
+			t.Errorf("%s: splitStack(%d, %d, %d) = %d, want %d", c.name, c.area, c.listNeed, c.paneNeed, got, c.wantList)
+		}
+	}
+}
+
+// A few tags with many tasks: the tag list shrinks to its rows and the tasks
+// under it get the rest, stacked or beside it.
+func TestTagsTabGivesTheRoomToTheTasks(t *testing.T) {
+	var ts []todo.Todo
+	for i := 0; i < 40; i++ {
+		x := todo.New(fmt.Sprintf("Work item %d", i))
+		x.AddTag("work")
+		ts = append(ts, x)
+	}
+	home := todo.New("Home item")
+	home.AddTag("home")
+	ts = append(ts, home)
+
+	for _, w := range []int{90, 120} { // stacked, then side by side
+		m := modelWithTasks(t, ts...)
+		m.termWidth, m.tab = w, tabTags
+		m.clampCursors()
+		view := m.View()
+		rows := strings.Count(view, "[ ] Work item")
+		// 40 rows less the header, key hints, the tag list (two rows plus its
+		// header and panel), and the pane's own summary and chrome.
+		if rows < 20 {
+			t.Errorf("width %d: %d task rows shown in a 40-row window, want at least 20\n%s", w, rows, view)
+		}
 	}
 }

@@ -13,6 +13,10 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+### Changed
+
+- Tags and Projects size the list to its rows and give the rest of the height to the tasks.
+
 ### Fixed
 
 - West of UTC, a typed date like `05-10-26` no longer saves as the day before.

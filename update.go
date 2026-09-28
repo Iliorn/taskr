@@ -1067,7 +1067,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clampListOffsetVisible(m.projectCursor, len(m.allProjectsForList()), m.projectListVisibleRows())
 		}
 	case tabTags:
-		m.clampListOffsetFor(m.tagTabCursor, len(m.getFilteredTagsForTab()))
+		m.clampListOffsetVisible(m.tagTabCursor, len(m.getFilteredTagsForTab()), m.tagListVisibleRows())
 	}
 	return m, flashCmd
 }

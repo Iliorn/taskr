@@ -187,7 +187,11 @@ everything.
   (`tagGroupKeys`/`inTagGroup`, `projectGroupKeys`/`inProjectGroup`); the two
   halves must agree, or a row counts a different list from the one enter
   opens. Summaries are built in `refreshCaches` (`refreshGroups`). Both lists
-  draw through `renderGroupRows` and their panes through `groupPaneLines`. The
+  draw through `renderGroupRows` and their panes through `groupPaneLines`.
+  Stacked, the list and its pane split the height by need (`splitStack`):
+  each gets its rows while both fit, and two full panels get half each.
+  `tagStackRows`/`projectListOuter` are read by the render and the offset
+  clamp alike, so the rows drawn are the rows the cursor is kept in. The
   Projects pane shows the timeline only when an open task has a date
   (`hasDatedOpenTask`), and the timeline always reaches today
   (`ganttDateWindow`).

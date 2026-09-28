@@ -364,6 +364,15 @@ func (m model) View() string {
 			// unclipped line pushes the whole box past the terminal edge on a
 			// narrow window — every other pane clips for the same reason.
 			detailBody := strings.Split(m.applyDetailScroll(detailContent), "\n")
+			if m.tab == tabTags {
+				// The stacked tag pane takes its share of the height whole, so
+				// the list above it is only as tall as its rows (tagStackRows).
+				_, paneLines := m.tagStackRows()
+				detailBody = strings.Split(m.applyDetailScrollN(detailContent, paneLines), "\n")
+				for len(detailBody) < paneLines {
+					detailBody = append(detailBody, "")
+				}
+			}
 			truncateLines(detailBody, w-2)
 			detailContent = dst.Width(w).Render(strings.Join(detailBody, "\n"))
 			detailContent = withBorderTitle(detailContent, m.detailPanelTitle(), w, focused)
@@ -924,13 +933,11 @@ func (m model) buildDetailContent() string {
 	// Projects tab, where the right column swaps the Gantt for the task
 	// detail. Without this the pane would keep showing the tag summary while
 	// the detail keyset was live.
-	case m.tab == tabTags && m.pane == paneDetail:
-		if t := m.currentTodo(); t != nil {
-			return m.renderDetailPage1(t) + "\n" +
-				m.renderDetailPage2(t) + "\n" +
-				m.renderDetailPage3(t)
-		}
-		return strings.Join(m.buildTagDetailLines(), "\n")
+	case m.tagTaskOpen():
+		t := m.currentTodo()
+		return m.renderDetailPage1(t) + "\n" +
+			m.renderDetailPage2(t) + "\n" +
+			m.renderDetailPage3(t)
 	case m.tab == tabTags:
 		lines := m.buildTagDetailLines()
 		if len(lines) == 0 {
@@ -950,6 +957,12 @@ func (m model) buildDetailContent() string {
 			m.renderDetailPage2(t) + "\n" +
 			m.renderDetailPage3(t)
 	}
+}
+
+// tagTaskOpen reports whether the Tags tab's pane shows a task opened out of
+// the tag drill rather than the tag itself.
+func (m model) tagTaskOpen() bool {
+	return m.tab == tabTags && m.pane == paneDetail && m.currentTodo() != nil
 }
 
 // ── List content builder ──────────────────────────────────────────────────────
@@ -1016,9 +1029,15 @@ func (m model) buildSideBySide(w, outerH int) string {
 	dm := m
 	dm.termWidth = detailW + 6
 	var detailLines []string
-	if m.tab == tabTasks && m.currentTodo() == nil {
+	switch {
+	case m.tab == tabTasks && m.currentTodo() == nil:
 		detailLines = []string{"", dimStyle.Render(tr("  No task selected."))}
-	} else {
+	case m.tab == tabTags && !m.tagTaskOpen():
+		// The tag pane has the whole column. It is windowed here rather than by
+		// buildTagDetailLines, which dm's narrowed width would take for the
+		// stacked layout.
+		detailLines = dm.tagPaneLines(innerH)
+	default:
 		detailLines = strings.Split(dm.applyDetailScrollN(dm.buildDetailContent(), innerH), "\n")
 	}
 
@@ -1084,11 +1103,9 @@ func (m model) buildProjectListContent(w, listH int) string {
 		return m.buildProjectDrillContent(projects, w, listH)
 	}
 
-	// ── Project list + Gantt preview (stacked, original layout) ──────────────
-	projMaxH := listH / 3
-	if projMaxH < minListPanelLines {
-		projMaxH = minListPanelLines
-	}
+	// ── Project list + the pane previewing the selected project, stacked ────
+	listOuter := m.projectListOuter(listH)
+	projMaxH := panelContentHeight(listOuter)
 	projLines := strings.Split(m.renderProjectListContent(projects), "\n")
 	projEnd := len(projLines)
 	for projEnd > 0 && strings.TrimSpace(projLines[projEnd-1]) == "" {
@@ -1112,28 +1129,7 @@ func (m model) buildProjectListContent(w, listH int) string {
 	}
 	ganttInnerH := panelContentHeight(ganttOuterH)
 
-	// The pane under the list previews the selected project: its timeline
-	// when it has open work with dates to put on one, and otherwise what the
-	// Tags tab shows under a tag — its counts and the tasks enter opens.
-	project := ""
-	var tasks []todo.Todo
-	if m.projectCursor < len(projects) {
-		project = projects[m.projectCursor]
-		tasks = m.getProjectTasks(project)
-	}
-	var ganttLines []string
-	paneTitle := projectTimelineTitle(project)
-	if hasDatedOpenTask(tasks) {
-		ganttLines = strings.Split(m.renderGantt(tasks), "\n")
-	} else if project != "" {
-		ganttLines = m.groupPaneLines(m.cache.projectGroups[project], tasks, -1, nil, ganttInnerH, false)
-		paneTitle = "@" + project
-	}
-	ganttEnd := len(ganttLines)
-	for ganttEnd > 0 && strings.TrimSpace(ganttLines[ganttEnd-1]) == "" {
-		ganttEnd--
-	}
-	ganttLines = ganttLines[:ganttEnd]
+	ganttLines, paneTitle := m.projectPane(projects, ganttInnerH)
 	if len(ganttLines) > ganttInnerH {
 		ganttLines = ganttLines[:ganttInnerH]
 	}
@@ -1150,6 +1146,32 @@ func (m model) buildProjectListContent(w, listH int) string {
 	b.WriteString("\n")
 	b.WriteString(ganttRendered)
 	return b.String()
+}
+
+// projectPane is the pane under the project list, previewing the selected
+// project: its timeline when it has open work with dates to put on one, and
+// otherwise what the Tags tab shows under a tag — its counts and the tasks
+// enter opens, windowed to maxLines. Trailing blank lines are trimmed, so its
+// length is the height the pane needs.
+func (m model) projectPane(projects []string, maxLines int) (lines []string, title string) {
+	project := ""
+	var tasks []todo.Todo
+	if m.projectCursor < len(projects) {
+		project = projects[m.projectCursor]
+		tasks = m.getProjectTasks(project)
+	}
+	title = projectTimelineTitle(project)
+	if hasDatedOpenTask(tasks) {
+		lines = strings.Split(m.renderGantt(tasks), "\n")
+	} else if project != "" {
+		lines = m.groupPaneLines(m.cache.projectGroups[project], tasks, -1, nil, maxLines, false)
+		title = "@" + project
+	}
+	end := len(lines)
+	for end > 0 && strings.TrimSpace(lines[end-1]) == "" {
+		end--
+	}
+	return lines[:end], title
 }
 
 // buildProjectDrillContent renders the drilled-in project view as two columns:
@@ -1930,7 +1952,17 @@ func (m model) buildListLines() []string {
 	return strings.Split(m.renderListContent(), "\n")
 }
 
+// buildTagDetailLines is the pane stacked under the tag list, windowed to its
+// share of the height (tagStackRows). Beside the list, buildSideBySide gives
+// it the whole column instead.
 func (m model) buildTagDetailLines() []string {
+	_, maxLines := m.tagStackRows()
+	return m.tagPaneLines(maxLines)
+}
+
+// tagPaneLines is the selected tag's pane with its task list windowed to
+// maxLines around the drill cursor.
+func (m model) tagPaneLines(maxLines int) []string {
 	tags := m.getFilteredTagsForTab()
 	if len(tags) == 0 || m.tagTabCursor >= len(tags) {
 		return strings.Split(dimStyle.Render("  No tag selected."), "\n")
@@ -1952,9 +1984,7 @@ func (m model) buildTagDetailLines() []string {
 	if m.tagTaskMode {
 		sel = m.cursor
 	}
-	// The detail pane is height-capped (see applyDetailScroll), so the list is
-	// windowed here, around the cursor, rather than left to the generic scroll.
-	maxLines := max(m.termHeight*detailMaxHeightPct/100-2, 3)
+	// Windowed here, around the cursor, rather than left to the generic scroll.
 	return m.groupPaneLines(m.cache.tagGroups[tag], tasks, sel, extra, maxLines, true)
 }
 

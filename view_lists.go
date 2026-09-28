@@ -39,7 +39,7 @@ func (m model) renderTagList() string {
 		labelStyle: tagStyle,
 		cursor:     m.tagTabCursor,
 		start:      m.listOffset,
-		count:      m.estimateListHeight(),
+		count:      m.tagListVisibleRows(),
 		label: func(key string) string {
 			if key == untaggedKey {
 				return tr("(untagged)")
