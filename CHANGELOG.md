@@ -18,6 +18,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - A daily desktop reminder lists what is due today and overdue; set its time in Settings.
 - `taskr remind` sends the same reminder from cron or a timer; `--now` sends it straight away.
 - Settings → "Subtasks copy tags" chooses whether a new subtask takes its parent's tags.
+- The Calendar lists what is due in the week from the selected day under the month grid.
 
 ### Changed
 

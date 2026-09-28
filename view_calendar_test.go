@@ -153,3 +153,43 @@ func TestTimelineTicksTrackedTaskCompletedThatDay(t *testing.T) {
 		t.Fatalf("timeline entry = %q, want ✓ instead of the timer dot", line)
 	}
 }
+
+// Under the month grid, the open tasks due in the week from the selected day,
+// soonest first, cut to the rows the panel has with a count of the rest.
+func TestCalendarComingUp(t *testing.T) {
+	today := startOfDay(time.Now())
+	due := func(title string, days int) todo.Todo {
+		td := todo.New(title)
+		td.DueDate = today.AddDate(0, 0, days)
+		return td
+	}
+	finished := due("Finished", 1)
+	finished.Status = todo.Done
+	m := modelWithTasks(t, due("Third", 5), due("First", 0), due("Second", 2), due("Next month", 30), due("Yesterday", -1), finished)
+	m.switchTab(tabCalendar)
+
+	got := ansi.Strip(strings.Join(m.renderComingUpLines(20, 10), "\n"))
+	for _, want := range []string{"First", "Second", "Third"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("coming up lacks %q:\n%s", want, got)
+		}
+	}
+	for _, not := range []string{"Next month", "Yesterday", "Finished"} {
+		if strings.Contains(got, not) {
+			t.Errorf("coming up lists %q, outside the week or done:\n%s", not, got)
+		}
+	}
+	if strings.Index(got, "First") > strings.Index(got, "Second") || strings.Index(got, "Second") > strings.Index(got, "Third") {
+		t.Errorf("not soonest first:\n%s", got)
+	}
+
+	short := ansi.Strip(strings.Join(m.renderComingUpLines(20, 2), "\n"))
+	if !strings.Contains(short, "First") || !strings.Contains(short, "2 more") || strings.Contains(short, "Third") {
+		t.Errorf("two rows should be the first task and a count of the rest:\n%s", short)
+	}
+	for _, line := range strings.Split(got, "\n") {
+		if w := ansi.StringWidth(line); w > 20 {
+			t.Errorf("line %q is %d wide, over the panel's 20", line, w)
+		}
+	}
+}

@@ -246,6 +246,11 @@ func (m model) buildCalendarContent(w, outerH int) string {
 	for len(calLines) > 0 && strings.TrimSpace(ansi.Strip(calLines[len(calLines)-1])) == "" {
 		calLines = calLines[:len(calLines)-1]
 	}
+	// What the grid only marks, by name, in the rows the panel has left: a
+	// blank, the heading, and a row at least, less the blank at the foot.
+	if rows := innerH - len(calLines) - 3; rows >= 1 {
+		calLines = append(calLines, m.renderComingUpLines(calPanelWidth-2, rows)...)
+	}
 	calLines = fitLines(calLines, min(len(calLines)+1, innerH), calPanelWidth-2)
 	tlLines = fitLines(tlLines, innerH, tlW-2)
 
@@ -348,6 +353,58 @@ func (m model) renderMonthCalendarLines() []string {
 
 	lines = append(lines, "")
 	lines = append(lines, dimStyle.Render(tr("month "))+timerStyle.Render(formatDuration(monthTotal)))
+	return lines
+}
+
+// comingUpDays is how far ahead of the selected day the month panel lists
+// deadlines: a week, the span the grid's due marks are read across.
+const comingUpDays = 7
+
+// renderComingUpLines lists the open tasks due in the week from the selected
+// day, soonest first, under the month grid: the names behind its due marks,
+// moving with the cursor so the week ahead can be read from any day. At most
+// maxRows rows, the last saying how many more there are.
+func (m model) renderComingUpLines(w, maxRows int) []string {
+	from := startOfDay(m.calendar.selected)
+	until := from.AddDate(0, 0, comingUpDays)
+	var due []*todo.Todo
+	for _, t := range m.tasks {
+		if t.Deleted || t.Status == todo.Done || t.DueDate.IsZero() {
+			continue
+		}
+		if !t.DueDate.Before(from) && t.DueDate.Before(until) {
+			due = append(due, t)
+		}
+	}
+	sort.Slice(due, func(i, j int) bool {
+		if !due[i].DueDate.Equal(due[j].DueDate) {
+			return due[i].DueDate.Before(due[j].DueDate)
+		}
+		if due[i].Priority != due[j].Priority {
+			return due[i].Priority > due[j].Priority
+		}
+		return due[i].ID < due[j].ID
+	})
+
+	lines := []string{"", dimStyle.Render(tr("coming up"))}
+	if len(due) == 0 {
+		return append(lines, dimStyle.Render(" "+tr("nothing due")))
+	}
+	shown := due
+	if len(due) > maxRows {
+		shown = due[:max(maxRows-1, 0)]
+	}
+	for _, t := range shown {
+		day := padRight(localizedWeekdayShort(t.DueDate.Weekday()), 3) + fmt.Sprintf(" %02d  ", t.DueDate.Day())
+		style := normalStyle
+		if t.IsOverdueAt(m.frameTime) {
+			style = overdueStyle
+		}
+		lines = append(lines, dimStyle.Render(day)+style.Render(truncate(t.Title, w-len([]rune(day)))))
+	}
+	if more := len(due) - len(shown); more > 0 {
+		lines = append(lines, dimStyle.Render(strings.TrimSpace(fmt.Sprintf(tr("  … and %d more"), more))))
+	}
 	return lines
 }
 

@@ -657,6 +657,10 @@ var daTranslations = map[string]string{
 	// ── Adding tasks ──
 	"A task needs a title": "En opgave skal have en titel",
 
+	// ── Calendar: coming up ──
+	"coming up":   "kommende",
+	"nothing due": "intet forfalder",
+
 	// ── Reminders ──
 	"%d due today":                    "%d forfalder i dag",
 	"Desktop notification failed: %v": "Skrivebordsnotifikation mislykkedes: %v",
@@ -1281,6 +1285,10 @@ var deTranslations = map[string]string{
 
 	// ── Adding tasks ──
 	"A task needs a title": "Eine Aufgabe braucht einen Titel",
+
+	// ── Calendar: coming up ──
+	"coming up":   "demnächst",
+	"nothing due": "nichts fällig",
 
 	// ── Reminders ──
 	"%d due today":                    "%d heute fällig",
