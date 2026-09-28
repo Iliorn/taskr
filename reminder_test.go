@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/binary"
+	"encoding/xml"
 	"errors"
 	"slices"
 	"strings"
 	"testing"
 	"time"
-	"unicode/utf16"
 
 	"github.com/Iliorn/taskr/todo"
 	"github.com/charmbracelet/x/ansi"
@@ -311,42 +309,29 @@ func TestNotifyCommandKeepsTextOutOfTheScript(t *testing.T) {
 	if mac[0] != "osascript" || !slices.Equal(mac[len(mac)-2:], []string{title, body}) {
 		t.Errorf("darwin args = %q", mac)
 	}
+}
 
-	win := notifyCommand(ctx, "windows", title, body)
-	if win.Args[len(win.Args)-2] != "-EncodedCommand" {
-		t.Fatalf("windows args = %q", win.Args)
+// The Windows toast is XML built in Go: the texts are escaped, so a title with
+// markup in it is shown as text and cannot end the element it sits in.
+func TestToastXMLEscapesTheTexts(t *testing.T) {
+	doc := toastXML(`taskr: 1 overdue`, "• Fix <b> & \"quote\"\n• Second")
+	var parsed struct {
+		Texts []string `xml:"visual>binding>text"`
 	}
-	raw, err := base64.StdEncoding.DecodeString(win.Args[len(win.Args)-1])
-	if err != nil {
-		t.Fatal(err)
+	if err := xml.Unmarshal([]byte(doc), &parsed); err != nil {
+		t.Fatalf("toast XML does not parse: %v\n%s", err, doc)
 	}
-	units := make([]uint16, len(raw)/2)
-	for i := range units {
-		units[i] = binary.LittleEndian.Uint16(raw[2*i:])
-	}
-	if got := string(utf16.Decode(units)); got != windowsToastScript {
-		t.Error("the encoded command does not decode to the toast script")
-	}
-	if !slices.Contains(win.Env, "TASKR_NOTIFY_TITLE="+title) || !slices.Contains(win.Env, "TASKR_NOTIFY_BODY="+body) {
-		t.Error("windows command does not carry the texts in its environment")
+	want := []string{"taskr: 1 overdue", "• Fix <b> & \"quote\"\n• Second"}
+	if !slices.Equal(parsed.Texts, want) {
+		t.Errorf("toast texts = %q, want %q", parsed.Texts, want)
 	}
 }
 
-// A notifier that fails says why in one line. Windows PowerShell answers with a
-// CLIXML document, and one locked into Constrained Language Mode by an
-// organisation cannot build a toast at all — that case is named outright.
+// A notifier that fails says why in one line, not a page of tool output.
 func TestNotifyFailureIsOneLine(t *testing.T) {
-	clm := []byte(`#< CLIXML
-<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><S S="Error">Method invocation is supported only on core types in this language mode._x000D__x000A_</S><S S="Error">At line:2 char:1_x000D__x000A_</S></Objs>`)
-	got := notifyFailureReason(clm, errors.New("exit status 1"))
-	if !strings.Contains(got, "Constrained Language Mode") || strings.Contains(got, "\n") {
-		t.Errorf("constrained PowerShell reads %q", got)
-	}
-
-	other := []byte(`#< CLIXML
-<Objs Version="1.1.0.1"><S S="Error">Something else went wrong_x000D__x000A_</S></Objs>`)
-	if got := notifyFailureReason(other, errors.New("exit status 1")); got != "Something else went wrong" {
-		t.Errorf("CLIXML error reads %q, want its message", got)
+	out := []byte("\n  GDBus.Error: The name org.freedesktop.Notifications was not provided   \nsecond line\n")
+	if got := notifyFailureReason(out, errors.New("exit status 1")); got != "GDBus.Error: The name org.freedesktop.Notifications was not provided" {
+		t.Errorf("reason = %q", got)
 	}
 	if got := notifyFailureReason(nil, errors.New("exit status 1")); got != "exit status 1" {
 		t.Errorf("a silent failure reads %q, want the exit status", got)

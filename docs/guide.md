@@ -149,10 +149,10 @@ what is due today. Settings → "Daily reminder" turns it off and on again,
 keeping the time. Opening taskr after the reminder time counts as that day's
 reminder, since the list on screen already says the same thing.
 
-When the desktop can't show the pop-up — on a work PC whose PowerShell is
-locked down by the organisation, for example — the app still shows the
-reminder in its status line, and `taskr remind --now` prints it with a line
-saying why the pop-up was unavailable.
+When the desktop can't show the pop-up — no notification service on a Linux
+session over ssh, for example — the app still shows the reminder in its
+status line, and `taskr remind --now` prints it with a line saying why the
+pop-up was unavailable.
 
 The app sends it while it is running. To be reminded when it isn't, have
 your system run `taskr remind` every few minutes; it does nothing until the
@@ -186,8 +186,12 @@ systemctl --user enable --now taskr-remind.timer
 **macOS** — notifications use the built-in `osascript`; a launchd agent with
 `StartInterval` 900 running `taskr remind` does the scheduling.
 
-**Windows** — notifications appear under "Windows PowerShell" in the
-Action Center. To schedule it:
+**Windows** — notifications appear under "taskr" in the notification
+centre. taskr calls the Windows notification API itself rather than going
+through PowerShell, so it works on work PCs where PowerShell is locked down.
+The first one registers taskr for notifications under your own user
+(`HKCU\Software\Classes\AppUserModelId\taskr`); no administrator rights are
+needed. To schedule it:
 
 ```bat
 schtasks /create /sc minute /mo 15 /tn "taskr remind" /tr "\"%LOCALAPPDATA%\Programs\taskr\taskr.exe\" remind"

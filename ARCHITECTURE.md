@@ -229,9 +229,13 @@ everything.
   tick against the wall clock, so a machine waking from sleep catches up;
   `taskr remind` runs the same check for cron or a timer. Both record the day
   in a state-dir sidecar (`remindedPath`), and a launch after the time counts
-  as the reminder (`settleReminderAtLaunch`). `notify.go` shells out to the
-  platform's own tool (notify-send, osascript, Windows PowerShell's toast
-  API), passing text as arguments or environment, never inside a script.
+  as the reminder (`settleReminderAtLaunch`). `notify.go` uses what each
+  platform has: notify-send or osascript, with the texts as arguments, never
+  inside a script, and on Windows the toast API over COM (`wintoast`, with
+  `toastXML` escaping the texts). Not PowerShell: an organisation's
+  Constrained Language Mode blocks the WinRT calls a script would make. A
+  failure is one line (`notifyFailureReason`), and the TUI keeps the
+  reminder on screen when the pop-up cannot be shown.
 - **`layout.go` / `styles.go` / `constants.go`** — width/height math, theming,
   magic numbers.
 
