@@ -11,6 +11,28 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [1.43.0] - 2026-09-29
+
+### Added
+
+- A bar at the top of the detail pane names its sections; → opens the next one at the top.
+- An orange "! sync" in the status line while the sync server runs another tjek version.
+
+### Changed
+
+- Tags is tab 3 and Projects tab 4.
+- The / field is called Filter, and a task's notes are called its description.
+- A task that starts on a later day shows that day instead of a score.
+- Footer hints show only each screen's essential keys.
+- A detail pane below the list takes the rows a short list leaves free.
+- Stats: the Activity bars grow into rows the summary leaves blank.
+- Every panel has a blank row above its bottom border.
+
+### Fixed
+
+- The detail pane's cursor could disappear in short windows.
+- On the board, a card picked up below the top of its column is lifted to the top.
+
 ## [1.42.0] - 2026-09-29
 
 ### Changed
