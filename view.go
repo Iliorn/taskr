@@ -97,7 +97,7 @@ func truncateLines(lines []string, maxW int) {
 // panelContentHeight returns the rows available to pane content after the top
 // and bottom borders and the shared blank row below the border title.
 func panelContentHeight(outerH int) int {
-	h := outerH - 3
+	h := outerH - panelChromeLines
 	if h < 1 {
 		return 1
 	}
@@ -1723,7 +1723,7 @@ func (m model) statsChartHeight() int {
 // leaves room for once the pane's border and the baseline and label rows are
 // taken, so a chart grown into spare rows is never clipped at the bottom.
 func (m model) statsChartCeiling() int {
-	return m.termHeight*detailMaxHeightPct/100 - 2 - 2
+	return m.termHeight*detailMaxHeightPct/100 - panelChromeLines - 2
 }
 
 // statsChartSpareRows is how many rows the Stats summary's panel would leave
@@ -1737,7 +1737,7 @@ func (m model) statsChartSpareRows(chartH int) int {
 		footerLines = strings.Count(f, "\n") + 1
 	}
 	summary := len(trimTrailingBlank(strings.Split(m.renderStatsList(), "\n")))
-	return m.termHeight - minHeaderLines - footerLines - 2 - summary - 2 - (chartH + 2)
+	return m.termHeight - minHeaderLines - footerLines - panelChromeLines - summary - panelChromeLines - (chartH + 2)
 }
 
 // statsChartRows is the height the chart actually draws at: the budget, or the

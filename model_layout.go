@@ -125,11 +125,11 @@ func (m model) detailViewportHeight() int {
 	}
 	if m.sideBySide() {
 		// A full-height column beside the list: the window less the fixed
-		// header and footer, less the panel's two borders and the blank row
-		// under its border title. Deliberately not listVisible(), which
+		// header and footer, less the panel's chrome. Deliberately not
+		// listVisible(), which
 		// additionally subtracts a row per active filter — those render into
 		// the one fixed status line and cost the columns nothing.
-		h = m.termHeight - minHeaderLines - footerHeight - m.extraOverheadLines() - 3
+		h = m.termHeight - minHeaderLines - footerHeight - m.extraOverheadLines() - panelChromeLines
 	}
 	if h < 3 {
 		return 3
@@ -340,9 +340,8 @@ func (m model) taskListRows() int {
 }
 
 // taskListChromeLines is what the task list panel spends on anything but rows:
-// its two borders, the blank row under its title, the column header, and a
-// blank row above its bottom border to match the one at the top.
-const taskListChromeLines = 5
+// the panel's chrome and the column header.
+const taskListChromeLines = panelChromeLines + 1
 
 // taskStackArea is the height the task list and a detail stacked under it
 // share: the window less the header and the footer as drawn.

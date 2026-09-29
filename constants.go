@@ -172,8 +172,12 @@ const (
 
 	footerHeight   = 1
 	minHeaderLines = 2
-	// Two border rows plus the shared blank row below a pane's border title.
-	detailBorderLines = 3
+	// panelChromeLines is what a panel spends on anything but content: two
+	// border rows, the blank row under its border title and the blank row
+	// above its bottom border.
+	panelChromeLines = 4
+	// detailBorderLines is a stacked pane's chrome, the same as any panel's.
+	detailBorderLines = panelChromeLines
 	minListPanelLines = 3
 	minDetailHeight   = 3
 	minListHeight     = 1

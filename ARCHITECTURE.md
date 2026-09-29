@@ -618,6 +618,10 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
 
 ## Rendering conventions
 
+- **Every panel has a blank row inside each end**, under its border title
+  and above its bottom border (`Padding(1, 1)` in `styles.go`). Height math
+  takes a panel's chrome from `panelChromeLines` and `panelContentHeight`,
+  never a literal.
 - **ANSI-aware width math.** After a lipgloss `.Render`, `len([]rune(s))`
   counts escape sequences. Measure styled text with `ansi.StringWidth` and clip
   it with `ansi.Truncate`. Width tests assert no line exceeds the pane's inner

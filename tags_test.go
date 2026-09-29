@@ -134,7 +134,7 @@ func TestTagDetailCapsAndOrders(t *testing.T) {
 
 	m := newTagModel(todos...)
 	m.tab = tabTags
-	m.termHeight = 16
+	m.termHeight = 18
 	m.refreshCaches()
 	m.tagTabCursor = 0 // the untagged row
 
