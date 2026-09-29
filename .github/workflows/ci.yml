@@ -162,6 +162,7 @@ jobs:
           declare -A floor=(
             ["github.com/Iliorn/tjek"]=78
             ["github.com/Iliorn/tjek/tasksync"]=92
+            ["github.com/Iliorn/tjek/hlc"]=90
             ["github.com/Iliorn/tjek/todo"]=96
           )
           go test -cover -timeout 5m ./... | tee /tmp/cover.txt
