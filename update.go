@@ -1374,9 +1374,9 @@ func tabForNumberKeyRaw(key string) (tab, bool) {
 	case "2":
 		return tabCalendar, true
 	case "3":
-		return tabProjects, true
-	case "4":
 		return tabTags, true
+	case "4":
+		return tabProjects, true
 	case "5":
 		return tabBoard, true
 	case "6":

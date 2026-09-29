@@ -315,8 +315,8 @@ func TestScriptDeleteTagGlobally(t *testing.T) {
 	second.AddTag("obsolete")
 	m := modelWithTasks(t, first, second)
 
-	// Tab 4 is Tags; the digit shortcuts jump straight there.
-	m = sendKey(t, m, "4")
+	// Tab 3 is Tags; the digit shortcuts jump straight there.
+	m = sendKey(t, m, "3")
 	if m.tab != tabTags {
 		t.Fatalf("tab = %v, want tabTags", m.tab)
 	}

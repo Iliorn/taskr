@@ -45,8 +45,8 @@ var paletteTabs = map[keyCtx]tab{
 // entry's context column: two tabs can share a binding (rename globally lives
 // on both Tags and Projects), so the row has to say which one it will run on.
 func paletteTabName(tb tab) string {
-	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"),
-		tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings")}
+	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Tags"),
+		tr("4 Projects"), tr("5 Board"), tr("6 Stats"), tr("7 Settings")}
 	if tb < 0 || int(tb) >= len(full) {
 		return ""
 	}
@@ -90,8 +90,8 @@ func (m model) paletteCommands() []paletteCmd {
 	}{
 		{tr("Go to Tasks"), "1", tabTasks},
 		{tr("Go to Calendar"), "2", tabCalendar},
-		{tr("Go to Projects"), "3", tabProjects},
-		{tr("Go to Tags"), "4", tabTags},
+		{tr("Go to Tags"), "3", tabTags},
+		{tr("Go to Projects"), "4", tabProjects},
 		{tr("Go to Board"), "5", tabBoard},
 		{tr("Go to Stats"), "6", tabStats},
 		{tr("Go to Settings"), "7", tabSettings},

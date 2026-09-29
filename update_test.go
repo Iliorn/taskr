@@ -111,8 +111,8 @@ func TestTabSwitchByNumberKey(t *testing.T) {
 	}{
 		{"1", tabTasks},
 		{"2", tabCalendar},
-		{"3", tabProjects},
-		{"4", tabTags},
+		{"3", tabTags},
+		{"4", tabProjects},
 		{"5", tabBoard},
 		{"6", tabStats},
 		{"7", tabSettings},

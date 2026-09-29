@@ -2145,8 +2145,8 @@ func (m model) renderTabs(avail int) string {
 	activeStyles := [numTabs]lipgloss.Style{
 		tabTasksActiveStyle,
 		tabCalendarActiveStyle,
-		tabProjectsActiveStyle,
 		tabTagsActiveStyle,
+		tabProjectsActiveStyle,
 		tabBoardActiveStyle,
 		tabStatsActiveStyle,
 		tabSettingsActiveStyle,
@@ -2154,8 +2154,8 @@ func (m model) renderTabs(avail int) string {
 	inactiveStyles := [numTabs]lipgloss.Style{
 		tabTasksInactiveStyle,
 		tabCalendarInactiveStyle,
-		tabProjectsInactiveStyle,
 		tabTagsInactiveStyle,
+		tabProjectsInactiveStyle,
 		tabBoardInactiveStyle,
 		tabStatsInactiveStyle,
 		tabSettingsInactiveStyle,
@@ -2163,7 +2163,7 @@ func (m model) renderTabs(avail int) string {
 	// The selected tab renders as a solid colored pill. Unselected tabs use
 	// the per-tab color as the foreground so each tab keeps its identity
 	// without a background block.
-	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"), tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings")}
+	full := [numTabs]string{tr("1 Tasks"), tr("2 Calendar"), tr("3 Tags"), tr("4 Projects"), tr("5 Board"), tr("6 Stats"), tr("7 Settings")}
 	nums := [numTabs]string{"1", "2", "3", "4", "5", "6", "7"}
 
 	// abbr is the curated short label, one per tab, not a mechanical cut of the

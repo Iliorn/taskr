@@ -1418,7 +1418,7 @@ func TestScriptProjectFilterJumpsToTasks(t *testing.T) {
 	if n := m.visibleActiveLen(); n != 1 {
 		t.Errorf("filtered list has %d tasks, want 1", n)
 	}
-	m = sendKey(t, m, "3")
+	m = sendKey(t, m, "4")
 	if got := m.allProjectsForList(); len(got) != 1 || got[0] != "House" {
 		t.Errorf("the @House query should still find House on the Projects tab, got %v", got)
 	}

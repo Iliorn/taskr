@@ -68,7 +68,7 @@ func TestEscOnlyPopsCurrentTabState(t *testing.T) {
 	withProj.Project = "garden"
 	m := modelWithTasks(t, withProj, todo.New("pay rent"))
 
-	m = script(t, m, "/", "rent", "enter", "3", "enter")
+	m = script(t, m, "/", "rent", "enter", "4", "enter")
 	if m.tab != tabProjects || !m.projectTaskMode {
 		t.Fatalf("setup: tab=%v projectTaskMode=%v", m.tab, m.projectTaskMode)
 	}

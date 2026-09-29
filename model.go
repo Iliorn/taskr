@@ -23,8 +23,8 @@ type tab int
 const (
 	tabTasks tab = iota
 	tabCalendar
-	tabProjects
 	tabTags
+	tabProjects
 	tabBoard
 	tabStats
 	tabSettings

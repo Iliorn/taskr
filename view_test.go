@@ -929,8 +929,8 @@ func TestSelectedTabNeverTruncatedWidthSweep(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("tab%d", tc.tb), func(t *testing.T) {
 			fullLabel := [numTabs]string{
-				tr("1 Tasks"), tr("2 Calendar"), tr("3 Projects"),
-				tr("4 Tags"), tr("5 Board"), tr("6 Stats"), tr("7 Settings"),
+				tr("1 Tasks"), tr("2 Calendar"), tr("3 Tags"),
+				tr("4 Projects"), tr("5 Board"), tr("6 Stats"), tr("7 Settings"),
 			}[tc.tb]
 			shortLabel := tabShortLabels[langEN][tc.tb]
 
