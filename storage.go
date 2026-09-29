@@ -93,6 +93,11 @@ type appSettings struct {
 	// list is meant to win.
 	StagesModifiedAt time.Time `json:"stages_modified_at,omitempty"`
 
+	// StageIcons gives working columns a one-cell mark, keyed by the column's
+	// lower-cased name: {"in progress": "◐"}. Written from the editor's
+	// "[◐] In progress" form; see boardConfig.icons.
+	StageIcons map[string]string `json:"stage_icons,omitempty"`
+
 	// SyncBoardDisabled opts out of sharing the column list with the fleet.
 	// Negative like BoardDisabled and SeqAgingDisabled, so the zero value
 	// shares: the names are what make a synced Stage field mean the same thing

@@ -939,10 +939,10 @@ func TestScriptNumberKeysSwitchTabsFromDetailPane(t *testing.T) {
 func restoreStages(t *testing.T) {
 	t.Helper()
 	before, _ := loadSettings()
-	prev := before.Stages
+	prev, prevIcons := before.Stages, before.StageIcons
 	t.Cleanup(func() {
 		if s, err := loadSettings(); err == nil {
-			s.Stages = prev
+			s.Stages, s.StageIcons = prev, prevIcons
 			_ = saveSettings(s)
 		}
 	})
@@ -986,8 +986,8 @@ func TestScriptEditBoardColumnsFromSettings(t *testing.T) {
 	if m.mode != modeEditStages {
 		t.Fatalf("enter on the Board columns row: mode = %v, want modeEditStages", m.mode)
 	}
-	if got := m.textInput.Value(); got != "Backlog, In progress, Review, Done" {
-		t.Fatalf("editor pre-fill = %q, want the current list", got)
+	if got := m.textInput.Value(); got != "Backlog, In progress, Review, [✓] Done" {
+		t.Fatalf("editor pre-fill = %q, want the current list, Done marked ✓", got)
 	}
 
 	m.textInput.SetValue("Backlog, In progress, QA, Done")
@@ -1476,5 +1476,52 @@ func TestScriptBoardCarryCard(t *testing.T) {
 	m = script(t, m, "enter")
 	if m.mode != modeConfirm {
 		t.Fatalf("enter on a done card should ask to reopen it, mode = %v", m.mode)
+	}
+}
+
+// Icons go in through the same editor: "[R] Review" marks the column, the
+// task list's box shows the mark, and it survives a restart. An emoji keeps
+// the field open with the text as typed, so the one bad icon can be fixed.
+func TestScriptBoardColumnIconsFromSettings(t *testing.T) {
+	card := todo.New("Ship the release")
+	card.Stage = "Review"
+	m := modelWithTasks(t, card)
+	restoreStages(t)
+	m.boardCfg.setStages([]string{"Backlog", "In progress", "Review", "Done"})
+	m.markCacheDirty()
+
+	m = sendKey(t, m, "7")
+	m = settingsCursorTo(t, m, settingStages)
+	m = sendKey(t, m, "enter")
+	m.textInput.SetValue("Backlog, [>] In progress, [🚀] Review, Done")
+	m = sendKey(t, m, "enter")
+	if m.mode != modeEditStages || !strings.Contains(m.err, "🚀") {
+		t.Fatalf("a wide icon should keep the editor open and name it: mode %v, flash %q", m.mode, m.err)
+	}
+	if m.textInput.Value() != "Backlog, [>] In progress, [🚀] Review, Done" {
+		t.Errorf("the text should stay as typed, got %q", m.textInput.Value())
+	}
+
+	m.textInput.SetValue("Backlog, [>] In progress, [R] Review, Done")
+	m = sendKey(t, m, "enter")
+	if m.mode != modeNormal {
+		t.Fatalf("after applying: mode = %v", m.mode)
+	}
+	if got := m.boardCfg.statusBox(m.get(card.ID)); got != "[R]" {
+		t.Errorf("the card's box = %q, want its column's [R]", got)
+	}
+	m = sendKey(t, m, "1")
+	if row := ansi.Strip(m.View()); !strings.Contains(row, "[R] Ship the release") {
+		t.Errorf("the task list should show the column icon:\n%s", row)
+	}
+	s, err := loadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.StageIcons["review"] != "R" || s.StageIcons["in progress"] != ">" {
+		t.Errorf("settings.json kept icons %v", s.StageIcons)
+	}
+	if again := boardConfigFromSettings(s); again.columnIcon(2) != "R" {
+		t.Errorf("icons read back from settings.json = %v", again.icons)
 	}
 }

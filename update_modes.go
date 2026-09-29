@@ -835,8 +835,19 @@ func (m model) updateEditStages(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "enter":
-			m.applyStageEdit(parseStagesInput(m.textInput.Value()))
+			stages, icons, doneIcon, err := parseStagesInput(m.textInput.Value())
+			if err != nil {
+				// Keep the field open with the text as typed, so the one
+				// wide icon is fixed rather than the whole line retyped.
+				m.flashError(fmt.Sprintf(tr("An icon is one character wide; %s is not"), err))
+				return m, clearErrAfter()
+			}
+			m.applyStageEdit(stages, icons)
 			m.mode = modeNormal
+			if doneIcon != "" {
+				m.flashInfo(fmt.Sprintf(tr("The last column keeps ✓; its icon %s was left out"), doneIcon))
+				return m, clearErrAfter()
+			}
 			return m, nil
 		case "esc":
 			m.mode = modeNormal
@@ -858,9 +869,11 @@ func (m model) updateEditStages(msg tea.Msg) (tea.Model, tea.Cmd) {
 // every one of them in the first column. The edit is its own inverse instead —
 // renaming QA back to Review carries the same cards back, because stageRemap
 // is positional.
-func (m *model) applyStageEdit(next []string) {
+func (m *model) applyStageEdit(next []string, icons map[string]string) {
 	prev := m.boardCfg.stages
-	if len(prev) == len(next) {
+	var probe boardConfig
+	probe.setColumns(next, icons)
+	if len(prev) == len(next) && sameIcons(m.boardCfg.icons, probe.icons) {
 		same := true
 		for i := range prev {
 			if prev[i] != next[i] {
@@ -886,7 +899,7 @@ func (m *model) applyStageEdit(next []string) {
 			}
 		}
 	}
-	m.boardCfg.setStages(next)
+	m.boardCfg.setColumns(next, icons)
 	// Stamped here and nowhere else: the timestamp is what wins the list a
 	// merge (boardsync.go), so it marks a deliberate edit, never a list that
 	// merely arrived from the fleet or was read back off disk.

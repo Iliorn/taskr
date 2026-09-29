@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Iliorn/taskr/todo"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // board.go — the kanban stage configuration. A "stage" is a named board
@@ -39,6 +42,12 @@ type boardConfig struct {
 	// stages is the column list; the last entry is the Done column. Set it
 	// through setStages, which keeps that invariant.
 	stages []string
+	// icons gives a working column a one-cell mark, keyed by its lower-cased
+	// name. A pending task's status box shows its column's mark once any
+	// column has one (taskStatusIcon). Keyed by name rather than position so
+	// the dedup and Done-column repairs setStages makes cannot shift a mark
+	// onto the wrong column. The Done column has none: done is always ✓.
+	icons map[string]string
 	// modifiedAt is when this device last edited its column list, and the
 	// only thing that decides whether its list beats another's. Zero means
 	// never edited here — the shipped defaults — and a zero stamp never wins,
@@ -66,12 +75,13 @@ func defaultBoardConfig() boardConfig {
 // boardConfigFromSettings reads the board preferences out of settings.json,
 // sanitizing the column list on the way in.
 func boardConfigFromSettings(s appSettings) boardConfig {
-	return boardConfig{
-		stages:     stagesFromSettings(s),
+	c := boardConfig{
 		modifiedAt: s.StagesModifiedAt,
 		shown:      !s.BoardDisabled,
 		sync:       !s.SyncBoardDisabled,
 	}
+	c.setColumns(stagesFromSettings(s), s.StageIcons)
+	return c
 }
 
 // storedBoard reads the board preferences from settings.json, for the CLI,
@@ -85,7 +95,111 @@ func storedBoard() boardConfig {
 // structural invariant — a Done column at the end, with at least one working
 // column before it — holds no matter which entry point set the list (settings,
 // the Settings editor, a sync, a test).
-func (c *boardConfig) setStages(stages []string) { c.stages = ensureDoneColumn(stages) }
+func (c *boardConfig) setStages(stages []string) { c.setColumns(stages, nil) }
+
+// setColumns installs a stage list and its icons together. Only a valid mark
+// (validStageIcon) on a working column that is in the list is kept, so a
+// hand-edited settings.json or an icon from a newer peer cannot put a
+// two-cell glyph into a one-cell box.
+func (c *boardConfig) setColumns(stages []string, icons map[string]string) {
+	c.stages = ensureDoneColumn(stages)
+	c.icons = nil
+	for _, name := range pendingOf(c.stages) {
+		key := strings.ToLower(name)
+		if icon := icons[key]; icon != "" && validStageIcon(icon) {
+			if c.icons == nil {
+				c.icons = make(map[string]string)
+			}
+			c.icons[key] = icon
+		}
+	}
+}
+
+// sameIcons reports whether two icon sets mark the same columns alike.
+func sameIcons(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// validStageIcon reports whether s fits a status box: one character, one cell
+// wide. A letter, a digit or a symbol does; an emoji, which terminals draw two
+// cells wide, would push every column after it out of line.
+func validStageIcon(s string) bool {
+	return utf8.RuneCountInString(s) == 1 && ansi.StringWidth(s) == 1
+}
+
+// doneColumnIcon is the Done column's mark, always: the box a done task
+// shows, so the column that holds done tasks says so at a glance.
+const doneColumnIcon = "✓"
+
+// columnIcon is the mark of the column at index i of the full list: ✓ for the
+// Done column, the configured icon for a working one, or "".
+func (c boardConfig) columnIcon(i int) string {
+	if i < 0 || i >= len(c.stages) {
+		return ""
+	}
+	if i == c.doneColumn() {
+		return doneColumnIcon
+	}
+	return c.icons[strings.ToLower(c.stages[i])]
+}
+
+// stageIcon is the mark of the working column a stored stage name falls in.
+func (c boardConfig) stageIcon(stage string) string {
+	p := c.pending()
+	if len(p) == 0 {
+		return ""
+	}
+	return c.icons[strings.ToLower(p[c.stageIndex(stage)])]
+}
+
+// taskStatusIcon is what a pending top-level task's status box holds when the
+// board's columns carry icons: its column's mark, or a blank for a column
+// without one. ok is false when no column has an icon, or the board is hidden,
+// or t is a subtask (which has no column); the box then keeps its usual
+// ready / started / overdue marks. The column wins over overdue and started
+// because it is what the icons were set up to show; an overdue row still says
+// so in its colour and its Due cell.
+func (c boardConfig) taskStatusIcon(t *todo.Todo) (icon string, ok bool) {
+	if !c.shown || len(c.icons) == 0 || t.ParentID != "" || t.Status == todo.Done {
+		return "", false
+	}
+	p := c.pending()
+	if len(p) == 0 {
+		return "", false
+	}
+	if icon = c.icons[strings.ToLower(p[c.stageIndex(t.Stage)])]; icon == "" {
+		icon = " "
+	}
+	return icon, true
+}
+
+// statusBox is a task's status box: [✓] done; its column's mark when the
+// board's columns have icons; otherwise [!] overdue, [>] started (time has
+// been logged), [ ] ready. The TUI rows and `taskr list` both draw it, so the
+// two can never disagree about a task.
+func (c boardConfig) statusBox(t *todo.Todo) string {
+	if t.Status == todo.Done {
+		return "[✓]"
+	}
+	if icon, ok := c.taskStatusIcon(t); ok {
+		return "[" + icon + "]"
+	}
+	switch {
+	case t.IsOverdue():
+		return "[!]"
+	case len(t.TimeEntries) > 0:
+		return "[>]"
+	}
+	return "[ ]"
+}
 
 // ensureDoneColumn upholds "the last column is Done" for a list that may not
 // have enough columns to say so. An empty list is the defaults. A single name
@@ -188,16 +302,51 @@ func canonicalStageIn(stages []string, input string) (string, bool) {
 // of the active stage list: the same comma-separated form the editor parses.
 // The Done column is in it — that is how renaming it is discoverable.
 func (c boardConfig) stagesDisplay() string {
-	return strings.Join(c.stages, ", ")
+	parts := make([]string, len(c.stages))
+	for i, name := range c.stages {
+		parts[i] = name
+		if icon := c.columnIcon(i); icon != "" {
+			parts[i] = "[" + icon + "] " + name
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 // parseStagesInput turns the Settings editor's comma-separated line into a
-// stage list, running it through the same sanitizer a hand-edited
-// settings.json goes through — so both entry points accept exactly the same
-// input and degrade the same way (all-blank falls back to the defaults).
-func parseStagesInput(line string) []string {
+// stage list and its icons, running the names through the same sanitizer a
+// hand-edited settings.json goes through, so both entry points accept exactly
+// the same input and degrade the same way (all-blank falls back to the
+// defaults). A column's icon is written in brackets before its name, the way
+// the status box will show it: "[◐] In progress". An icon that is not one
+// cell wide is an error naming it; the Done column always shows ✓, so any
+// other icon on it is dropped and reported in doneIcon.
+func parseStagesInput(line string) (stages []string, icons map[string]string, doneIcon string, err error) {
 	parts := strings.Split(line, ",")
-	return stagesFromSettings(appSettings{Stages: parts})
+	names := make([]string, 0, len(parts))
+	byName := make(map[string]string)
+	for _, raw := range parts {
+		name := strings.TrimSpace(raw)
+		if strings.HasPrefix(name, "[") {
+			if end := strings.Index(name, "]"); end > 0 {
+				icon := strings.TrimSpace(name[1:end])
+				name = strings.TrimSpace(name[end+1:])
+				if icon != "" && name != "" {
+					if !validStageIcon(icon) {
+						return nil, nil, "", fmt.Errorf("%q", icon)
+					}
+					byName[strings.ToLower(name)] = icon
+				}
+			}
+		}
+		names = append(names, name)
+	}
+	stages = stagesFromSettings(appSettings{Stages: names})
+	// The ✓ stagesDisplay puts on the Done column comes back unchanged
+	// whenever the line is saved as shown; only a different mark is news.
+	if icon := byName[strings.ToLower(stages[len(stages)-1])]; icon != doneColumnIcon {
+		doneIcon = icon
+	}
+	return stages, byName, doneIcon, nil
 }
 
 // stageRemap describes where the cards of each dropped stage should go when

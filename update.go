@@ -1703,6 +1703,7 @@ func (m *model) persistSettings() {
 		AutoCloseSubtasks: m.autoCloseSubtasks,
 		BoardDisabled:     !m.boardCfg.shown,
 		Stages:            m.boardCfg.stages,
+		StageIcons:        m.boardCfg.icons,
 		StagesModifiedAt:  m.boardCfg.modifiedAt,
 		SyncBoardDisabled: !m.boardCfg.sync,
 		Search:            m.persistedSearch(),

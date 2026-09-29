@@ -671,7 +671,7 @@ func (m model) footerContentFor(w int) string {
 			// The last column holds the completed tasks whatever it is called,
 			// so say which one that is — otherwise renaming it looks like it
 			// might have added a fifth column, or lost the done cards.
-			return field + "\n" + helpStyle.Render("    "+truncate(tr("Comma-separated column names · the last one holds completed tasks"), w))
+			return field + "\n" + helpStyle.Render("    "+truncate(tr("Comma-separated column names · [x] before a name gives it an icon · the last holds completed tasks"), w))
 		}
 		// The single-line comment inputs get a ctrl+e escape hatch to compose
 		// in $EDITOR; advertise it under the field.
@@ -1415,6 +1415,7 @@ func (m model) helpBodyLines() []string {
 		{"[>]", tr("in progress: time has been logged against it (ST column)")},
 		{"[!]", tr("overdue (ST column)")},
 		{"[✓]", tr("done (ST column)")},
+		{"[B]", tr("its board column's icon, once columns have icons (ST column)")},
 		{"⧗", tr("timer running")},
 		{"↧", tr("blocked: waiting on an unfinished dependency; sorts last")},
 		{"↥", tr("others depend on this: finishing it unblocks them")},

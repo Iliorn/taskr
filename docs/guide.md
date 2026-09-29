@@ -125,9 +125,24 @@ holding the completed ones. The default columns are Backlog / In progress /
 Review / Done, and every name is yours to change in Settings → "Board
 columns" (comma-separated). Renaming a column takes its cards with it.
 
-The last column always means *done*: calling it "Shipped" changes the heading
-and nothing else. Moving a card into it completes the task, and moving one out
-reopens it (after asking).
+The last column always means *done*, and its heading always carries a ✓:
+calling it "Shipped" changes the name and nothing else. Moving a card into it
+completes the task, and moving one out reopens it (after asking).
+
+### Column icons
+
+Give a column an icon by writing it in brackets before the name:
+
+```
+[B] Backlog, [>] In progress, [R] Review, Done
+```
+
+The icon leads the column's heading, and every task list shows it in the task's
+status box, so `[R]` beside a task says it is in Review, on any tab. A column
+without an icon leaves the box blank. The icon is one character: a letter, a
+digit or a symbol. Emojis are two cells wide in a terminal and are refused. Once
+any column has an icon, the box shows columns only; an overdue task still shows
+red. Icons sync with the columns.
 
 - `←/→` switch columns; `H`/`L` move the selected card between them.
 - `enter` picks a card up, `←/→` carry it, `enter` or `esc` put it down.

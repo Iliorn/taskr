@@ -1186,19 +1186,10 @@ func taskRowPalette(t *todo.Todo, hasOverdueDep, selected bool) rowPalette {
 func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bool, overdueSet map[string]bool, cols listCols) string {
 	titleW := cols.titleW
 	selected := index == cursor && active
-	// The status box holds one fact: where this task stands. Overdue outranks
-	// started because it is the one that wants a decision — you already know
-	// you started it. Blocked is not in here any more: the sort puts blocked
-	// work at the bottom, and the ↧ before the title says why it is there.
-	checkbox := "[ ]"
-	switch {
-	case t.Status == todo.Done:
-		checkbox = "[✓]"
-	case t.IsOverdue():
-		checkbox = "[!]"
-	case len(t.TimeEntries) > 0:
-		checkbox = "[>]" // in progress: time has been logged against it
-	}
+	// The status box holds one fact: where this task stands (statusBox).
+	// Blocked is not in it: the sort puts blocked work at the bottom, and the
+	// ↧ before the title says why it is there.
+	checkbox := m.boardCfg.statusBox(t)
 	// The gutter holds the fold sign: + for a task whose subtasks are hidden,
 	// - for one showing them. Task rows carry no cursor mark (see cursorMark):
 	// the gutter is the one place the sign has room, set apart from the box.

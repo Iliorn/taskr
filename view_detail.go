@@ -116,6 +116,9 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		// words, in a place the eye reads as part of the value. The brackets are
 		// decoration: too narrow for both and they go whole, leaving the name.
 		stageVal := m.boardCfg.stageDisplay(t.Stage)
+		if icon := m.boardCfg.stageIcon(t.Stage); icon != "" {
+			stageVal = icon + " " + stageVal
+		}
 		if bracketed := "‹ " + stageVal + " ›"; len([]rune(bracketed)) <= valW {
 			stageVal = bracketed
 		}

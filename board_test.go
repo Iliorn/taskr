@@ -91,8 +91,8 @@ func TestLastColumnIsDoneWhateverItIsCalled(t *testing.T) {
 		if len(cols) != 4 {
 			t.Fatalf("columns = %d, want the 4 configured ones", len(cols))
 		}
-		if titles := m.boardColTitles(); titles[len(titles)-1] != "Shipped" {
-			t.Errorf("last column heading = %q, want the configured name", titles[len(titles)-1])
+		if titles := m.boardColTitles(); titles[len(titles)-1] != "✓ Shipped" {
+			t.Errorf("last column heading = %q, want the configured name behind its ✓", titles[len(titles)-1])
 		}
 		if got := cols[m.boardCfg.doneColumn()]; len(got) != 1 || got[0].Title != "Shipped" {
 			t.Errorf("Done column = %v, want the completed task", got)
@@ -202,7 +202,7 @@ func TestParseStagesInput(t *testing.T) {
 		{"empty line falls back to the defaults", "   ", defaultStages()},
 	}
 	for _, c := range cases {
-		if got := parseStagesInput(c.in); !reflect.DeepEqual(got, c.want) {
+		if got, _, _, _ := parseStagesInput(c.in); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: parseStagesInput(%q) = %v, want %v", c.name, c.in, got, c.want)
 		}
 	}
@@ -255,5 +255,81 @@ func TestStageRemap(t *testing.T) {
 		if got := stageRemap(c.old, c.new); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: stageRemap(%v, %v) = %v, want %v", c.name, c.old, c.new, got, c.want)
 		}
+	}
+}
+
+// A column's icon is written in brackets before its name, the way the status
+// box shows it. One cell or it is refused; the Done column keeps ✓.
+func TestParseStagesInputReadsIcons(t *testing.T) {
+	stages, icons, doneIcon, err := parseStagesInput("[B] Backlog, [>] In progress, Review, [✓] Shipped")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Backlog", "In progress", "Review", "Shipped"}; !reflect.DeepEqual(stages, want) {
+		t.Errorf("stages = %v, want %v", stages, want)
+	}
+	if icons["backlog"] != "B" || icons["in progress"] != ">" || icons["review"] != "" {
+		t.Errorf("icons = %v", icons)
+	}
+	if doneIcon != "" {
+		t.Errorf("the ✓ the editor shows on the last column is not news, got %q", doneIcon)
+	}
+	if _, _, doneIcon, _ := parseStagesInput("Todo, [x] Done"); doneIcon != "x" {
+		t.Errorf("another icon on the last column should be reported, got %q", doneIcon)
+	}
+	if _, _, _, err := parseStagesInput("[🚀] Launch, Done"); err == nil {
+		t.Error("a two-cell emoji should be refused")
+	}
+	if _, _, _, err := parseStagesInput("[ab] Launch, Done"); err == nil {
+		t.Error("two characters should be refused")
+	}
+
+	var c boardConfig
+	c.setColumns(stages, icons)
+	if got := c.stagesDisplay(); got != "[B] Backlog, [>] In progress, Review, [✓] Shipped" {
+		t.Errorf("the editor pre-fill should read back as typed: %q", got)
+	}
+}
+
+// Once any column has an icon, a pending task's box shows its column's mark,
+// blank for a column without one, ahead of overdue and started. Done is ✓;
+// a subtask, a hidden board or a board without icons keep the usual marks.
+func TestStatusBoxShowsTheColumnIcon(t *testing.T) {
+	var c boardConfig
+	c.shown = true
+	c.setColumns([]string{"Backlog", "Doing", "Review", "Done"}, map[string]string{"doing": "D", "review": "R"})
+
+	late := todo.New("late")
+	late.DueDate = time.Now().AddDate(0, 0, -2)
+	late.SetStage("Review")
+	started := todo.New("started")
+	started.TimeEntries = []todo.TimeEntry{{StartedAt: time.Now().Add(-time.Hour), StoppedAt: time.Now()}}
+	started.SetStage("Doing")
+	fresh := todo.New("fresh") // no stage: the first column, which has no icon
+	done := todo.New("done")
+	done.Status = todo.Done
+	sub := todo.New("sub")
+	sub.ParentID = late.ID
+	sub.DueDate = late.DueDate
+
+	for _, tc := range []struct {
+		t    *todo.Todo
+		want string
+	}{{&late, "[R]"}, {&started, "[D]"}, {&fresh, "[ ]"}, {&done, "[✓]"}, {&sub, "[!]"}} {
+		if got := c.statusBox(tc.t); got != tc.want {
+			t.Errorf("%s: box = %q, want %q", tc.t.Title, got, tc.want)
+		}
+	}
+	c.shown = false
+	if got := c.statusBox(&late); got != "[!]" {
+		t.Errorf("with the board hidden the box keeps its usual marks, got %q", got)
+	}
+	c.shown = true
+	c.setColumns(c.stages, nil)
+	if got := c.statusBox(&started); got != "[>]" {
+		t.Errorf("without icons the box keeps its usual marks, got %q", got)
+	}
+	if got := c.columnIcon(c.doneColumn()); got != "✓" {
+		t.Errorf("the Done column's mark is always ✓, got %q", got)
 	}
 }

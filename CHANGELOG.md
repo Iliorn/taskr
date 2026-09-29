@@ -15,6 +15,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ### Added
 
+- Board columns can have an icon (`[R] Review`), shown in each task's status box; Done shows ✓.
 - Settings → Export keeps a JSON export of all tasks current in a folder you choose.
 - Settings → Import from file merges a taskr export in, as one undo step.
 

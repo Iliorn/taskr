@@ -509,6 +509,12 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   column, then Done" holds whatever set the list.
 - **Editing columns** (Settings → "Board columns", `modeEditStages`,
   `applyStageEdit`) carries a renamed column's cards over with `stageRemap`.
+- **Column icons.** `[x] Name` in the editor (`parseStagesInput`) gives a
+  working column a one-cell mark (`validStageIcon`), kept in
+  `boardConfig.icons` by lower-cased name and synced as `Board.Icons`. Once
+  any column has one, `statusBox` (the TUI rows and `taskr list` alike)
+  shows the task's column mark instead of ready/started/overdue; done is
+  always ✓, and the Done column's heading always carries it (`columnIcon`).
 - **Columns are a projection** of the same filtered, cached lists the Tasks tab
   shows, so `/` on the Board is the shared search and there is no board-only
   filter state.

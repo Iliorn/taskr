@@ -167,3 +167,28 @@ func TestAdoptedBoardLeavesCardsAlone(t *testing.T) {
 		t.Errorf("an unknown stage should render in the first column, got %q", got)
 	}
 }
+
+// Icons ride with the columns: a board that differs only in its icons is a
+// different board, and adopting it installs them and writes them down.
+func TestBoardSyncCarriesIcons(t *testing.T) {
+	edited := time.Date(2026, 9, 10, 9, 0, 0, 0, time.UTC)
+	c := boardHome(t, []string{"Todo", "Doing", "Done"}, edited)
+	c.setColumns(c.stages, map[string]string{"doing": "D"})
+	if w := c.wire(); w.Icons["doing"] != "D" {
+		t.Fatalf("the wire should carry the icons, got %+v", w)
+	}
+	plain := tasksync.Board{Stages: c.stages}
+	if tasksync.SameBoard(plain, *c.wire()) {
+		t.Error("boards that differ in icons are not the same board")
+	}
+	newer := &tasksync.Board{Stages: []string{"Todo", "Doing", "Done"}, Icons: map[string]string{"todo": "T"}, ModifiedAt: edited.Add(time.Hour)}
+	if !c.adoptFromSync(newer) {
+		t.Fatal("a newer board with other icons should be adopted as a change")
+	}
+	if c.columnIcon(0) != "T" || c.columnIcon(1) != "" {
+		t.Errorf("icons after adopting = %v, want the fleet's", c.icons)
+	}
+	if s, _ := loadSettings(); s.StageIcons["todo"] != "T" {
+		t.Errorf("settings.json kept icons %v", s.StageIcons)
+	}
+}

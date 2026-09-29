@@ -22,8 +22,13 @@ import "time"
 // The zero value — no stages, no timestamp — is "I have nothing to say about
 // the columns", which is what every device that has never edited them sends.
 type Board struct {
-	Stages     []string  `json:"stages"`
-	ModifiedAt time.Time `json:"modified_at"`
+	Stages []string `json:"stages"`
+	// Icons marks columns, keyed by lower-cased column name. Optional like
+	// the Board itself: an older peer neither sends nor keeps it, so a list
+	// it edits last arrives without icons, the price of needing no protocol
+	// bump.
+	Icons      map[string]string `json:"icons,omitempty"`
+	ModifiedAt time.Time         `json:"modified_at"`
 }
 
 // BoardStore is the optional second doorway into the application's storage:
@@ -52,7 +57,7 @@ func MergeBoard(stored, incoming Board) Board {
 	return stored
 }
 
-// SameBoard reports whether two lists are identical in names and order. The
+// SameBoard reports whether two lists are identical in names, order and icons. The
 // timestamp is deliberately not part of it: callers use this to decide whether
 // anything needs writing or redrawing, and a list that came back unchanged with
 // a newer stamp is still the same board.
@@ -62,6 +67,14 @@ func SameBoard(a, b Board) bool {
 	}
 	for i := range a.Stages {
 		if a.Stages[i] != b.Stages[i] {
+			return false
+		}
+	}
+	if len(a.Icons) != len(b.Icons) {
+		return false
+	}
+	for k, v := range a.Icons {
+		if b.Icons[k] != v {
 			return false
 		}
 	}

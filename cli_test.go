@@ -983,6 +983,22 @@ func TestPrintTaskTableStatusGlyphs(t *testing.T) {
 	}
 }
 
+// With column icons, taskr list's ST column is the TUI's box: the task's
+// column mark, overdue or not.
+func TestListStatusColumnShowsColumnIcons(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	if err := saveSettings(appSettings{Stages: []string{"Todo", "Review", "Done"}, StageIcons: map[string]string{"review": "R"}}); err != nil {
+		t.Fatal(err)
+	}
+	late := todo.New("Late in review")
+	late.DueDate = time.Now().Add(-48 * time.Hour)
+	late.SetStage("Review")
+	out := captureStdout(t, func() { printTaskTable([]todo.Todo{late}, nil) })
+	if !strings.Contains(out, "[R]") || strings.Contains(out, "[!]") {
+		t.Errorf("ST should show the column icon:\n%s", out)
+	}
+}
+
 // TestResolveRefs covers the batch verb's ref-resolution contract: succeed on
 // all refs or fail before any mutation; collapse duplicates silently so
 // `done abc abc` is one done, not an error.

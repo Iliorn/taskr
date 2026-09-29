@@ -67,8 +67,16 @@ func (c boardConfig) wire() *tasksync.Board {
 	if !c.sync {
 		return nil
 	}
+	var icons map[string]string
+	if len(c.icons) > 0 {
+		icons = make(map[string]string, len(c.icons))
+		for k, v := range c.icons {
+			icons[k] = v
+		}
+	}
 	return &tasksync.Board{
 		Stages:     append([]string(nil), c.stages...),
+		Icons:      icons,
 		ModifiedAt: c.modifiedAt,
 	}
 }
@@ -89,15 +97,16 @@ func (c *boardConfig) adoptFromSync(b *tasksync.Board) bool {
 	if !b.ModifiedAt.After(c.modifiedAt) {
 		return false
 	}
-	changed := !tasksync.SameBoard(*b, tasksync.Board{Stages: c.stages})
+	changed := !tasksync.SameBoard(*b, tasksync.Board{Stages: c.stages, Icons: c.icons})
 	if changed {
-		c.setStages(b.Stages)
+		c.setColumns(b.Stages, b.Icons)
 	}
 	c.modifiedAt = b.ModifiedAt
 	// Read-modify-write rather than rebuilding the whole file from app state:
 	// this runs from the CLI too, where there is no model to rebuild it from.
 	if s, err := loadSettings(); err == nil {
 		s.Stages = c.stages
+		s.StageIcons = c.icons
 		s.StagesModifiedAt = c.modifiedAt
 		_ = saveSettings(s)
 	}

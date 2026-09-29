@@ -235,7 +235,7 @@ var cliHelpBlocks = []helpBlock{
 	{"Tasks:", []helpRow{
 		{`taskr add "title" [flags]`, "add a new task (--like <ref> clones, --depends <ref>|^ blocks on, --start tracks)"},
 		{"taskr add -", "batch add: one task per stdin line (flags apply to all; --chain links each line as depending on the previous, a plan typed in execution order)"},
-		{"taskr list [flags]", "list pending top-level tasks (ST: [ ] ready, [>] in progress, [!] overdue, [✓] done). Review filters: --stale=30d (untouched that long), --unblocked-since=14d (every blocker now done, the last one recently), --sort=seq|due|size|age|idle|pri, --wide (AGE + IDLE columns), --search-word / --search-re"},
+		{"taskr list [flags]", "list pending top-level tasks (ST: [ ] ready, [>] in progress, [!] overdue, [✓] done, or the board column's icon once columns have icons). Review filters: --stale=30d (untouched that long), --unblocked-since=14d (every blocker now done, the last one recently), --sort=seq|due|size|age|idle|pri, --wide (AGE + IDLE columns), --search-word / --search-re"},
 		{`taskr search "term" [flags]`, "title/notes substring search (includes done by default; --word matches whole words only, --re treats the term as a regular expression)"},
 		{"taskr top [-n=N] [--json] [--wide]", "show top-N by sequence score"},
 		{"taskr show <ref> [--json]", "full detail (incl. score breakdown + subtask IDs)"},
@@ -564,19 +564,12 @@ func printTaskTableWide(rows []todo.Todo, blocked map[string]bool, wide bool) {
 	} else {
 		fmt.Printf("%-8s  %-3s  %-4s  %-3s  %-10s  %s%s\n", "ID", "ST", "SIZE", "PRI", "DUE", timeHdr, "TITLE")
 	}
+	board := storedBoard()
 	for _, t := range rows {
-		// Same four states as the TUI's status column, same precedence: one
-		// fact about where the task stands, with overdue ahead of started.
-		// Blocked is not among them — these rows are already sorted last.
-		st := "[ ]"
-		switch {
-		case t.Status == todo.Done:
-			st = "[✓]"
-		case t.IsOverdue():
-			st = "[!]"
-		case len(t.TimeEntries) > 0:
-			st = "[>]"
-		}
+		// The TUI's status box, from the same function: one fact about where
+		// the task stands. Blocked is not among them; these rows are already
+		// sorted last.
+		st := board.statusBox(&t)
 		due := ""
 		if !t.DueDate.IsZero() {
 			due = t.DueDate.Format("02-01-06")
