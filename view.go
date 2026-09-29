@@ -924,7 +924,7 @@ func (m model) renderKeyHints(w int) string {
 	hints := hintString(ctx, false, over)
 	// Prefer the full hint line; when it can't fit, fall back to the curated
 	// short (primary-only) set instead of truncating mid-list — plain
-	// truncation always cut the same trailing keys (e.g. / search on the Tasks
+	// truncation always cut the same trailing keys (e.g. / filter on the Tasks
 	// tab), hiding them at common terminal widths. hints is pre-Render plain
 	// text, so rune length is the display width.
 	if short := hintString(ctx, true, over); short != "" && len([]rune(hints)) > w {
