@@ -655,3 +655,12 @@ func (m *model) fitInputs() {
 		ti.SetCursor(pos)
 	}
 }
+
+// inlineInputView draws the text input inside a list row rather than in the
+// footer box. fitInputs sizes the input to the footer, and a sized input pads
+// itself out to that width, which a row then clips to a stray ellipsis.
+func (m model) inlineInputView() string {
+	ti := m.textInput
+	ti.Width = 0
+	return ti.View()
+}

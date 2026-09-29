@@ -50,7 +50,7 @@ func (m model) renderTagList() string {
 			if m.mode != modeEditTag || m.editingTagName != key {
 				return "", false
 			}
-			return tagSelectedStyle.Render(lead+label+" ") + m.textInput.View(), true
+			return tagSelectedStyle.Render(lead+label+" ") + m.inlineInputView(), true
 		},
 	})
 }
@@ -1288,7 +1288,7 @@ func (m model) renderProjectListContent(projects []string) string {
 			if m.mode != modeEditProjectInline || key != m.editingProjectName {
 				return "", false
 			}
-			return normalStyle.Render(lead) + m.textInput.View(), true
+			return normalStyle.Render(lead) + m.inlineInputView(), true
 		},
 	})
 }

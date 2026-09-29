@@ -44,3 +44,22 @@ func TestFooterFieldHeightIsSteadyThroughTheBlink(t *testing.T) {
 		}
 	}
 }
+
+// A field edited inside a list row draws only its text: the footer's width
+// would pad it past the panel, and the row would end in a clipped ellipsis.
+func TestInlineRenameRowIsNotPaddedToTheFooter(t *testing.T) {
+	m := smallTermModel(t)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	m = next.(model)
+	m.tab = tabTags
+	m.editingTagName = "home"
+	m.mode = modeEditTag
+	m.textInput.SetValue("home")
+	m.textInput.Focus()
+	m.ensureCache()
+	for _, line := range strings.Split(ansi.Strip(m.View()), "\n") {
+		if strings.Contains(line, "#home > home") && strings.Contains(line, ellipsis) {
+			t.Fatalf("the rename row is clipped: %q", line)
+		}
+	}
+}
