@@ -454,7 +454,8 @@ Rules:
   `drainDirty`. Events are insert-only (`task_events`, `INSERT OR IGNORE`), a
   sync merge unions them by ID and records none of its own, and the save hands
   each task back with its full stored history, which `saveDoneMsg` merges into
-  the live store (`adoptSavedHistory`). `view_history.go` folds runs of edits
+  the live store (`adoptSaved`), with the authors it gave new comments and
+  time entries (`signNewChildren`). `view_history.go` folds runs of edits
   into rows (`historyRows`) for the detail pane's last section and `tjek show`.
 - **Saves are debounced and differential.** Mutations set
   `dirty`/`savePending`; a `saveTickMsg` (300ms) drains the change set with

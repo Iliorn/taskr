@@ -45,21 +45,43 @@ func accountName() string {
 	return login
 }
 
-// adoptSavedHistory takes the history a save read back (saveDoneMsg) onto the
-// live tasks, so the event it recorded shows without a reload. A union, not a
-// copy: the task may have been reloaded with newer events meanwhile, and the
-// save's copy may be from an undo snapshot that lacked some.
-func (m *model) adoptSavedHistory(saved []*todo.Todo) {
+// adoptSaved takes what a save wrote onto the tasks it handed back
+// (saveDoneMsg) onto the live tasks: the history, with the event it recorded,
+// and the authors it gave new comments and time entries, so both show without
+// a reload. The history is a union, not a copy: the task may have been
+// reloaded with newer events meanwhile, and the save's copy may be from an
+// undo snapshot that lacked some.
+func (m *model) adoptSaved(saved []*todo.Todo) {
 	changed := false
 	for _, s := range saved {
 		t := m.get(s.ID)
-		if t == nil || len(s.History) == 0 {
+		if t == nil {
 			continue
 		}
-		merged := todo.MergeHistory(t.History, s.History)
-		if len(merged) != len(t.History) {
-			t.History = merged
-			changed = true
+		if len(s.History) > 0 {
+			if merged := todo.MergeHistory(t.History, s.History); len(merged) != len(t.History) {
+				t.History = merged
+				changed = true
+			}
+		}
+		authors := make(map[string]string)
+		for _, c := range s.Comments {
+			authors[c.ID] = c.Author
+		}
+		for _, e := range s.TimeEntries {
+			authors[e.ID] = e.Author
+		}
+		for i := range t.Comments {
+			if c := &t.Comments[i]; c.Author == "" && authors[c.ID] != "" {
+				c.Author = authors[c.ID]
+				changed = true
+			}
+		}
+		for i := range t.TimeEntries {
+			if e := &t.TimeEntries[i]; e.Author == "" && authors[e.ID] != "" {
+				e.Author = authors[e.ID]
+				changed = true
+			}
 		}
 	}
 	if changed {

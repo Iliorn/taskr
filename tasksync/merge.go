@@ -198,11 +198,34 @@ func mergeChildren[T any](a, b []T, id func(T) string, deletedAt func(T) time.Ti
 }
 
 func mergeComments(a, b []todo.Comment) []todo.Comment {
-	return mergeChildren(a, b,
+	out := mergeChildren(a, b,
 		func(c todo.Comment) string { return c.ID },
 		func(c todo.Comment) time.Time { return c.DeletedAt },
 		func(c todo.Comment) time.Time { return c.ModifiedAt },
 	)
+	authors := childAuthors(a, b, func(c todo.Comment) (string, string) { return c.ID, c.Author })
+	for i := range out {
+		if out[i].Author == "" {
+			out[i].Author = authors[out[i].ID]
+		}
+	}
+	return out
+}
+
+// childAuthors maps each child ID on either side to its author. An author is
+// set once, by the save that first stores the record, so a copy without one
+// has not heard of it yet rather than cleared it: the merge keeps it whichever
+// version wins.
+func childAuthors[T any](a, b []T, idAuthor func(T) (string, string)) map[string]string {
+	out := make(map[string]string)
+	for _, list := range [][]T{a, b} {
+		for _, x := range list {
+			if id, author := idAuthor(x); author != "" {
+				out[id] = author
+			}
+		}
+	}
+	return out
 }
 
 // Time entries order by ModifiedAt like the others, but with a fallback for
@@ -210,7 +233,7 @@ func mergeComments(a, b []todo.Comment) []todo.Comment {
 // of itself when neither carries a ModifiedAt, since a stop is always the
 // later event.
 func mergeTimeEntries(a, b []todo.TimeEntry) []todo.TimeEntry {
-	return mergeChildren(a, b,
+	out := mergeChildren(a, b,
 		func(e todo.TimeEntry) string { return e.ID },
 		func(e todo.TimeEntry) time.Time { return e.DeletedAt },
 		func(e todo.TimeEntry) time.Time {
@@ -220,6 +243,13 @@ func mergeTimeEntries(a, b []todo.TimeEntry) []todo.TimeEntry {
 			return e.StoppedAt // zero for a running legacy entry → stop wins
 		},
 	)
+	authors := childAuthors(a, b, func(e todo.TimeEntry) (string, string) { return e.ID, e.Author })
+	for i := range out {
+		if out[i].Author == "" {
+			out[i].Author = authors[out[i].ID]
+		}
+	}
+	return out
 }
 
 // Merge folds two task sets into one authoritative set. It is symmetric in its

@@ -299,3 +299,72 @@ func TestAppShowsTheSavedEventWithoutAReload(t *testing.T) {
 		t.Errorf("close event %+v, want closed by Anna in the app", e)
 	}
 }
+
+func storedTask(t *testing.T, h *sql.DB, id string) todo.Todo {
+	t.Helper()
+	all, err := loadTodosForSync(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range all {
+		if x.ID == id {
+			return x
+		}
+	}
+	t.Fatalf("task %s missing", id)
+	return todo.Todo{}
+}
+
+// A comment or time entry is signed by the save that first stores it. One
+// the store already holds keeps its author, or its lack of one, and a copy
+// that has not heard of the author cannot clear it.
+func TestNewCommentsAndTimeEntriesAreSigned(t *testing.T) {
+	h := openTestDB(t)
+	task := todo.New("Review draft")
+	task.AddComment("from before authors")
+	historySave(t, h, s0, editor{}, []todo.Todo{task})
+
+	task = storedTask(t, h, task.ID)
+	task.AddComment("looks good")
+	task.AddTimeEntry(s0, s0.Add(time.Hour))
+	saved := historySave(t, h, s0.Add(time.Minute), anna, []todo.Todo{task})
+
+	got := storedTask(t, h, task.ID)
+	if got.Comments[0].Author != "" {
+		t.Errorf("an unsigned comment the store held was credited to %q", got.Comments[0].Author)
+	}
+	if got.Comments[1].Author != "Anna" || got.TimeEntries[0].Author != "Anna" {
+		t.Errorf("new comment by %q, entry by %q; want Anna for both", got.Comments[1].Author, got.TimeEntries[0].Author)
+	}
+	if saved[0].Comments[1].Author != "Anna" {
+		t.Error("the save did not hand the author back")
+	}
+
+	// The live copy still lacks the author (as the app's does until the save
+	// reports back) and is saved again by someone else.
+	task.SetNotes("edited")
+	historySave(t, h, s0.Add(2*time.Minute), editor{name: "Mark"}, []todo.Todo{task})
+	if got := storedTask(t, h, task.ID); got.Comments[1].Author != "Anna" {
+		t.Errorf("a stale copy changed the author to %q", got.Comments[1].Author)
+	}
+}
+
+// A merge keeps a child's author whichever version of it wins.
+func TestMergeKeepsChildAuthors(t *testing.T) {
+	h := openTestDB(t)
+	task := todo.New("Shared")
+	task.AddComment("hello")
+	historySave(t, h, s0, anna, []todo.Todo{task})
+
+	theirs := storedTask(t, h, task.ID)
+	theirs.Comments[0].Author = ""
+	theirs.Comments[0].Text = "hello, edited"
+	theirs.Comments[0].ModifiedAt = theirs.Comments[0].ModifiedAt.Add(time.Hour)
+	if _, _, err := mergeIntoStore(h, []todo.Todo{theirs}, rank.Biases{}); err != nil {
+		t.Fatal(err)
+	}
+	got := storedTask(t, h, task.ID).Comments[0]
+	if got.Text != "hello, edited" || got.Author != "Anna" {
+		t.Errorf("merged comment %+v, want the later text and Anna as its author", got)
+	}
+}

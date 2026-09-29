@@ -172,6 +172,15 @@ func clampLines(lines []string, max int) []string {
 	return out
 }
 
+// commentBody is a comment as the detail pane wraps it: its author, when it
+// has one, ahead of the text.
+func commentBody(c todo.Comment) string {
+	if c.Author == "" {
+		return c.Text
+	}
+	return c.Author + ": " + c.Text
+}
+
 // commentLineCount is how many lines the detail pane draws for a comment:
 // wrapText's word wrap, which can take more lines than the rune count
 // divided by the width.

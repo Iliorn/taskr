@@ -229,7 +229,7 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo, rk rank.
 		// HH:MM so multiple comments on the same day stay ordered/readable.
 		fmt.Printf("\nComments (%d):\n", len(t.Comments))
 		for i, c := range t.Comments {
-			fmt.Printf("  %d. [%s] %s\n", i+1, c.CreatedAt.Format("2006-01-02 15:04"), c.Text)
+			fmt.Printf("  %d. [%s] %s\n", i+1, c.CreatedAt.Format("2006-01-02 15:04"), commentBody(c))
 		}
 	}
 	if t.Notes != "" {

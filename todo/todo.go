@@ -163,6 +163,9 @@ type Comment struct {
 	// DeletedAt tombstones the record for cross-device sync (see merge.go); the
 	// zero value means live. Kept rather than removed so a deletion propagates.
 	DeletedAt time.Time `json:"deleted_at,omitempty"`
+	// Author is who wrote the comment, as the history names people. The save
+	// that first stores it sets it; empty on comments from before authors.
+	Author string `json:"author,omitempty"`
 }
 
 // ── TimeEntry ─────────────────────────────────────────────────────────────────
@@ -177,6 +180,8 @@ type TimeEntry struct {
 	// still running (heartbeat). A running entry whose LastSeen has gone stale is
 	// treated as abandoned and recovered. Zero = never heartbeated.
 	LastSeen time.Time `json:"last_seen,omitempty"`
+	// Author is who tracked the time; set like Comment.Author.
+	Author string `json:"author,omitempty"`
 }
 
 func (te TimeEntry) Duration() time.Duration {

@@ -66,8 +66,13 @@ func saveStampedOnce(h *sql.DB, dirty []*todo.Todo, tombstones map[string]time.T
 	if err != nil {
 		return err
 	}
+	known, err := storedChildIDs(tx, ids[:len(dirty)])
+	if err != nil {
+		return err
+	}
 	events := make(map[string]todo.Event, len(dirty))
 	for _, t := range dirty {
+		signNewChildren(t, known, by.name)
 		old, ok := stored[t.ID]
 		var prev *todo.Todo
 		if ok {
@@ -385,6 +390,59 @@ func sameMembers(a, b []string) bool {
 		have[x]--
 	}
 	return true
+}
+
+// signNewChildren gives the comments and time entries of t that the store
+// does not hold yet their author: whoever's save first writes them. One the
+// store holds keeps what it has, even when it has no author, so a comment
+// from before authors is not credited to whoever next edits its task.
+func signNewChildren(t *todo.Todo, known map[string]bool, name string) {
+	for i := range t.Comments {
+		if c := &t.Comments[i]; c.Author == "" && !known[c.ID] {
+			c.Author = name
+		}
+	}
+	for i := range t.TimeEntries {
+		if e := &t.TimeEntries[i]; e.Author == "" && !known[e.ID] {
+			e.Author = name
+		}
+	}
+}
+
+// storedChildIDs is the IDs of every comment and time entry the store holds
+// for the tasks ids, tombstoned ones included.
+func storedChildIDs(tx *sql.Tx, ids []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	const chunk = 500
+	for len(ids) > 0 {
+		n := min(chunk, len(ids))
+		part := ids[:n]
+		ids = ids[n:]
+		in := "(" + strings.TrimSuffix(strings.Repeat("?,", len(part)), ",") + ")"
+		args := make([]any, len(part))
+		for i, id := range part {
+			args[i] = id
+		}
+		for _, table := range []string{"task_comments", "task_time_entries"} {
+			rows, err := tx.Query(`SELECT id FROM `+table+` WHERE task_id IN `+in, args...)
+			if err != nil {
+				return nil, err
+			}
+			for rows.Next() {
+				var id string
+				if err := rows.Scan(&id); err != nil {
+					rows.Close()
+					return nil, err
+				}
+				out[id] = true
+			}
+			rows.Close()
+			if err := rows.Err(); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
 }
 
 // eventColumns are the task_events columns scanEvent reads, in its order.

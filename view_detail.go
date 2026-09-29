@@ -468,6 +468,9 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 				datePrefix = e.StartedAt.Format("02-01 ")
 			}
 			line := pfx + datePrefix + rangeStr + "  " + durStr
+			if e.Author != "" {
+				line += "  · " + e.Author
+			}
 			if running {
 				line += tr(" ◉")
 			}
@@ -498,7 +501,7 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 				pfx = cursorMark
 			}
 			header := fmt.Sprintf("%s[%s] ", pfx, c.CreatedAt.Format("02-01-06 15:04"))
-			wrapped := wrapText(c.Text, available)
+			wrapped := wrapText(commentBody(c), available)
 			indent := strings.Repeat(" ", len([]rune(header)))
 			for j, line := range wrapped {
 				var fullLine string

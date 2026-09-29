@@ -262,7 +262,7 @@ func dropAllLocalTasks(h *sql.DB) error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, table := range []string{"task_tags", "task_dependencies", "task_comments", "task_time_entries", "todos"} {
+	for _, table := range []string{"task_tags", "task_dependencies", "task_comments", "task_time_entries", "task_events", "todos"} {
 		if _, err := tx.Exec(`DELETE FROM ` + table); err != nil {
 			return err
 		}

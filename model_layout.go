@@ -87,7 +87,7 @@ func (m model) estimateSectionRowLine(t *todo.Todo) int {
 	line := commentsStart + 1
 	available := m.detailCommentWidth()
 	for i := 0; i < m.detail.commentCursor && i < len(t.Comments); i++ {
-		line += commentLineCount(t.Comments[i].Text, available)
+		line += commentLineCount(commentBody(t.Comments[i]), available)
 	}
 	return line
 }
@@ -602,7 +602,7 @@ func (m model) detailCommentsHeight(t *todo.Todo) int {
 	}
 	available := m.detailCommentWidth()
 	for _, c := range t.Comments {
-		lines += commentLineCount(c.Text, available)
+		lines += commentLineCount(commentBody(c), available)
 	}
 	return lines
 }

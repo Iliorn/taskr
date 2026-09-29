@@ -1,3 +1,4 @@
+comments[].author
 comments[].created_at
 comments[].deleted_at
 comments[].id
@@ -24,6 +25,7 @@ size
 start_date
 status
 tags[]
+time_entries[].author
 time_entries[].deleted_at
 time_entries[].id
 time_entries[].last_seen

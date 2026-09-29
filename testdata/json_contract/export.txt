@@ -1,4 +1,5 @@
 exported_at
+tasks[].comments[].author
 tasks[].comments[].created_at
 tasks[].comments[].deleted_at
 tasks[].comments[].id
@@ -27,6 +28,7 @@ tasks[].size
 tasks[].start_date
 tasks[].status
 tasks[].tags[]
+tasks[].time_entries[].author
 tasks[].time_entries[].deleted_at
 tasks[].time_entries[].id
 tasks[].time_entries[].last_seen

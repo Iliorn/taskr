@@ -33,7 +33,7 @@ func (m model) handleBackgroundMsg(msg tea.Msg) (next tea.Model, cmd tea.Cmd, ok
 	case updateCheckMsg:
 		next, cmd = m.handleUpdateCheck(msg)
 	case saveDoneMsg:
-		m.adoptSavedHistory(msg.saved)
+		m.adoptSaved(msg.saved)
 		next = m
 	case syncTickMsg:
 		next, cmd = m.handleSyncTick()
