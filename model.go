@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"sort"
@@ -820,6 +821,9 @@ func copyTodo(t todo.Todo) todo.Todo {
 	}
 	if len(t.TimeEntries) > 0 {
 		cp.TimeEntries = append([]todo.TimeEntry{}, t.TimeEntries...)
+	}
+	if len(t.Stamps) > 0 {
+		cp.Stamps = maps.Clone(t.Stamps)
 	}
 	return cp
 }

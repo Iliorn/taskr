@@ -142,6 +142,7 @@ func TestThreeWayCoversEveryField(t *testing.T) {
 		"ID": true, "CreatedAt": true, "ModifiedAt": true,
 		"Comments": true, "TimeEntries": true, // merged by their own IDs
 		"Deleted": true, "DeletedAt": true, // a delete is Merge's call
+		"Stamps": true,
 	}
 	typ := reflect.TypeOf(todo.Todo{})
 	for i := 0; i < typ.NumField(); i++ {

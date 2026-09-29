@@ -10,6 +10,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/Iliorn/tjek/hlc"
 	"github.com/google/uuid"
 )
 
@@ -234,6 +235,12 @@ type Todo struct {
 	// soft-deleted rows; these surface that state on the struct and the wire.
 	Deleted   bool      `json:"deleted,omitempty"`
 	DeletedAt time.Time `json:"deleted_at,omitempty"`
+
+	// Stamps holds, per field, the stamp of the edit that set it: a sync
+	// merge keeps each field from the version with the later stamp (see
+	// fields.go for the keys). The store sets them when it saves a task, by
+	// comparing it with the stored version, so no mutation here touches them.
+	Stamps map[string]hlc.Stamp `json:"stamps,omitempty"`
 }
 
 func New(title string) Todo {
