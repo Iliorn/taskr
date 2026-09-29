@@ -1739,3 +1739,16 @@ func TestCliRecloseDoesNotSpawnASecondInstance(t *testing.T) {
 		t.Errorf("%d pending next instances, want 1", pending)
 	}
 }
+
+// A mistyped command is answered with the nearest real one, and a word that
+// is nowhere near any command gets no guess.
+func TestNearestCommandSuggestsATypo(t *testing.T) {
+	for arg, want := range map[string]string{
+		"lsit": "list", "dnoe": "done", "serch": "search", "sycn": "sync",
+		"time": "", "calendar": "", "--verbose": "",
+	} {
+		if got := nearestCommand(arg); got != want {
+			t.Errorf("nearestCommand(%q) = %q, want %q", arg, got, want)
+		}
+	}
+}

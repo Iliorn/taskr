@@ -34,11 +34,16 @@ func main() {
 	adoptFormerName()
 
 	// CLI mode: when the first arg names a subcommand, run the non-TUI
-	// dispatcher and exit. Bare `tjek` (no args, or only flags meant for the
-	// TUI) still launches the Bubble Tea program below.
-	if len(os.Args) > 1 && isCLICommand(os.Args[1]) {
-		code := runCLI(os.Args[1:])
-		checkpointStore()
+	// dispatcher and exit. Only bare `tjek` launches the Bubble Tea program
+	// below; it takes no arguments, so any other word is a mistake to report.
+	if len(os.Args) > 1 {
+		code := 0
+		if isCLICommand(os.Args[1]) {
+			code = runCLI(os.Args[1:])
+			checkpointStore()
+		} else {
+			code = unknownCommand(os.Args[1])
+		}
 		restoreConsole() // os.Exit runs no deferred calls
 		os.Exit(code)
 	}

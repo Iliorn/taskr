@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,21 +23,71 @@ import (
 // a pipe or $(...) capture wants); side-effect notices — another timer being
 // stopped, ancestor due dates bumped, recovery hints — go to stderr.
 
+// cliCommands are the first args main routes to runCLI instead of launching
+// the TUI.
+var cliCommands = []string{
+	"add", "list", "ls", "done", "reopen", "top",
+	"show", "why", "edit", "delete", "rm", "undelete", "comment",
+	"stats", "start", "stop", "log", "export", "import", "subtask",
+	"search", "tags", "projects", "serve", "sync", "undo",
+	"doctor", "update", "suggest", "remind", "completion", "man", "help", "-h", "--help", "--version",
+	// Retired, but still routed so muscle memory gets an explanation
+	// instead of the TUI opening on top of the typed command.
+	"learnings",
+}
+
 // isCLICommand reports whether the first arg names a subcommand main should
 // route to runCLI instead of launching the TUI.
 func isCLICommand(arg string) bool {
-	switch arg {
-	case "add", "list", "ls", "done", "reopen", "top",
-		"show", "why", "edit", "delete", "rm", "undelete", "comment",
-		"stats", "start", "stop", "log", "export", "import", "subtask",
-		"search", "tags", "projects", "serve", "sync", "undo",
-		"doctor", "update", "suggest", "remind", "completion", "man", "help", "-h", "--help", "--version",
-		// Retired, but still routed so muscle memory gets an explanation
-		// instead of the TUI opening on top of the typed command.
-		"learnings":
-		return true
+	return slices.Contains(cliCommands, arg)
+}
+
+// unknownCommand answers a first arg that names no command. The TUI takes no
+// arguments, so opening it would drop the typed word without a trace and
+// leave a mistyped `tjek lsit` looking like a command that ran.
+func unknownCommand(arg string) int {
+	fmt.Fprintf(os.Stderr, "tjek: unknown command %q\n", arg)
+	if near := nearestCommand(arg); near != "" {
+		fmt.Fprintf(os.Stderr, "Did you mean: tjek %s\n", near)
 	}
-	return false
+	fmt.Fprintln(os.Stderr, "Run 'tjek help' for the list, or 'tjek' alone to open the app.")
+	return 2
+}
+
+// nearestCommand is the command within two edits of arg, or "" if none is.
+func nearestCommand(arg string) string {
+	best, bestD := "", 3
+	for _, c := range cliCommands {
+		if c == "learnings" || strings.HasPrefix(c, "-") {
+			continue
+		}
+		if d := editDistance(arg, c); d < bestD {
+			best, bestD = c, d
+		}
+	}
+	return best
+}
+
+// editDistance is the Levenshtein distance between a and b, in runes.
+func editDistance(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	prev := make([]int, len(rb)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(ra); i++ {
+		cur := make([]int, len(rb)+1)
+		cur[0] = i
+		for j := 1; j <= len(rb); j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			cur[j] = min(min(prev[j]+1, cur[j-1]+1), prev[j-1]+cost)
+		}
+		prev = cur
+	}
+	return prev[len(rb)]
 }
 
 func runCLI(args []string) int {
@@ -142,8 +193,8 @@ func dispatchCLI(args []string) int {
 
 // cliHelp prints the command reference. It goes to stdout, not stderr:
 // dispatchCLI only reaches it for an explicit `tjek help` / `-h` / `--help`
-// (an unrecognised word never gets this far — isCLICommand sends it to the
-// TUI instead), and an explicitly requested document belongs on stdout so
+// (an unrecognised word never gets this far — main answers it with
+// unknownCommand), and an explicitly requested document belongs on stdout so
 // `tjek help | grep sync` and `tjek help | less` work.
 
 // ── update ───────────────────────────────────────────────────────────────────
