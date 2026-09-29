@@ -508,6 +508,18 @@ and Bubble Tea glue stay in the app.
   is set only by `applyStageEdit`. The server keeps the fleet's list in
   `board.json`. An adopted list does not re-stage cards: an unknown stage falls
   into the first column.
+- **Edits to different fields of one task both survive**
+  (`tasksync/threeway.go`, `mergeServerIntoStore` in `syncstore.go`). The
+  server's merge stays whole-task last-writer-wins. The client keeps each
+  task's last-agreed version in `sync_base` (local, never synced), and with
+  edits the server has not seen it pulls before it pushes (an empty push is
+  a pull), so the two versions meet on the client: pushed first, the later
+  edit would replace the other on the server, where no client sees it.
+  `ThreeWay` combines them field by field, tags and dependencies as sets,
+  and stamps the result newer than both. A field both sides changed stays
+  last-writer-wins and goes to sync.log; `KeepsLocalEdits` keeps a combined
+  task out of it. `TestThreeWayCoversEveryField` fails for a new `todo.Todo`
+  field until `taskFields` decides it.
 - **First sync asks before uploading** (`syncadopt.go`). The merge is a union
   by ID, so a device's first sync hands every local task to every other device,
   with no undo. `firstSyncNeedsChoice` (never synced, has live tasks, no answer
