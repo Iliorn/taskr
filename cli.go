@@ -29,7 +29,7 @@ var cliCommands = []string{
 	"add", "list", "ls", "done", "reopen", "top",
 	"show", "why", "edit", "delete", "rm", "undelete", "comment",
 	"stats", "start", "stop", "log", "export", "import", "subtask",
-	"search", "tags", "projects", "serve", "sync", "undo",
+	"search", "tags", "projects", "serve", "sync", "undo", "share",
 	"doctor", "update", "suggest", "remind", "completion", "man", "help", "-h", "--help", "--version",
 	// Retired, but still routed so muscle memory gets an explanation
 	// instead of the TUI opening on top of the typed command.
@@ -99,6 +99,7 @@ func runCLI(args []string) int {
 	// a shell edit propagates even when the TUI isn't open. Fail-soft and gated
 	// on sync being configured.
 	if rc == 0 && cliMutates(args[0]) {
+		maybeSharedSyncCLI()
 		maybeAutoSyncCLI()
 	}
 	return rc
@@ -165,6 +166,8 @@ func dispatchCLI(args []string) int {
 		return cliServe(rest)
 	case "sync":
 		return cliSync(rest)
+	case "share":
+		return cliShare(rest)
 	case "learnings":
 		fmt.Fprintln(os.Stderr, "tjek learnings: removed; learnings were folded into each task's notes.")
 		fmt.Fprintln(os.Stderr, "Search them with: tjek search \"Learnings\"  (notes are searched too), or open the task and press n.")
@@ -340,6 +343,13 @@ var cliHelpBlocks = []helpBlock{
 		{"tjek sync --adopt-remote", "first sync only: back them up, clear them here, pull the fleet's list. A device that has never synced and holds tasks of its own refuses to sync until one of these is given, so its old tasks can't land on every device by surprise; the backup is a normal export, tjek import undoes it"},
 		{"tjek sync --recover", "list dropped edits from sync.log (local only, no network)"},
 		{"tjek sync --recover=<ref>", "reapply one dropped edit by id-prefix or title substring; stamps a fresh ModifiedAt so the fix propagates on the next sync"},
+	}},
+	{"Shared projects (through a folder, e.g. OneDrive):", []helpRow{
+		{"tjek share", "list the projects this device shares, and where"},
+		{"tjek share start <project> <folder>", "share a project with everyone who can reach the folder; each device writes its own file there, and changes merge like sync"},
+		{"tjek share join <folder> [--merge]", "join the project a folder holds; --merge when you already have tasks in a project of that name, which then become shared"},
+		{"tjek share leave <project>", "stop sharing here; the tasks stay as an ordinary project, and the others keep theirs"},
+		{"tjek share sync", "sync every shared project now (the app does it on its own, and so does every command that changes tasks)"},
 	}},
 	{"Meta:", []helpRow{
 		{"tjek --version", "print build version"},
