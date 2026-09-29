@@ -357,6 +357,9 @@ type syncSummary struct {
 	// summary rather than being printed here so both callers can place it:
 	// the CLI on stderr, the TUI in the Settings footer.
 	versionGap string
+	// serverVersion is the build the server stamped on its answer, which the
+	// TUI's status line names while it differs from this one.
+	serverVersion string
 	// board is the fleet's column list as the server has it after this sync,
 	// or nil when neither end shares one. It rides back rather than being
 	// applied in here for the same reason versionGap does — and one better:
@@ -415,11 +418,12 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b rank.Bias
 	// Count live tasks only: the wire sets include every tombstone ever made,
 	// so raw lengths would overstate forever ("received 400" on a no-op sync).
 	sum := syncSummary{
-		sent:       countLive(local),
-		received:   countLive(merged),
-		conflicts:  len(dropped),
-		versionGap: tasksync.VersionGapWarning(resp.ServerVersion, appVersion),
-		board:      resp.Board,
+		sent:          countLive(local),
+		received:      countLive(merged),
+		conflicts:     len(dropped),
+		versionGap:    tasksync.VersionGapWarning(resp.ServerVersion, appVersion),
+		serverVersion: resp.ServerVersion,
+		board:         resp.Board,
 	}
 	// Record status for `tjek sync --status`. Best-effort: a write failure here
 	// must not fail an otherwise-successful sync.

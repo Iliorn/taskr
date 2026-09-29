@@ -1072,8 +1072,13 @@ func TestStatusLineSpeaksOnlyWhenSyncFails(t *testing.T) {
 		{"sync not configured", func(m *model) {}, ""},
 		{"sync healthy", configured, ""},
 		{"sync failing", func(m *model) { configured(m); m.lastSyncFailed = true }, tr("✕ sync")},
-		{"server on another version", func(m *model) { configured(m); m.syncVersionGap = true }, tr("! sync")},
-		{"failing outranks a version gap", func(m *model) { configured(m); m.lastSyncFailed = true; m.syncVersionGap = true }, tr("✕ sync")},
+		{"server on another version", func(m *model) { configured(m); m.syncGapServer = "v1.42.0" }, "! server v1.42.0, app " + appVersion},
+		{"failing outranks a version gap", func(m *model) { configured(m); m.lastSyncFailed = true; m.syncGapServer = "v1.42.0" }, tr("✕ sync")},
+		{"version gap beside a long filter", func(m *model) {
+			configured(m)
+			m.syncGapServer = "v1.42.0"
+			m.searchQuery = strings.Repeat("x", 70)
+		}, "/" + strings.Repeat("x", 70) + strings.Repeat(" ", 11) + tr("! sync")},
 	} {
 		m := modelWithTasks(t, todo.New("alpha"))
 		m.termWidth, m.termHeight = 90, 20

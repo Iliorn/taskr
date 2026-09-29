@@ -454,13 +454,14 @@ type model struct {
 	syncCfg    syncConfig
 	autoSync   bool
 	syncStatus string
-	// lastSyncFailed and syncVersionGap drive the header sync-health glyph:
-	// true after a failed background sync, and after a successful one against
-	// a server on another tjek version, each cleared by the next sync that
-	// says otherwise. syncStatus keeps the full message for the Settings
+	// lastSyncFailed and syncGapServer drive the header sync-health glyph:
+	// lastSyncFailed is true after a failed background sync, and
+	// syncGapServer holds the server's version after a successful sync found
+	// it on another tjek build than this one. Each is cleared by the next sync
+	// that says otherwise. syncStatus keeps the full message for the Settings
 	// footer.
 	lastSyncFailed bool
-	syncVersionGap bool
+	syncGapServer  string
 	// inprocServer is the in-process sync server when "Server" is toggled on
 	// (nil otherwise). serverExternal is set by probeServer when a headless
 	// `tjek serve` is answering at the configured address.

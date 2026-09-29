@@ -72,7 +72,7 @@ func TestSyncSuccessReportsAVersionGap(t *testing.T) {
 	m := modelWithTasks(t)
 	gap := "sync server runs tjek v1.25.0, this device runs v1.33.1"
 
-	next, _ := m.handleSyncDone(syncDoneMsg{summary: syncSummary{sent: 2, received: 0, versionGap: gap}})
+	next, _ := m.handleSyncDone(syncDoneMsg{summary: syncSummary{sent: 2, received: 0, versionGap: gap, serverVersion: "v1.25.0"}})
 	m = next.(model)
 	if !strings.Contains(m.syncStatus, gap) {
 		t.Errorf("syncStatus = %q, want the version gap named", m.syncStatus)
@@ -80,7 +80,7 @@ func TestSyncSuccessReportsAVersionGap(t *testing.T) {
 	if m.lastSyncFailed {
 		t.Error("a version gap must not mark the sync as failed")
 	}
-	if !m.syncVersionGap {
+	if m.syncGapServer != "v1.25.0" {
 		t.Error("a version gap must light the status line's sync mark")
 	}
 	if m.err == "" {
@@ -90,14 +90,14 @@ func TestSyncSuccessReportsAVersionGap(t *testing.T) {
 	// Said once: the mark carries it from there, until a sync finds the
 	// versions level again.
 	m.err = ""
-	next, _ = m.handleSyncDone(syncDoneMsg{summary: syncSummary{versionGap: gap}})
+	next, _ = m.handleSyncDone(syncDoneMsg{summary: syncSummary{versionGap: gap, serverVersion: "v1.25.0"}})
 	m = next.(model)
 	if m.err != "" {
 		t.Error("a repeated version gap should stay quiet on the toast line")
 	}
 	next, _ = m.handleSyncDone(syncDoneMsg{})
 	m = next.(model)
-	if m.syncVersionGap {
+	if m.syncGapServer != "" {
 		t.Error("a sync with no version gap should clear the mark")
 	}
 }

@@ -496,7 +496,7 @@ func (m model) renderStatusLine() string {
 	left := strings.Join(chips, " ")
 
 	var right []string
-	if g := m.syncGlyph(); g != "" {
+	if g := m.syncGlyph(width - ansi.StringWidth(left) - 1); g != "" {
 		right = append(right, g)
 	}
 
@@ -549,22 +549,27 @@ func groupListTitle(order groupSort, hidden int) string {
 	return title
 }
 
-// syncGlyph reports background-sync health for the status line: a red mark
-// after a failure, an orange one while the server runs another tjek version,
-// and nothing otherwise.
+// syncGlyph reports background-sync health for the status line in at most
+// room cells: a red mark after a failure, an orange one while the server runs
+// another tjek version, and nothing otherwise. The orange mark names both
+// versions when they fit, so it says which end is behind; otherwise it is the
+// short form the help overlay explains.
 //
 // Healthy sync says nothing on purpose: the steady state is shown in words in
 // Settings. A failure means this device is drifting from the others, the one
 // sync fact a user must not have to go looking for. A version gap is the same
 // fact arriving quietly: every sync succeeds while the older end drops what it
 // has no column for.
-func (m model) syncGlyph() string {
+func (m model) syncGlyph(room int) string {
 	switch {
 	case !m.autoSync:
 		return ""
 	case m.lastSyncFailed:
 		return syncFailStyle.Render(tr("✕ sync"))
-	case m.syncVersionGap:
+	case m.syncGapServer != "":
+		if long := fmt.Sprintf(tr("! server %s, app %s"), m.syncGapServer, appVersion); ansi.StringWidth(long) <= room {
+			return syncWarnStyle.Render(long)
+		}
 		return syncWarnStyle.Render(tr("! sync"))
 	}
 	return ""

@@ -85,9 +85,11 @@ func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	// saying. Two builds against one store agree until a migration lands, and
 	// then the older end starts dropping whatever it has no column for, with
 	// every sync still reporting success.
-	newGap := msg.summary.versionGap != "" && !m.syncVersionGap
-	m.syncVersionGap = msg.summary.versionGap != ""
-	if m.syncVersionGap {
+	gap := msg.summary.versionGap != ""
+	newGap := gap && m.syncGapServer == ""
+	m.syncGapServer = ""
+	if gap {
+		m.syncGapServer = msg.summary.serverVersion
 		m.syncStatus += ". " + msg.summary.versionGap
 	}
 	if newGap {
