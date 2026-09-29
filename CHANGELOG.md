@@ -16,7 +16,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 ### Added
 
 - Share a project through a folder (OneDrive, Dropbox): `S` on the Projects tab, or `tjek share`.
-- Join a shared project from Settings, and leave it again with `S`; its tasks stay with you.
+- Join a shared project from Settings; `S` leaves it and removes its tasks from the device.
 - Comments and tracked time show who wrote or tracked them.
 
 ### Fixed

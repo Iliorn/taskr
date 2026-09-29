@@ -121,7 +121,7 @@ func (m model) startShareOrLeave(name string) (tea.Model, tea.Cmd) {
 		m.pendingProjectName = name
 		m.mode = modeConfirm
 		m.confirmOnYes = (*model).confirmLeaveShared
-		m.confirmMsg = fmt.Sprintf(tr("Stop sharing '%s'? Its tasks stay here, and the others keep theirs. (y/n)"), name)
+		m.confirmMsg = fmt.Sprintf(tr("Leave '%s'? Its tasks are removed from this device; the others keep theirs. (y/n)"), name)
 		return m, nil
 	}
 	m.pendingProjectName = name
@@ -132,9 +132,25 @@ func (m model) startShareOrLeave(name string) (tea.Model, tea.Cmd) {
 	return m, textinput.Blink
 }
 
+// confirmLeaveShared leaves the project and removes its tasks here. Edits
+// still inside the save debounce are written first, so the folder gets them
+// and no later save puts a removed task back; a pass over the folders that
+// is running could merge the tasks back in behind the removal, so the leave
+// waits for it.
 func (m *model) confirmLeaveShared() tea.Cmd {
+	if m.sharedRunning {
+		m.flashInfo(tr("A shared project is syncing; try again in a moment"))
+		return clearErrAfter()
+	}
+	if dirty, tombstones := m.Store.drainDirty(); len(dirty) > 0 || len(tombstones) > 0 {
+		m.savePending = false
+		if err := m.repo.Save(dirty, tombstones); err != nil {
+			m.flashError(fmt.Sprintf(tr("Shared project: %v"), err))
+			return clearErrAfter()
+		}
+	}
 	c := m.shared.clone()
-	p, err := leaveShared(&c, m.pendingProjectName)
+	p, n, err := leaveShared(db, &c, m.pendingProjectName, authorName(appSettings{Name: m.userName}), m.rank.Biases)
 	if err == nil {
 		err = saveSharedConfig(c)
 	}
@@ -143,9 +159,12 @@ func (m *model) confirmLeaveShared() tea.Cmd {
 		return clearErrAfter()
 	}
 	m.shared = c
-	m.markCacheDirty()
-	m.flashInfo(fmt.Sprintf(tr("Stopped sharing '%s'"), p.Name))
-	return clearErrAfter()
+	m.flashInfo(fmt.Sprintf(tr("Left '%s' and removed its %d task(s) here"), p.Name, n))
+	repo := m.repo
+	return tea.Batch(clearErrAfter(), func() tea.Msg {
+		todos, err := repo.Load()
+		return reloadedMsg{todos: todos, err: err}
+	})
 }
 
 // updateShareFolder takes the folder to share a project in: tab completes a

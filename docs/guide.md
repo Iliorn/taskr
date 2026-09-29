@@ -49,8 +49,9 @@ set up.
 - **Join**: Settings → Shared projects → "Join a project", and type the same
   folder. If you already have tasks in a project with that name, tjek asks
   before sharing them, since everyone in the folder gets them.
-- **Leave**: `S` on the shared project again. Its tasks stay with you as an
-  ordinary project, and the others keep theirs.
+- **Leave**: `S` on the shared project again. Its tasks are removed from
+  this device, and the others keep theirs. Joining again brings everything
+  back, comments and history included.
 
 Everything about the project's tasks is shared: fields, subtasks, comments,
 tracked time and history, each signed with the name of whoever made it (see
@@ -63,6 +64,10 @@ never has two people writing the same file. tjek writes a few seconds after
 a change and looks for the others' changes every 30 seconds while it runs;
 the command line does both after every command that changes tasks, and
 `tjek share sync` does it at once.
+
+A shared project travels only through its folder, never through your
+[sync server](sync.md): each of your own machines that should have it joins
+the folder too, and leaving on one machine touches no other.
 
 Two things to know. Anyone who can open the folder can read and change the
 project, just as with any shared folder. And a task moved out of the shared

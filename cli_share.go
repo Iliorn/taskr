@@ -12,7 +12,7 @@ import (
 const shareUsage = `usage: tjek share                            list the shared projects
        tjek share start <project> <folder>   share a project through a folder
        tjek share join <folder> [--merge]    join the project a folder holds
-       tjek share leave <project>            stop sharing a project here
+       tjek share leave <project>            leave a project and remove its tasks here
        tjek share sync                       sync every shared project now`
 
 func cliShare(args []string) int {
@@ -73,7 +73,7 @@ func cliShare(args []string) int {
 		return 0
 
 	case "leave":
-		p, err := leaveShared(&c, positionals[0])
+		p, n, err := leaveShared(db, &c, positionals[0], author, biases)
 		if err == nil {
 			err = saveSharedConfig(c)
 		}
@@ -81,7 +81,7 @@ func cliShare(args []string) int {
 			fmt.Fprintf(os.Stderr, "tjek share: %v\n", err)
 			return 1
 		}
-		fmt.Printf("left %q; its tasks stay here as an ordinary project\n", p.Name)
+		fmt.Printf("left %q and removed its %d task(s) from this device; joining again brings them back\n", p.Name, n)
 		return 0
 	}
 

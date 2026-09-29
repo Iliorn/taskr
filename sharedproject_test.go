@@ -135,35 +135,79 @@ func TestSharedEditsToDifferentFieldsBothSurvive(t *testing.T) {
 	}
 }
 
-// Leaving takes this device's file out of the folder and the project out of
-// shared.json; its tasks stay here as an ordinary project.
-func TestLeavingKeepsTheTasksAndRemovesTheFile(t *testing.T) {
+// Leaving removes the project's tasks from this device outright and keeps
+// its file in the folder, so the others lose nothing; joining again brings
+// every task back, history and all, and deletes nothing for anyone.
+func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 	folder := t.TempDir()
-	mark := newSharer(t, "Mark")
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
 	task := todo.New("Pack")
 	task.Project = "Trip"
-	mark.save(t, s0, task)
-	startSharing(&mark.cfg, "Trip", folder)
+	private := todo.New("Dentist")
+	anna.save(t, s0, task)
+	mark.save(t, s0, private)
+	startSharing(&anna.cfg, "Trip", folder)
+	anna.sync(t, "Trip")
+	joinShared(&mark.cfg, folder)
 	mark.sync(t, "Trip")
 	own := mark.cfg.memberPath(mark.cfg.Projects[0])
+
+	p, n, err := leaveShared(mark.h, &mark.cfg, "Trip", "Mark", rank.Biases{})
+	if err != nil || n != 1 {
+		t.Fatalf("leave: removed %d, %v; want the one task", n, err)
+	}
+	if len(mark.cfg.Projects) != 0 || len(mark.cfg.Left) != 1 {
+		t.Fatalf("after leaving: shared %+v, left %+v", mark.cfg.Projects, mark.cfg.Left)
+	}
+	if _, ok := mark.task(t, task.ID); ok {
+		t.Error("the project's task is still on Mark's device, tombstone or not")
+	}
+	if _, ok := mark.task(t, private.ID); !ok {
+		t.Error("leaving removed a task outside the project")
+	}
 	if _, err := os.Stat(own); err != nil {
-		t.Fatalf("no member file before leaving: %v", err)
+		t.Errorf("Mark's file left the folder (%v); it is kept so nothing is lost", err)
+	}
+	if _, _, err := leaveShared(mark.h, &mark.cfg, "Trip", "Mark", rank.Biases{}); err == nil {
+		t.Error("leaving a project that is not shared should say so")
 	}
 
-	if _, err := leaveShared(&mark.cfg, "Trip"); err != nil {
+	// Anna keeps working; Mark rejoins and gets it all, and she loses nothing.
+	a, _ := anna.task(t, task.ID)
+	a.AddComment("don't forget the charger")
+	anna.save(t, s0.Add(time.Minute), a)
+	anna.sync(t, "Trip")
+	if _, err := joinShared(&mark.cfg, p.Folder); err != nil {
 		t.Fatal(err)
 	}
-	if len(mark.cfg.Projects) != 0 {
-		t.Error("the project is still listed as shared")
+	if len(mark.cfg.Left) != 0 {
+		t.Error("rejoining did not forget the removed tasks")
 	}
-	if _, err := os.Stat(own); !os.IsNotExist(err) {
-		t.Errorf("the member file is still in the folder (%v)", err)
+	mark.sync(t, "Trip")
+	anna.sync(t, "Trip")
+	got, ok := mark.task(t, task.ID)
+	if !ok || len(got.Comments) != 1 || len(got.History) == 0 {
+		t.Fatalf("rejoined copy %+v, want the task with Anna's comment and its history", got)
 	}
-	if got, ok := mark.task(t, task.ID); !ok || got.Project != "Trip" {
-		t.Error("leaving took the task away")
+	if still, _ := anna.task(t, task.ID); still.Deleted {
+		t.Fatal("Mark's leave and rejoin deleted the task for Anna")
 	}
-	if _, err := leaveShared(&mark.cfg, "Trip"); err == nil {
-		t.Error("leaving a project that is not shared should say so")
+}
+
+// The sync server neither gets nor gives a shared project's tasks, nor the
+// ones this device removed by leaving: those travel through the folder.
+func TestSyncServerSkipsSharedProjects(t *testing.T) {
+	shared := todo.New("In the shared project")
+	shared.Project = "Trip"
+	left := todo.New("Removed by leaving")
+	mine := todo.New("Private")
+	c := sharedConfig{
+		Projects: []sharedProject{{ID: "trip", Name: "Trip"}},
+		Left:     []sharedLeft{{ID: "work", Name: "Work", Tasks: []string{left.ID}}},
+	}
+	got := c.withoutShared([]todo.Todo{shared, left, mine})
+	if len(got) != 1 || got[0].ID != mine.ID {
+		t.Fatalf("kept %d task(s), want only the private one", len(got))
 	}
 }
 
@@ -252,12 +296,15 @@ func TestCLIJoinAsksBeforeMergingALocalProject(t *testing.T) {
 }
 
 // S on a Projects row shares it through a folder; S on a shared one asks,
-// and y stops sharing it. The row carries the shared mark in between.
+// and y leaves it and removes its tasks. The row carries the shared mark in
+// between.
 func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
 	folder := t.TempDir()
-	task := todo.New("Book the ferry")
-	task.Project = "Trip"
-	m := modelWithTasks(t, task)
+	setTestHome(t, t.TempDir())
+	testStore(t)
+	captureStdout(t, func() { cliAdd([]string{"Book the ferry", "--project", "Trip"}) })
+	m := initialModel(newSQLiteRepo())
+	m.termWidth, m.termHeight = 120, 40
 	m.tab = tabProjects
 	m.refreshCaches()
 
@@ -286,12 +333,17 @@ func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
 	if m.mode != modeConfirm {
 		t.Fatalf("S on a shared project: mode = %v, want the leave prompt", m.mode)
 	}
-	m = sendKey(t, m, "y")
+	m, cmd := sendKeyCmd(t, m, keyMsgFor("y"))
 	if _, ok := m.shared.find("Trip"); ok {
 		t.Fatal("still shared after y")
 	}
-	if len(m.allTodos()) != 1 {
-		t.Error("leaving took the task away")
+	for _, msg := range runCmd(cmd) {
+		if r, ok := msg.(reloadedMsg); ok {
+			m, _ = send(t, m, r)
+		}
+	}
+	if n := len(m.allTodos()); n != 0 {
+		t.Errorf("%d task(s) left after leaving, want the project's removed", n)
 	}
 }
 

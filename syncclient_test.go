@@ -335,3 +335,55 @@ func TestCLISyncRefusesStale(t *testing.T) {
 		t.Errorf("stale sync with flag should pass the guard and fail on network: want 1, got %d", rc)
 	}
 }
+
+// A shared project's tasks do not go to the sync server, and the server's
+// copies of them, or of tasks removed by leaving a project, do not come back.
+func TestClientSyncLeavesSharedProjectsOut(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	ch := openTestDB(t)
+	shared := todo.New("shared")
+	shared.Project = "Trip"
+	private := todo.New("private")
+	saveTodos(t, ch, []todo.Todo{shared, private})
+	gone := todo.New("removed by leaving")
+	fromServer := todo.New("the server's copy")
+	fromServer.Project = "Trip"
+	if err := saveSharedConfig(sharedConfig{
+		Device:   "dev",
+		Projects: []sharedProject{{ID: "trip", Name: "Trip", Folder: t.TempDir()}},
+		Left:     []sharedLeft{{ID: "work", Name: "Work", Tasks: []string{gone.ID}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var sent []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/sync", func(w http.ResponseWriter, r *http.Request) {
+		var req tasksync.Request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode push: %v", err)
+		}
+		for _, x := range req.Tasks {
+			sent = append(sent, x.Title)
+		}
+		resp := append(req.Tasks, gone, fromServer)
+		if err := json.NewEncoder(w).Encode(tasksync.Response{Tasks: resp}); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
+	})
+	ts := httptest.NewServer(mux)
+	t.Cleanup(ts.Close)
+	if _, err := runClientSync(ch, syncConfig{URL: ts.URL, Token: "tok"}, 5*time.Second, rank.DefaultBiases(), defaultBoardConfig().wire()); err != nil {
+		t.Fatalf("client sync: %v", err)
+	}
+
+	if len(sent) != 1 || sent[0] != "Private" {
+		t.Errorf("sent %q, want only the private task", sent)
+	}
+	live, _ := loadTodosFromDB(ch)
+	for _, x := range live {
+		if x.ID == gone.ID || x.ID == fromServer.ID {
+			t.Errorf("%q came back from the server", x.Title)
+		}
+	}
+}

@@ -229,7 +229,11 @@ everything.
   history; `syncShared` folds the other files in with `mergeIntoStore` (the
   sync merge, a CRDT, so read order and lateness do not matter) and rewrites
   its own only when it changed. Which projects are shared lives in the local
-  `shared.json`. The app runs `syncAllShared` off the loop after saves
+  `shared.json`. A shared project never goes through the sync server
+  (`keepsOutOfSync`, filtered both ways in `runClientSync`), so leaving can
+  remove its tasks outright (`removeProjectTasks`, no tombstones, which would
+  delete them for everyone on a later join) and remember their IDs until
+  then. The app runs `syncAllShared` off the loop after saves
   (`sharedSoon`) and on a poll (`sharedPollMsg`), the watcher reloads what it
   merged, and `flushShared` runs on quit; the CLI runs it after every
   mutating command.

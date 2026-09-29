@@ -346,9 +346,9 @@ var cliHelpBlocks = []helpBlock{
 	}},
 	{"Shared projects (through a folder, e.g. OneDrive):", []helpRow{
 		{"tjek share", "list the projects this device shares, and where"},
-		{"tjek share start <project> <folder>", "share a project with everyone who can reach the folder; each device writes its own file there, and changes merge like sync"},
+		{"tjek share start <project> <folder>", "share a project with everyone who can reach the folder; each device writes its own file there, and changes merge like sync. A shared project travels only through its folder, not the sync server, so each of your machines joins it by itself"},
 		{"tjek share join <folder> [--merge]", "join the project a folder holds; --merge when you already have tasks in a project of that name, which then become shared"},
-		{"tjek share leave <project>", "stop sharing here; the tasks stay as an ordinary project, and the others keep theirs"},
+		{"tjek share leave <project>", "leave a shared project: its tasks are removed from this device, the others keep theirs, and joining again brings them back"},
 		{"tjek share sync", "sync every shared project now (the app does it on its own, and so does every command that changes tasks)"},
 	}},
 	{"Meta:", []helpRow{

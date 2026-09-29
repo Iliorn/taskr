@@ -36,6 +36,14 @@ import (
 //
 // Which projects this device shares, and where, is local: shared.json in the
 // config directory, beside the device's own ID that names its file.
+//
+// A shared project lives on the devices that joined its folder and nowhere
+// else: the sync server neither gets nor gives its tasks (keepsOutOfSync), so
+// each machine joins by itself, and leaving on one touches no other.
+// Leaving removes the project's tasks from the device outright, with no
+// tombstones: a tombstone would travel back into the folder on a later join
+// and delete the tasks for everyone. The removed IDs are remembered until
+// then, so a sync server that still holds the tasks cannot bring them back.
 
 const (
 	sharedManifestName = "tjek-project.json"
@@ -69,11 +77,20 @@ type sharedProject struct {
 	Folder string `json:"folder"`
 }
 
+// sharedLeft is a project this device left: the tasks it removed, which a
+// sync must not bring back until the project is joined again.
+type sharedLeft struct {
+	ID    string   `json:"id"`
+	Name  string   `json:"name"`
+	Tasks []string `json:"tasks"`
+}
+
 // sharedConfig is shared.json.
 type sharedConfig struct {
 	// Device names this device's file in every shared folder.
 	Device   string          `json:"device"`
 	Projects []sharedProject `json:"projects,omitempty"`
+	Left     []sharedLeft    `json:"left,omitempty"`
 }
 
 func sharedConfigPath() string { return paths.For(paths.Config, "shared.json") }
@@ -113,7 +130,40 @@ func saveSharedConfig(c sharedConfig) error {
 // touching c, so a failed save leaves the loaded list as it was.
 func (c sharedConfig) clone() sharedConfig {
 	c.Projects = slices.Clone(c.Projects)
+	c.Left = slices.Clone(c.Left)
 	return c
+}
+
+// keepsOutOfSync reports whether the sync server must neither get t nor
+// give it: a task of a project shared here, which travels through its
+// folder, or one this device removed by leaving a project.
+func (c sharedConfig) keepsOutOfSync(t *todo.Todo) bool {
+	if t.Project != "" {
+		if _, ok := c.find(t.Project); ok {
+			return true
+		}
+	}
+	for _, l := range c.Left {
+		if slices.Contains(l.Tasks, t.ID) {
+			return true
+		}
+	}
+	return false
+}
+
+// withoutShared is tasks less the ones keepsOutOfSync keeps from the sync
+// server. The slice is new; tasks is left as it was.
+func (c sharedConfig) withoutShared(tasks []todo.Todo) []todo.Todo {
+	if len(c.Projects) == 0 && len(c.Left) == 0 {
+		return tasks
+	}
+	out := make([]todo.Todo, 0, len(tasks))
+	for i := range tasks {
+		if !c.keepsOutOfSync(&tasks[i]) {
+			out = append(out, tasks[i])
+		}
+	}
+	return out
 }
 
 // find is the shared project named name, if this device shares one.
@@ -214,22 +264,73 @@ func joinShared(c *sharedConfig, typedFolder string) (sharedProject, error) {
 	}
 	p := sharedProject{ID: m.ID, Name: m.Name, Folder: folder}
 	c.Projects = append(c.Projects, p)
+	// Joining again lets the folder bring back what leaving removed.
+	c.Left = slices.DeleteFunc(c.Left, func(l sharedLeft) bool { return l.ID == m.ID })
 	return p, nil
 }
 
-// leaveShared stops sharing the project named name here. Its tasks stay, as
-// ordinary tasks of a project by that name; this device's file leaves the
-// folder, and the others keep what it had already given them.
-func leaveShared(c *sharedConfig, name string) (sharedProject, error) {
+// leaveShared stops sharing the project named name here and removes its
+// tasks from this device. It first brings the folder up to date, so nothing
+// made here is lost to the others, and keeps this device's file there for the
+// same reason: a cloud client may not have uploaded it yet. A folder it
+// cannot reach does not stop the leave. The removal is outright, with no
+// tombstones (see the top of the file), and returns how many tasks went.
+func leaveShared(h *sql.DB, c *sharedConfig, name, author string, b rank.Biases) (sharedProject, int, error) {
 	p, ok := c.find(name)
 	if !ok {
-		return p, fmt.Errorf("%q is not a shared project", name)
+		return p, 0, fmt.Errorf("%q is not a shared project", name)
+	}
+	_, _ = syncShared(h, *c, p, author, b)
+	ids, err := removeProjectTasks(h, p.Name)
+	if err != nil {
+		return p, 0, err
 	}
 	c.Projects = slices.DeleteFunc(c.Projects, func(x sharedProject) bool { return x.ID == p.ID })
-	if err := os.Remove(c.memberPath(p)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return p, err
+	c.Left = append(c.Left, sharedLeft{ID: p.ID, Name: p.Name, Tasks: ids})
+	return p, len(ids), nil
+}
+
+// removeProjectTasks deletes every row of the project's tasks, tombstones
+// included, with their children, history and dependency links, and returns
+// their IDs. Nothing marks them deleted: to the store they were never here.
+func removeProjectTasks(h *sql.DB, name string) ([]string, error) {
+	tx, err := h.Begin()
+	if err != nil {
+		return nil, err
 	}
-	return p, nil
+	defer tx.Rollback()
+	rows, err := tx.Query(`SELECT id FROM todos WHERE project = ?`, name)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		for _, q := range []string{
+			`DELETE FROM task_tags WHERE task_id = ?1`,
+			`DELETE FROM task_dependencies WHERE task_id = ?1 OR depends_on_id = ?1`,
+			`DELETE FROM task_comments WHERE task_id = ?1`,
+			`DELETE FROM task_time_entries WHERE task_id = ?1`,
+			`DELETE FROM task_events WHERE task_id = ?1`,
+			`DELETE FROM todos WHERE id = ?1`,
+		} {
+			if _, err := tx.Exec(q, id); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return ids, tx.Commit()
 }
 
 // localProjectTasks counts the live tasks this device already files under

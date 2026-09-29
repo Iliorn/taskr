@@ -61,6 +61,9 @@ them: add them to the shared copy (`--adopt-local`) or replace them with it
 (`--adopt-remote`, which saves a backup first). It asks because neither can
 be undone once the other devices have them.
 
+A [shared project](guide.md#shared-projects) is the exception: it travels
+only through its folder, so the server neither gets nor gives its tasks.
+
 ## How changes are merged
 
 Each task is matched by its ID, and each field of it is merged on its own:

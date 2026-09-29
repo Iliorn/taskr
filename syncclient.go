@@ -380,6 +380,13 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b rank.Bias
 	if err != nil {
 		return syncSummary{}, err
 	}
+	// A shared project travels through its folder, never through the server:
+	// its tasks are neither sent nor taken (sharedproject.go).
+	shared, err := loadSharedConfig()
+	if err != nil {
+		return syncSummary{}, err
+	}
+	local = shared.withoutShared(local)
 	resp, err := tasksync.PostSync(cfg.URL, cfg.Token, appVersion, local, board, timeout)
 	if err != nil {
 		return syncSummary{}, err
@@ -400,6 +407,7 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b rank.Bias
 	// whatever the server hasn't seen yet goes out on the next sync. Its no-op
 	// guard also keeps the fs watcher from waking the TUI on an unchanged
 	// periodic pull.
+	resp.Tasks = shared.withoutShared(resp.Tasks)
 	merged, _, err := mergeIntoStore(h, resp.Tasks, b)
 	if err != nil {
 		return syncSummary{}, err

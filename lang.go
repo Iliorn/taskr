@@ -624,9 +624,10 @@ var daTranslations = map[string]string{
 	"Joined '%s'":                                    "Forbundet til '%s'",
 	"Shared project: %v":                             "Delt projekt: %v",
 	"Sharing '%s' in %s":                             "Deler '%s' i %s",
-	"Stop sharing '%s'? Its tasks stay here, and the others keep theirs. (y/n)": "Stop deling af '%s'? Opgaverne bliver her, og de andre beholder deres. (y/n)",
-	"Stopped sharing '%s'": "Deler ikke længere '%s'",
-	"You have %d task(s) in '%s'. Share them with everyone in the folder? (y/n)": "Du har %d opgave(r) i '%s'. Del dem med alle i mappen? (y/n)",
+	"Leave '%s'? Its tasks are removed from this device; the others keep theirs. (y/n)": "Forlad '%s'? Opgaverne fjernes fra denne maskine; de andre beholder deres. (y/n)",
+	"A shared project is syncing; try again in a moment":                                "Et delt projekt synkroniserer; prøv igen om et øjeblik",
+	"Left '%s' and removed its %d task(s) here":                                         "Forlod '%s' og fjernede dets %d opgave(r) her",
+	"You have %d task(s) in '%s'. Share them with everyone in the folder? (y/n)":        "Du har %d opgave(r) i '%s'. Del dem med alle i mappen? (y/n)",
 
 	// Calendar
 	"Month ":                     "Måned ",
@@ -1326,9 +1327,10 @@ var deTranslations = map[string]string{
 	"Joined '%s'":                                    "'%s' beigetreten",
 	"Shared project: %v":                             "Geteiltes Projekt: %v",
 	"Sharing '%s' in %s":                             "'%s' wird in %s geteilt",
-	"Stop sharing '%s'? Its tasks stay here, and the others keep theirs. (y/n)": "'%s' nicht mehr teilen? Die Aufgaben bleiben hier, die anderen behalten ihre. (y/n)",
-	"Stopped sharing '%s'": "'%s' wird nicht mehr geteilt",
-	"You have %d task(s) in '%s'. Share them with everyone in the folder? (y/n)": "Du hast %d Aufgabe(n) in '%s'. Mit allen im Ordner teilen? (y/n)",
+	"Leave '%s'? Its tasks are removed from this device; the others keep theirs. (y/n)": "'%s' verlassen? Die Aufgaben werden von diesem Gerät entfernt; die anderen behalten ihre. (y/n)",
+	"A shared project is syncing; try again in a moment":                                "Ein geteiltes Projekt synchronisiert gerade; versuch es gleich noch einmal",
+	"Left '%s' and removed its %d task(s) here":                                         "'%s' verlassen, %d Aufgabe(n) hier entfernt",
+	"You have %d task(s) in '%s'. Share them with everyone in the folder? (y/n)":        "Du hast %d Aufgabe(n) in '%s'. Mit allen im Ordner teilen? (y/n)",
 
 	// Calendar
 	"Month ":                     "Monat ",

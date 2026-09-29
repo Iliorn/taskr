@@ -106,14 +106,15 @@ tjek man > ~/.local/share/man/man1/tjek.1
 tjek share                            # the projects this device shares, and where
 tjek share start Trip ~/OneDrive/Trip # share a project through a folder
 tjek share join ~/OneDrive/Trip       # join the project a folder holds
-tjek share leave Trip                 # stop sharing it here; the tasks stay
+tjek share leave Trip                 # leave it and remove its tasks here
 tjek share sync                       # sync every shared project now
 ```
 
 `join` refuses when this device already has tasks in a project of the same
 name, since joining hands them to everyone in the folder; `--merge` goes
 ahead. Every command that changes tasks brings the shared projects up to
-date afterwards. See [Shared projects](guide.md#shared-projects).
+date afterwards. A shared project never goes through `tjek sync`: each
+machine joins its folder. See [Shared projects](guide.md#shared-projects).
 
 ## Export and import
 
