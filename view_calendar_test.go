@@ -218,3 +218,22 @@ func TestCalendarComingUpListsAParentsDeadlineOnce(t *testing.T) {
 		t.Errorf("a subtask due with its parent should not repeat the deadline:\n%s", got)
 	}
 }
+
+// The month panel grows with the window, and what it gains goes to the names
+// in Coming up: at 22 cells a title clipped after a word or two.
+func TestComingUpNamesUseAWideWindow(t *testing.T) {
+	title := "Send the quarterly report"
+	task := todo.New(title)
+	task.DueDate = startOfDay(time.Now()).AddDate(0, 0, 1)
+	m := modelWithTasks(t, task)
+	m.termWidth, m.termHeight = 120, 30
+	m.switchTab(tabCalendar)
+	if out := ansi.Strip(m.View()); !strings.Contains(out, title) {
+		t.Errorf("a 120-column calendar clips %q in Coming up:\n%s", title, out)
+	}
+	for _, w := range []int{calSideBySideMinWidth, 80, 200} {
+		if got := calPanelWidthFor(w); got < calPanelWidth || got > calPanelMaxWidth || w-got-4 < minInnerWidth {
+			t.Errorf("width %d: month panel %d leaves the timeline too little, or is out of bounds", w, got)
+		}
+	}
+}

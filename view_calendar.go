@@ -221,12 +221,13 @@ func (m model) buildCalendarContent(w, outerH int) string {
 	if w < calSideBySideMinWidth {
 		return m.buildCalendarNarrow(w, innerH)
 	}
-	tlW := w - calPanelWidth - 4
+	calW := calPanelWidthFor(w)
+	tlW := w - calW - 4
 	if tlW < minInnerWidth {
 		tlW = minInnerWidth
 	}
 
-	calLines := m.renderMonthCalendarLines()
+	calLines := m.renderMonthCalendarLines(calW - 2)
 	tlLines := m.renderTimelineLines(tlW-2, innerH)
 
 	fitLines := func(lines []string, h, contentW int) []string {
@@ -249,9 +250,9 @@ func (m model) buildCalendarContent(w, outerH int) string {
 	// What the grid only marks, by name, in the rows the panel has left: a
 	// blank, the heading, and a row at least, less the blank at the foot.
 	if rows := innerH - len(calLines) - 3; rows >= 1 {
-		calLines = append(calLines, m.renderComingUpLines(calPanelWidth-2, rows)...)
+		calLines = append(calLines, m.renderComingUpLines(calW-2, rows)...)
 	}
-	calLines = fitLines(calLines, min(len(calLines)+1, innerH), calPanelWidth-2)
+	calLines = fitLines(calLines, min(len(calLines)+1, innerH), calW-2)
 	tlLines = fitLines(tlLines, innerH, tlW-2)
 
 	// Accent border on the pane that owns keystrokes — same contract as the
@@ -260,11 +261,19 @@ func (m model) buildCalendarContent(w, outerH int) string {
 	if m.calendar.focusTimeline {
 		calStyle, tlStyle = listPanelStyle, listPanelFocusedStyle
 	}
-	calPanel := calStyle.Width(calPanelWidth).Render(strings.Join(calLines, "\n"))
+	calPanel := calStyle.Width(calW).Render(strings.Join(calLines, "\n"))
 	tlPanel := tlStyle.Width(tlW).Render(strings.Join(tlLines, "\n"))
 	tlPanel = withBorderTitle(tlPanel, m.calendarTimelineTitle(localizedDayDateAbbrev(m.calendar.selected), tlW), tlW, m.calendar.focusTimeline)
-	calPanel = withBorderTitle(calPanel, localizedMonthYear(m.calendar.selected), calPanelWidth, !m.calendar.focusTimeline)
+	calPanel = withBorderTitle(calPanel, localizedMonthYear(m.calendar.selected), calW, !m.calendar.focusTimeline)
 	return lipgloss.JoinHorizontal(lipgloss.Top, tlPanel, calPanel)
+}
+
+// calPanelWidthFor is the month panel's width in a calendar w cells wide: a
+// third of it, between calPanelWidth and calPanelMaxWidth. The grid is a
+// fixed 20 cells, so what the panel gains goes to the task names in its
+// Coming up list, which clip after a word or two at the narrowest width.
+func calPanelWidthFor(w int) int {
+	return min(max(w/3, calPanelWidth), calPanelMaxWidth)
 }
 
 // buildCalendarNarrow is the single-pane calendar for windows too small to
@@ -290,7 +299,7 @@ func (m model) buildCalendarNarrow(w, innerH int) string {
 
 // ── Month calendar (right panel) ──────────────────────────────────────────────
 
-func (m model) renderMonthCalendarLines() []string {
+func (m model) renderMonthCalendarLines(innerW int) []string {
 	sel := m.calendar.selected
 	monthStart := time.Date(sel.Year(), sel.Month(), 1, 0, 0, 0, 0, sel.Location())
 	monthEnd := monthStart.AddDate(0, 1, -1)
@@ -306,7 +315,6 @@ func (m model) renderMonthCalendarLines() []string {
 	}
 
 	today := startOfDay(m.frameTime)
-	innerW := calPanelWidth - 2
 
 	var lines []string
 	lines = append(lines, dimStyle.Render(localizedWeekdayHeader()))
