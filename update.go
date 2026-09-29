@@ -67,6 +67,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if sz, ok := msg.(tea.WindowSizeMsg); ok {
 		m.termWidth = sz.Width
 		m.termHeight = sz.Height
+		m.fitInputs()
 		m.invalidateDetailCache()
 	}
 

@@ -3,6 +3,9 @@ package main
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/Iliorn/tjek/todo"
 )
 
@@ -624,4 +627,26 @@ func (m model) extraOverheadLines() int {
 		return 1
 	}
 	return 0
+}
+
+// fitInputs sizes the footer's text fields to the box they are drawn in, so
+// a long value scrolls sideways instead of wrapping. A wrapping field changes
+// height as the caret blinks: at the end of the text the caret is a styled
+// space, which wraps onto a line of its own, and the blinked-off plain space
+// does not, so the footer and everything above it jump on every blink.
+func (m *model) fitInputs() {
+	// The footer box is termWidth-6 wide including its padding columns
+	// (footerContentFor's w), and the caret takes one cell after the text.
+	inner := m.termWidth - 8
+	for _, ti := range []*textinput.Model{
+		&m.textInput, &m.searchInput, &m.depSearchInput, &m.tagSearchInput,
+		&m.projSearchInput, &m.tagTabSearchInput, &m.paletteInput,
+	} {
+		ti.Width = max(1, inner-ansi.StringWidth(ti.Prompt)-1)
+		// Recompute the visible window for the new width: the input only
+		// does that when the caret moves, and from the end it starts clean.
+		pos := ti.Position()
+		ti.CursorEnd()
+		ti.SetCursor(pos)
+	}
 }
