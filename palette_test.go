@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // paletteModel is the smallest model the palette reads: the default board.

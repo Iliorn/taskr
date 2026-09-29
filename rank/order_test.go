@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // laterStartFixture is an urgent task that cannot begin until tomorrow beside a

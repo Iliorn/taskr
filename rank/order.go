@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // order.go turns scores into an order: the lifts a task inherits from its
@@ -334,7 +334,7 @@ func SortValues(todos []todo.Todo, rollup map[string]float64, sunk map[string]bo
 // inherits its subtasks' urgency and a blocker inherits the urgency of the work
 // it holds up. The rollup is computed from the full set — it needs subtasks and
 // dependency targets, not just the top-level rows. Pure; the caller applies any
-// -n limit. `taskr top`'s displayed SCORE stays each task's own score (matching
+// -n limit. `tjek top`'s displayed SCORE stays each task's own score (matching
 // the TUI); only the ordering reflects the boost.
 func (r Ranker) Top(todos []*todo.Todo) []todo.Todo {
 	now := time.Now()

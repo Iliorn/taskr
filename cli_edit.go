@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── edit ─────────────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ func cliEdit(args []string) int {
 	appendNote := fs.String("append-note", "", "append a paragraph to the task's notes ('-' reads from stdin)")
 	clearNote := fs.Bool("clear-note", false, "drop the notes")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: taskr edit <ref> [<ref>...] [flags]")
+		fmt.Fprintln(os.Stderr, "usage: tjek edit <ref> [<ref>...] [flags]")
 		fs.PrintDefaults()
 	}
 	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
@@ -46,14 +46,14 @@ func cliEdit(args []string) int {
 		return 2
 	}
 	if len(positionals) < 1 {
-		fmt.Fprintln(os.Stderr, "taskr edit: at least one ref required")
+		fmt.Fprintln(os.Stderr, "tjek edit: at least one ref required")
 		return 2
 	}
 	// A title is one task's identity — applying the same one to several is
 	// always a mistake, so it's refused rather than obeyed. Every other flag
 	// here is a property several tasks can genuinely share.
 	if *title != "" && len(positionals) > 1 {
-		fmt.Fprintln(os.Stderr, "taskr edit: --title takes one ref (it would give every task the same title)")
+		fmt.Fprintln(os.Stderr, "tjek edit: --title takes one ref (it would give every task the same title)")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -103,7 +103,7 @@ func cliEdit(args []string) int {
 		}
 	}
 	if len(saveSet) == 0 {
-		fmt.Fprintln(os.Stderr, "taskr edit: no fields changed (nothing to save)")
+		fmt.Fprintln(os.Stderr, "tjek edit: no fields changed (nothing to save)")
 		return 0
 	}
 	if err := repo.Save(saveSet, nil); err != nil {
@@ -139,8 +139,8 @@ func cliEdit(args []string) int {
 }
 
 // editFields carries the resolved --edit flags into editOneTask. It exists so
-// the per-task mutation is one body rather than one per ref: `taskr edit a b c
-// --project hoth` and `taskr edit a --project hoth` must mean the same thing to
+// the per-task mutation is one body rather than one per ref: `tjek edit a b c
+// --project hoth` and `tjek edit a --project hoth` must mean the same thing to
 // each task they touch.
 type editFields struct {
 	title, priority, size, stage       string
@@ -182,7 +182,7 @@ func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propaga
 		board := storedBoard()
 		name, ok := board.canonicalStage(*stage)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "taskr edit: unknown stage %q (configured: %s)\n", *stage, strings.Join(board.pending(), ", "))
+			fmt.Fprintf(os.Stderr, "tjek edit: unknown stage %q (configured: %s)\n", *stage, strings.Join(board.pending(), ", "))
 			return false, 2
 		}
 		t.SetStage(name)
@@ -252,7 +252,7 @@ func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propaga
 			byID[todos[i].ID] = &todos[i]
 		}
 		if loopingDepCandidates(byID, t.ID)[dep.ID] {
-			fmt.Fprintf(os.Stderr, "taskr edit: %q can't depend on %q: it would create a dependency loop\n", t.Title, dep.Title)
+			fmt.Fprintf(os.Stderr, "tjek edit: %q can't depend on %q: it would create a dependency loop\n", t.Title, dep.Title)
 			return false, 2
 		}
 		t.AddDependency(dep.ID)
@@ -326,10 +326,10 @@ func cliComment(args []string) int {
 	delIdx := fs.Int("delete", 0, "1-based comment index to delete")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, `usage:
-  taskr comment <ref> "text"              append a new comment
-  taskr comment <ref> -                   read comment text from stdin
-  taskr comment <ref> --edit=N "new text" edit comment N (1-based)
-  taskr comment <ref> --delete=N          delete comment N (1-based)`)
+  tjek comment <ref> "text"              append a new comment
+  tjek comment <ref> -                   read comment text from stdin
+  tjek comment <ref> --edit=N "new text" edit comment N (1-based)
+  tjek comment <ref> --delete=N          delete comment N (1-based)`)
 		fs.PrintDefaults()
 	}
 	// comment supports interspersed flags so --edit / --delete can sit
@@ -374,7 +374,7 @@ func cliComment(args []string) int {
 			return 2
 		}
 		if len(positionals) < 2 {
-			fmt.Fprintln(os.Stderr, "taskr comment --edit: new comment text required")
+			fmt.Fprintln(os.Stderr, "tjek comment --edit: new comment text required")
 			return 2
 		}
 		text, terr := commentTextFromPositionals(positionals[1:], os.Stdin)
@@ -411,7 +411,7 @@ func cliComment(args []string) int {
 }
 
 // commentTextFromPositionals resolves the user's comment text. If the single
-// positional is "-", read everything from the given reader (lets `taskr
+// positional is "-", read everything from the given reader (lets `tjek
 // comment <ref> -` accept piped or here-doc input for long comments instead
 // of forcing shell-escape gymnastics). Trailing newline trimmed so a heredoc
 // doesn't leave a blank line in the comment.

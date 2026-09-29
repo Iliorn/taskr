@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // benchTodos builds a realistic task set: a mix of pending/done, varied tags

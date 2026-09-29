@@ -11,7 +11,7 @@
 # Usage:  packaging/generate-packages.sh <version> <outdir>
 #
 # Expects the Windows release binary in the current directory under the exact
-# name the release publishes: taskr.exe.
+# name the release publishes: tjek.exe.
 
 set -euo pipefail
 
@@ -19,47 +19,47 @@ version="${1:?usage: generate-packages.sh <version> <outdir>}"
 outdir="${2:?usage: generate-packages.sh <version> <outdir>}"
 # Scoop wants a bare version; the release tag carries a "v".
 bare="${version#v}"
-base="https://github.com/Iliorn/taskr/releases/download/${version}"
+base="https://github.com/Iliorn/tjek/releases/download/${version}"
 
 mkdir -p "$outdir"
 
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 
-sha_windows="$(sha taskr.exe)"
+sha_windows="$(sha tjek.exe)"
 
 # ── Scoop (Windows) ─────────────────────────────────────────────────────────
 # Installed with:
-#   scoop install https://github.com/Iliorn/taskr/releases/latest/download/taskr.json
+#   scoop install https://github.com/Iliorn/tjek/releases/latest/download/tjek.json
 # That URL always resolves to the newest release, so it never needs bumping.
 # checkver/autoupdate are there so the manifest also works unmodified inside a
 # Scoop bucket, where the excavator maintains it.
-cat > "$outdir/taskr.json" <<EOF
+cat > "$outdir/tjek.json" <<EOF
 {
     "version": "${bare}",
     "description": "A keyboard-driven task manager for the terminal that tells you what to do next",
-    "homepage": "https://github.com/Iliorn/taskr",
+    "homepage": "https://github.com/Iliorn/tjek",
     "license": "MIT",
     "architecture": {
         "64bit": {
-            "url": "${base}/taskr.exe",
+            "url": "${base}/tjek.exe",
             "hash": "${sha_windows}"
         }
     },
-    "bin": "taskr.exe",
+    "bin": "tjek.exe",
     "checkver": {
-        "github": "https://github.com/Iliorn/taskr"
+        "github": "https://github.com/Iliorn/tjek"
     },
     "autoupdate": {
         "architecture": {
             "64bit": {
-                "url": "https://github.com/Iliorn/taskr/releases/download/v\$version/taskr.exe"
+                "url": "https://github.com/Iliorn/tjek/releases/download/v\$version/tjek.exe"
             }
         },
         "hash": {
-            "url": "https://github.com/Iliorn/taskr/releases/download/v\$version/SHA256SUMS"
+            "url": "https://github.com/Iliorn/tjek/releases/download/v\$version/SHA256SUMS"
         }
     }
 }
 EOF
 
-echo "wrote $outdir/taskr.json for $version"
+echo "wrote $outdir/tjek.json for $version"

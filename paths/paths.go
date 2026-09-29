@@ -1,4 +1,4 @@
-// Package paths decides where taskr keeps its files. There are four kinds and
+// Package paths decides where tjek keeps its files. There are four kinds and
 // they belong in four places, because that is what the platform conventions
 // say:
 //
@@ -9,9 +9,9 @@
 //
 // The resolution order is the same for every kind:
 //
-//  1. TASKR_HOME, if set — one directory for everything, for people who would
+//  1. TJEK_HOME, if set — one directory for everything, for people who would
 //     rather have a single thing to back up than a tidy split.
-//  2. An existing ~/.taskr — older installs put everything there, and moving a user's database out from under them to satisfy a
+//  2. An existing ~/.tjek — older installs put everything there, and moving a user's database out from under them to satisfy a
 //     specification is not an upgrade. It keeps working, forever.
 //  3. The platform convention: XDG on Linux/BSD (and anywhere the XDG_*
 //     variables are set deliberately), %APPDATA%/%LOCALAPPDATA% on Windows,
@@ -28,12 +28,12 @@ import (
 	"strings"
 )
 
-// AppDirName is the directory taskr adds under each platform base.
-const AppDirName = "taskr"
+// AppDirName is the directory tjek adds under each platform base.
+const AppDirName = "tjek"
 
 // LegacyDirName is the single directory every version before the XDG split
 // used. Its presence is what pins an existing install to it.
-const LegacyDirName = ".taskr"
+const LegacyDirName = ".tjek"
 
 // Kind is which of the four directories a file belongs in.
 type Kind int
@@ -45,13 +45,13 @@ const (
 	Cache
 )
 
-// HomeOverride returns TASKR_HOME, expanded, or "" when unset. It collapses
+// HomeOverride returns TJEK_HOME, expanded, or "" when unset. It collapses
 // all four kinds into one directory.
 func HomeOverride() string {
-	return strings.TrimSpace(os.Getenv("TASKR_HOME"))
+	return strings.TrimSpace(os.Getenv("TJEK_HOME"))
 }
 
-// legacyHome returns ~/.taskr when it already exists as a directory.
+// legacyHome returns ~/.tjek when it already exists as a directory.
 func legacyHome() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -80,7 +80,7 @@ func Dir(kind Kind) (string, error) {
 	return filepath.Join(base, AppDirName), nil
 }
 
-// platformBase is the parent directory for a kind, before the "taskr" element.
+// platformBase is the parent directory for a kind, before the "tjek" element.
 // An explicitly set XDG variable wins on every platform: someone who exports
 // XDG_DATA_HOME on macOS or Windows means it.
 func platformBase(kind Kind) (string, error) {
@@ -177,8 +177,8 @@ func For(kind Kind, name ...string) string {
 	return filepath.Join(append([]string{dir}, name...)...)
 }
 
-// UsingLegacyLayout reports whether taskr is reading and writing the old single
-// ~/.taskr directory. The doctor says so, since it explains why the XDG paths
+// UsingLegacyLayout reports whether tjek is reading and writing the old single
+// ~/.tjek directory. The doctor says so, since it explains why the XDG paths
 // are not in use.
 func UsingLegacyLayout() bool {
 	return HomeOverride() == "" && legacyHome() != ""

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // A subtask belongs to its parent's project: moving the parent takes the whole

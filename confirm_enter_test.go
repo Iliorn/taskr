@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

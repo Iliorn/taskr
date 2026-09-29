@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // Tab at a path prompt completes like a shell: as far as the names in the
@@ -55,9 +55,9 @@ func TestCompletePath(t *testing.T) {
 	}
 }
 
-// Setting a folder in Settings starts the export: taskr-export.json appears
+// Setting a folder in Settings starts the export: tjek-export.json appears
 // there holding every live task, done ones included, in the format
-// `taskr import` reads. Later changes are paced into one write, quitting
+// `tjek import` reads. Later changes are paced into one write, quitting
 // writes what is still due, and a blank folder turns it off.
 func TestScriptAutoExport(t *testing.T) {
 	open := todo.New("Open task")
@@ -140,7 +140,7 @@ func TestScriptExportFolderMustExist(t *testing.T) {
 	}
 }
 
-// Import from file merges an export through the same merge as `taskr import`:
+// Import from file merges an export through the same merge as `tjek import`:
 // a newer version of a task updates it, an unknown task is added, and u takes
 // the whole import back in one step.
 func TestScriptImportFromFile(t *testing.T) {

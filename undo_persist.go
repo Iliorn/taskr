@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // Undo for deletions persists to a sidecar JSON so the most recent task/subtask
@@ -80,7 +80,7 @@ func loadPersistedUndoEntries() ([]undoEntry, error) {
 }
 
 // recordDeleteUndo appends one delete entry to the undo sidecar and reports
-// whether it is actually recoverable, so the caller can promise `taskr undo`
+// whether it is actually recoverable, so the caller can promise `tjek undo`
 // only when that's true. An unreadable history is replaced, not obeyed:
 // silently skipping the write when the sidecar is corrupt would disable the
 // safety net for the one irreversible CLI verb exactly when it's needed.

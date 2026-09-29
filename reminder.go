@@ -9,13 +9,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // The daily reminder: once a day, at the time set in Settings, a desktop
 // notification lists what is due today and what is overdue. The TUI checks on
-// a minute tick; `taskr remind` runs the same check for a scheduler (cron, a
+// a minute tick; `tjek remind` runs the same check for a scheduler (cron, a
 // systemd timer, Task Scheduler) so the reminder also arrives while the TUI is
 // closed. Both record the day in a per-device sidecar, so a device reminds
 // once a day however many of them are running.
@@ -164,7 +164,7 @@ func reminderMessage(overdue, today []*todo.Todo) (title, body string) {
 	if n := len(overdue); n > 0 {
 		counts = append(counts, trCount("%d overdue", n, n))
 	}
-	title = "taskr: " + strings.Join(counts, ", ")
+	title = "tjek: " + strings.Join(counts, ", ")
 
 	all := append(append([]*todo.Todo(nil), overdue...), today...)
 	var lines []string
@@ -179,7 +179,7 @@ func reminderMessage(overdue, today []*todo.Todo) (title, body string) {
 }
 
 // The sidecar holding the day this device last reminded. It is not a
-// settings.json field because the TUI and `taskr remind` both write it, and
+// settings.json field because the TUI and `tjek remind` both write it, and
 // neither should rewrite the other's settings to do so.
 func remindedPath() string {
 	return paths.For(paths.State, "reminded")

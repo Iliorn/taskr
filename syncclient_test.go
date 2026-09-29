@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/tasksync"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/tasksync"
+	"github.com/Iliorn/tjek/todo"
 )
 
 func TestSyncStateRoundTrip(t *testing.T) {
@@ -191,12 +191,12 @@ func TestDroppedLocalEditsBaseline(t *testing.T) {
 }
 
 // TestSyncSaveIgnoresEnvOverlay: `sync --save` persists file values + explicit
-// flags, never the TASKR_SYNC_URL/TOKEN env overlay — a one-off env var must
+// flags, never the TJEK_SYNC_URL/TOKEN env overlay — a one-off env var must
 // not get baked into sync.json where it would silently outlive the shell.
 func TestSyncSaveIgnoresEnvOverlay(t *testing.T) {
 	setTestHome(t, t.TempDir())
-	t.Setenv("TASKR_SYNC_URL", "http://env-only:1")
-	t.Setenv("TASKR_SYNC_TOKEN", "env-only-token")
+	t.Setenv("TJEK_SYNC_URL", "http://env-only:1")
+	t.Setenv("TJEK_SYNC_TOKEN", "env-only-token")
 	t.Cleanup(func() { _ = os.Remove(syncConfigPath()) })
 
 	// URL from a flag, token only from env. The sync itself fails (dead

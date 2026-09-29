@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
-// taskr suggest mines the dependency structure the user already wrote down
+// tjek suggest mines the dependency structure the user already wrote down
 // implicitly and offers to make it explicit, one y/n at a time. Two sources:
 //
 //   - note refs: a task whose notes mention another pending task's id prefix
@@ -45,7 +45,7 @@ var suggestStopwords = map[string]bool{
 	"after": true, "before": true, "update": true, "check": true, "the": true,
 }
 
-// noteRefPattern matches a bare 8-hex id prefix (the form every taskr surface
+// noteRefPattern matches a bare 8-hex id prefix (the form every tjek surface
 // prints); \b keeps it from firing inside longer hex runs, and a full UUID's
 // first segment matches on its own because '-' is a word boundary.
 var noteRefPattern = regexp.MustCompile(`\b[0-9a-f]{8}\b`)
@@ -55,7 +55,7 @@ func cliSuggest(args []string) int {
 	fs.SetOutput(os.Stderr)
 	listOnly := fs.Bool("list", false, "print the suggestions without prompting to link them")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: taskr suggest [--list]   suggest dependency links from note refs and related titles")
+		fmt.Fprintln(os.Stderr, "usage: tjek suggest [--list]   suggest dependency links from note refs and related titles")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {

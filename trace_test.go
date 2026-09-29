@@ -11,9 +11,9 @@ import (
 
 // Tracing must be invisible unless asked for: no file, no channel, no cost.
 func TestTraceOffByDefault(t *testing.T) {
-	t.Setenv("TASKR_TRACE", "")
+	t.Setenv("TJEK_TRACE", "")
 	if got := tracePath(); got != "" {
-		t.Errorf("tracePath() = %q with TASKR_TRACE unset, want off", got)
+		t.Errorf("tracePath() = %q with TJEK_TRACE unset, want off", got)
 	}
 	stop := startTrace()
 	defer stop()
@@ -30,11 +30,11 @@ func TestTraceOffByDefault(t *testing.T) {
 func wantStateFile(home, name string) string {
 	switch runtime.GOOS {
 	case "windows":
-		return filepath.Join(home, "AppData", "Local", "taskr", name)
+		return filepath.Join(home, "AppData", "Local", "tjek", name)
 	case "darwin":
-		return filepath.Join(home, "Library", "Application Support", "taskr", name)
+		return filepath.Join(home, "Library", "Application Support", "tjek", name)
 	default:
-		return filepath.Join(home, ".local", "state", "taskr", name)
+		return filepath.Join(home, ".local", "state", "tjek", name)
 	}
 }
 
@@ -42,18 +42,18 @@ func TestTracePathForms(t *testing.T) {
 	home := t.TempDir()
 	setTestHome(t, home)
 	for _, off := range []string{"", "0", "false", "off", "  "} {
-		t.Setenv("TASKR_TRACE", off)
+		t.Setenv("TJEK_TRACE", off)
 		if got := tracePath(); got != "" {
-			t.Errorf("TASKR_TRACE=%q → %q, want off", off, got)
+			t.Errorf("TJEK_TRACE=%q → %q, want off", off, got)
 		}
 	}
 	for _, on := range []string{"1", "true", "on"} {
-		t.Setenv("TASKR_TRACE", on)
+		t.Setenv("TJEK_TRACE", on)
 		if got, want := tracePath(), wantStateFile(home, "trace.log"); got != want {
-			t.Errorf("TASKR_TRACE=%q → %q, want %q", on, got, want)
+			t.Errorf("TJEK_TRACE=%q → %q, want %q", on, got, want)
 		}
 	}
-	t.Setenv("TASKR_TRACE", "/tmp/somewhere.log")
+	t.Setenv("TJEK_TRACE", "/tmp/somewhere.log")
 	if got := tracePath(); got != "/tmp/somewhere.log" {
 		t.Errorf("an explicit path became %q", got)
 	}
@@ -64,7 +64,7 @@ func TestTracePathForms(t *testing.T) {
 func TestTraceWritesFrames(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "trace.log")
-	t.Setenv("TASKR_TRACE", path)
+	t.Setenv("TJEK_TRACE", path)
 
 	stop := startTrace()
 	if traceCh == nil {
@@ -116,25 +116,25 @@ func TestTraceDoesNotBlockWhenFull(t *testing.T) {
 	}
 }
 
-// TASKR_NO_WATCH is the escape hatch for "input feels laggy": it must actually
+// TJEK_NO_WATCH is the escape hatch for "input feels laggy": it must actually
 // leave the watcher unstarted, since the point is to remove the app's only
 // continuous OS interaction from the picture.
 func TestNoWatchEnvDisablesTheWatcher(t *testing.T) {
 	setTestHome(t, t.TempDir())
 	for _, v := range []string{"1", "true", "yes"} {
-		t.Setenv("TASKR_NO_WATCH", v)
+		t.Setenv("TJEK_NO_WATCH", v)
 		var m model
 		startModelWatcher(&m)
 		if m.watcher != nil {
-			t.Errorf("TASKR_NO_WATCH=%q still started a watcher", v)
+			t.Errorf("TJEK_NO_WATCH=%q still started a watcher", v)
 		}
 	}
 	for _, v := range []string{"", "0", "false"} {
-		t.Setenv("TASKR_NO_WATCH", v)
+		t.Setenv("TJEK_NO_WATCH", v)
 		var m model
 		startModelWatcher(&m)
 		if m.watcher == nil {
-			t.Errorf("TASKR_NO_WATCH=%q disabled live reload, want it on", v)
+			t.Errorf("TJEK_NO_WATCH=%q disabled live reload, want it on", v)
 		}
 		m.closeWatcher()
 	}
@@ -144,7 +144,7 @@ func TestNoWatchEnvDisablesTheWatcher(t *testing.T) {
 // one is in use is the difference between a keystroke waiting on a 16ms poll
 // and one that doesn't. Off Windows there is only the one.
 func TestInputPathIsNamedAndSwitchable(t *testing.T) {
-	t.Setenv("TASKR_WIN_CONSOLE_INPUT", "")
+	t.Setenv("TJEK_WIN_CONSOLE_INPUT", "")
 	if consoleInputForced() {
 		t.Error("the console-input override defaulted to on")
 	}
@@ -152,15 +152,15 @@ func TestInputPathIsNamedAndSwitchable(t *testing.T) {
 		t.Error("the doctor would print an empty input path")
 	}
 	for _, v := range []string{"1", "true", "yes"} {
-		t.Setenv("TASKR_WIN_CONSOLE_INPUT", v)
+		t.Setenv("TJEK_WIN_CONSOLE_INPUT", v)
 		if !consoleInputForced() {
-			t.Errorf("TASKR_WIN_CONSOLE_INPUT=%q did not take", v)
+			t.Errorf("TJEK_WIN_CONSOLE_INPUT=%q did not take", v)
 		}
 	}
 	for _, v := range []string{"", "0", "false"} {
-		t.Setenv("TASKR_WIN_CONSOLE_INPUT", v)
+		t.Setenv("TJEK_WIN_CONSOLE_INPUT", v)
 		if consoleInputForced() {
-			t.Errorf("TASKR_WIN_CONSOLE_INPUT=%q should mean off", v)
+			t.Errorf("TJEK_WIN_CONSOLE_INPUT=%q should mean off", v)
 		}
 	}
 	if runtime.GOOS != "windows" && len(inputProgramOptions()) != 0 {

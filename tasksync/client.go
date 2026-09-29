@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // syncTransport is shared by every sync round trip and the SSE listener. The
@@ -29,7 +29,7 @@ var syncTransport = &http.Transport{
 // PostSync pushes tasks to the server at serverURL and returns its response:
 // the merged authoritative set plus the server's clock reading.
 //
-// clientVersion is this build's taskr version, used only to describe a
+// clientVersion is this build's tjek version, used only to describe a
 // version gap in an error — pass "" from anywhere that has no version stamp
 // and the comparison is skipped rather than guessed at.
 // board is this device's column list when it shares one, nil when it does not
@@ -122,14 +122,14 @@ func postSyncBody(client *http.Client, endpoint, token string, body []byte, comp
 func serverError(resp *http.Response, clientVersion, body string) error {
 	body = strings.TrimSpace(body)
 	if peer := resp.Header.Get(VersionHeader); peer != "" && clientVersion != "" && peer != clientVersion {
-		return fmt.Errorf("sync server runs taskr %s, this device runs %s; restart the sync server (it answered %s: %s)",
+		return fmt.Errorf("sync server runs tjek %s, this device runs %s; restart the sync server (it answered %s: %s)",
 			peer, clientVersion, resp.Status, body)
 	}
 	return fmt.Errorf("%s (server returned %s)", body, resp.Status)
 }
 
 // VersionGapWarning returns a human warning when a *successful* sync came back
-// from a server running a different taskr build. Succeeding is what makes it
+// from a server running a different tjek build. Succeeding is what makes it
 // worth saying: a schema migration that only adds a column lets an older
 // server keep answering 200 while dropping the new field on every round trip,
 // so the mismatch never surfaces as an error — it surfaces as data quietly
@@ -138,7 +138,7 @@ func VersionGapWarning(serverVersion, clientVersion string) string {
 	if serverVersion == "" || clientVersion == "" || serverVersion == clientVersion {
 		return ""
 	}
-	return fmt.Sprintf("sync server runs taskr %s, this device runs %s; restart the sync server after upgrading it, or the two can drift apart",
+	return fmt.Sprintf("sync server runs tjek %s, this device runs %s; restart the sync server after upgrading it, or the two can drift apart",
 		serverVersion, clientVersion)
 }
 
@@ -188,7 +188,7 @@ func InsecureURLWarning(rawURL string) string {
 			return ""
 		}
 	}
-	return fmt.Sprintf("warning: %s is plain http to a public host: the sync token and your tasks travel unencrypted; prefer a Tailscale IP, or https (taskr serve --tls-cert)", rawURL)
+	return fmt.Sprintf("warning: %s is plain http to a public host: the sync token and your tasks travel unencrypted; prefer a Tailscale IP, or https (tjek serve --tls-cert)", rawURL)
 }
 
 // DroppedLocalEdits returns the local versions of tasks whose scalar fields

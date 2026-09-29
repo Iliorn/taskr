@@ -4,7 +4,7 @@ import "fmt"
 
 // Wire protocol versioning.
 //
-// Sync is the one place where two taskr binaries of different vintages talk
+// Sync is the one place where two tjek binaries of different vintages talk
 // to each other — that is the entire reason it exists — so the wire needs a
 // version on it. Without one, a client sending a field the server does not
 // know, or expecting a field the server does not send, fails by silent
@@ -35,21 +35,21 @@ const (
 // ProtocolHeader carries the server's supported range on unauthenticated
 // health responses, so an operator can check what a server speaks without
 // holding the sync token.
-const ProtocolHeader = "Taskr-Sync-Protocol"
+const ProtocolHeader = "Tjek-Sync-Protocol"
 
-// VersionHeader carries the taskr build the server is running, on *every*
+// VersionHeader carries the tjek build the server is running, on *every*
 // response including errors.
 //
 // The wire version above only moves when a field changes meaning, so two
 // builds years apart still negotiate cleanly — which is the point, and also
 // why it cannot answer "why did this stop working". The failure it misses is
-// two taskr builds of different vintages against one store: the newer one
+// two tjek builds of different vintages against one store: the newer one
 // migrates the schema, the older server process keeps running and answers
 // every sync with a 500 whose body ("no such table: task_learnings") means
 // nothing to the person reading it. A header rather than a body field because
 // that failure produces no decodable body at all — an http.Error — and that is
 // exactly the moment the client needs to be able to name which side is old.
-const VersionHeader = "Taskr-Version"
+const VersionHeader = "Tjek-Version"
 
 // negotiate validates a peer's declared version against what this build
 // supports, returning a user-facing error when they cannot talk. A zero
@@ -59,10 +59,10 @@ func negotiate(peer int) error {
 		peer = legacyProtocolVersion
 	}
 	if peer > ProtocolVersion {
-		return fmt.Errorf("sync protocol mismatch: the other side speaks v%d but this taskr only understands up to v%d; upgrade this end", peer, ProtocolVersion)
+		return fmt.Errorf("sync protocol mismatch: the other side speaks v%d but this tjek only understands up to v%d; upgrade this end", peer, ProtocolVersion)
 	}
 	if peer < MinProtocolVersion {
-		return fmt.Errorf("sync protocol mismatch: the other side speaks v%d but this taskr no longer supports anything below v%d; upgrade that end", peer, MinProtocolVersion)
+		return fmt.Errorf("sync protocol mismatch: the other side speaks v%d but this tjek no longer supports anything below v%d; upgrade that end", peer, MinProtocolVersion)
 	}
 	return nil
 }

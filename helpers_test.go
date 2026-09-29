@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -23,11 +23,11 @@ func TestIsHomebrewCellarPath(t *testing.T) {
 		path string
 		want bool
 	}{
-		{"Apple Silicon Homebrew", "/opt/homebrew/Cellar/taskr/1.30.0/bin/taskr", true},
-		{"Intel Homebrew", "/usr/local/Cellar/taskr/1.30.0/bin/taskr", true},
-		{"Linuxbrew", "/home/linuxbrew/.linuxbrew/Cellar/taskr/1.30.0/bin/taskr", true},
-		{"unresolved Homebrew symlink", "/opt/homebrew/bin/taskr", false},
-		{"manual install", "/usr/local/bin/taskr", false},
+		{"Apple Silicon Homebrew", "/opt/homebrew/Cellar/tjek/1.30.0/bin/tjek", true},
+		{"Intel Homebrew", "/usr/local/Cellar/tjek/1.30.0/bin/tjek", true},
+		{"Linuxbrew", "/home/linuxbrew/.linuxbrew/Cellar/tjek/1.30.0/bin/tjek", true},
+		{"unresolved Homebrew symlink", "/opt/homebrew/bin/tjek", false},
+		{"manual install", "/usr/local/bin/tjek", false},
 	}
 
 	for _, tt := range tests {
@@ -49,10 +49,10 @@ func TestSelfUpdateAsset(t *testing.T) {
 		wantAsset string
 		wantErr   bool
 	}{
-		{"linux", "amd64", "taskr", false},
-		{"linux", "arm64", "taskr-linux-arm64", false},
+		{"linux", "amd64", "tjek", false},
+		{"linux", "arm64", "tjek-linux-arm64", false},
 		{"linux", "386", "", true},
-		{"windows", "amd64", "taskr.exe", false},
+		{"windows", "amd64", "tjek.exe", false},
 		{"windows", "arm64", "", true},
 		{"darwin", "arm64", "", true},
 		{"freebsd", "amd64", "", true},
@@ -331,9 +331,9 @@ func TestParseQuickAdd(t *testing.T) {
 		},
 		{
 			name:      "with project",
-			input:     "Write docs @taskr",
+			input:     "Write docs @tjek",
 			wantTitle: "Write docs",
-			wantProj:  "taskr",
+			wantProj:  "tjek",
 			wantPrio:  todo.PriorityMedium,
 		},
 		{
@@ -345,10 +345,10 @@ func TestParseQuickAdd(t *testing.T) {
 		},
 		{
 			name:      "all together",
-			input:     "Refactor cache #performance @taskr p:high due:+3d",
+			input:     "Refactor cache #performance @tjek p:high due:+3d",
 			wantTitle: "Refactor cache",
 			wantTags:  []string{"performance"},
-			wantProj:  "taskr",
+			wantProj:  "tjek",
 			wantPrio:  todo.PriorityHigh,
 			wantDue:   true,
 		},
@@ -983,7 +983,7 @@ func TestCopyTodosNilSlices(t *testing.T) {
 	}
 }
 
-// parseManualEntry backs both the TUI 'T' shortcut and `taskr log`: bare
+// parseManualEntry backs both the TUI 'T' shortcut and `tjek log`: bare
 // durations anchor the entry to END now (the "I just spent 45m" reading),
 // clock ranges are literal on today.
 func TestParseManualEntry(t *testing.T) {
@@ -1032,8 +1032,8 @@ func TestFetchLatestReleaseParsesTagAndAssets(t *testing.T) {
 	releaseServer(t, func(w http.ResponseWriter, r *http.Request) {
 		gotPath, gotAccept, gotAgent = r.URL.Path, r.Header.Get("Accept"), r.Header.Get("User-Agent")
 		fmt.Fprint(w, `{"tag_name":"v1.20.0","assets":[
-			{"name":"taskr","browser_download_url":"https://example.invalid/taskr"},
-			{"name":"taskr.exe","browser_download_url":"https://example.invalid/taskr.exe"}]}`)
+			{"name":"tjek","browser_download_url":"https://example.invalid/tjek"},
+			{"name":"tjek.exe","browser_download_url":"https://example.invalid/tjek.exe"}]}`)
 	})
 
 	info, err := fetchLatestRelease()
@@ -1051,18 +1051,18 @@ func TestFetchLatestReleaseParsesTagAndAssets(t *testing.T) {
 	if gotAccept != "application/vnd.github+json" {
 		t.Errorf("Accept = %q", gotAccept)
 	}
-	if !strings.HasPrefix(gotAgent, "taskr/") {
-		t.Errorf("User-Agent = %q, want a taskr/… agent", gotAgent)
+	if !strings.HasPrefix(gotAgent, "tjek/") {
+		t.Errorf("User-Agent = %q, want a tjek/… agent", gotAgent)
 	}
 
-	asset, err := findReleaseAsset(info, "taskr.exe")
-	if err != nil || asset.URL != "https://example.invalid/taskr.exe" {
+	asset, err := findReleaseAsset(info, "tjek.exe")
+	if err != nil || asset.URL != "https://example.invalid/tjek.exe" {
 		t.Errorf("findReleaseAsset = %+v, %v", asset, err)
 	}
-	if _, err := findReleaseAsset(info, "taskr.dmg"); err == nil {
+	if _, err := findReleaseAsset(info, "tjek.dmg"); err == nil {
 		t.Error("a missing asset should be an error, not an empty download")
 	}
-	if _, err := findReleaseAsset(releaseInfo{TagName: "v1", Assets: []releaseAsset{{Name: "taskr"}}}, "taskr"); err == nil {
+	if _, err := findReleaseAsset(releaseInfo{TagName: "v1", Assets: []releaseAsset{{Name: "tjek"}}}, "tjek"); err == nil {
 		t.Error("an asset with no URL should be an error")
 	}
 }
@@ -1104,7 +1104,7 @@ func TestFetchLatestReleaseErrors(t *testing.T) {
 }
 
 func TestDownloadReleaseAsset(t *testing.T) {
-	const payload = "#!/bin/sh\necho taskr\n"
+	const payload = "#!/bin/sh\necho tjek\n"
 	// releaseServer, not a bare httptest server: asset downloads are pinned to
 	// GitHub hosts (checkAssetURL), and the stand-in is trusted only because it
 	// is the same origin releaseAPIBase points at — which is how the real flow
@@ -1120,8 +1120,8 @@ func TestDownloadReleaseAsset(t *testing.T) {
 		fmt.Fprint(w, payload)
 	})
 
-	dst := filepath.Join(t.TempDir(), "taskr")
-	digest, err := downloadReleaseAsset(releaseAsset{Name: "taskr", URL: srv.URL + "/taskr"}, dst)
+	dst := filepath.Join(t.TempDir(), "tjek")
+	digest, err := downloadReleaseAsset(releaseAsset{Name: "tjek", URL: srv.URL + "/tjek"}, dst)
 	if err != nil {
 		t.Fatalf("downloadReleaseAsset: %v", err)
 	}
@@ -1172,7 +1172,7 @@ func TestResolveEditorCmdHonoursAChangedEditor(t *testing.T) {
 		t.Fatalf("second call = %q, want the same answer %q", got, self)
 	}
 
-	t.Setenv("EDITOR", "taskr-definitely-not-an-editor-zzz")
+	t.Setenv("EDITOR", "tjek-definitely-not-an-editor-zzz")
 	if got := resolveEditorCmd(); got == self {
 		t.Error("a stale cache answered with the previous $EDITOR after it changed")
 	}
@@ -1182,25 +1182,25 @@ func TestResolveEditorCmdHonoursAChangedEditor(t *testing.T) {
 
 func TestChecksumForParsesSha256sumOutput(t *testing.T) {
 	sums := []byte(
-		"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  taskr\n" +
-			"a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00 *taskr.exe\n" +
+		"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  tjek\n" +
+			"a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00 *tjek.exe\n" +
 			"\n" +
 			"not a checksum line\n")
 
-	got, err := checksumFor(sums, "taskr")
+	got, err := checksumFor(sums, "tjek")
 	if err != nil || got != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
-		t.Errorf("taskr → %q, %v", got, err)
+		t.Errorf("tjek → %q, %v", got, err)
 	}
 	// GNU coreutils marks binary mode with a leading '*' on the name.
-	if got, err := checksumFor(sums, "taskr.exe"); err != nil || got == "" {
+	if got, err := checksumFor(sums, "tjek.exe"); err != nil || got == "" {
 		t.Errorf("binary-mode entry not found: %q, %v", got, err)
 	}
-	if _, err := checksumFor(sums, "taskr-linux-arm64"); err == nil {
+	if _, err := checksumFor(sums, "tjek-linux-arm64"); err == nil {
 		t.Error("an asset with no entry must be an error, not an empty checksum")
 	}
 	// A truncated or non-hex digest is corruption, not a match to compare.
-	for _, bad := range []string{"abc123  taskr\n", "zzzz0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  taskr\n"} {
-		if _, err := checksumFor([]byte(bad), "taskr"); err == nil {
+	for _, bad := range []string{"abc123  tjek\n", "zzzz0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  tjek\n"} {
+		if _, err := checksumFor([]byte(bad), "tjek"); err == nil {
 			t.Errorf("malformed line %q was accepted", bad)
 		}
 	}
@@ -1209,13 +1209,13 @@ func TestChecksumForParsesSha256sumOutput(t *testing.T) {
 // The update path must refuse anything it cannot check: a release with no
 // SHA256SUMS, an asset missing from it, or bytes that hash to something else.
 func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
-	const payload = "#!/bin/sh\necho taskr\n"
+	const payload = "#!/bin/sh\necho tjek\n"
 	good := fmt.Sprintf("%x", sha256.Sum256([]byte(payload)))
 
 	var sumsBody string
 	srv := releaseServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/taskr":
+		case "/tjek":
 			fmt.Fprint(w, payload)
 		case "/sums":
 			fmt.Fprint(w, sumsBody)
@@ -1226,7 +1226,7 @@ func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
 
 	release := func(withSums bool) releaseInfo {
 		info := releaseInfo{TagName: "v9.9.9", Assets: []releaseAsset{
-			{Name: "taskr", URL: srv.URL + "/taskr"},
+			{Name: "tjek", URL: srv.URL + "/tjek"},
 		}}
 		if withSums {
 			info.Assets = append(info.Assets, releaseAsset{Name: sha256SumsAsset, URL: srv.URL + "/sums"})
@@ -1235,9 +1235,9 @@ func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
 	}
 
 	t.Run("matching checksum installs", func(t *testing.T) {
-		sumsBody = good + "  taskr\n"
-		dst := filepath.Join(t.TempDir(), "taskr")
-		if err := downloadVerifiedAsset(release(true), "taskr", dst); err != nil {
+		sumsBody = good + "  tjek\n"
+		dst := filepath.Join(t.TempDir(), "tjek")
+		if err := downloadVerifiedAsset(release(true), "tjek", dst); err != nil {
 			t.Fatalf("a matching checksum should verify: %v", err)
 		}
 		if b, err := os.ReadFile(dst); err != nil || string(b) != payload {
@@ -1246,9 +1246,9 @@ func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
 	})
 
 	t.Run("mismatched checksum refuses and removes the file", func(t *testing.T) {
-		sumsBody = strings.Repeat("a", 64) + "  taskr\n"
-		dst := filepath.Join(t.TempDir(), "taskr")
-		err := downloadVerifiedAsset(release(true), "taskr", dst)
+		sumsBody = strings.Repeat("a", 64) + "  tjek\n"
+		dst := filepath.Join(t.TempDir(), "tjek")
+		err := downloadVerifiedAsset(release(true), "tjek", dst)
 		if err == nil {
 			t.Fatal("a mismatched checksum was installed")
 		}
@@ -1261,8 +1261,8 @@ func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
 	})
 
 	t.Run("a release without SHA256SUMS is refused", func(t *testing.T) {
-		dst := filepath.Join(t.TempDir(), "taskr")
-		err := downloadVerifiedAsset(release(false), "taskr", dst)
+		dst := filepath.Join(t.TempDir(), "tjek")
+		err := downloadVerifiedAsset(release(false), "tjek", dst)
 		if err == nil {
 			t.Fatal("an unverifiable release was installed")
 		}
@@ -1273,8 +1273,8 @@ func TestDownloadVerifiedAssetRefusesUnverifiedBinaries(t *testing.T) {
 
 	t.Run("SHA256SUMS without this asset is refused", func(t *testing.T) {
 		sumsBody = good + "  some-other-binary\n"
-		dst := filepath.Join(t.TempDir(), "taskr")
-		if err := downloadVerifiedAsset(release(true), "taskr", dst); err == nil {
+		dst := filepath.Join(t.TempDir(), "tjek")
+		if err := downloadVerifiedAsset(release(true), "tjek", dst); err == nil {
 			t.Fatal("an asset with no published checksum was installed")
 		}
 	})

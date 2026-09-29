@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/x/ansi"
 )
 

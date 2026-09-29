@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -72,7 +72,7 @@ func truncateStyled(s string, max int) string {
 }
 
 // shortID returns the first 8 chars of a task ID — the same prefix the CLI
-// shows and accepts in commands like `taskr show <prefix>`.
+// shows and accepts in commands like `tjek show <prefix>`.
 func shortID(id string) string {
 	if len(id) <= 8 {
 		return id
@@ -664,7 +664,7 @@ func lookUpEditorCmd() string {
 // editorDraftKey is the sentinel "task ID" for the scratch file that backs the
 // ctrl+e editor escape from a comment input, keeping it out of any real
 // task's notes file. Task IDs are UUIDs, so it can never collide with one.
-const editorDraftKey = "__taskr_input_draft__"
+const editorDraftKey = "__tjek_input_draft__"
 
 // notesFilePath is the scratch file $EDITOR is handed. It is cache, not data:
 // the notes themselves live in the database, and this copy exists only for the
@@ -915,7 +915,7 @@ func parseEntryEdit(input string, oldStart time.Time, running bool) (time.Time, 
 // duration ("45m") becomes [now-d, now] — "I just spent 45m on this" almost
 // always means it ends now, not starts now — while a clock range
 // ("10:00-11:30") is taken literally on today. Shared by the TUI's
-// modeAddTimeEntry and `taskr log` so the two surfaces can't drift.
+// modeAddTimeEntry and `tjek log` so the two surfaces can't drift.
 func parseManualEntry(input string, now time.Time) (start, stop time.Time, err error) {
 	start, stop, err = parseEntryEdit(input, now, false)
 	if err != nil {
@@ -976,12 +976,12 @@ func putBuilder(b *strings.Builder) {
 
 // ── Self-update ───────────────────────────────────────────────────────────────
 
-// isHomebrewCellarPath reports whether path belongs to Taskr's Homebrew keg.
+// isHomebrewCellarPath reports whether path belongs to Tjek's Homebrew keg.
 // Homebrew exposes the command through a symlink, so callers must resolve
 // symlinks before checking it.
 func isHomebrewCellarPath(path string) bool {
 	path = filepath.ToSlash(filepath.Clean(path))
-	return strings.Contains(path, "/Cellar/taskr/")
+	return strings.Contains(path, "/Cellar/tjek/")
 }
 
 // packageManagerFor names the tool that owns the binary at path, or "" when the
@@ -998,9 +998,9 @@ func packageManagerFor(path string) string {
 	path = strings.ReplaceAll(filepath.Clean(path), `\`, "/")
 	switch {
 	case isHomebrewCellarPath(path):
-		return "brew update && brew upgrade taskr"
+		return "brew update && brew upgrade tjek"
 	case strings.Contains(strings.ToLower(path), "/scoop/apps/"):
-		return "scoop update taskr"
+		return "scoop update tjek"
 	case strings.HasPrefix(path, "/usr/bin/"):
 		return "your distribution's package manager"
 	}
@@ -1023,7 +1023,7 @@ func runningPackageManager() string {
 // selfUpdateAsset names the release asset for a platform. The names are
 // load-bearing in both directions: the release workflow attaches exactly these,
 // and an already-installed binary looks for the name *it* was built to expect —
-// so "taskr" and "taskr.exe" can never be renamed, and a new platform gets a new
+// so "tjek" and "tjek.exe" can never be renamed, and a new platform gets a new
 // name rather than a redefinition. Architecture is part of the lookup because
 // there are now two Linux builds; handing an arm64 machine the amd64 asset would
 // install a binary that cannot run.
@@ -1032,18 +1032,18 @@ func selfUpdateAsset(goos, goarch string) (string, error) {
 	case "linux":
 		switch goarch {
 		case "amd64":
-			return "taskr", nil
+			return "tjek", nil
 		case "arm64":
-			return "taskr-linux-arm64", nil
+			return "tjek-linux-arm64", nil
 		}
-		return "", fmt.Errorf("no release build for linux/%s ; install from source with `go install github.com/Iliorn/taskr@latest`", goarch)
+		return "", fmt.Errorf("no release build for linux/%s ; install from source with `go install github.com/Iliorn/tjek@latest`", goarch)
 	case "windows":
 		if goarch == "amd64" {
-			return "taskr.exe", nil
+			return "tjek.exe", nil
 		}
-		return "", fmt.Errorf("no release build for windows/%s ; install from source with `go install github.com/Iliorn/taskr@latest`", goarch)
+		return "", fmt.Errorf("no release build for windows/%s ; install from source with `go install github.com/Iliorn/tjek@latest`", goarch)
 	case "darwin":
-		return "", fmt.Errorf("macOS updates are distributed via Homebrew; run `brew install iliorn/tap/taskr`")
+		return "", fmt.Errorf("macOS updates are distributed via Homebrew; run `brew install iliorn/tap/tjek`")
 	default:
 		return "", fmt.Errorf("self-update is not available for %s", goos)
 	}
@@ -1067,9 +1067,9 @@ func selfUpdate() error {
 		return err
 	}
 	// Stage the download in a private temp dir, not the shared os.TempDir():
-	// a fixed, predictable path like /tmp/taskr is writable by any local user,
+	// a fixed, predictable path like /tmp/tjek is writable by any local user,
 	// who could swap the file between the download and the install below.
-	stageDir, err := os.MkdirTemp("", "taskr-update-")
+	stageDir, err := os.MkdirTemp("", "tjek-update-")
 	if err != nil {
 		return fmt.Errorf("could not create staging dir: %w", err)
 	}
@@ -1140,7 +1140,7 @@ func copyFile(srcPath, dstPath string) error {
 // point it at an httptest server; nothing else reassigns it.
 var releaseAPIBase = "https://api.github.com"
 
-const releaseRepo = "iliorn/taskr"
+const releaseRepo = "iliorn/tjek"
 
 // releaseAsset is one downloadable file attached to a release.
 type releaseAsset struct {
@@ -1163,7 +1163,7 @@ func fetchLatestRelease() (releaseInfo, error) {
 	// The documented Accept header, and a User-Agent because the API rejects
 	// requests without one.
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "taskr/"+appVersion)
+	req.Header.Set("User-Agent", "tjek/"+appVersion)
 
 	resp, err := (&http.Client{Timeout: releaseAPITimeout}).Do(req)
 	if err != nil {
@@ -1243,7 +1243,7 @@ func downloadReleaseAsset(asset releaseAsset, dst string) (digest string, err er
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "taskr/"+appVersion)
+	req.Header.Set("User-Agent", "tjek/"+appVersion)
 
 	client := &http.Client{
 		Timeout: releaseDownloadTimeout,

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // cli.go is the non-TUI surface: a small set of subcommands sharing the same
@@ -115,8 +115,8 @@ func dispatchCLI(args []string) int {
 	case "sync":
 		return cliSync(rest)
 	case "learnings":
-		fmt.Fprintln(os.Stderr, "taskr learnings: removed; learnings were folded into each task's notes.")
-		fmt.Fprintln(os.Stderr, "Search them with: taskr search \"Learnings\"  (notes are searched too), or open the task and press n.")
+		fmt.Fprintln(os.Stderr, "tjek learnings: removed; learnings were folded into each task's notes.")
+		fmt.Fprintln(os.Stderr, "Search them with: tjek search \"Learnings\"  (notes are searched too), or open the task and press n.")
 		return 2
 	case "completion":
 		return cliCompletion(rest)
@@ -141,10 +141,10 @@ func dispatchCLI(args []string) int {
 // ── help ─────────────────────────────────────────────────────────────────────
 
 // cliHelp prints the command reference. It goes to stdout, not stderr:
-// dispatchCLI only reaches it for an explicit `taskr help` / `-h` / `--help`
+// dispatchCLI only reaches it for an explicit `tjek help` / `-h` / `--help`
 // (an unrecognised word never gets this far — isCLICommand sends it to the
 // TUI instead), and an explicitly requested document belongs on stdout so
-// `taskr help | grep sync` and `taskr help | less` work.
+// `tjek help | grep sync` and `tjek help | less` work.
 
 // ── update ───────────────────────────────────────────────────────────────────
 
@@ -158,7 +158,7 @@ func cliUpdate(args []string) int {
 	check := fs.Bool("check", false, "report the running and latest version, install nothing")
 	yes := fs.Bool("y", false, "install without the confirmation prompt")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: taskr update [--check] [-y]   install the latest release (macOS and package-managed installs are told which tool to use instead)")
+		fmt.Fprintln(os.Stderr, "usage: tjek update [--check] [-y]   install the latest release (macOS and package-managed installs are told which tool to use instead)")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -167,7 +167,7 @@ func cliUpdate(args []string) int {
 
 	latest, err := latestRelease()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr update: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek update: %v\n", err)
 		return 1
 	}
 
@@ -194,7 +194,7 @@ func cliUpdate(args []string) int {
 	// than reading EOF as "no".
 	if !*yes {
 		if !stdinIsTTY() {
-			fmt.Fprintln(os.Stderr, "taskr update: not a terminal; rerun with -y to install without confirming")
+			fmt.Fprintln(os.Stderr, "tjek update: not a terminal; rerun with -y to install without confirming")
 			return 1
 		}
 		if !confirmStdin(fmt.Sprintf("install %s over the running binary?", latest)) {
@@ -203,16 +203,16 @@ func cliUpdate(args []string) int {
 		}
 	}
 	if err := selfUpdate(); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr update: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek update: %v\n", err)
 		return 1
 	}
 	// The running process keeps executing the old image either way (the file is
 	// renamed out from under it on Unix, moved aside on Windows), so say so.
-	fmt.Printf("installed %s; restart taskr to run it\n", latest)
+	fmt.Printf("installed %s; restart tjek to run it\n", latest)
 	return 0
 }
 
-// helpBlock is one section of `taskr help`: a heading and its rows, each a
+// helpBlock is one section of `tjek help`: a heading and its rows, each a
 // usage line and what it does. The text is laid out by writeHelp rather than
 // by hand, so every line fits an 80-column terminal however a description is
 // edited (TestCliHelpFitsEightyColumns).
@@ -230,69 +230,69 @@ const (
 
 var cliHelpBlocks = []helpBlock{
 	{"Usage:", []helpRow{
-		{"taskr", "launch the TUI (no args)"},
+		{"tjek", "launch the TUI (no args)"},
 	}},
 	{"Tasks:", []helpRow{
-		{`taskr add "title" [flags]`, "add a new task (--like <ref> clones, --depends <ref>|^ blocks on, --start tracks)"},
-		{"taskr add -", "batch add: one task per stdin line (flags apply to all; --chain links each line as depending on the previous, a plan typed in execution order)"},
-		{"taskr list [flags]", "list pending top-level tasks (ST: [ ] ready, [>] in progress, [!] overdue, [✓] done, or the board column's icon once columns have icons). Review filters: --stale=30d (untouched that long), --unblocked-since=14d (every blocker now done, the last one recently), --sort=seq|due|size|age|idle|pri, --wide (AGE + IDLE columns), --search-word / --search-re"},
-		{`taskr search "term" [flags]`, "title/notes substring search (includes done by default; --word matches whole words only, --re treats the term as a regular expression)"},
-		{"taskr top [-n=N] [--json] [--wide]", "show top-N by sequence score"},
-		{"taskr show <ref> [--json]", "full detail (incl. score breakdown + subtask IDs)"},
-		{"taskr why <ref> [--json]", "why it ranks where it does: each score factor with its cause, the margins to the tasks either side, and when the ranking moves on its own (deadline steps, momentum expiring)"},
-		{"taskr edit <ref>... [flags]", "change fields on one or more tasks (incl. --note/--append-note/--clear-note, --stage to move it on the board, with stage names from settings.json; --title takes a single ref)"},
-		{`taskr done <ref>... [-m "why"]`, "mark one or more tasks done, stopping any running timer on them (--cascade also closes pending subtasks; without it a parent with open subtasks prompts on a TTY, else warns and leaves them open; -m/--comment adds a closing comment to each)"},
-		{`taskr reopen <ref>... [-m "why"]`, "move tasks back to pending (the counterpart to done; already-pending tasks are reported and skipped)"},
-		{"taskr delete <ref> [-f]", "soft-delete a task (alias: rm; substring matches confirm first)"},
-		{"taskr undo [--list]", "restore the most recent deletion (task + subtasks)"},
-		{"taskr undelete <ref> | --list", "restore a specific deleted task by ref (browse with --list)"},
-		{`taskr subtask <parent> "title"`, "create a subtask (--each for multiple titles)"},
+		{`tjek add "title" [flags]`, "add a new task (--like <ref> clones, --depends <ref>|^ blocks on, --start tracks)"},
+		{"tjek add -", "batch add: one task per stdin line (flags apply to all; --chain links each line as depending on the previous, a plan typed in execution order)"},
+		{"tjek list [flags]", "list pending top-level tasks (ST: [ ] ready, [>] in progress, [!] overdue, [✓] done, or the board column's icon once columns have icons). Review filters: --stale=30d (untouched that long), --unblocked-since=14d (every blocker now done, the last one recently), --sort=seq|due|size|age|idle|pri, --wide (AGE + IDLE columns), --search-word / --search-re"},
+		{`tjek search "term" [flags]`, "title/notes substring search (includes done by default; --word matches whole words only, --re treats the term as a regular expression)"},
+		{"tjek top [-n=N] [--json] [--wide]", "show top-N by sequence score"},
+		{"tjek show <ref> [--json]", "full detail (incl. score breakdown + subtask IDs)"},
+		{"tjek why <ref> [--json]", "why it ranks where it does: each score factor with its cause, the margins to the tasks either side, and when the ranking moves on its own (deadline steps, momentum expiring)"},
+		{"tjek edit <ref>... [flags]", "change fields on one or more tasks (incl. --note/--append-note/--clear-note, --stage to move it on the board, with stage names from settings.json; --title takes a single ref)"},
+		{`tjek done <ref>... [-m "why"]`, "mark one or more tasks done, stopping any running timer on them (--cascade also closes pending subtasks; without it a parent with open subtasks prompts on a TTY, else warns and leaves them open; -m/--comment adds a closing comment to each)"},
+		{`tjek reopen <ref>... [-m "why"]`, "move tasks back to pending (the counterpart to done; already-pending tasks are reported and skipped)"},
+		{"tjek delete <ref> [-f]", "soft-delete a task (alias: rm; substring matches confirm first)"},
+		{"tjek undo [--list]", "restore the most recent deletion (task + subtasks)"},
+		{"tjek undelete <ref> | --list", "restore a specific deleted task by ref (browse with --list)"},
+		{`tjek subtask <parent> "title"`, "create a subtask (--each for multiple titles)"},
 	}},
 	{"Shell integration:", []helpRow{
-		{"taskr completion bash|zsh|fish", "print a completion script (install paths in the man page)"},
-		{"taskr man", "print the man page in roff (e.g. > ~/.local/share/man/man1/taskr.1)"},
+		{"tjek completion bash|zsh|fish", "print a completion script (install paths in the man page)"},
+		{"tjek man", "print the man page in roff (e.g. > ~/.local/share/man/man1/tjek.1)"},
 	}},
 	{"Discovery:", []helpRow{
-		{"taskr tags [--json]", "pending tags with counts"},
-		{"taskr projects [--json]", "pending projects with counts"},
-		{"taskr suggest [--list]", "suggest dependency links from note refs + related titles (interactive)"},
+		{"tjek tags [--json]", "pending tags with counts"},
+		{"tjek projects [--json]", "pending projects with counts"},
+		{"tjek suggest [--list]", "suggest dependency links from note refs + related titles (interactive)"},
 	}},
 	{"Tracking:", []helpRow{
-		{"taskr start <ref>", "start the time tracker, stopping any other task's timer first (no-op if already tracking ref)"},
-		{"taskr stop [<ref>]", "stop the tracker (no ref = whichever's running)"},
-		{"taskr log <ref> <45m|10:00-11:30>", "backfill a time entry (duration ends now; range is today)"},
+		{"tjek start <ref>", "start the time tracker, stopping any other task's timer first (no-op if already tracking ref)"},
+		{"tjek stop [<ref>]", "stop the tracker (no ref = whichever's running)"},
+		{"tjek log <ref> <45m|10:00-11:30>", "backfill a time entry (duration ends now; range is today)"},
 	}},
 	{"Reminders:", []helpRow{
-		{"taskr remind [--now]", "desktop notification of what is due today and overdue, once a day at the time set in Settings (run it every few minutes from cron or a timer); --now reminds immediately"},
+		{"tjek remind [--now]", "desktop notification of what is due today and overdue, once a day at the time set in Settings (run it every few minutes from cron or a timer); --now reminds immediately"},
 	}},
 	{"Comments:", []helpRow{
-		{`taskr comment <ref> "text"`, "append a comment"},
-		{"taskr comment <ref> -", "read comment text from stdin (for long/heredoc input)"},
-		{`taskr comment <ref> --edit=N "text"`, "edit comment N (1-based)"},
-		{"taskr comment <ref> --delete=N", "delete comment N"},
+		{`tjek comment <ref> "text"`, "append a comment"},
+		{"tjek comment <ref> -", "read comment text from stdin (for long/heredoc input)"},
+		{`tjek comment <ref> --edit=N "text"`, "edit comment N (1-based)"},
+		{"tjek comment <ref> --delete=N", "delete comment N"},
 	}},
 	{"Diagnostics:", []helpRow{
-		{"taskr doctor [--json]", "report this installation's health: version, where its files are, database integrity, schema version, settings, sync and editor (paste the output into a bug report; exits non-zero on a problem)"},
-		{"taskr update [--check] [-y]", "install the latest release, verified against the release's SHA256SUMS (--check only reports; macOS and package-managed installs are pointed at brew/scoop/the distro instead of being overwritten)"},
+		{"tjek doctor [--json]", "report this installation's health: version, where its files are, database integrity, schema version, settings, sync and editor (paste the output into a bug report; exits non-zero on a problem)"},
+		{"tjek update [--check] [-y]", "install the latest release, verified against the release's SHA256SUMS (--check only reports; macOS and package-managed installs are pointed at brew/scoop/the distro instead of being overwritten)"},
 	}},
 	{"Reporting / backup:", []helpRow{
-		{"taskr stats [--format=text|json|waybar]", "one-line health summary (default text). --tag/--project/--search scope the stats to matching tasks; --seq appends the sequence miss analysis: which score dimension buried the tasks you finished anyway, and a bias hint"},
-		{"taskr export [--include-done]", "JSON snapshot (versioned envelope) to stdout"},
-		{"taskr import <file>|-", "merge an export file into the local store (- = stdin)"},
+		{"tjek stats [--format=text|json|waybar]", "one-line health summary (default text). --tag/--project/--search scope the stats to matching tasks; --seq appends the sequence miss analysis: which score dimension buried the tasks you finished anyway, and a bias hint"},
+		{"tjek export [--include-done]", "JSON snapshot (versioned envelope) to stdout"},
+		{"tjek import <file>|-", "merge an export file into the local store (- = stdin)"},
 	}},
 	{"Sync (cross-device):", []helpRow{
-		{"taskr serve [--listen=ADDR] [--token=T] [--tls-cert=F --tls-key=F]", "run the sync server (self-hosted; binds 127.0.0.1:8765 by default); --tls-cert/--tls-key serve https with that PEM pair, re-read when the files are renewed"},
-		{"taskr sync [--url=U] [--token=T] [--save]", `push/pull once against a sync server (--save stores config). Auto-sync runs on its own once configured (set "auto_sync":false in sync.json to disable); conflicts log to sync.log`},
-		{"taskr sync --status", "print the last sync time/result (local only, no network)"},
-		{"taskr sync --accept-stale", `rejoin after being offline past the deletion-memory window (~6 months; both auto-sync and a manual "taskr sync" refuse until then, so tasks deleted elsewhere can't resurrect)`},
-		{"taskr sync --adopt-local", "first sync only: keep this device's tasks and push them to the fleet"},
-		{"taskr sync --adopt-remote", "first sync only: back them up, clear them here, pull the fleet's list. A device that has never synced and holds tasks of its own refuses to sync until one of these is given, so its old tasks can't land on every device by surprise; the backup is a normal export, taskr import undoes it"},
-		{"taskr sync --recover", "list dropped edits from sync.log (local only, no network)"},
-		{"taskr sync --recover=<ref>", "reapply one dropped edit by id-prefix or title substring; stamps a fresh ModifiedAt so the fix propagates on the next sync"},
+		{"tjek serve [--listen=ADDR] [--token=T] [--tls-cert=F --tls-key=F]", "run the sync server (self-hosted; binds 127.0.0.1:8765 by default); --tls-cert/--tls-key serve https with that PEM pair, re-read when the files are renewed"},
+		{"tjek sync [--url=U] [--token=T] [--save]", `push/pull once against a sync server (--save stores config). Auto-sync runs on its own once configured (set "auto_sync":false in sync.json to disable); conflicts log to sync.log`},
+		{"tjek sync --status", "print the last sync time/result (local only, no network)"},
+		{"tjek sync --accept-stale", `rejoin after being offline past the deletion-memory window (~6 months; both auto-sync and a manual "tjek sync" refuse until then, so tasks deleted elsewhere can't resurrect)`},
+		{"tjek sync --adopt-local", "first sync only: keep this device's tasks and push them to the fleet"},
+		{"tjek sync --adopt-remote", "first sync only: back them up, clear them here, pull the fleet's list. A device that has never synced and holds tasks of its own refuses to sync until one of these is given, so its old tasks can't land on every device by surprise; the backup is a normal export, tjek import undoes it"},
+		{"tjek sync --recover", "list dropped edits from sync.log (local only, no network)"},
+		{"tjek sync --recover=<ref>", "reapply one dropped edit by id-prefix or title substring; stamps a fresh ModifiedAt so the fix propagates on the next sync"},
 	}},
 	{"Meta:", []helpRow{
-		{"taskr --version", "print build version"},
-		{"taskr help", "this message"},
+		{"tjek --version", "print build version"},
+		{"tjek help", "this message"},
 	}},
 	{"", []helpRow{
 		{"", "Task references can be a UUID prefix (`347e`) OR a case-insensitive substring of the title (`milk`). ID-prefix wins on hex-shaped queries so scripts stay deterministic. Ambiguous refs fail with exit code 2 and list each match with its short ID."},
@@ -343,7 +343,7 @@ var cliHelpBlocks = []helpBlock{
 		{"--remove-dep=REF", "remove a dependency"},
 	}},
 	{"Notes:", []helpRow{
-		{"", "- Data lives in tasks.db, shared with the TUI ('taskr doctor' prints where taskr keeps its files). Concurrent CLI + TUI usage is safe for reads; writes serialize via SQLite's busy-timeout. A running TUI live-reloads on external writes via a filesystem watcher, so CLI changes appear without restarting it."},
+		{"", "- Data lives in tasks.db, shared with the TUI ('tjek doctor' prints where tjek keeps its files). Concurrent CLI + TUI usage is safe for reads; writes serialize via SQLite's busy-timeout. A running TUI live-reloads on external writes via a filesystem watcher, so CLI changes appear without restarting it."},
 		{"", "- The sequencing weights (Deadline/Priority/Momentum) are loaded from settings.json, so 'top' and 'list' rank the same way as the TUI under the user's current bias settings."},
 	}},
 }
@@ -406,7 +406,7 @@ func helpWrap(s string, w int) []string {
 
 func cliHelp() int {
 	var b strings.Builder
-	b.WriteString("taskr: keyboard-driven task manager\n\n")
+	b.WriteString("tjek: keyboard-driven task manager\n\n")
 	writeHelp(&b, cliHelpBlocks)
 	fmt.Print(b.String())
 	return 0
@@ -417,8 +417,8 @@ func cliHelp() int {
 // splitFlagsAndPositionals separates a CLI subcommand's argv into a flag-only
 // slice (safe to pass to flag.Parse) and a positional-only slice (the title,
 // etc). Go's stdlib flag package stops at the first non-flag token, so without
-// this helper users would have to write `taskr add --p=h "Buy milk"` instead
-// of the more natural `taskr add "Buy milk" --p=h`.
+// this helper users would have to write `tjek add --p=h "Buy milk"` instead
+// of the more natural `tjek add "Buy milk" --p=h`.
 //
 // Which flags consume the next arg when written without an embedded `=`
 // (e.g. `--due tomorrow`) is derived from fs itself: every registered flag
@@ -440,7 +440,7 @@ func splitFlagsAndPositionals(fs *flag.FlagSet, args []string) (flags, positiona
 			return
 		case a == "-":
 			// Bare single dash is conventional stdin / "this position", not a
-			// flag. Without this, `taskr comment <ref> -` would route the dash
+			// flag. Without this, `tjek comment <ref> -` would route the dash
 			// into flag parsing and lose it before reaching the stdin reader.
 			positionals = append(positionals, a)
 		case strings.HasPrefix(a, "-"):
@@ -513,7 +513,7 @@ func printTaskTable(rows []todo.Todo, blocked map[string]bool) {
 // printTaskTableWide is printTaskTable with the two time columns --wide adds:
 // AGE (days since the task was created) and IDLE (days since it last changed).
 // They are opt-in rather than always shown because they are review columns, not
-// working ones — a daily `taskr list` doesn't need them, and every column costs
+// working ones — a daily `tjek list` doesn't need them, and every column costs
 // width the title would otherwise have.
 func printTaskTableWide(rows []todo.Todo, blocked map[string]bool, wide bool) {
 	if len(rows) == 0 {

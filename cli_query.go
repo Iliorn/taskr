@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── list ─────────────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ func cliList(args []string) int {
 	blockedSet := buildBlockedSet(todos)
 	rows := filterTopLevel(todos, opts)
 	if err := sortTodosByCLIMode(rows, *sortBy, blockedSet, repo.ranker()); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr list: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek list: %v\n", err)
 		return 2
 	}
 	if *limit > 0 && len(rows) > *limit {
@@ -87,7 +87,7 @@ func listOptsFromFlags(all, focus bool, tag, project, search, searchWord, search
 		searchWord:  searchWord,
 	}
 	if search != "" && searchWord != "" {
-		fmt.Fprintln(os.Stderr, "taskr: --search and --search-word both narrow the same fields; pass one")
+		fmt.Fprintln(os.Stderr, "tjek: --search and --search-word both narrow the same fields; pass one")
 		return opts, 2
 	}
 	if searchRe != "" {
@@ -96,7 +96,7 @@ func listOptsFromFlags(all, focus bool, tag, project, search, searchWord, search
 		// rather than a feature.
 		re, err := regexp.Compile("(?i)" + searchRe)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "taskr: invalid --search-re: %v\n", err)
+			fmt.Fprintf(os.Stderr, "tjek: invalid --search-re: %v\n", err)
 			return opts, 2
 		}
 		opts.searchRe = re
@@ -104,7 +104,7 @@ func listOptsFromFlags(all, focus bool, tag, project, search, searchWord, search
 	if stale != "" {
 		d, err := parseAgeSpec(stale)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "taskr: --stale: %v\n", err)
+			fmt.Fprintf(os.Stderr, "tjek: --stale: %v\n", err)
 			return opts, 2
 		}
 		opts.staleFor = d
@@ -112,7 +112,7 @@ func listOptsFromFlags(all, focus bool, tag, project, search, searchWord, search
 	if unblocked != "" {
 		d, err := parseAgeSpec(unblocked)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "taskr: --unblocked-since: %v\n", err)
+			fmt.Fprintf(os.Stderr, "tjek: --unblocked-since: %v\n", err)
 			return opts, 2
 		}
 		opts.unblockedFor = d
@@ -137,11 +137,11 @@ func cliSearch(args []string) int {
 		return 2
 	}
 	if len(positionals) == 0 {
-		fmt.Fprintln(os.Stderr, `usage: taskr search "term" [--json] [--pending] [--word] [--re] [--sort=…] [--limit=N]`)
+		fmt.Fprintln(os.Stderr, `usage: tjek search "term" [--json] [--pending] [--word] [--re] [--sort=…] [--limit=N]`)
 		return 2
 	}
 	if *word && *asRegexp {
-		fmt.Fprintln(os.Stderr, "taskr search: --word and --re are two ways to read the same term; pass one")
+		fmt.Fprintln(os.Stderr, "tjek search: --word and --re are two ways to read the same term; pass one")
 		return 2
 	}
 	term := strings.Join(positionals, " ")
@@ -154,7 +154,7 @@ func cliSearch(args []string) int {
 	case *asRegexp:
 		re, err := regexp.Compile("(?i)" + term)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "taskr search: invalid regular expression: %v\n", err)
+			fmt.Fprintf(os.Stderr, "tjek search: invalid regular expression: %v\n", err)
 			return 2
 		}
 		opts.searchRe = re
@@ -169,7 +169,7 @@ func cliSearch(args []string) int {
 	blockedSet := buildBlockedSet(todos)
 	rows := filterTopLevel(todos, opts)
 	if err := sortTodosByCLIMode(rows, *sortBy, blockedSet, repo.ranker()); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr search: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek search: %v\n", err)
 		return 2
 	}
 	if *limit > 0 && len(rows) > *limit {
@@ -292,7 +292,7 @@ func cliTop(args []string) int {
 		return 2
 	}
 	if *n < 1 {
-		fmt.Fprintln(os.Stderr, "taskr top: -n must be at least 1")
+		fmt.Fprintln(os.Stderr, "tjek top: -n must be at least 1")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -385,7 +385,7 @@ func cliRemind(args []string) int {
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintln(os.Stderr, "usage: taskr remind [--now]")
+		fmt.Fprintln(os.Stderr, "usage: tjek remind [--now]")
 		return 2
 	}
 	now := remindClock()
@@ -418,7 +418,7 @@ func cliRemind(args []string) int {
 	fmt.Println(title)
 	fmt.Println(body)
 	if err := sendDesktopNotification(title, body); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr: desktop notification unavailable: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek: desktop notification unavailable: %v\n", err)
 		return 1
 	}
 	return 0

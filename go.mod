@@ -1,4 +1,4 @@
-module github.com/Iliorn/taskr
+module github.com/Iliorn/tjek
 
 go 1.25.0
 

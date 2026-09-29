@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
-// exportEnvelope is the versioned wrapper emitted by `taskr export`.
+// exportEnvelope is the versioned wrapper emitted by `tjek export`.
 // Version 1 is the only defined version; readers must reject any version > 1
 // with a clear error so future format changes do not silently corrupt data.
 type exportEnvelope struct {
@@ -29,11 +29,11 @@ func cliImport(args []string) int {
 	fs := flag.NewFlagSet("import", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, `usage: taskr import <file>
-       taskr import -              read from stdin
+		fmt.Fprintln(os.Stderr, `usage: tjek import <file>
+       tjek import -              read from stdin
 
 Merges the tasks in the export file into the local store. Both the versioned
-envelope produced by 'taskr export' and the legacy bare JSON array are accepted.
+envelope produced by 'tjek export' and the legacy bare JSON array are accepted.
 Import is idempotent: running it a second time with the same file changes nothing.`)
 	}
 	if err := fs.Parse(args); err != nil {
@@ -55,25 +55,25 @@ Import is idempotent: running it a second time with the same file changes nothin
 		data, err = os.ReadFile(filepath.Clean(src))
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr import: read: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek import: read: %v\n", err)
 		return 1
 	}
 
 	tasks, err := parseExportData(data)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr import: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek import: %v\n", err)
 		return 1
 	}
 
 	// Get the DB handle through the same path that sync uses: openStore sets
 	// up the package-level `db` singleton and applies all migrations.
 	if err := openStore(); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr import: open store: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek import: open store: %v\n", err)
 		return 1
 	}
 	res, err := importTasks(db, tasks, storedBiases())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr import: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek import: %v\n", err)
 		return 1
 	}
 	fmt.Printf("imported %d task(s), %d changed\n", len(tasks), res.added+res.updated)
@@ -86,7 +86,7 @@ type importResult struct{ added, updated int }
 
 // importTasks merges an export's tasks into the store — the sync merge, so it
 // never replaces anything wholesale and a second import of the same file
-// changes nothing. The CLI's `taskr import` and the Settings import share it,
+// changes nothing. The CLI's `tjek import` and the Settings import share it,
 // so the two cannot disagree about what a file does.
 func importTasks(h *sql.DB, tasks []todo.Todo, b rank.Biases) (importResult, error) {
 	// Snapshot the pre-merge set so the result reports what the merge actually
@@ -120,9 +120,9 @@ func importTasks(h *sql.DB, tasks []todo.Todo, b rank.Biases) (importResult, err
 
 // exportFileName is the file the Settings auto-export keeps current in the
 // folder it is given.
-const exportFileName = "taskr-export.json"
+const exportFileName = "tjek-export.json"
 
-// exportJSON is the export document for tasks as `taskr export` writes it:
+// exportJSON is the export document for tasks as `tjek export` writes it:
 // the versioned envelope, indented, with a trailing newline.
 func exportJSON(tasks []todo.Todo, at time.Time) ([]byte, error) {
 	data, err := json.MarshalIndent(exportEnvelope{Version: 1, ExportedAt: at.UTC(), Tasks: tasks}, "", "  ")
@@ -158,7 +158,7 @@ func parseExportData(data []byte) ([]todo.Todo, error) {
 			return nil, fmt.Errorf("malformed export envelope: %w", err)
 		}
 		if env.Version > 1 {
-			return nil, fmt.Errorf("unsupported export version %d (this build only knows version 1; upgrade taskr to import this file)", env.Version)
+			return nil, fmt.Errorf("unsupported export version %d (this build only knows version 1; upgrade tjek to import this file)", env.Version)
 		}
 		return env.Tasks, nil
 	case 0:

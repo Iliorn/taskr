@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── Bias level ────────────────────────────────────────────────────────────────
@@ -528,7 +528,7 @@ func (r Ranker) Refreshed(now time.Time, todos []*todo.Todo) Ranker {
 // highest-scoring pending task right now, so the number answers "how close to
 // the top is this" rather than asking to be calibrated against a scale nobody
 // published. The points survive where the arithmetic is being explained (the
-// w overlay, `taskr why`), which is the one place a raw magnitude is the point.
+// w overlay, `tjek why`), which is the one place a raw magnitude is the point.
 //
 // Normalizing against the live field rather than a fixed theoretical maximum is
 // a deliberate trade: the scale uses its whole range, at the cost of 100%
@@ -607,7 +607,7 @@ const (
 )
 
 // CaptureRankAtDone stamps t.SeqRankAtDone with the task's 1-based
-// position in the ranking `taskr top` would have shown at this moment. The
+// position in the ranking `tjek top` would have shown at this moment. The
 // user-initiated close paths (CLI done, TUI toggle, confirm-close-parent)
 // call it just before Toggle flips the status; auto-closed parents and
 // recurrence spawns don't, so the metric only reads deliberate picks —

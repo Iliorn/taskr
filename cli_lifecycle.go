@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── done ─────────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ func cliDone(args []string) int {
 		return 2
 	}
 	if len(positionals) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr done <ref> [<ref>...] [-m \"why\"] [--cascade]")
+		fmt.Fprintln(os.Stderr, "usage: tjek done <ref> [<ref>...] [-m \"why\"] [--cascade]")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -98,7 +98,7 @@ func cliDone(args []string) int {
 			} else {
 				// Non-interactive: don't break scripts, but surface it loudly
 				// so the subtasks aren't silently orphaned.
-				fmt.Fprintf(os.Stderr, "warning: closing %s %q leaves %d pending subtask(s) hidden under it; rerun with --cascade to close them, or 'taskr done <subtask>'\n",
+				fmt.Fprintf(os.Stderr, "warning: closing %s %q leaves %d pending subtask(s) hidden under it; rerun with --cascade to close them, or 'tjek done <subtask>'\n",
 					t.ID[:8], t.Title, len(pending))
 			}
 		}
@@ -184,7 +184,7 @@ func cliDone(args []string) int {
 
 // cliReopen is `done`'s counterpart: it moves tasks back to pending. Without
 // it the CLI could close a task but never undo that, so a mistyped ref in a
-// batch `taskr done a b c` could only be repaired by opening the TUI — which
+// batch `tjek done a b c` could only be repaired by opening the TUI — which
 // makes every scripted or remote close riskier than it needs to be.
 //
 // Deliberately not a "toggle": a verb that closes a pending task when you
@@ -201,7 +201,7 @@ func cliReopen(args []string) int {
 		return 2
 	}
 	if len(positionals) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr reopen <ref> [<ref>...] [-m \"why\"]")
+		fmt.Fprintln(os.Stderr, "usage: tjek reopen <ref> [<ref>...] [-m \"why\"]")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -270,7 +270,7 @@ func cliDelete(args []string) int {
 		return 2
 	}
 	if len(positionals) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr delete <ref> [-f]")
+		fmt.Fprintln(os.Stderr, "usage: tjek delete <ref> [-f]")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -294,7 +294,7 @@ func cliDelete(args []string) int {
 			what += fmt.Sprintf(" (+%d subtask(s))", extra)
 		}
 		if !stdinIsTTY() {
-			fmt.Fprintf(os.Stderr, "taskr delete: %q matched by title substring and confirmation needs a terminal; use the id prefix %s, or -f\n",
+			fmt.Fprintf(os.Stderr, "tjek delete: %q matched by title substring and confirmation needs a terminal; use the id prefix %s, or -f\n",
 				positionals[0], t.ID[:8])
 			return 2
 		}
@@ -316,7 +316,7 @@ func cliDelete(args []string) int {
 		fmt.Fprintf(os.Stderr, "delete: %v\n", err)
 		return 1
 	}
-	// Record the pre-delete states in the undo sidecar so `taskr undo` (and
+	// Record the pre-delete states in the undo sidecar so `tjek undo` (and
 	// the TUI, which seeds its undo stack from the same file) can restore
 	// this. Best-effort: a persist failure must not fail the delete — but the
 	// "(recoverable…)" hint below is printed only when recording succeeded.
@@ -337,7 +337,7 @@ func cliDelete(args []string) int {
 		fmt.Printf("deleted %s  %s\n", t.ID[:8], t.Title)
 	}
 	if recorded {
-		fmt.Fprintln(os.Stderr, "(recoverable with `taskr undo`)")
+		fmt.Fprintln(os.Stderr, "(recoverable with `tjek undo`)")
 	}
 	return 0
 }
@@ -354,7 +354,7 @@ func cliUndelete(args []string) int {
 	fs.SetOutput(os.Stderr)
 	list := fs.Bool("list", false, "list the deleted tasks that can be restored instead of restoring one")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: taskr undelete <ref>   |   taskr undelete --list")
+		fmt.Fprintln(os.Stderr, "usage: tjek undelete <ref>   |   tjek undelete --list")
 		fs.PrintDefaults()
 	}
 	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
@@ -466,11 +466,11 @@ func cliUndo(args []string) int {
 	}
 	entries, err := loadPersistedUndoEntries()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr undo: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek undo: %v\n", err)
 		return 1
 	}
 	if len(entries) == 0 {
-		fmt.Fprintln(os.Stderr, "taskr undo: nothing to restore (only deletions are undoable from the CLI, last 5 kept)")
+		fmt.Fprintln(os.Stderr, "tjek undo: nothing to restore (only deletions are undoable from the CLI, last 5 kept)")
 		return 1
 	}
 	if *list {
@@ -482,7 +482,7 @@ func cliUndo(args []string) int {
 			}
 			marker := " "
 			if i == len(entries)-1 {
-				marker = "*" // next `taskr undo` restores this one
+				marker = "*" // next `tjek undo` restores this one
 			}
 			fmt.Printf("%s %s  %q  (%d task(s))\n", marker, e.desc, title, len(e.partial))
 		}
@@ -525,7 +525,7 @@ func cliUndo(args []string) int {
 		restore = append(restore, t)
 	}
 	if len(restore) == 0 {
-		fmt.Fprintln(os.Stderr, "taskr undo: every task in the newest entry already exists; nothing to do")
+		fmt.Fprintln(os.Stderr, "tjek undo: every task in the newest entry already exists; nothing to do")
 		if perr := savePersistedUndoEntries(entries[:len(entries)-1]); perr != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not update undo history: %v\n", perr)
 		}

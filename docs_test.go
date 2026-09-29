@@ -174,13 +174,13 @@ func TestReleaseNotesExtractionMatchesTheChangelog(t *testing.T) {
 	}
 }
 
-// The README advertises `go install github.com/Iliorn/taskr@latest` as the
+// The README advertises `go install github.com/Iliorn/tjek@latest` as the
 // install with the strongest integrity guarantee. That command resolves the
 // module by the path in go.mod, not by the repository URL, so a module
-// declared as bare `taskr` fails the install outright:
+// declared as bare `tjek` fails the install outright:
 //
-//	module declares its path as: taskr
-//	        but was required as: github.com/Iliorn/taskr
+//	module declares its path as: tjek
+//	        but was required as: github.com/Iliorn/tjek
 //
 // Nothing in the build catches that — the module path is only consulted by
 // someone installing from outside the tree, which is exactly the person the

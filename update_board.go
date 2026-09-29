@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

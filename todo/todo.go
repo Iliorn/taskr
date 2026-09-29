@@ -1,4 +1,4 @@
-// Package todo is taskr's framework-free domain layer: the Todo type and its
+// Package todo is tjek's framework-free domain layer: the Todo type and its
 // mutations (toggle, tags, timers, subtasks, comments, time entries).
 // It carries no Bubble Tea or rendering concerns.
 package todo
@@ -172,7 +172,7 @@ type TimeEntry struct {
 	StoppedAt  time.Time `json:"stopped_at,omitempty"`
 	ModifiedAt time.Time `json:"modified_at,omitempty"` // sync merge recency; see Comment.ModifiedAt
 	DeletedAt  time.Time `json:"deleted_at,omitempty"`  // sync tombstone; see Comment.DeletedAt
-	// LastSeen is the last moment a live taskr process confirmed this timer was
+	// LastSeen is the last moment a live tjek process confirmed this timer was
 	// still running (heartbeat). A running entry whose LastSeen has gone stale is
 	// treated as abandoned and recovered. Zero = never heartbeated.
 	LastSeen time.Time `json:"last_seen,omitempty"`

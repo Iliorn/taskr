@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // Scripted flows for the Settings tab: the four inline sync editors and the
@@ -19,7 +19,7 @@ import (
 // reason — each one has to write config, reset the mode, and leave the shared
 // text input in a state the *next* modal can use. The sync pair carries an
 // extra obligation the others do not: it holds the bearer token, which
-// SECURITY.md names as the only secret taskr stores. So the masking and the
+// SECURITY.md names as the only secret tjek stores. So the masking and the
 // file mode are pinned here, not left to inspection.
 
 // settingsModel builds a model on the Settings tab with a private HOME, so the
@@ -172,7 +172,7 @@ func TestScriptSyncTokenIsStoredPrivately(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// SECURITY.md states this file is 0600. It is the only secret taskr
+	// SECURITY.md states this file is 0600. It is the only secret tjek
 	// stores, so the mode is a documented property, not an accident of
 	// whichever call happened to create the file. Windows has no POSIX mode
 	// bits — Go reports 0666 for every file it creates there, and the file is

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Desktop notifications go through what each platform already has, so taskr
+// Desktop notifications go through what each platform already has, so tjek
 // needs no cgo and no notification library: notify-send on Linux and the
 // BSDs, osascript on macOS, and on Windows the toast API called directly over
 // COM (notify_windows.go). Windows does not go through PowerShell: an
@@ -53,7 +53,7 @@ func notifyCommand(ctx context.Context, goos, title, body string) *exec.Cmd {
 			"-e", "end run",
 			title, body)
 	}
-	return exec.CommandContext(ctx, "notify-send", "--app-name=taskr", title, body)
+	return exec.CommandContext(ctx, "notify-send", "--app-name=tjek", title, body)
 }
 
 // notifyFailureReason turns a failed notifier's output into one line: the

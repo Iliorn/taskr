@@ -1,4 +1,4 @@
-// Package tasksync is taskr's cross-device sync engine: the pure merge fold
+// Package tasksync is tjek's cross-device sync engine: the pure merge fold
 // (Merge), the wire protocol (Request/Response, PostSync), the HTTP endpoint
 // (Server), the real-time change push (Hub, Listener), and conflict detection
 // (DroppedLocalEdits). It is deliberately storage- and UI-free: the ONLY thing

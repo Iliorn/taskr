@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── Localization ──────────────────────────────────────────────────────────────
@@ -607,7 +607,7 @@ var daTranslations = map[string]string{
 
 	// Update / status / errors
 	"Update failed":                    "Opdatering mislykkedes",
-	"Updated! Restart taskr to apply.": "Opdateret! Genstart taskr for at anvende.",
+	"Updated! Restart tjek to apply.":  "Opdateret! Genstart tjek for at anvende.",
 	"Error saving settings: %v":        "Kunne ikke gemme indstillinger: %v",
 	"Updated; restart to apply":        "Opdateret; genstart for at anvende",
 	"Check failed":                     "Søgning mislykkedes",
@@ -621,7 +621,7 @@ var daTranslations = map[string]string{
 	"Updating…":                        "Opdaterer…",
 	"Nothing to undo":                  "Intet at fortryde",
 	"Undid: %s":                        "Fortrød: %s",
-	"No editor found. Set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)":                               "Ingen editor fundet. Sæt EDITOR permanent, f.eks: setx EDITOR notepad (genstart derefter taskr)",
+	"No editor found. Set EDITOR permanently, e.g: setx EDITOR notepad (then restart tjek)":                                "Ingen editor fundet. Sæt EDITOR permanent, f.eks: setx EDITOR notepad (genstart derefter tjek)",
 	"No editor found. Set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish": "Ingen editor fundet. Sæt $EDITOR permanent, f.eks: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish",
 	"Editor failed; falling back to notepad":                "Editor fejlede; falder tilbage til notepad",
 	"Invalid date - use dd-mm-yy, %q, %q, %q, %q, or '+3d'": "Ugyldig dato - brug dd-mm-yy, %q, %q, %q, %q eller '+3d'",
@@ -692,7 +692,7 @@ var daTranslations = map[string]string{
 	"Last sync failed: ":              "Seneste synk. mislykkedes: ",
 	"Last sync: sent %d, received %d": "Seneste synk.: sendt %d, modtaget %d",
 	"Sync failing: devices may be diverging (see Settings)":                       "Synk. mislykkes: enhederne kan være ved at glide fra hinanden (se Indstillinger)",
-	"Sync: %d conflict(s) resolved; taskr sync --recover lists them":              "Synk.: %d konflikt(er) løst; taskr sync --recover viser dem",
+	"Sync: %d conflict(s) resolved; tjek sync --recover lists them":               "Synk.: %d konflikt(er) løst; tjek sync --recover viser dem",
 	"Sync server URL, e.g. http://100.x.y.z:8765":                                 "URL til synk.server, fx http://100.x.y.z:8765",
 	"Sync token (clear the field to remove it)":                                   "Synk.token (ryd feltet for at fjerne den)",
 	"Server token clients must present (ctrl+g generates one · blank removes it)": "Servertoken som klienter skal vise (ctrl+g genererer et · tomt felt fjerner det)",
@@ -729,13 +729,13 @@ var daTranslations = map[string]string{
 	"✓ is kept for the last column; pick another icon":          "✓ er forbeholdt sidste kolonne; vælg et andet ikon",
 	"An icon is one character wide; %s is not":                  "Et ikon fylder ét tegn; %s gør ikke",
 	"The last column keeps ✓; its icon %s was left out":         "Sidste kolonne beholder ✓; ikonet %s blev udeladt",
-	"Path to a taskr export (.json)":                            "Sti til en taskr-eksport (.json)",
+	"Path to a tjek export (.json)":                             "Sti til en tjek-eksport (.json)",
 	"Auto-export off":                                           "Autoeksport slået fra",
 	"Not a folder: %s":                                          "Ikke en mappe: %s",
 	"Exporting to %s":                                           "Eksporterer til %s",
 	"Import failed: %v":                                         "Import mislykkedes: %v",
 	"Auto-export failed: %v":                                    "Autoeksport mislykkedes: %v",
-	"Folder to keep taskr-export.json in (blank turns it off)":  "Mappe til taskr-export.json (tom slår den fra)",
+	"Folder to keep tjek-export.json in (blank turns it off)":   "Mappe til tjek-export.json (tom slår den fra)",
 	"Nothing to import: every task in the file is already here": "Intet at importere: alle opgaver i filen er her allerede",
 	"Imported %d new, %d updated · u undoes it":                 "Importeret %d nye, %d opdaterede · u fortryder",
 	"tab completes the name · enter confirms · esc cancels":     "tab fuldfører navnet · enter bekræfter · esc annullerer",
@@ -861,7 +861,7 @@ var daTranslations = map[string]string{
 	"balanced": "balanceret",
 	"intense":  "intens",
 
-	// ── Why this rank (the explain overlay and `taskr why`) ──
+	// ── Why this rank (the explain overlay and `tjek why`) ──
 	"Why this rank":              "Hvorfor denne placering",
 	"Deadline":                   "Deadline",
 	"Momentum":                   "Momentum",
@@ -1260,7 +1260,7 @@ var deTranslations = map[string]string{
 
 	// Update / status / errors
 	"Update failed":                    "Update fehlgeschlagen",
-	"Updated! Restart taskr to apply.": "Aktualisiert! taskr neu starten.",
+	"Updated! Restart tjek to apply.":  "Aktualisiert! tjek neu starten.",
 	"Error saving settings: %v":        "Fehler beim Speichern der Einstellungen: %v",
 	"Updated; restart to apply":        "Aktualisiert; Neustart nötig",
 	"Check failed":                     "Prüfung fehlgeschlagen",
@@ -1274,7 +1274,7 @@ var deTranslations = map[string]string{
 	"Updating…":                        "Aktualisiere…",
 	"Nothing to undo":                  "Nichts rückgängig zu machen",
 	"Undid: %s":                        "Rückgängig: %s",
-	"No editor found. Set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)":                               "Kein Editor gefunden. EDITOR dauerhaft setzen, z. B.: setx EDITOR notepad (dann taskr neu starten)",
+	"No editor found. Set EDITOR permanently, e.g: setx EDITOR notepad (then restart tjek)":                                "Kein Editor gefunden. EDITOR dauerhaft setzen, z. B.: setx EDITOR notepad (dann tjek neu starten)",
 	"No editor found. Set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish": "Kein Editor gefunden. $EDITOR dauerhaft setzen, z. B.: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish",
 	"Editor failed; falling back to notepad":                "Editor fehlgeschlagen; nutze notepad",
 	"Invalid date - use dd-mm-yy, %q, %q, %q, %q, or '+3d'": "Ungültiges Datum - nutze dd-mm-yy, %q, %q, %q, %q oder '+3d'",
@@ -1345,7 +1345,7 @@ var deTranslations = map[string]string{
 	"Last sync failed: ":              "Letzter Sync fehlgeschlagen: ",
 	"Last sync: sent %d, received %d": "Letzter Sync: %d gesendet, %d empfangen",
 	"Sync failing: devices may be diverging (see Settings)":                       "Sync schlägt fehl: Geräte laufen evtl. auseinander (siehe Einstellungen)",
-	"Sync: %d conflict(s) resolved; taskr sync --recover lists them":              "Sync: %d Konflikt(e) gelöst; taskr sync --recover zeigt sie",
+	"Sync: %d conflict(s) resolved; tjek sync --recover lists them":               "Sync: %d Konflikt(e) gelöst; tjek sync --recover zeigt sie",
 	"Sync server URL, e.g. http://100.x.y.z:8765":                                 "Sync-Server-URL, z. B. http://100.x.y.z:8765",
 	"Sync token (clear the field to remove it)":                                   "Sync-Token (Feld leeren zum Entfernen)",
 	"Server token clients must present (ctrl+g generates one · blank removes it)": "Token, das Clients vorzeigen müssen (ctrl+g erzeugt eines · leer entfernt es)",
@@ -1382,13 +1382,13 @@ var deTranslations = map[string]string{
 	"✓ is kept for the last column; pick another icon":          "✓ ist der letzten Spalte vorbehalten; wähle ein anderes Symbol",
 	"An icon is one character wide; %s is not":                  "Ein Symbol ist ein Zeichen breit; %s nicht",
 	"The last column keeps ✓; its icon %s was left out":         "Die letzte Spalte behält ✓; das Symbol %s wurde weggelassen",
-	"Path to a taskr export (.json)":                            "Pfad zu einem taskr-Export (.json)",
+	"Path to a tjek export (.json)":                             "Pfad zu einem tjek-Export (.json)",
 	"Auto-export off":                                           "Auto-Export aus",
 	"Not a folder: %s":                                          "Kein Ordner: %s",
 	"Exporting to %s":                                           "Exportiere nach %s",
 	"Import failed: %v":                                         "Import fehlgeschlagen: %v",
 	"Auto-export failed: %v":                                    "Auto-Export fehlgeschlagen: %v",
-	"Folder to keep taskr-export.json in (blank turns it off)":  "Ordner für taskr-export.json (leer schaltet ihn ab)",
+	"Folder to keep tjek-export.json in (blank turns it off)":   "Ordner für tjek-export.json (leer schaltet ihn ab)",
 	"Nothing to import: every task in the file is already here": "Nichts zu importieren: alle Aufgaben der Datei sind schon da",
 	"Imported %d new, %d updated · u undoes it":                 "%d neu, %d aktualisiert importiert · u macht es rückgängig",
 	"tab completes the name · enter confirms · esc cancels":     "Tab vervollständigt · Enter bestätigt · Esc bricht ab",
@@ -1514,7 +1514,7 @@ var deTranslations = map[string]string{
 	"balanced": "ausgewogen",
 	"intense":  "intensiv",
 
-	// ── Why this rank (the explain overlay and `taskr why`) ──
+	// ── Why this rank (the explain overlay and `tjek why`) ──
 	"Why this rank":              "Warum dieser Rang",
 	"Deadline":                   "Frist",
 	"Momentum":                   "Momentum",

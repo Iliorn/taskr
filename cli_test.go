@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // captureStdout redirects os.Stdout for the duration of fn and returns what was
@@ -28,7 +28,7 @@ func captureStdout(t *testing.T, fn func()) string {
 	defer func() { os.Stdout = orig }()
 
 	// Drain while fn runs. Reading only afterwards deadlocks as soon as the
-	// output exceeds the pipe buffer — which `taskr completion fish` does, and
+	// output exceeds the pipe buffer — which `tjek completion fish` does, and
 	// which showed up as a ten-minute test timeout on Windows, where the buffer
 	// is far smaller than Linux's 64 KB.
 	var buf bytes.Buffer
@@ -138,7 +138,7 @@ func TestSplitFlagsAndPositionals(t *testing.T) {
 			wantPos:   []string{"Just", "a", "title"},
 		},
 		{
-			// `taskr comment <ref> -` uses bare dash for stdin; if the splitter
+			// `tjek comment <ref> -` uses bare dash for stdin; if the splitter
 			// classifies it as a flag, the stdin path never fires.
 			name:      "bare dash is positional, not a flag",
 			in:        []string{"abc123", "-"},
@@ -182,7 +182,7 @@ func sliceEq(a, b []string) bool {
 // TestFindTaskByRefFallsBackToTitleSubstring covers the new ergonomic path:
 // when no task ID matches the query, fall back to a case-insensitive title
 // substring search. Without this, every CLI mutation requires looking up
-// a UUID prefix from `taskr list` first — too much friction for daily use.
+// a UUID prefix from `tjek list` first — too much friction for daily use.
 func TestFindTaskByRefFallsBackToTitleSubstring(t *testing.T) {
 	a := todo.New("Buy milk")
 	a.ID = "1aaaaa00-aaaa"
@@ -239,7 +239,7 @@ func TestFindTaskByRefFallsBackToTitleSubstring(t *testing.T) {
 }
 
 // TestShowAcceptsTrailingJSONFlag locks in the fix for the bug where
-// `taskr show <ref> --json` failed because stdlib flag.Parse stops at the
+// `tjek show <ref> --json` failed because stdlib flag.Parse stops at the
 // first non-flag token, leaving --json as an unexpected second positional.
 // cliShow now routes through splitFlagsAndPositionals; this test guards that
 // path at the helper level so a future refactor can't silently revert it.
@@ -735,7 +735,7 @@ func TestIsCLICommand(t *testing.T) {
 func TestRankTopBySequenceLiftsBlockerAboveDependent(t *testing.T) {
 	// A low-priority, no-due-date blocker has a low base score; the urgent task
 	// that depends on it has a high base score. The critical-path rollup must
-	// lift the blocker above the work it holds up, so `taskr top` matches the
+	// lift the blocker above the work it holds up, so `tjek top` matches the
 	// TUI's Sequence ordering rather than the plain base-score sort.
 	blocker := todo.New("blocker")
 	blocker.Priority = todo.PriorityLow
@@ -983,7 +983,7 @@ func TestPrintTaskTableStatusGlyphs(t *testing.T) {
 	}
 }
 
-// With column icons, taskr list's ST column is the TUI's box: the task's
+// With column icons, tjek list's ST column is the TUI's box: the task's
 // column mark, overdue or not.
 func TestListStatusColumnShowsColumnIcons(t *testing.T) {
 	setTestHome(t, t.TempDir())
@@ -1171,7 +1171,7 @@ func TestFindTaskByRefKindReportsMatchPath(t *testing.T) {
 	}
 }
 
-// `taskr add` parses the same quick-add tokens as the TUI, so a line is
+// `tjek add` parses the same quick-add tokens as the TUI, so a line is
 // copy-pasteable between them. Backlog item 52089090.
 func TestCliAddParsesQuickAddTokens(t *testing.T) {
 	setTestHome(t, t.TempDir())
@@ -1364,7 +1364,7 @@ func TestCliAddLikeNotClobberedByTokenlessTitle(t *testing.T) {
 	}
 }
 
-// `taskr undelete <ref>` restores a soft-deleted task from the tombstones.
+// `tjek undelete <ref>` restores a soft-deleted task from the tombstones.
 // Backlog item e80b30ed (pivoted from a redo stack to undelete-by-ref).
 func TestCliUndeleteRestoresTask(t *testing.T) {
 	setTestHome(t, t.TempDir())
@@ -1452,7 +1452,7 @@ func TestCliUndoRestoreBeatsSlowClockTombstone(t *testing.T) {
 	}
 }
 
-// `taskr undelete --list` browses the deleted tasks.
+// `tjek undelete --list` browses the deleted tasks.
 func TestCliUndeleteListShowsDeleted(t *testing.T) {
 	setTestHome(t, t.TempDir())
 	if code := cliAdd([]string{"Undelete list target"}); code != 0 {

@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest something taskr should be able to do
+about: Suggest something tjek should be able to do
 labels: enhancement
 ---
 

@@ -12,12 +12,12 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
-// Settings → Export: a folder taskr keeps an up-to-date export in
-// (exportFileName, the document `taskr export --include-done` prints), and an
-// import from a file through the same merge as `taskr import`.
+// Settings → Export: a folder tjek keeps an up-to-date export in
+// (exportFileName, the document `tjek export --include-done` prints), and an
+// import from a file through the same merge as `tjek import`.
 //
 // The export follows the data, not the keys: it is scheduled after the TUI
 // saves a change or reloads one another process made, soon after the first
@@ -113,7 +113,7 @@ func (m model) openExportFolderEditor() (tea.Model, tea.Cmd) {
 	m.mode = modeEditExportFolder
 	m.textInput.SetValue(m.exportFolder)
 	m.textInput.CursorEnd()
-	m.textInput.Placeholder = tr("Folder to keep taskr-export.json in (blank turns it off)")
+	m.textInput.Placeholder = tr("Folder to keep tjek-export.json in (blank turns it off)")
 	m.textInput.Focus()
 	return m, textinput.Blink
 }
@@ -126,7 +126,7 @@ func (m model) openImportPrompt() (tea.Model, tea.Cmd) {
 	}
 	m.textInput.SetValue(start)
 	m.textInput.CursorEnd()
-	m.textInput.Placeholder = tr("Path to a taskr export (.json)")
+	m.textInput.Placeholder = tr("Path to a tjek export (.json)")
 	m.textInput.Focus()
 	return m, textinput.Blink
 }
@@ -267,7 +267,7 @@ func exportFolderDisplay(folder string) string {
 // ── Paths typed at a prompt ──────────────────────────────────────────────────
 
 // expandHome reads a leading ~ as the home directory. These are paths the user
-// types for their own files, not taskr's (which go through paths.For).
+// types for their own files, not tjek's (which go through paths.For).
 func expandHome(p string) string {
 	if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
 		if home, err := os.UserHomeDir(); err == nil {

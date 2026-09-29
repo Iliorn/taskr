@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // getStoragePath is the legacy JSON file, kept only as the first-run import
@@ -19,9 +19,9 @@ func getStoragePath() string {
 	return paths.For(paths.Data, "tasks.json")
 }
 
-// taskrDir is the directory holding tasks.db — what the filesystem watcher
+// tjekDir is the directory holding tasks.db — what the filesystem watcher
 // watches and what the doctor reports as the data directory.
-func taskrDir() string {
+func tjekDir() string {
 	dir, _ := paths.Dir(paths.Data)
 	return dir
 }
@@ -132,7 +132,7 @@ type appSettings struct {
 	Reminder    string `json:"reminder,omitempty"`
 	ReminderOff bool   `json:"reminder_off,omitempty"`
 
-	// ExportFolder is where the TUI keeps taskr-export.json current
+	// ExportFolder is where the TUI keeps tjek-export.json current
 	// (exportsettings.go); empty means no auto-export.
 	ExportFolder string `json:"export_folder,omitempty"`
 

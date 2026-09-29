@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 )
 
-// smallterm_test.go is the guard for the class of bug that made taskr crash
+// smallterm_test.go is the guard for the class of bug that made tjek crash
 // when the terminal got small: a width budget computed from the window size
 // (termWidth-6 and its friends) goes negative, and the next rune slice or
 // strings.Repeat panics. The fix is clamping in the shared helpers, so the

@@ -105,7 +105,7 @@ func TestCompletionScriptsMentionEveryCommand(t *testing.T) {
 		var script string
 		out := captureStdout(t, func() {
 			if rc := cliCompletion([]string{shell}); rc != 0 {
-				t.Errorf("taskr completion %s exited %d", shell, rc)
+				t.Errorf("tjek completion %s exited %d", shell, rc)
 			}
 		})
 		script = out
@@ -130,14 +130,14 @@ func TestCompletionScriptsMentionEveryCommand(t *testing.T) {
 // a backslash would otherwise be read as a request.
 func TestManPageStructure(t *testing.T) {
 	page := manPage()
-	for _, want := range []string{".TH TASKR 1", ".SH NAME", ".SH SYNOPSIS", ".SH DESCRIPTION",
+	for _, want := range []string{".TH TJEK 1", ".SH NAME", ".SH SYNOPSIS", ".SH DESCRIPTION",
 		".SH COMMANDS", ".SH FILES", ".SH ENVIRONMENT", ".SH EXIT STATUS"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("man page is missing %q", want)
 		}
 	}
 	for _, spec := range cliCommandSpecs {
-		if !strings.Contains(page, ".B taskr "+spec.name+"\n") {
+		if !strings.Contains(page, ".B tjek "+spec.name+"\n") {
 			t.Errorf("man page is missing the %q command", spec.name)
 		}
 	}
@@ -147,6 +147,6 @@ func TestManPageStructure(t *testing.T) {
 		}
 	}
 	if rc := cliMan([]string{"extra"}); rc == 0 {
-		t.Error("taskr man takes no arguments")
+		t.Error("tjek man takes no arguments")
 	}
 }

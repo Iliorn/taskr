@@ -1,4 +1,4 @@
-# Installing taskr
+# Installing tjek
 
 The [README](../README.md#install) has the one-line install for each
 platform. This page has the details.
@@ -6,45 +6,45 @@ platform. This page has the details.
 ## macOS (Homebrew)
 
 ```sh
-brew install iliorn/tap/taskr
+brew install iliorn/tap/tjek
 ```
 
-Homebrew builds the tagged source and installs the `taskr` command. Update
-with `brew update && brew upgrade taskr`; taskr recognises a Homebrew install
+Homebrew builds the tagged source and installs the `tjek` command. Update
+with `brew update && brew upgrade tjek`; tjek recognises a Homebrew install
 and points you at that command rather than replacing Homebrew's files.
 
 ## Windows (Scoop)
 
 ```sh
-scoop install https://github.com/Iliorn/taskr/releases/latest/download/taskr.json
+scoop install https://github.com/Iliorn/tjek/releases/latest/download/tjek.json
 ```
 
 That address always points at the newest release. Upgrade with
-`scoop update taskr`.
+`scoop update tjek`.
 
 Notes open in `EDITOR` if it is set (`setx EDITOR hx`), otherwise Notepad.
 
 ## A downloaded binary (Linux / Windows)
 
-From the [Releases](https://github.com/iliorn/taskr/releases) page:
+From the [Releases](https://github.com/iliorn/tjek/releases) page:
 
 | File | Platform |
 |------|----------|
-| `taskr` | Linux x64 |
-| `taskr-linux-arm64` | Linux arm64 (Raspberry Pi, ARM servers) |
-| `taskr.exe` | Windows x64 |
+| `tjek` | Linux x64 |
+| `tjek-linux-arm64` | Linux arm64 (Raspberry Pi, ARM servers) |
+| `tjek.exe` | Windows x64 |
 | `SHA256SUMS` | checksums for the three binaries |
-| `taskr.json` | Scoop manifest (Windows) |
+| `tjek.json` | Scoop manifest (Windows) |
 
 Put it somewhere on your `PATH` (for example `~/.local/bin`). Later updates
-are one step: Settings → "Update to latest release", or `taskr update`. The
+are one step: Settings → "Update to latest release", or `tjek update`. The
 download is checked against the release's `SHA256SUMS`, and nothing is
 installed if it doesn't match.
 
 ## With Go
 
 ```sh
-go install github.com/Iliorn/taskr@latest
+go install github.com/Iliorn/tjek@latest
 ```
 
 Builds from source on any platform Go supports, including ones the release
@@ -55,10 +55,10 @@ strongest integrity guarantee.
 ## From source
 
 ```sh
-git clone https://github.com/iliorn/taskr
-cd taskr
-go build -ldflags "-X main.appVersion=$(git describe --tags --abbrev=0)" -o taskr .
-mv taskr ~/.local/bin/   # or anywhere on your PATH
+git clone https://github.com/iliorn/tjek
+cd tjek
+go build -ldflags "-X main.appVersion=$(git describe --tags --abbrev=0)" -o tjek .
+mv tjek ~/.local/bin/   # or anywhere on your PATH
 ```
 
 ## Checking a download
@@ -66,7 +66,7 @@ mv taskr ~/.local/bin/   # or anywhere on your PATH
 That a file matches what the release published:
 
 ```sh
-curl -LO https://github.com/Iliorn/taskr/releases/latest/download/SHA256SUMS
+curl -LO https://github.com/Iliorn/tjek/releases/latest/download/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 
@@ -74,7 +74,7 @@ That it was built by this repository's release workflow. Every release
 binary is signed through Sigstore and recorded in a public log:
 
 ```sh
-gh attestation verify taskr --repo Iliorn/taskr
+gh attestation verify tjek --repo Iliorn/tjek
 ```
 
 Release builds are reproducible: check out the tag, run the same `go build`

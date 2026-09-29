@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Iliorn/taskr/tasksync"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/tasksync"
+	"github.com/Iliorn/tjek/todo"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/fsnotify/fsnotify"
 )
@@ -173,7 +173,7 @@ func startWatcher(state *watcherState, dir string) (cleanup func(), err error) {
 				// fsnotify error — log and keep going. A spurious error here
 				// shouldn't kill the watcher; rare enough that a stderr line
 				// (even under a live TUI) beats swallowing it.
-				log.Printf("taskr watcher: %v", err)
+				log.Printf("tjek watcher: %v", err)
 			}
 		}
 	}()
@@ -202,7 +202,7 @@ func waitForDBChange(ch chan dbChangedMsg) tea.Cmd {
 }
 
 // startChangeWatcher watches the storage directory and nudges the hub whenever
-// tasks.db changes, so a direct CLI write on the server host (taskr add/done…)
+// tasks.db changes, so a direct CLI write on the server host (tjek add/done…)
 // reaches connected clients in real time — not only client-initiated merges. It
 // reuses the same fsnotify plumbing the TUI uses for live reload. Returns a stop
 // func; if the watcher can't start the server still works, it just loses

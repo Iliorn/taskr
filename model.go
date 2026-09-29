@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/tasksync"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/tasksync"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -412,7 +412,7 @@ type model struct {
 	reminderAt int
 	reminderOn bool
 	remindedOn string
-	// exportFolder is where taskr-export.json is kept current ("" = off);
+	// exportFolder is where tjek-export.json is kept current ("" = off);
 	// exportDirty/exportScheduled/lastExport pace the writes (exportSoon).
 	exportFolder    string
 	exportDirty     bool
@@ -460,7 +460,7 @@ type model struct {
 	lastSyncFailed bool
 	// inprocServer is the in-process sync server when "Server" is toggled on
 	// (nil otherwise). serverExternal is set by probeServer when a headless
-	// `taskr serve` is answering at the configured address.
+	// `tjek serve` is answering at the configured address.
 	inprocServer   *http.Server
 	inprocStop     func() // stops the in-process server's change watcher
 	serverExternal bool
@@ -609,7 +609,7 @@ func initialModel(repo Repository) model {
 		m.liveSync = startLiveSync(m.syncCfg)
 	}
 	// If this machine is set to serve, start the in-process endpoint now. A bind
-	// failure (e.g. an external taskr serve already on that address) is non-fatal
+	// failure (e.g. an external tjek serve already on that address) is non-fatal
 	// — the TUI keeps working and the Settings row will show it's served
 	// externally instead.
 	if m.syncCfg.ServerOn && m.syncCfg.ServerToken != "" {
@@ -700,10 +700,10 @@ func scheduleSave() tea.Cmd {
 	})
 }
 
-// watcherDisabled reports whether TASKR_NO_WATCH asks for live reload to stay
+// watcherDisabled reports whether TJEK_NO_WATCH asks for live reload to stay
 // off. Shared with the doctor so what it prints is what startModelWatcher does.
 func watcherDisabled() bool {
-	v := strings.TrimSpace(os.Getenv("TASKR_NO_WATCH"))
+	v := strings.TrimSpace(os.Getenv("TJEK_NO_WATCH"))
 	return v != "" && v != "0" && v != "false"
 }
 
@@ -718,11 +718,11 @@ func watcherDisabled() bool {
 // end of the suite — which is exactly how many the macOS runner ran out of
 // (a process there may hold 256 open files).
 func startModelWatcher(m *model) {
-	// TASKR_NO_WATCH turns live reload off. The watcher is the one thing taskr
+	// TJEK_NO_WATCH turns live reload off. The watcher is the one thing tjek
 	// does continuously against the operating system — an inotify/kqueue watch
 	// on the data directory, woken by every WAL write the app itself makes — so when
 	// input feels laggy it is the first variable worth removing. Without it,
-	// the TUI simply won't notice a `taskr add` from another shell until it
+	// the TUI simply won't notice a `tjek add` from another shell until it
 	// next reloads.
 	if watcherDisabled() {
 		return

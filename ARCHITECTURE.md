@@ -1,6 +1,6 @@
 # Architecture
 
-How taskr is put together, and the conventions that are load-bearing rather
+How tjek is put together, and the conventions that are load-bearing rather
 than stylistic. Read the section for the area you are touching before changing
 it. Each rule carries a short reason; the longer story of how it came about is
 in the commit that introduced it.
@@ -11,7 +11,7 @@ audiences cannot be told different things.
 
 ## What this is
 
-`taskr` is a keyboard-driven terminal task manager built with Go and Bubble Tea
+`tjek` is a keyboard-driven terminal task manager built with Go and Bubble Tea
 (Charm). It is a standalone app with its own SQLite storage, **not** a
 Taskwarrior frontend. Beyond tasks it has a calendar/time-tracking view,
 projects (Gantt), tags, a kanban board, a stats dashboard, a CLI, cross-device
@@ -20,13 +20,13 @@ sync, and in-app self-update.
 ## Commands
 
 ```bash
-go build -o taskr .                                        # build (version = "dev")
-go build -ldflags "-X main.appVersion=v1.8.0" -o taskr .   # build with a real version
-go run .                                                   # build & run
-go test ./...                                              # all packages
-go test -run TestName ./...                                # one test
+go build -o tjek .                                       # build (version = "dev")
+go build -ldflags "-X main.appVersion=v1.8.0" -o tjek .  # build with a real version
+go run .                                                 # build & run
+go test ./...                                            # all packages
+go test -run TestName ./...                              # one test
 go vet ./...
-golangci-lint run ./...                                    # config in .golangci.yml
+golangci-lint run ./...                                  # config in .golangci.yml
 ```
 
 CI (`.github/workflows/ci.yml`) runs vet, test and build on ubuntu, windows and
@@ -61,18 +61,22 @@ git push origin v1.10.0       # ← triggers the build + release
   stat/layout tweaks, minor bumps for new interactive features.
 - **Asset names are load-bearing; never rename one.** An installed binary
   looks for the name it was built with, so a name can be added but not
-  changed: `taskr` (Linux x64), `taskr-linux-arm64`, `taskr.exe` (Windows
+  changed: `tjek` (Linux x64), `tjek-linux-arm64`, `tjek.exe` (Windows
   x64), plus `SHA256SUMS`. `selfUpdateAsset(goos, goarch)` is the one map
   from platform to asset; a new build target needs a case there.
 - **macOS ships from source** through the `Iliorn/homebrew-tap` repository
-  (`brew install iliorn/tap/taskr`). The release workflow's `homebrew` job
+  (`brew install iliorn/tap/tjek`). The release workflow's `homebrew` job
   bumps the formula's tarball and checksum, pushing with a deploy key scoped
   to the tap (secret `HOMEBREW_TAP_DEPLOY_KEY`), so a release needs no step
-  after the tag. There is no AUR package: Arch uses the Linux binary. Do not attach macOS binaries or `.app`
-  bundles to releases; Homebrew installs are pointed at Homebrew rather than
-  having their managed files replaced.
+  after the tag. There is no AUR package: Arch uses the Linux binary. Do not
+  attach macOS binaries or `.app` bundles to releases; Homebrew installs are
+  pointed at Homebrew rather than having their managed files replaced.
+- **The former names ship too.** tjek was called taskr, and an install from
+  then fetches `taskr`, `taskr-linux-arm64`, `taskr.exe` or `taskr.json`, so
+  the release attaches the same bytes under those names and lists them in
+  `SHA256SUMS`.
 - **Self-update** (Settings → "Update to latest release") reads
-  `/repos/iliorn/taskr/releases/latest` over stdlib `net/http`
+  `/repos/iliorn/tjek/releases/latest` over stdlib `net/http`
   (`fetchLatestRelease`, `downloadReleaseAsset`), so it needs no other tool
   installed. `downloadVerifiedAsset` checks the asset against `SHA256SUMS`
   and fails closed. The endpoint needs no auth; the unauthenticated rate limit
@@ -151,7 +155,7 @@ everything.
   review filters (`staleFor`, `unblockedFor`, word and regexp matching) and the
   CLI-only sorts in `sortTodosByCLIMode` (age/idle/pri; the TUI's sort modes
   must each line up with a visible column). `now` is injectable for tests.
-- **`completion.go`**: `taskr completion bash|zsh|fish` and `taskr man`,
+- **`completion.go`**: `tjek completion bash|zsh|fish` and `tjek man`,
   generated from `cliCommandSpecs`. `TestCompletionMatchesFlagSets` compares
   the table with each command's real `flag.FlagSet`;
   `TestCompletionCoversEveryCommand` ties it to the dispatch.
@@ -210,13 +214,13 @@ everything.
   the kanban tab; see *The board*.
 - **`input.go`** and **`console.go`** (each with `_windows`/`_other`
   variants): see *Terminals*.
-- **`trace.go`**: opt-in latency tracing (`TASKR_TRACE=1` →
+- **`trace.go`**: opt-in latency tracing (`TJEK_TRACE=1` →
   `trace.log` in the state dir): per frame, the wall clock, gap since the previous
   frame, `Update` and `View` durations, GC count and message. It writes on its
   own goroutine and drops rather than blocks. Measured: a keystroke costs
   ~0.1ms in `Update` and ~1ms in `View` at 2000 tasks, and an idle app produces
   no messages, so a late keystroke is not the model's compute.
-  `TASKR_NO_WATCH=1` removes the file watcher, the app's only continuous OS
+  `TJEK_NO_WATCH=1` removes the file watcher, the app's only continuous OS
   interaction; bisect with it first.
 - **`crash.go`**: the panic path. Bubble Tea already recovers panics (on its
   loop and in commands) and restores the terminal, so the guard is deferred
@@ -231,7 +235,7 @@ everything.
   external reload (`exportSoon`), soon after the first change and then at
   most once per `exportInterval`, since the folder is usually synced and each
   write is an upload; written atomically off the loop, and on quit by
-  `flushPendingWrites`. The import runs `importTasks`, the core `taskr
+  `flushPendingWrites`. The import runs `importTasks`, the core `tjek
   import` shares, after saving pending edits, as one undo step naming every
   task in the file. Path prompts complete with `completePath`.
 - **`reminder.go` / `notify.go`**: the daily reminder. At the Settings time
@@ -239,7 +243,7 @@ everything.
   the overdue tasks and those due today. Due dates are calendar days, so it is
   one reminder a day rather than a per-task alarm. The TUI checks on a minute
   tick against the wall clock, so a machine waking from sleep catches up;
-  `taskr remind` runs the same check for cron or a timer. Both record the day
+  `tjek remind` runs the same check for cron or a timer. Both record the day
   in a state-dir sidecar (`remindedPath`), and a launch after the time counts
   as the reminder (`settleReminderAtLaunch`). `notify.go` uses what each
   platform has: notify-send or osascript, with the texts as arguments, never
@@ -401,11 +405,11 @@ Rules:
 - **Displayed scores are percentages.** The raw score is unbounded, so every
   surface that shows one renders `FormatPercent`, a share of the
   highest-scoring pending task. Points appear only where the arithmetic is
-  explained (the `w` overlay, `taskr why`, `stats --seq`), and those state
+  explained (the `w` overlay, `tjek why`, `stats --seq`), and those state
   what 100% currently costs. A hypothetical field (the Settings knob preview)
   passes its own maximum to `PercentOfField`.
 - **The reading side is in the app.** `view_explain.go` owns the sentences
-  (`trSeqReason`), the row layout, the `w` overlay and the `taskr why` output,
+  (`trSeqReason`), the row layout, the `w` overlay and the `tjek why` output,
   so the two surfaces cannot describe one score differently.
 
 ## Storage
@@ -440,14 +444,17 @@ Rules:
 Resolve every path through `paths.Dir`/`paths.For`/`paths.Ensure`, never
 `os.UserHomeDir` plus a literal. There are four kinds (config, data, state,
 cache), mapped to XDG, `%APPDATA%`/`%LOCALAPPDATA%` or `~/Library`. Two
-overrides come first: `TASKR_HOME` collapses all four into one directory, and
-an existing `~/.taskr` pins an old install there for good (no migration, by
-design). Only the data directory is created eagerly, so a new writer calls
+overrides come first: `TJEK_HOME` collapses all four into one directory, and
+an existing `~/.tjek` pins an old install there for good (no migration to the
+split layout, by design). An install made as taskr is carried over once at
+startup (`adoptFormerName`, `paths.AdoptFormerDirs`): each taskr directory is
+renamed to its tjek name when that name is free, and a binary still called
+taskr renames itself. Only the data directory is created eagerly, so a new writer calls
 `paths.Ensure(kind)`.
 
 Data lives at `<data>/tasks.db` (WAL, so `-wal`/`-shm` sidecars). **Tests must
 not touch the real home:** `TestMain` (`main_test.go`) and `setTestHome`
-redirect `$HOME` and neutralize `XDG_*`/`TASKR_HOME`, and
+redirect `$HOME` and neutralize `XDG_*`/`TJEK_HOME`, and
 `TestStorageStaysInsideTheTestHome` walks every path the app can write.
 
 ## Sync (`tasksync/` and the app's glue)
@@ -463,7 +470,7 @@ and Bubble Tea glue stay in the app.
 
 - **Two versions, two questions.** `ProtocolVersion` is the wire *format*; a
   mismatch is refused with a 409 before merging. `VersionHeader`
-  (`Taskr-Version`) is the *build*, stamped by `stampVersion` on every
+  (`Tjek-Version`) is the *build*, stamped by `stampVersion` on every
   response, including a bare 500 from `http.Error`, which is what a stale
   server answers after a newer build migrated its store. `PostSync` puts it in
   the error text (`serverError`) and on `Response.ServerVersion`, where
@@ -475,7 +482,7 @@ and Bubble Tea glue stay in the app.
   `Accept-Encoding: gzip`; a 400/415 to a compressed request drops the
   capability and resends plain once. The 64 MB request cap applies after
   decompression (`cappedReader`). The SSE stream is never compressed.
-- **`servetls.go`**: https for headless `taskr serve`
+- **`servetls.go`**: https for headless `tjek serve`
   (`--tls-cert`/`--tls-key`). The pair is loaded before binding, then re-read
   by `certReloader.getCertificate` whenever a file's mtime moves, since
   `tailscale cert` and Let's Encrypt renew in place. A failed reload keeps the
@@ -494,7 +501,7 @@ and Bubble Tea glue stay in the app.
   by ID, so a device's first sync hands every local task to every other device,
   with no undo. `firstSyncNeedsChoice` (never synced, has live tasks, no answer
   recorded) is the gate. Unattended syncs (TUI launch and timer, CLI
-  after-command) decline with `firstSyncNotice`; manual `taskr sync` goes
+  after-command) decline with `firstSyncNotice`; manual `tjek sync` goes
   through `resolveFirstSync` and needs `--adopt-local` or `--adopt-remote`.
   The answer is stored in sync.json (`Adopted`), so losing the state directory
   does not ask again. `--adopt-remote` exports a backup, clears local rows
@@ -515,7 +522,7 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
 - **Column icons.** `[x] Name` in the editor (`parseStagesInput`) gives a
   working column a one-cell mark (`validStageIcon`), kept in
   `boardConfig.icons` by lower-cased name and synced as `Board.Icons`. Once
-  any column has one, `statusBox` (the TUI rows and `taskr list` alike)
+  any column has one, `statusBox` (the TUI rows and `tjek list` alike)
   shows the task's column mark instead of ready/started/overdue; done is
   always ✓, and the Done column's heading always carries it (`columnIcon`).
   That ✓ is fixed: the editor neither shows nor takes it, and no working
@@ -556,11 +563,11 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   Bubble Tea's console-event reader polls with a 16ms sleep, so the first key
   after a pause lags; `tea.WithInputTTY()` opens `CONIN$` and reads the VT
   stream instead. That path has no resize events, so the Windows build polls
-  the console size (`startResizePoller`). `TASKR_WIN_CONSOLE_INPUT=1` goes back.
+  the console size (`startResizePoller`). `TJEK_WIN_CONSOLE_INPUT=1` goes back.
 - **Encoding (`console.go`).** A Windows console decodes output with its code
   page (CP850 on a Danish install), which garbles UTF-8. `useUTF8Console` sets
   the output and input code pages to 65001 for the run and restores them on
-  every exit path, since `os.Exit` skips defers. `taskr doctor` reports the
+  every exit path, since `os.Exit` skips defers. `tjek doctor` reports the
   page. mintty (Git Bash, MSYS2) is not a console: its charset comes from the
   locale, so `prepareConsole` sends OSC 701 (`minttyUTF8Sequence`, only when
   `MSYSTEM`/`TERM_PROGRAM` say mintty and stdout is a tty). That one is not

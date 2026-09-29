@@ -63,7 +63,7 @@ func startResizePoller(p *tea.Program) (stop func()) {
 
 func inputPathName() string {
 	if consoleInputForced() {
-		return "console events (TASKR_WIN_CONSOLE_INPUT, polls every 16ms)"
+		return "console events (TJEK_WIN_CONSOLE_INPUT, polls every 16ms)"
 	}
 	return "CONIN$ escape sequences (blocking read)"
 }

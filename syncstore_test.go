@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // openFileDBPair opens two independent handles (separate connection pools,
 // like two processes) onto one on-disk database with the schema applied —
-// the shape of the hub host, where `taskr serve` and CLI invocations write
+// the shape of the hub host, where `tjek serve` and CLI invocations write
 // the same file.
 func openFileDBPair(t *testing.T) (h1, h2 *sql.DB) {
 	t.Helper()

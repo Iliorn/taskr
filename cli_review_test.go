@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // cli_review_test.go covers the flags a backlog review needs — the ones added
 // after clearing a 47-task backlog was only possible by exporting to JSON and
-// doing the arithmetic outside taskr: age/idle ordering, --stale, whole-word
+// doing the arithmetic outside tjek: age/idle ordering, --stale, whole-word
 // and regexp matching, "what did closing that unblock", multi-ref edit and
 // reopen.
 
@@ -49,7 +49,7 @@ func TestParseAgeSpecUnits(t *testing.T) {
 		{"30d", 30 * 24 * time.Hour},
 		{"2w", 14 * 24 * time.Hour},
 		{"12h", 12 * time.Hour},
-		{"90m", 90 * time.Minute}, // 'm' stays minutes, as in `taskr log 45m`
+		{"90m", 90 * time.Minute}, // 'm' stays minutes, as in `tjek log 45m`
 		{"30", 30 * 24 * time.Hour},
 		{" 1W ", 7 * 24 * time.Hour},
 	}
@@ -360,7 +360,7 @@ func TestCliReopenRestoresPendingAndSkipsOpenTasks(t *testing.T) {
 }
 
 // The whole point of --wide: the two review columns appear only when asked for,
-// so a daily `taskr list` keeps its width for the title.
+// so a daily `tjek list` keeps its width for the title.
 func TestListWideAddsAgeAndIdleColumns(t *testing.T) {
 	const project = "wide-column-check"
 	captureStdout(t, func() {

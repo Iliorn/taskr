@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // Store is the doorway the sync engine needs into task storage — the only
@@ -58,7 +58,7 @@ type Response struct {
 	// nothing else in the protocol would ever tell the user. Zero when the
 	// server predates the field; clients skip the check then.
 	ServerTime time.Time `json:"server_time,omitempty"`
-	// ServerVersion is the taskr build that answered, filled in by PostSync
+	// ServerVersion is the tjek build that answered, filled in by PostSync
 	// from VersionHeader. Not on the wire (`json:"-"`) on purpose: it has to
 	// come from the header to be readable on the error responses that carry
 	// no body at all, and one source beats two that can disagree.
@@ -72,7 +72,7 @@ type Response struct {
 type Server struct {
 	Token string
 	Store Store
-	// Version is the taskr build this server is running, stamped onto every
+	// Version is the tjek build this server is running, stamped onto every
 	// response via VersionHeader. Empty means unknown (a test server, or a
 	// build without the ldflags stamp) and the header is then omitted rather
 	// than sent blank — a client must be able to tell "the server did not say"
@@ -185,7 +185,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 		zw := gzip.NewWriter(w)
 		defer func() {
 			if err := zw.Close(); err != nil {
-				log.Printf("taskr serve: finish gzip response: %v", err)
+				log.Printf("tjek serve: finish gzip response: %v", err)
 			}
 		}()
 		out = zw
@@ -196,7 +196,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 		ServerTime: time.Now().UTC(),
 		Protocol:   ProtocolVersion,
 	}); err != nil {
-		log.Printf("taskr serve: encode response: %v", err)
+		log.Printf("tjek serve: encode response: %v", err)
 	}
 }
 
@@ -237,7 +237,7 @@ func (s *Server) syncBoard(incoming *Board) *Board {
 	defer s.boardMu.Unlock()
 	stored, err := s.Board.LoadBoard()
 	if err != nil {
-		log.Printf("taskr serve: read board: %v", err)
+		log.Printf("tjek serve: read board: %v", err)
 		return nil
 	}
 	winner := stored
@@ -246,7 +246,7 @@ func (s *Server) syncBoard(incoming *Board) *Board {
 	}
 	if !SameBoard(winner, stored) || winner.ModifiedAt.After(stored.ModifiedAt) {
 		if err := s.Board.SaveBoard(winner); err != nil {
-			log.Printf("taskr serve: write board: %v", err)
+			log.Printf("tjek serve: write board: %v", err)
 		}
 	}
 	if len(winner.Stages) == 0 {

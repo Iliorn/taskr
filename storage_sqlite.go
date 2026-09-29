@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 
 	_ "modernc.org/sqlite"
 )
@@ -106,7 +106,7 @@ func openStoreAt(path string) (*sql.DB, error) {
 	// Fail-soft: a GC hiccup must never keep the store from opening — the
 	// tombstones just live a little longer.
 	if err := pruneOldTombstones(handle, time.Now()); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr: tombstone cleanup failed (harmless, will retry next open): %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek: tombstone cleanup failed (harmless, will retry next open): %v\n", err)
 	}
 	return handle, nil
 }
@@ -232,7 +232,7 @@ func parseTime(s string) time.Time {
 		// Loud like the enum clamps below: a non-empty value that doesn't parse
 		// means corruption (manual SQL edit, bad migration), and silently
 		// treating it as unset would make e.g. a due date quietly vanish.
-		validationWarn("taskr: invalid timestamp %q, treated as unset\n", s)
+		validationWarn("tjek: invalid timestamp %q, treated as unset\n", s)
 		return time.Time{}
 	}
 	// Stored timestamps are UTC (fmtTime); rehydrate in local time so
@@ -723,7 +723,7 @@ func safeStatus(raw int, taskID string) todo.Status {
 	}
 	// Pending is the safer default than Done: a corrupted task should land
 	// back in the active list rather than be silently archived.
-	validationWarn("taskr: invalid status %d on task %s, clamped to Pending\n", raw, taskID)
+	validationWarn("tjek: invalid status %d on task %s, clamped to Pending\n", raw, taskID)
 	return todo.Pending
 }
 
@@ -731,7 +731,7 @@ func safePriority(raw int, taskID string) todo.Priority {
 	if raw >= int(todo.PriorityLow) && raw <= int(todo.PriorityHigh) {
 		return todo.Priority(raw)
 	}
-	validationWarn("taskr: invalid priority %d on task %s, clamped to Medium\n", raw, taskID)
+	validationWarn("tjek: invalid priority %d on task %s, clamped to Medium\n", raw, taskID)
 	return todo.PriorityMedium
 }
 
@@ -741,7 +741,7 @@ func safeSize(raw int, taskID string) todo.Size {
 	if raw >= 0 && raw <= int(todo.SizeLarge) {
 		return todo.Size(raw)
 	}
-	validationWarn("taskr: invalid size %d on task %s, clamped to Medium\n", raw, taskID)
+	validationWarn("tjek: invalid size %d on task %s, clamped to Medium\n", raw, taskID)
 	return todo.SizeMedium
 }
 

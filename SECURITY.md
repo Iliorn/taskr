@@ -5,25 +5,25 @@
 Please report security issues **privately**, not as a public issue.
 
 Use GitHub's private vulnerability reporting:
-[**Report a vulnerability**](https://github.com/Iliorn/taskr/security/advisories/new).
+[**Report a vulnerability**](https://github.com/Iliorn/tjek/security/advisories/new).
 It opens a private thread visible only to the maintainers.
 
-Please include what `taskr doctor` prints (it never includes your sync token),
+Please include what `tjek doctor` prints (it never includes your sync token),
 what you did, what happened, and what you expected. A proof of concept helps
 but is not required to file.
 
-taskr is a single-maintainer hobby project, so there is no paid bounty and no
+tjek is a single-maintainer hobby project, so there is no paid bounty and no
 guaranteed response time. Expect a first reply within about a week. If a
 report is valid you will be credited in the release notes unless you would
 rather not be.
 
 ## What is in scope
 
-taskr is a local terminal application, so most of it has no attacker to defend
-against: whoever can run `taskr` can already read its files. The parts where
+tjek is a local terminal application, so most of it has no attacker to defend
+against: whoever can run `tjek` can already read its files. The parts where
 that is not true:
 
-- **The sync server** (`taskr serve`, or the in-process server enabled in
+- **The sync server** (`tjek serve`, or the in-process server enabled in
   Settings). It listens on a network socket and is the one component that
   accepts input from another machine. Authentication bypass, reading or
   writing another user's tasks, crashes triggered by a request, or anything
@@ -33,24 +33,24 @@ that is not true:
 - **The self-update path** on Linux and Windows, which downloads and replaces
   the running binary.
 - **Token and file handling**: anything that writes a sync token somewhere
-  it should not be, or that widens the permissions of a file taskr keeps.
-- **Parsing of files taskr reads**: the SQLite database, `settings.json`,
+  it should not be, or that widens the permissions of a file tjek keeps.
+- **Parsing of files tjek reads**: the SQLite database, `settings.json`,
   `sync.json`, an imported export file, and the legacy `tasks.json`.
 
 ## What is not in scope
 
-- **Plain HTTP between client and server.** `taskr serve` speaks plain http
+- **Plain HTTP between client and server.** `tjek serve` speaks plain http
   unless it is given a certificate (`--tls-cert`/`--tls-key`). Without one, the
-  bearer token travels in the clear unless you put it behind a tunnel, and taskr
-  warns you about that in Settings and in `taskr doctor`. Run the sync server
+  bearer token travels in the clear unless you put it behind a tunnel, and tjek
+  warns you about that in Settings and in `tjek doctor`. Run the sync server
   with a certificate, or over Tailscale, a VPN, or a reverse proxy that
   terminates TLS. A report that the token is readable on an unencrypted link you
   chose is documented behaviour, not a vulnerability.
 - **A single shared token with full access.** The sync server is single-owner
   by design: one token, no multi-tenancy, no per-device revocation. Anyone
   holding the token can read and write every task.
-- **Local access.** Another process running as your user can read taskr's
-  files directly; taskr does not try to prevent that.
+- **Local access.** Another process running as your user can read tjek's
+  files directly; tjek does not try to prevent that.
 - **Denial of service against your own server** by a client holding a valid
   token.
 
@@ -89,23 +89,23 @@ identity, so there is no key for anyone, me included, to steal or misuse,
 and the log entry cannot be withdrawn after the fact. Verify a download with:
 
 ```sh
-gh attestation verify taskr --repo Iliorn/taskr
+gh attestation verify tjek --repo Iliorn/tjek
 ```
 
 That checks the provenance, not just the bytes: it names the workflow, the
 commit and the run that built the file in front of you. The in-app updater
 does **not** perform this check (verifying an attestation needs the Sigstore
-verification stack, which taskr does not carry), so it remains a checksum-level
+verification stack, which tjek does not carry), so it remains a checksum-level
 guarantee, and this is the check to run by hand when that is not enough.
 
 If that trade is not one you want to make, do not use the in-app updater:
 
-- `go install github.com/Iliorn/taskr@latest` verifies against
+- `go install github.com/Iliorn/tjek@latest` verifies against
   `sum.golang.org`, an append-only transparency log. A recorded hash cannot be
   changed afterwards, including by the maintainer. This is the strongest
-  guarantee taskr offers.
+  guarantee tjek offers.
 - Homebrew and Scoop each add their own distribution checks,
-  and taskr refuses to overwrite a Homebrew-managed install.
+  and tjek refuses to overwrite a Homebrew-managed install.
 - Release builds are reproducible (`-trimpath`, `CGO_ENABLED=0`, the Go version
   pinned in `go.mod`), so you can rebuild a tag and compare hashes yourself.
 
@@ -117,7 +117,7 @@ those precautions is downstream of a secret you chose: a guessable token is the
 likeliest realistic compromise of a sync setup, and no amount of care further
 down compensates for it.
 
-`taskr serve --new-token` mints one from the system CSPRNG (32 bytes,
+`tjek serve --new-token` mints one from the system CSPRNG (32 bytes,
 URL-safe), stores it, and prints it. In Settings, `ctrl+g` on the server-token
 row does the same.
 
@@ -125,19 +125,19 @@ Whether a weak token is **refused** or merely **flagged** depends on whose
 choice it is:
 
 - **Settings → Server token is refused.** This is the token for the endpoint on
-  this machine, which taskr gets to choose, and `ctrl+g` is one keystroke away, so a
+  this machine, which tjek gets to choose, and `ctrl+g` is one keystroke away, so a
   weak value is rejected with the text left in the field to fix.
 - **Settings → Sync token is accepted as typed.** That one has to equal
   whatever the *server* already uses. Refusing a short one would not make
   anything safer; it would make a server that uses one unreachable.
-- **`taskr serve --token` / `TASKR_SYNC_TOKEN` warn but run.** A deployment's
+- **`tjek serve --token` / `TJEK_SYNC_TOKEN` warn but run.** A deployment's
   token may come from a secret manager, a reverse proxy, or a unit file written
   a year ago. Breaking a running service to make a point about entropy is the
   wrong trade, and the warning is on stderr where an operator will see it.
-- **`taskr doctor` reports it** for both tokens, naming the property and never
+- **`tjek doctor` reports it** for both tokens, naming the property and never
   the token.
 
-The rule behind all four: taskr refuses only where it can offer the alternative
+The rule behind all four: tjek refuses only where it can offer the alternative
 in the same breath.
 
 There is no rate limiting on failed authentication. With a generated token that
@@ -146,9 +146,9 @@ warning exists.
 
 ## Handling of secrets
 
-The only secret taskr stores is the sync bearer token, in `sync.json` in the
+The only secret tjek stores is the sync bearer token, in `sync.json` in the
 config directory, with mode `0600`. It is never written to `sync.log`, never included in
-`taskr doctor` output, and never logged. If you believe you have found a path
+`tjek doctor` output, and never logged. If you believe you have found a path
 where it is exposed, that is in scope and worth reporting.
 
 ## Supported versions

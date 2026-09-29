@@ -1,7 +1,7 @@
-# Using taskr
+# Using tjek
 
 The full tour of the terminal app. The [README](../README.md) has the short
-version; the [CLI reference](cli.md) covers the `taskr <command>` side.
+version; the [CLI reference](cli.md) covers the `tjek <command>` side.
 
 ## The tabs
 
@@ -66,7 +66,7 @@ tags".
 
 The **Sequence** sort ranks pending tasks by a weighted score: deadline,
 priority, momentum (what you have been working on), size and age. The Score
-column is a percentage of the top task, so 100% is what taskr thinks you
+column is a percentage of the top task, so 100% is what tjek thinks you
 should do now. Tune the weights in Settings (Relaxed / Balanced / Intense per
 dimension), and press `w` on any task to see the points behind its
 percentage, their causes, the margins to the rows either side, and when the
@@ -154,26 +154,26 @@ With more columns than fit, the board scrolls sideways and its title says
 which slice you are on (`Workflow ‹ 3–8/11 ›`); below three visible columns
 it shows the stages as one stacked list instead. A task's stage can also be
 changed on the detail pane's **Stage** row with `←/→`, or with
-`taskr edit <ref> --stage <name>`. Not using kanban? Settings → "Kanban
+`tjek edit <ref> --stage <name>`. Not using kanban? Settings → "Kanban
 board" hides the tab and the Stage row.
 
 ## The daily reminder
 
 Once a day, at the time set in Settings → "Reminder time" (09:00 unless you
-change it), taskr shows a desktop notification listing what is overdue and
+change it), tjek shows a desktop notification listing what is overdue and
 what is due today. Settings → "Daily reminder" turns it off and on again,
-keeping the time. Opening taskr after the reminder time counts as that day's
+keeping the time. Opening tjek after the reminder time counts as that day's
 reminder, since the list on screen already says the same thing.
 
 When the desktop can't show the pop-up (no notification service on a Linux
 session over ssh, for example), the app still shows the reminder in its
-status line, and `taskr remind --now` prints it with a line saying why the
+status line, and `tjek remind --now` prints it with a line saying why the
 pop-up was unavailable.
 
 The app sends it while it is running. To be reminded when it isn't, have
-your system run `taskr remind` every few minutes; it does nothing until the
+your system run `tjek remind` every few minutes; it does nothing until the
 time comes, and reminds only once a day however many times it runs.
-`taskr remind --now` sends one straight away, which is a quick way to check
+`tjek remind --now` sends one straight away, which is a quick way to check
 notifications work.
 
 **Linux**: notifications need `notify-send` (Debian/Ubuntu:
@@ -181,12 +181,12 @@ notifications work.
 running:
 
 ```ini
-# ~/.config/systemd/user/taskr-remind.service
+# ~/.config/systemd/user/tjek-remind.service
 [Service]
 Type=oneshot
-ExecStart=%h/.local/bin/taskr remind
+ExecStart=%h/.local/bin/tjek remind
 
-# ~/.config/systemd/user/taskr-remind.timer
+# ~/.config/systemd/user/tjek-remind.timer
 [Timer]
 OnCalendar=*:0/15
 Persistent=true
@@ -196,24 +196,24 @@ WantedBy=timers.target
 ```
 
 ```sh
-systemctl --user enable --now taskr-remind.timer
+systemctl --user enable --now tjek-remind.timer
 ```
 
 **macOS**: notifications use the built-in `osascript`; a launchd agent with
-`StartInterval` 900 running `taskr remind` does the scheduling.
+`StartInterval` 900 running `tjek remind` does the scheduling.
 
-**Windows**: notifications appear under "taskr" in the notification
-centre. taskr calls the Windows notification API itself rather than going
+**Windows**: notifications appear under "tjek" in the notification
+centre. tjek calls the Windows notification API itself rather than going
 through PowerShell, so it works on work PCs where PowerShell is locked down.
-The first one registers taskr for notifications under your own user
-(`HKCU\Software\Classes\AppUserModelId\taskr`); no administrator rights are
+The first one registers tjek for notifications under your own user
+(`HKCU\Software\Classes\AppUserModelId\tjek`); no administrator rights are
 needed. To schedule it:
 
 ```bat
-schtasks /create /sc minute /mo 15 /tn "taskr remind" /tr "\"%LOCALAPPDATA%\Programs\taskr\taskr.exe\" remind"
+schtasks /create /sc minute /mo 15 /tn "tjek remind" /tr "\"%LOCALAPPDATA%\Programs\tjek\tjek.exe\" remind"
 ```
 
-(adjust the path to wherever `taskr.exe` lives). Each run opens a console
+(adjust the path to wherever `tjek.exe` lives). Each run opens a console
 window for a moment; if that is a bother, leaving the app running does the
 same job.
 
@@ -224,21 +224,21 @@ a folder you choose. In a OneDrive or Dropbox folder it doubles as a backup,
 and another tool can read it.
 
 - **Auto-export folder**: press enter, type or paste the folder (`tab`
-  completes folder names), and enter again. taskr writes
-  `taskr-export.json` there straight away, then keeps it current: within a
+  completes folder names), and enter again. tjek writes
+  `tjek-export.json` there straight away, then keeps it current: within a
   minute of a change, and again when you quit. Clear the path to turn it off.
-- **Import from file**: press enter and give the path to a taskr export
+- **Import from file**: press enter and give the path to a tjek export
   (`tab` completes). Its tasks are merged in: new ones are added, ones you
   already have take the newer version, and nothing is deleted, so importing
   the same file twice changes nothing. `u` takes the whole import back.
 
-The file is the same one `taskr export --include-done` prints, so the
+The file is the same one `tjek export --include-done` prints, so the
 [command line](cli.md#export-and-import) reads and writes it too.
 
 ## Custom keybindings
 
 Every binding has an action name, so rebinding one is a line in
-`settings.json` (`taskr doctor` prints where that file is):
+`settings.json` (`tjek doctor` prints where that file is):
 
 ```json
 {

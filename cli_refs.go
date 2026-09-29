@@ -9,8 +9,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // loadForCLI opens the store with the user's persisted biases and stage list
@@ -347,7 +347,7 @@ func filterTopLevel(todos []todo.Todo, opts listFilterOpts) []todo.Todo {
 //
 // Days and weeks are the units a backlog is actually discussed in, and Go's
 // time.ParseDuration knows neither. Note that 'm' keeps its Go meaning of
-// minutes — the same as `taskr log 45m` — so months have no shorthand; write
+// minutes — the same as `tjek log 45m` — so months have no shorthand; write
 // them as days.
 func parseAgeSpec(s string) (time.Duration, error) {
 	s = strings.ToLower(strings.TrimSpace(s))

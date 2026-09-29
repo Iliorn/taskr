@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
+	"github.com/Iliorn/tjek/rank"
 )
 
 // view_explain.go is the reading side of rank/explain.go: the "why this
-// rank" overlay (w on a task) and the shared line building `taskr why` prints.
+// rank" overlay (w on a task) and the shared line building `tjek why` prints.
 // Both surfaces compose the same rows so the two can never explain one score
 // differently.
 //
@@ -348,7 +348,7 @@ func (m model) renderExplainFullscreen() string {
 
 // ── Plain text (CLI) ──────────────────────────────────────────────────────────
 
-// explainPlainLines is the unstyled form `taskr why` prints. Same rows, same
+// explainPlainLines is the unstyled form `tjek why` prints. Same rows, same
 // order, no escape sequences — the CLI is a pipe target as often as a terminal.
 func explainPlainLines(e rank.Explanation) []string {
 	var lines []string

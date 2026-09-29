@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── Tags and Projects as one kind of thing ───────────────────────────────────

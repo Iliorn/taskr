@@ -10,13 +10,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/tjek/paths"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // trace.go is the opt-in answer to "the app felt slow just then". Set
-// TASKR_TRACE=1 to write trace.log in the state directory, or
-// TASKR_TRACE=/some/path to choose the file; unset, every function here is a
+// TJEK_TRACE=1 to write trace.log in the state directory, or
+// TJEK_TRACE=/some/path to choose the file; unset, every function here is a
 // branch on a nil channel.
 //
 // It times the two things the app controls — Update and View — and stamps each
@@ -48,9 +48,9 @@ var (
 	lastUpdateKind string
 )
 
-// tracePath resolves TASKR_TRACE into a file path, or "" when tracing is off.
+// tracePath resolves TJEK_TRACE into a file path, or "" when tracing is off.
 func tracePath() string {
-	v := strings.TrimSpace(os.Getenv("TASKR_TRACE"))
+	v := strings.TrimSpace(os.Getenv("TJEK_TRACE"))
 	switch v {
 	case "", "0", "false", "off":
 		return ""
@@ -72,7 +72,7 @@ func startTrace() (stop func()) {
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr: cannot write trace to %s: %v\n", path, err)
+		fmt.Fprintf(os.Stderr, "tjek: cannot write trace to %s: %v\n", path, err)
 		return func() {}
 	}
 	ch := make(chan traceEntry, 4096)
@@ -91,7 +91,7 @@ func startTrace() (stop func()) {
 			w.Flush()
 			f.Close()
 		}()
-		fmt.Fprintf(w, "\n# taskr %s trace started %s\n", appVersion, time.Now().Format(time.RFC3339))
+		fmt.Fprintf(w, "\n# tjek %s trace started %s\n", appVersion, time.Now().Format(time.RFC3339))
 		fmt.Fprintf(w, "# time                     gap_ms  update_ms  view_ms  gc  msg\n")
 		var prev time.Time
 		flush := time.NewTicker(time.Second)

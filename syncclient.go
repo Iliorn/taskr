@@ -8,14 +8,14 @@ import (
 	"os"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/tasksync"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/tasksync"
+	"github.com/Iliorn/tjek/todo"
 )
 
-// syncclient.go is the `taskr sync` side: it pushes the local task set (including
-// tombstones) to a `taskr serve` endpoint, applies the authoritative merged set
+// syncclient.go is the `tjek sync` side: it pushes the local task set (including
+// tombstones) to a `tjek serve` endpoint, applies the authoritative merged set
 // that comes back, and logs any local edit that lost a conflict so it stays
 // recoverable. It is fail-soft — a network/server error leaves the local store
 // untouched.
@@ -35,7 +35,7 @@ type syncConfig struct {
 
 	// Server side: this machine acting as a sync hub. ServerOn runs the endpoint
 	// in-process while the TUI is open (the always-on case still uses the
-	// headless `taskr serve`). ServerListen/ServerToken are its bind address and
+	// headless `tjek serve`). ServerListen/ServerToken are its bind address and
 	// the token clients must present.
 	ServerListen string `json:"server_listen,omitempty"`
 	ServerToken  string `json:"server_token,omitempty"`
@@ -51,7 +51,7 @@ func autoSyncEnabled(c syncConfig) bool {
 }
 
 // maybeAutoSyncCLI runs one fail-soft sync after a mutating CLI command, so a
-// shell edit (taskr add/done/…) propagates without the TUI being open. Silent
+// shell edit (tjek add/done/…) propagates without the TUI being open. Silent
 // on failure — a network blip must not fail the command the user actually ran.
 func maybeAutoSyncCLI() {
 	cfg := loadSyncConfig()
@@ -62,9 +62,9 @@ func maybeAutoSyncCLI() {
 		return
 	}
 	// Stale-device guard: auto-sync must never be the thing that resurrects
-	// long-deleted tasks. Manual `taskr sync --accept-stale` is the way back in.
+	// long-deleted tasks. Manual `tjek sync --accept-stale` is the way back in.
 	if gap, stale := staleSyncGap(time.Now()); stale {
-		fmt.Fprintf(os.Stderr, "taskr sync: auto-sync paused: %s; run `taskr sync --accept-stale` to rejoin\n", staleSyncNotice(gap))
+		fmt.Fprintf(os.Stderr, "tjek sync: auto-sync paused: %s; run `tjek sync --accept-stale` to rejoin\n", staleSyncNotice(gap))
 		return
 	}
 	// First-sync guard: nor may it be the thing that pushes a device's
@@ -72,7 +72,7 @@ func maybeAutoSyncCLI() {
 	// only decline and say where to make it.
 	if firstSyncNeedsChoice(cfg, db) {
 		n, _ := countLiveTasks(db)
-		fmt.Fprintf(os.Stderr, "taskr sync: auto-sync paused: %s; run `taskr sync` to choose\n", firstSyncNotice(n))
+		fmt.Fprintf(os.Stderr, "tjek sync: auto-sync paused: %s; run `tjek sync` to choose\n", firstSyncNotice(n))
 		return
 	}
 	board := storedBoard()
@@ -88,7 +88,7 @@ func syncConfigPath() string {
 
 // loadSyncConfigFile reads sync.json alone, no env overlay. This is
 // what `sync --save` must start from: persisting the runtime view would bake a
-// one-off TASKR_SYNC_URL/TOKEN into the file, silently outliving the env var.
+// one-off TJEK_SYNC_URL/TOKEN into the file, silently outliving the env var.
 func loadSyncConfigFile() syncConfig {
 	var c syncConfig
 	if b, err := os.ReadFile(syncConfigPath()); err == nil {
@@ -97,14 +97,14 @@ func loadSyncConfigFile() syncConfig {
 	return c
 }
 
-// loadSyncConfig is the runtime view: the file overlaid with TASKR_SYNC_URL /
-// TASKR_SYNC_TOKEN when set. Either source may be absent.
+// loadSyncConfig is the runtime view: the file overlaid with TJEK_SYNC_URL /
+// TJEK_SYNC_TOKEN when set. Either source may be absent.
 func loadSyncConfig() syncConfig {
 	c := loadSyncConfigFile()
-	if v := os.Getenv("TASKR_SYNC_URL"); v != "" {
+	if v := os.Getenv("TJEK_SYNC_URL"); v != "" {
 		c.URL = v
 	}
-	if v := os.Getenv("TASKR_SYNC_TOKEN"); v != "" {
+	if v := os.Getenv("TJEK_SYNC_TOKEN"); v != "" {
 		c.Token = v
 	}
 	return c
@@ -121,7 +121,7 @@ func saveSyncConfig(c syncConfig) error {
 	return writeFileAtomic(syncConfigPath(), b, 0600)
 }
 
-// syncState is the outcome of the last successful sync, persisted so `taskr sync
+// syncState is the outcome of the last successful sync, persisted so `tjek sync
 // --status` can report it without touching the network. Only successful syncs
 // update it, so a failed attempt never erases the last-known-good timestamp.
 type syncState struct {
@@ -233,7 +233,7 @@ func printSyncStatus(cfg syncConfig) int {
 	}
 	st, ok, err := readSyncState()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync: read state: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek sync: read state: %v\n", err)
 		return 1
 	}
 	if !ok {
@@ -253,9 +253,9 @@ func cliSync(args []string) int {
 	// parsing, then treat the empty-string case as "list mode".
 	args = normaliseBareRecover(args)
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
-	url := fs.String("url", "", "sync server URL, e.g. http://100.x.y.z:8765 (or set TASKR_SYNC_URL)")
-	token := fs.String("token", "", "shared bearer token (or set TASKR_SYNC_TOKEN)")
-	save := fs.Bool("save", false, "persist --url/--token to sync.json for future syncs (taskr doctor shows where)")
+	url := fs.String("url", "", "sync server URL, e.g. http://100.x.y.z:8765 (or set TJEK_SYNC_URL)")
+	token := fs.String("token", "", "shared bearer token (or set TJEK_SYNC_TOKEN)")
+	save := fs.Bool("save", false, "persist --url/--token to sync.json for future syncs (tjek doctor shows where)")
 	quiet := fs.Bool("quiet", false, "print nothing on success")
 	status := fs.Bool("status", false, "print the last sync time/result and exit (local only, no network)")
 	acceptStale := fs.Bool("accept-stale", false, "sync even though this device has been offline longer than the deletion-memory window (tasks deleted elsewhere may resurrect)")
@@ -298,25 +298,25 @@ func cliSync(args []string) int {
 			saved.Token = *token
 		}
 		if err := saveSyncConfig(saved); err != nil {
-			fmt.Fprintf(os.Stderr, "taskr sync: save config: %v\n", err)
+			fmt.Fprintf(os.Stderr, "tjek sync: save config: %v\n", err)
 			return 1
 		}
 		if w := tasksync.InsecureURLWarning(saved.URL); w != "" {
-			fmt.Fprintln(os.Stderr, "taskr sync: "+w)
+			fmt.Fprintln(os.Stderr, "tjek sync: "+w)
 		}
 	}
 	if !cfg.ready() {
-		fmt.Fprintln(os.Stderr, "taskr sync: missing url/token; pass --url/--token (optionally --save), or set TASKR_SYNC_URL/TASKR_SYNC_TOKEN")
+		fmt.Fprintln(os.Stderr, "tjek sync: missing url/token; pass --url/--token (optionally --save), or set TJEK_SYNC_URL/TJEK_SYNC_TOKEN")
 		return 2
 	}
 	if err := openStore(); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync: open store: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek sync: open store: %v\n", err)
 		return 1
 	}
 	if gap, stale := staleSyncGap(time.Now()); stale && !*acceptStale {
-		fmt.Fprintf(os.Stderr, `taskr sync: refusing: %s.
+		fmt.Fprintf(os.Stderr, `tjek sync: refusing: %s.
 Options:
-  taskr sync --accept-stale     merge anyway (long-deleted tasks may return; back up first with taskr export)
+  tjek sync --accept-stale     merge anyway (long-deleted tasks may return; back up first with tjek export)
   or reset this device to re-pull clean: back up, then rm %s and sync again
 `, staleSyncNotice(gap), dbPath())
 		return 2
@@ -327,17 +327,17 @@ Options:
 	board := storedBoard()
 	sum, err := runClientSync(db, cfg, 30*time.Second, storedBiases(), board.wire())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek sync: %v\n", err)
 		return 1
 	}
 	if board.adoptFromSync(sum.board) {
-		fmt.Fprintf(os.Stderr, "taskr sync: board columns updated from the fleet: %s\n", board.stagesDisplay())
+		fmt.Fprintf(os.Stderr, "tjek sync: board columns updated from the fleet: %s\n", board.stagesDisplay())
 	}
 	if sum.versionGap != "" {
 		// stderr, and outside the --quiet gate: --quiet suppresses the
 		// routine "synced: sent 3, received 0" line, not a warning that the
 		// two ends are drifting.
-		fmt.Fprintln(os.Stderr, "taskr sync: warning: "+sum.versionGap)
+		fmt.Fprintln(os.Stderr, "tjek sync: warning: "+sum.versionGap)
 	}
 	if !*quiet {
 		hint := ""
@@ -353,7 +353,7 @@ Options:
 type syncSummary struct {
 	sent, received, conflicts int
 	// versionGap is set when the sync succeeded against a server running a
-	// different taskr build (tasksync.VersionGapWarning). It rides on the
+	// different tjek build (tasksync.VersionGapWarning). It rides on the
 	// summary rather than being printed here so both callers can place it:
 	// the CLI on stderr, the TUI in the Settings footer.
 	versionGap string
@@ -386,7 +386,7 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b rank.Bias
 	// else in the protocol surfaces it — warn loudly on every sync until the
 	// user fixes the clock.
 	if w := tasksync.ClockSkewWarning(resp.ServerTime, time.Now()); w != "" {
-		fmt.Fprintln(os.Stderr, "taskr sync: "+w)
+		fmt.Fprintln(os.Stderr, "tjek sync: "+w)
 	}
 	// Record dropped local edits before we overwrite, for the recovery log.
 	// The baseline is the last successful sync: only edits made here since then
@@ -398,7 +398,7 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b rank.Bias
 	}
 	dropped := tasksync.DroppedLocalEdits(local, merged, lastSync)
 	if err := logDroppedEdits(dropped); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync: warning: could not write sync log: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek sync: warning: could not write sync log: %v\n", err)
 	}
 	// The round trip can take seconds, and anything written locally meanwhile
 	// (the TUI's debounced save, another CLI command) is missing from `merged`.
@@ -421,7 +421,7 @@ func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b rank.Bias
 		versionGap: tasksync.VersionGapWarning(resp.ServerVersion, appVersion),
 		board:      resp.Board,
 	}
-	// Record status for `taskr sync --status`. Best-effort: a write failure here
+	// Record status for `tjek sync --status`. Best-effort: a write failure here
 	// must not fail an otherwise-successful sync.
 	_ = writeSyncState(sum)
 	return sum, nil

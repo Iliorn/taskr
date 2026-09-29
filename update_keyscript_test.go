@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -159,7 +159,7 @@ func TestScriptQuickAddFilteredOutStaysInList(t *testing.T) {
 
 func TestScriptQuickAddParsesInlineSyntax(t *testing.T) {
 	m := modelWithTasks(t)
-	m = script(t, m, "a", "ship release p:high due:tomorrow #work @taskr", "enter")
+	m = script(t, m, "a", "ship release p:high due:tomorrow #work @tjek", "enter")
 
 	created := m.currentTodo()
 	if created == nil {
@@ -171,8 +171,8 @@ func TestScriptQuickAddParsesInlineSyntax(t *testing.T) {
 	if created.Priority != todo.PriorityHigh {
 		t.Errorf("priority = %v, want High", created.Priority)
 	}
-	if created.Project != "taskr" {
-		t.Errorf("project = %q, want taskr", created.Project)
+	if created.Project != "tjek" {
+		t.Errorf("project = %q, want tjek", created.Project)
 	}
 	if len(created.Tags) != 1 || created.Tags[0] != "work" {
 		t.Errorf("tags = %v, want [work]", created.Tags)

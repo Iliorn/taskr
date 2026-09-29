@@ -15,7 +15,7 @@ import (
 // syncserver.go is the Settings-tab surface for running THIS machine as a sync
 // hub: the Server on/off toggle (an in-process endpoint while the TUI is open),
 // inline editors for the listen address and server token, and a probe that
-// detects an external `taskr serve` (e.g. a systemd service) so the row reads
+// detects an external `tjek serve` (e.g. a systemd service) so the row reads
 // "external" instead of looking unconfigured.
 
 func (c syncConfig) listenAddr() string {
@@ -105,7 +105,7 @@ func (m model) updateEditServerToken(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// Pre-filled editor: blank is a deliberate clear of the server token.
 			value := strings.TrimSpace(m.textInput.Value())
-			// This is the one token taskr wholly owns — the endpoint on this
+			// This is the one token tjek wholly owns — the endpoint on this
 			// machine — and a strong one is one keystroke away, so a weak value
 			// is refused rather than warned about. Stay in the prompt with the
 			// text intact, the way the date editor does, instead of discarding
@@ -150,7 +150,7 @@ type serverProbeMsg struct{ reachable bool }
 
 // probeServer checks whether something answers /v1/health at the configured
 // listen address. It lets the Settings row show "external" when this machine
-// runs the headless `taskr serve` (e.g. a systemd service) rather than the
+// runs the headless `tjek serve` (e.g. a systemd service) rather than the
 // in-process one. Returns nil (no probe) when no listen address is set.
 func (m model) probeServer() tea.Cmd {
 	addr := m.syncCfg.ServerListen
@@ -166,8 +166,8 @@ func (m model) probeServer() tea.Cmd {
 	}
 }
 
-// healthAnswers reports whether a taskr server answers /v1/health at addr, in
-// plain http or — for a headless `taskr serve --tls-cert` — https. Plain goes
+// healthAnswers reports whether a tjek server answers /v1/health at addr, in
+// plain http or — for a headless `tjek serve --tls-cert` — https. Plain goes
 // first, and https is tried only when something answered it without a 200: a
 // TLS server replies to plain http with a 400 of its own, and a closed port
 // needs no second attempt. The https probe skips certificate checks on

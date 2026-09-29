@@ -37,7 +37,7 @@ func TestDiagnosticsOnAFreshInstall(t *testing.T) {
 			t.Errorf("fresh install reported a failure: %s = %s (%s)", d.Name, d.Value, d.Detail)
 		}
 	}
-	findDiagnostic(t, report, "taskr version")
+	findDiagnostic(t, report, "tjek version")
 	findDiagnostic(t, report, "platform")
 	findDiagnostic(t, report, "data directory")
 }

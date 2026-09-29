@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // Repository is the persistence port. The app depends on this contract rather

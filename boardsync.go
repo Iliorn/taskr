@@ -5,8 +5,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/tasksync"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/tasksync"
 )
 
 // boardsync.go is this app's half of the shared kanban column list: the

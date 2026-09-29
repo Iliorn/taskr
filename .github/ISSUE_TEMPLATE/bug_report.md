@@ -15,11 +15,11 @@ labels: bug
 
 **Environment**
 
-- taskr version (`taskr --version`, or the Settings tab):
+- tjek version (`tjek --version`, or the Settings tab):
 - OS and terminal (e.g. Arch + kitty, Windows Terminal, macOS + iTerm2):
 - Terminal size, if the problem is visual (`stty size`):
 
 **Anything else**
 
-Screenshots of a broken layout help a lot. `taskr doctor` output is useful for
+Screenshots of a broken layout help a lot. `tjek doctor` output is useful for
 anything about tasks, dependencies or the store.

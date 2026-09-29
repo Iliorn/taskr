@@ -8,7 +8,7 @@ import (
 )
 
 // console_windows.go puts the Windows console into UTF-8 for the length of the
-// run. Everything taskr writes is UTF-8 — the box-drawing borders, the chips,
+// run. Everything tjek writes is UTF-8 — the box-drawing borders, the chips,
 // the user's own task titles — but a console decodes the bytes it is handed
 // with its *code page*, and on a Danish Windows install that is still CP850 by
 // default. The result is the classic mojibake: "på" arrives as bytes C3 A5 and
@@ -33,7 +33,7 @@ var (
 	procSetConsoleOutputCP = kernel32.NewProc("SetConsoleOutputCP")
 )
 
-// consoleNote is what `taskr doctor` reports, filled in by useUTF8Console.
+// consoleNote is what `tjek doctor` reports, filled in by useUTF8Console.
 // The code page is invisible until it is wrong, and then it explains every
 // garbled character on screen at once — worth a line in the diagnostics.
 var consoleNote string
@@ -50,7 +50,7 @@ func setConsoleCP(p *syscall.LazyProc, cp uint32) bool {
 
 // useUTF8Console switches the console to UTF-8 and returns the undo. A failure
 // is not fatal: output redirected to a file or a pipe has no console to
-// configure, which is the normal case for `taskr export > file` and for CI.
+// configure, which is the normal case for `tjek export > file` and for CI.
 func useUTF8Console() (restore func()) {
 	oldOut, oldIn := getConsoleCP(procGetConsoleOutputCP), getConsoleCP(procGetConsoleCP)
 	outOK := oldOut != cpUTF8 && setConsoleCP(procSetConsoleOutputCP, cpUTF8)

@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  # The matrix is the platforms taskr actually ships: the release attaches a
+  # The matrix is the platforms tjek actually ships: the release attaches a
   # Linux and a Windows binary, and macOS installs from tagged source through
   # the Homebrew tap. Testing only on Linux meant the Windows binary was first
   # compiled by the release job — after the tag existed — and its
@@ -121,7 +121,7 @@ jobs:
   # a different question from "does a version we ship have a known
   # vulnerability, and do we call it". govulncheck answers the second one, and
   # it answers it about reachable code — the first run against this tree found
-  # a vulnerability in a required module that no taskr code path calls, which
+  # a vulnerability in a required module that no tjek code path calls, which
   # is exactly the distinction that keeps this from becoming noise to ignore.
   # A pure-Go SQLite driver and an HTTP sync server are the parts where the
   # difference stops being academic.
@@ -160,9 +160,9 @@ jobs:
           # pipefail so a test failure here is not swallowed by tee.
           set -o pipefail
           declare -A floor=(
-            ["github.com/Iliorn/taskr"]=78
-            ["github.com/Iliorn/taskr/tasksync"]=92
-            ["github.com/Iliorn/taskr/todo"]=96
+            ["github.com/Iliorn/tjek"]=78
+            ["github.com/Iliorn/tjek/tasksync"]=92
+            ["github.com/Iliorn/tjek/todo"]=96
           )
           go test -cover -timeout 5m ./... | tee /tmp/cover.txt
           rc=0

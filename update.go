@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -122,7 +122,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.flashError(fmt.Sprintf("Update failed: %v", msg.err))
 			m.updateStatus = tr("Update failed")
 		} else {
-			m.flashSuccess(tr("Updated! Restart taskr to apply."))
+			m.flashSuccess(tr("Updated! Restart tjek to apply."))
 			m.updateStatus = tr("Updated; restart to apply")
 		}
 		return m, clearErrAfter()
@@ -132,7 +132,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateStatus = tr("Check failed")
 			return m, clearErrAfter()
 		}
-		// planUpdate (version.go) owns the verdict, shared with `taskr update`
+		// planUpdate (version.go) owns the verdict, shared with `tjek update`
 		// so the two surfaces cannot disagree about the same binary; the
 		// sentences stay here because they are translated and the CLI's aren't.
 		switch action, hint := planUpdate(appVersion, msg.latest); action {
@@ -215,7 +215,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			// The reminder is the news, not the pop-up: keep it on screen and
 			// say only that the desktop could not show it. The reason is
-			// `taskr remind --now`'s to print, where there is room for it.
+			// `tjek remind --now`'s to print, where there is room for it.
 			m.flashInfo(msg.title + " · " + tr("desktop pop-up unavailable"))
 			return m, clearErrAfter()
 		}
@@ -450,7 +450,7 @@ func (m *model) openEditorForNotes() tea.Cmd {
 	editorCmd := resolveEditorCmd()
 	if editorCmd == "" {
 		if runtime.GOOS == "windows" {
-			m.flashError(tr("No editor found. Set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"))
+			m.flashError(tr("No editor found. Set EDITOR permanently, e.g: setx EDITOR notepad (then restart tjek)"))
 		} else {
 			m.flashError(tr("No editor found. Set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"))
 		}
@@ -476,7 +476,7 @@ func (m *model) openEditorForInput() tea.Cmd {
 	editorCmd := resolveEditorCmd()
 	if editorCmd == "" {
 		if runtime.GOOS == "windows" {
-			m.flashError(tr("No editor found. Set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"))
+			m.flashError(tr("No editor found. Set EDITOR permanently, e.g: setx EDITOR notepad (then restart tjek)"))
 		} else {
 			m.flashError(tr("No editor found. Set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"))
 		}

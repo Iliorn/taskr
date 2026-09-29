@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/tjek/paths"
 )
 
 // syncadopt.go is the first-sync gate.
@@ -24,7 +24,7 @@ import (
 // So the device asks once, and the question is asked where it can actually be
 // answered. Three of the four paths that upload are unattended — the TUI syncs
 // on launch the moment sync.json has a url and a token, again on its timer, and
-// the CLI syncs after every mutating command — so a prompt in `taskr sync`
+// the CLI syncs after every mutating command — so a prompt in `tjek sync`
 // would have guarded the one path a person is already watching. The unattended
 // paths therefore refuse and explain, exactly as the stale-device guard does,
 // and the choice is made once in a shell.
@@ -122,7 +122,7 @@ func firstSyncNotice(n int) string {
 // about to happen, enough of the set to recognise it, and the two commands
 // that answer the question.
 func printFirstSyncChoice(s firstSyncSummary) {
-	fmt.Fprintf(os.Stderr, "taskr sync: %s.\n", firstSyncNotice(s.live))
+	fmt.Fprintf(os.Stderr, "tjek sync: %s.\n", firstSyncNotice(s.live))
 	switch {
 	case s.oldest.IsZero():
 	case s.oldest.Format("2006-01-02") == s.newest.Format("2006-01-02"):
@@ -137,18 +137,18 @@ func printFirstSyncChoice(s firstSyncSummary) {
 		fmt.Fprintf(os.Stderr, "  … %d more\n", rest)
 	}
 	fmt.Fprint(os.Stderr, `Choose once:
-  taskr sync --adopt-local     these are the real list: push them to the fleet
-  taskr sync --adopt-remote    these are leftovers: back them up, clear them here, pull the fleet's list
+  tjek sync --adopt-local     these are the real list: push them to the fleet
+  tjek sync --adopt-remote    these are leftovers: back them up, clear them here, pull the fleet's list
 `)
 }
 
-// resolveFirstSync answers the gate for a manual `taskr sync`, which is the
+// resolveFirstSync answers the gate for a manual `tjek sync`, which is the
 // one path a person is watching. It returns a process exit code; 0 means the
 // sync may proceed. Refusing is the default: an unanswered first sync exits 2
 // having touched neither the network nor the store.
 func resolveFirstSync(cfg syncConfig, adoptLocalFlag, adoptRemoteFlag bool) int {
 	if adoptLocalFlag && adoptRemoteFlag {
-		fmt.Fprintln(os.Stderr, "taskr sync: --adopt-local and --adopt-remote are opposite answers; pass one")
+		fmt.Fprintln(os.Stderr, "tjek sync: --adopt-local and --adopt-remote are opposite answers; pass one")
 		return 2
 	}
 	if !firstSyncNeedsChoice(cfg, db) {
@@ -156,7 +156,7 @@ func resolveFirstSync(cfg syncConfig, adoptLocalFlag, adoptRemoteFlag bool) int 
 		// is the whole of it — in particular, a stray --adopt-remote must never
 		// clear a store that is already part of a fleet.
 		if adoptLocalFlag || adoptRemoteFlag {
-			fmt.Fprintln(os.Stderr, "taskr sync: nothing to adopt (this device has synced before, or has no tasks of its own); syncing normally")
+			fmt.Fprintln(os.Stderr, "tjek sync: nothing to adopt (this device has synced before, or has no tasks of its own); syncing normally")
 		}
 		return 0
 	}
@@ -165,7 +165,7 @@ func resolveFirstSync(cfg syncConfig, adoptLocalFlag, adoptRemoteFlag bool) int 
 		n, _ := countLiveTasks(db)
 		backup, err := adoptRemote(db)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "taskr sync: adopt-remote: %v\n", err)
+			fmt.Fprintf(os.Stderr, "tjek sync: adopt-remote: %v\n", err)
 			return 1
 		}
 		// On stderr and outside --quiet: this is where the user's tasks went.
@@ -174,21 +174,21 @@ func resolveFirstSync(cfg syncConfig, adoptLocalFlag, adoptRemoteFlag bool) int 
 		// that fails here leaves an empty list and a file to put back. The
 		// command is quoted because it is meant to be pasted: on macOS the
 		// state directory is under "Application Support", and an unquoted
-		// path split there hands `taskr import` a file that does not exist.
-		fmt.Fprintf(os.Stderr, "taskr sync: backed up %d task(s) to %s and cleared them here; pulling the fleet's list (taskr import %s puts them back)\n", n, backup, shellArg(backup, runtime.GOOS))
+		// path split there hands `tjek import` a file that does not exist.
+		fmt.Fprintf(os.Stderr, "tjek sync: backed up %d task(s) to %s and cleared them here; pulling the fleet's list (tjek import %s puts them back)\n", n, backup, shellArg(backup, runtime.GOOS))
 	case adoptLocalFlag:
 		// Nothing to do: pushing the local set is the adoption.
 	default:
 		s, err := readFirstSyncSummary(db)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "taskr sync: read local tasks: %v\n", err)
+			fmt.Fprintf(os.Stderr, "tjek sync: read local tasks: %v\n", err)
 			return 1
 		}
 		printFirstSyncChoice(s)
 		return 2
 	}
 	if err := recordFirstSyncChoice(); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync: warning: could not record the first-sync choice: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek sync: warning: could not record the first-sync choice: %v\n", err)
 	}
 	return 0
 }
@@ -211,7 +211,7 @@ func shellArg(s, goos string) string {
 // adoptRemote is the answer that had no implementation: take the fleet's list
 // and set this device's own aside. The order is export, then clear, then sync —
 // the backup is written before anything is removed, and it is a normal export
-// file, so `taskr import` puts the tasks back if the answer turns out to be
+// file, so `tjek import` puts the tasks back if the answer turns out to be
 // wrong. Clearing before the sync is not an accident of ordering: the push is
 // the full local set, so tasks still in the store would go out with it.
 func adoptRemote(h *sql.DB) (backup string, err error) {

@@ -8,7 +8,7 @@ import (
 
 // console.go is the terminal's *encoding*, as opposed to input.go's keyboard.
 // Two different terminals on Windows get UTF-8 wrong in two different ways,
-// and neither is anything to do with the text taskr stores:
+// and neither is anything to do with the text tjek stores:
 //
 //   - A real console (conhost, Windows Terminal, cmd, PowerShell) decodes what
 //     a program writes with its code page, still CP850 on a Danish install.
@@ -36,9 +36,9 @@ func prepareConsole() (restore func()) {
 	return restoreCP
 }
 
-// minttyRetuned records that the OSC went out, for `taskr doctor`. Whether
+// minttyRetuned records that the OSC went out, for `tjek doctor`. Whether
 // mintty acted on it is not something we can read back, and saying which of
-// the two Windows paths taskr took is most of the answer when the next
+// the two Windows paths tjek took is most of the answer when the next
 // screenshot of garbled text arrives.
 var minttyRetuned bool
 
@@ -58,7 +58,7 @@ func terminalCharsetNote() string {
 // minttyUTF8Sequence is the OSC 701 to send, or "" when this is not mintty or
 // stdout is not a terminal at all. Kept pure and separate from the write so
 // the gate is testable off Windows, where the environment it reads never says
-// yes: `taskr export > file` must not get an escape sequence in the file, and
+// yes: `tjek export > file` must not get an escape sequence in the file, and
 // a terminal that has never heard of OSC 701 should not be sent one on the
 // off chance — an unknown OSC is swallowed, but only by terminals that parse
 // it correctly.

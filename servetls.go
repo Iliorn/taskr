@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// servetls.go gives `taskr serve` its own TLS, for the deployments where the
+// servetls.go gives `tjek serve` its own TLS, for the deployments where the
 // transport is not already private, without a reverse proxy in front.
 // Tailscale users do not need it
 // (the tunnel is encrypted); a VPS or a LAN without it does, since the bearer
@@ -78,20 +78,20 @@ func (r *certReloader) getCertificate(*tls.ClientHelloInfo) (*tls.Certificate, e
 		cert, lerr := tls.LoadX509KeyPair(r.certFile, r.keyFile)
 		if lerr == nil {
 			r.cert, r.certMod, r.keyMod, r.lastErr = &cert, certMod, keyMod, ""
-			r.logf("taskr serve: reloaded the TLS certificate from %s", r.certFile)
+			r.logf("tjek serve: reloaded the TLS certificate from %s", r.certFile)
 			return r.cert, nil
 		}
 		err = lerr
 	}
 	if err != nil && err.Error() != r.lastErr {
 		r.lastErr = err.Error()
-		r.logf("taskr serve: TLS certificate reload failed, still serving the previous one: %v", err)
+		r.logf("tjek serve: TLS certificate reload failed, still serving the previous one: %v", err)
 	}
 	return r.cert, nil
 }
 
 // serveTLSConfig is the server's TLS configuration: the reloading pair, and
-// nothing older than TLS 1.2 — every taskr client is a Go binary, so there is
+// nothing older than TLS 1.2 — every tjek client is a Go binary, so there is
 // no legacy peer to keep a weaker version around for. Go's server default is
 // already 1.2; saying it here keeps it true under a GODEBUG that lowers it.
 func serveTLSConfig(r *certReloader) *tls.Config {

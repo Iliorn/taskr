@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -188,7 +188,7 @@ func (c boardConfig) taskStatusIcon(t *todo.Todo) (icon string, ok bool) {
 
 // statusBox is a task's status box: [✓] done; its column's mark when the
 // board's columns have icons; otherwise [!] overdue, [>] started (time has
-// been logged), [ ] ready. The TUI rows and `taskr list` both draw it, so the
+// been logged), [ ] ready. The TUI rows and `tjek list` both draw it, so the
 // two can never disagree about a task.
 func (c boardConfig) statusBox(t *todo.Todo) string {
 	if t.Status == todo.Done {
@@ -272,7 +272,7 @@ func (c boardConfig) stageIndex(stage string) int {
 }
 
 // stageDisplay is the column heading a pending task's stored stage belongs
-// under — the detail pane's Stage row and `taskr show`. Empty only on a board
+// under — the detail pane's Stage row and `tjek show`. Empty only on a board
 // with no working columns at all, which ensureDoneColumn prevents.
 func (c boardConfig) stageDisplay(stage string) string {
 	p := c.pending()

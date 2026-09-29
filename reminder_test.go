@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -130,7 +130,7 @@ func TestReminderCoversOverdueAndTodayOnly(t *testing.T) {
 	}
 
 	title, body := reminderMessage(overdue, today)
-	if title != "taskr: 2 due today, 2 overdue" {
+	if title != "tjek: 2 due today, 2 overdue" {
 		t.Errorf("title = %q", title)
 	}
 	if want := "• Last week\n• Yesterday\n• Today high\n• Today low"; body != want {
@@ -155,7 +155,7 @@ func TestReminderBodyCapsTheList(t *testing.T) {
 }
 
 // The TUI's tick reminds once, at the set time, and records the day where
-// `taskr remind` will see it.
+// `tjek remind` will see it.
 func TestReminderTickNotifiesOncePerDay(t *testing.T) {
 	sent := captureNotifications(t)
 	m := modelWithTasks(t, dueTask("Pay rent", reminderDay, todo.PriorityHigh))
@@ -299,10 +299,10 @@ func TestCLIRemindRunsOncePerDay(t *testing.T) {
 
 func TestNotifyCommandKeepsTextOutOfTheScript(t *testing.T) {
 	ctx := context.Background()
-	title, body := `taskr: 1 due today`, `• say "hi" & <bye> $(rm -rf ~)`
+	title, body := `tjek: 1 due today`, `• say "hi" & <bye> $(rm -rf ~)`
 
 	linux := notifyCommand(ctx, "linux", title, body).Args
-	if want := []string{"notify-send", "--app-name=taskr", title, body}; !slices.Equal(linux, want) {
+	if want := []string{"notify-send", "--app-name=tjek", title, body}; !slices.Equal(linux, want) {
 		t.Errorf("linux args = %q", linux)
 	}
 	mac := notifyCommand(ctx, "darwin", title, body).Args
@@ -314,14 +314,14 @@ func TestNotifyCommandKeepsTextOutOfTheScript(t *testing.T) {
 // The Windows toast is XML built in Go: the texts are escaped, so a title with
 // markup in it is shown as text and cannot end the element it sits in.
 func TestToastXMLEscapesTheTexts(t *testing.T) {
-	doc := toastXML(`taskr: 1 overdue`, "• Fix <b> & \"quote\"\n• Second")
+	doc := toastXML(`tjek: 1 overdue`, "• Fix <b> & \"quote\"\n• Second")
 	var parsed struct {
 		Texts []string `xml:"visual>binding>text"`
 	}
 	if err := xml.Unmarshal([]byte(doc), &parsed); err != nil {
 		t.Fatalf("toast XML does not parse: %v\n%s", err, doc)
 	}
-	want := []string{"taskr: 1 overdue", "• Fix <b> & \"quote\"\n• Second"}
+	want := []string{"tjek: 1 overdue", "• Fix <b> & \"quote\"\n• Second"}
 	if !slices.Equal(parsed.Texts, want) {
 		t.Errorf("toast texts = %q, want %q", parsed.Texts, want)
 	}
@@ -341,9 +341,9 @@ func TestNotifyFailureIsOneLine(t *testing.T) {
 // A pop-up that cannot be shown still leaves the reminder on screen in the app.
 func TestReminderSurvivesAFailedPopUp(t *testing.T) {
 	m := modelWithTasks(t)
-	next, _ := m.Update(reminderSentMsg{title: "taskr: 1 overdue", err: errors.New("no toast")})
+	next, _ := m.Update(reminderSentMsg{title: "tjek: 1 overdue", err: errors.New("no toast")})
 	m = next.(model)
-	if !strings.Contains(m.err, "taskr: 1 overdue") || !strings.Contains(m.err, "unavailable") {
+	if !strings.Contains(m.err, "tjek: 1 overdue") || !strings.Contains(m.err, "unavailable") {
 		t.Errorf("toast = %q, want the reminder and a note that the pop-up failed", m.err)
 	}
 }

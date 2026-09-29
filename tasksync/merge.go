@@ -7,11 +7,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
-// merge.go is the heart of taskr's cross-device sync: a pure, I/O-free fold of
-// two task sets into one authoritative set. `taskr serve` (and the `taskr sync`
+// merge.go is the heart of tjek's cross-device sync: a pure, I/O-free fold of
+// two task sets into one authoritative set. `tjek serve` (and the `tjek sync`
 // client) call into it; everything around it — HTTP, storage — is plumbing.
 //
 // Resolution rules:

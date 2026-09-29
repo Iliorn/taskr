@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // nonTTYStdin swaps os.Stdin for a pipe (not a character device) so stdinIsTTY

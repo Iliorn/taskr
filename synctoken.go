@@ -7,15 +7,15 @@ import (
 	"unicode"
 )
 
-// synctoken.go is about the one secret taskr holds: the sync bearer token.
+// synctoken.go is about the one secret tjek holds: the sync bearer token.
 //
 // Everything downstream of it is careful — constant-time comparison on the
 // server (tasksync/server.go), 0600 on sync.json, never logged, never in
-// `taskr doctor` output. None of that matters if the token is "hunter2",
+// `tjek doctor` output. None of that matters if the token is "hunter2",
 // because the endpoint is one guess away and every other protection is
 // downstream of a secret the user invented under time pressure.
 //
-// So taskr mints one on request and says so when the configured one is short.
+// So tjek mints one on request and says so when the configured one is short.
 // It warns rather than refuses: an existing setup that works must keep working,
 // and the person best placed to judge a token behind a Tailscale-only listener
 // is the person who put it there.
@@ -57,10 +57,10 @@ func weakSyncToken(token string) string {
 		if n == 1 {
 			unit = "character"
 		}
-		return fmt.Sprintf("only %d %s, so anyone who can reach the endpoint can guess it; `taskr serve --new-token` mints a strong one", n, unit)
+		return fmt.Sprintf("only %d %s, so anyone who can reach the endpoint can guess it; `tjek serve --new-token` mints a strong one", n, unit)
 	}
 	if isSingleClass(token) {
-		return "one character class throughout, so it is likely a word or a phrase rather than random; `taskr serve --new-token` mints a strong one"
+		return "one character class throughout, so it is likely a word or a phrase rather than random; `tjek serve --new-token` mints a strong one"
 	}
 	return ""
 }

@@ -8,7 +8,7 @@ import (
 )
 
 // Terminals disagree about how wide a symbol is when the font falls back to an
-// emoji face for it: taskr counts one cell (ansi.StringWidth follows wcwidth),
+// emoji face for it: tjek counts one cell (ansi.StringWidth follows wcwidth),
 // the terminal draws two, and everything to the right of the glyph is off by
 // one — a tab-bar badge that swallows its own count, a due cell that pushes the
 // row past the border. The disagreement is not ours to settle per terminal, so
@@ -30,7 +30,7 @@ func TestUIAvoidsGlyphsTerminalsDrawDoubleWide(t *testing.T) {
 	}
 	// Only the app's own strings: a test may well feed the app an emoji on
 	// purpose (fuzz_test.go does), and user data is allowed to contain
-	// anything — it is what taskr *prints of its own accord* that has to be
+	// anything — it is what tjek *prints of its own accord* that has to be
 	// one cell wide.
 	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
@@ -60,7 +60,7 @@ func TestUIAvoidsGlyphsTerminalsDrawDoubleWide(t *testing.T) {
 }
 
 // The console helper has to be safe to call where there is no console at all —
-// `taskr export > file`, a pipe, the test binary — and safe to call its undo
+// `tjek export > file`, a pipe, the test binary — and safe to call its undo
 // twice, since main runs it both on the deferred path and before os.Exit.
 func TestPrepareConsoleIsSafeWithoutAConsole(t *testing.T) {
 	restore := prepareConsole()
@@ -72,7 +72,7 @@ func TestPrepareConsoleIsSafeWithoutAConsole(t *testing.T) {
 }
 
 // The mintty retune is an escape sequence written to stdout, so the gate has
-// to be exact: a redirected `taskr export` must not get one in the file, and a
+// to be exact: a redirected `tjek export` must not get one in the file, and a
 // terminal that is not mintty must not be sent an OSC on the off chance.
 func TestMinttyRetuneOnlyWhereItApplies(t *testing.T) {
 	const osc = "\x1b]701;C.UTF-8\a"

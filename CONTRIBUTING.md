@@ -1,12 +1,12 @@
 # Contributing
 
-Thanks for looking at taskr. It is a small, opinionated app; the notes below are
+Thanks for looking at tjek. It is a small, opinionated app; the notes below are
 the things that are easy to get wrong rather than a process to follow.
 
 ## Getting set up
 
 ```sh
-go build -o taskr .   # or: go run .
+go build -o tjek .   # or: go run .
 go test ./...
 go vet ./...
 golangci-lint run ./...

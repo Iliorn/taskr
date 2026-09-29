@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 func init() {
@@ -33,7 +33,7 @@ func backfillNormalizedTables(tx *sql.Tx) error {
 	// migration still proceeds because the underlying `data` blobs remain in
 	// the DB row (we don't drop the column in this migration).
 	if path, err := writePreNormalizeBackup(tx); err == nil && path != "" {
-		fmt.Fprintf(os.Stderr, "taskr: wrote pre-normalize backup to %s\n", path)
+		fmt.Fprintf(os.Stderr, "tjek: wrote pre-normalize backup to %s\n", path)
 	}
 
 	rows, err := tx.Query(`SELECT id, data FROM todos`)

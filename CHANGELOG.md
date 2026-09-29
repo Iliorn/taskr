@@ -1,9 +1,9 @@
 # Changelog
 
-Notable changes to taskr. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+Notable changes to tjek (called taskr before v1.42.0). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions are the git tags the [release workflow](.github/workflows/release.yml) builds from.
 
-Entries describe what changed for someone *using* taskr. Refactors and test work
+Entries describe what changed for someone *using* tjek. Refactors and test work
 belong in the commit log, not here, unless they change behaviour.
 
 **One line per entry.** No explanation, no rationale, no second sentence: the
@@ -12,6 +12,11 @@ belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
 ## [Unreleased]
+
+### Changed
+
+- taskr is now tjek: the command, its files and the repository. The first run moves everything over.
+- Environment variables are `TJEK_HOME`, `TJEK_SYNC_URL`, `TJEK_SYNC_TOKEN` and so on.
 
 ### Removed
 

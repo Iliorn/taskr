@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // explain.go answers the two questions the score column raises but
@@ -115,7 +115,7 @@ type Explanation struct {
 
 // ── Ranking with its effective scores ─────────────────────────────────────────
 
-// Ranking is the ordering `taskr top` and the Sequence sort produce, paired
+// Ranking is the ordering `tjek top` and the Sequence sort produce, paired
 // with the score each row was actually sorted by. That effective score is
 // max(own score, rollup) — a parent lifted by a subtask, or a blocker lifted by
 // what it blocks, ranks on the inherited number, so quoting the own-score as
@@ -129,7 +129,7 @@ func Ranking(todos []*todo.Todo, now time.Time, score func(*todo.Todo) float64) 
 			rows = append(rows, *t)
 		}
 	}
-	// Same partition the live list applies, or `taskr top` and the explain
+	// Same partition the live list applies, or `tjek top` and the explain
 	// view would rank a blocked task the list has already pushed to the bottom.
 	blocked, _ := DependencySets(todos)
 	SortValues(rows, rollup, Sunk(blocked, todos, now), score)
@@ -349,7 +349,7 @@ func ExplainAt(now time.Time, t *todo.Todo, all []*todo.Todo, b Biases, heat Hea
 }
 
 // Explain is the live form: current clock and the ranker's biases and heat —
-// what the TUI overlay and `taskr why` both call.
+// what the TUI overlay and `tjek why` both call.
 func (r Ranker) Explain(t *todo.Todo, all []*todo.Todo) Explanation {
 	return ExplainAt(time.Now(), t, all, r.Biases, r.Heat)
 }

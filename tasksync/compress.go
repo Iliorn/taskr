@@ -19,7 +19,7 @@ import (
 // differently against an older peer:
 //
 //   - Responses. Go's http.Transport already sends "Accept-Encoding: gzip"
-//     and decompresses transparently, so every taskr client that ever shipped
+//     and decompresses transparently, so every tjek client that ever shipped
 //     takes a gzipped response without knowing it. The server compresses
 //     whenever it is asked; nothing to negotiate.
 //   - Requests. An older server decodes the body as JSON straight away, so a

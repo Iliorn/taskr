@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── start / stop ─────────────────────────────────────────────────────────────
@@ -18,7 +18,7 @@ func cliStart(args []string) int {
 		return 2
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr start <ref>")
+		fmt.Fprintln(os.Stderr, "usage: tjek start <ref>")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -142,7 +142,7 @@ func cliLog(args []string) int {
 	fs := flag.NewFlagSet("log", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, `usage: taskr log <ref> <45m|1h30m|HH:MM-HH:MM>
+		fmt.Fprintln(os.Stderr, `usage: tjek log <ref> <45m|1h30m|HH:MM-HH:MM>
   duration form ends now ("I just spent 45m on this")
   range form is taken literally on today (crosses midnight if end < start)`)
 	}
@@ -166,7 +166,7 @@ func cliLog(args []string) int {
 	}
 	start, stop, err := parseManualEntry(positionals[1], time.Now())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr log: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek log: %v\n", err)
 		return 2
 	}
 	t.AddTimeEntry(start, stop)

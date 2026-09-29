@@ -1,7 +1,7 @@
 # Syncing between devices
 
-taskr syncs through a small server you run yourself. One machine holds the
-shared copy, and there is no third-party service. The same `taskr` program is
+tjek syncs through a small server you run yourself. One machine holds the
+shared copy, and there is no third-party service. The same `tjek` program is
 both the server and the client.
 
 ## Run a server
@@ -10,18 +10,18 @@ On the machine that should hold the shared copy (a home server reachable over
 Tailscale or your LAN, for example):
 
 ```sh
-taskr serve --listen 100.x.y.z:8765 --token "$(openssl rand -hex 32)"
-# or: TASKR_SYNC_TOKEN=… taskr serve --listen 100.x.y.z:8765
+tjek serve --listen 100.x.y.z:8765 --token "$(openssl rand -hex 32)"
+# or: TJEK_SYNC_TOKEN=… tjek serve --listen 100.x.y.z:8765
 ```
 
-A token is **required**; taskr refuses to run a server without one.
+A token is **required**; tjek refuses to run a server without one.
 `--listen` defaults to `127.0.0.1:8765`; bind to a Tailscale or LAN address
 so other devices can reach it. Tailscale already encrypts the connection;
 anywhere else, give the server a certificate and it serves https itself:
 
 ```sh
-taskr serve --listen 0.0.0.0:8765 --tls-cert cert.pem --tls-key key.pem
-taskr sync --url https://tasks.example.com:8765 --save
+tjek serve --listen 0.0.0.0:8765 --tls-cert cert.pem --tls-key key.pem
+tjek sync --url https://tasks.example.com:8765 --save
 ```
 
 The certificate is re-read when its files change, so one renewed in place
@@ -40,14 +40,14 @@ The server keeps its own `tasks.db` and answers on:
 ## Point a device at it
 
 ```sh
-taskr sync --url http://100.x.y.z:8765 --token "<token>" --save
+tjek sync --url http://100.x.y.z:8765 --token "<token>" --save
 ```
 
 `--save` stores the address and token, so later syncs need no flags;
-`TASKR_SYNC_URL` / `TASKR_SYNC_TOKEN` work too. From then on the app syncs by
+`TJEK_SYNC_URL` / `TJEK_SYNC_TOKEN` work too. From then on the app syncs by
 itself (at launch and exit, every few minutes, and as soon as another device
 changes something), and CLI commands sync in the background. Set
-`"auto_sync": false` in `sync.json` to sync only when you run `taskr sync`.
+`"auto_sync": false` in `sync.json` to sync only when you run `tjek sync`.
 
 All of this is also in the app's **Settings** tab: turn auto-sync on or off,
 edit the server address and token, "Sync now", or make this machine the
@@ -66,7 +66,7 @@ be undone once the other devices have them.
 Each task is matched by its ID. For a field changed on two devices, the later
 edit wins; comments and time entries from both are kept. A deleted task
 leaves a marker so the delete reaches other devices instead of the task
-coming back. When an edit loses to a delete, taskr says so briefly and writes
+coming back. When an edit loses to a delete, tjek says so briefly and writes
 the lost version to `sync.log` in the state directory, so nothing is gone for
 good.
 

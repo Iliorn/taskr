@@ -11,8 +11,8 @@ import (
 //
 // The release workflow bakes the tag in with
 // `-ldflags "-X main.appVersion=v1.31.0"`, and that is always authoritative.
-// But it is not the only way taskr gets installed: `go install
-// github.com/Iliorn/taskr@latest` (which the README recommends) compiles
+// But it is not the only way tjek gets installed: `go install
+// github.com/Iliorn/tjek@latest` (which the README recommends) compiles
 // without ldflags. Reporting "dev" there would make the update check, which
 // compares versions by string, offer an update on every run.
 //
@@ -136,7 +136,7 @@ func normalizeVersion(v string) string {
 
 // updateAction is the verdict of a latest-release check for *this* binary.
 // The decision is shared rather than duplicated: the Settings tab and
-// `taskr update` must not reach different conclusions about the same
+// `tjek update` must not reach different conclusions about the same
 // installation. Only the verdict is shared — each surface writes its own
 // sentence, since the TUI's are translated and the CLI's deliberately are not.
 type updateAction int
@@ -171,7 +171,7 @@ func planUpdate(current, latest string) (updateAction, string) {
 	}
 	if runtime.GOOS == "darwin" {
 		// Not from a keg, but macOS ships no release binary at all.
-		return updateManaged, "brew install iliorn/tap/taskr"
+		return updateManaged, "brew install iliorn/tap/tjek"
 	}
 	return updateAvailable, ""
 }

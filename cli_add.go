@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── add ──────────────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ func cliAdd(args []string) int {
 	asJSON := fs.Bool("json", false, "emit the created task as JSON (includes its id) instead of the human line")
 	quietID := fs.Bool("quiet-id", false, "print only the new task's full id (for scripting / shell capture)")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: taskr add \"title\" [flags]   (or `taskr add -` to read one title per line from stdin)")
+		fmt.Fprintln(os.Stderr, "usage: tjek add \"title\" [flags]   (or `tjek add -` to read one title per line from stdin)")
 		fmt.Fprintln(os.Stderr, "  the title accepts the same quick-add tokens as the TUI: #tag @project due:friday p:high s:l r:weekly dep:^  (flags override tokens)")
 		fs.PrintDefaults()
 	}
@@ -48,7 +48,7 @@ func cliAdd(args []string) int {
 		return 2
 	}
 	if len(titleParts) == 0 {
-		fmt.Fprintln(os.Stderr, "taskr add: title required")
+		fmt.Fprintln(os.Stderr, "tjek add: title required")
 		return 2
 	}
 	settings, sErr := loadSettings()
@@ -86,18 +86,18 @@ func cliAdd(args []string) int {
 	batch := len(titleParts) == 1 && titleParts[0] == "-"
 	titles := []string{strings.Join(titleParts, " ")}
 	if *chain && !batch {
-		fmt.Fprintln(os.Stderr, "taskr add: --chain only applies to batch stdin add (-); for a single task use --depends ^")
+		fmt.Fprintln(os.Stderr, "tjek add: --chain only applies to batch stdin add (-); for a single task use --depends ^")
 		return 2
 	}
 	// Detect the stdin conflict: `add -` (batch titles from stdin) + `--note -`
 	// (note body from stdin) can't both read the same stream.
 	if batch && *note == "-" {
-		fmt.Fprintln(os.Stderr, "taskr add: --note - and batch stdin add (-) both need stdin; use --note=TEXT or drop one")
+		fmt.Fprintln(os.Stderr, "tjek add: --note - and batch stdin add (-) both need stdin; use --note=TEXT or drop one")
 		return 2
 	}
 	if batch {
 		if *startNow {
-			fmt.Fprintln(os.Stderr, "taskr add: --start can't be combined with batch stdin add (-)")
+			fmt.Fprintln(os.Stderr, "tjek add: --start can't be combined with batch stdin add (-)")
 			return 2
 		}
 		lines, err := readTitlesFromStdin(os.Stdin)
@@ -106,7 +106,7 @@ func cliAdd(args []string) int {
 			return 1
 		}
 		if len(lines) == 0 {
-			fmt.Fprintln(os.Stderr, "taskr add: no titles on stdin")
+			fmt.Fprintln(os.Stderr, "tjek add: no titles on stdin")
 			return 2
 		}
 		titles = lines
@@ -116,7 +116,7 @@ func cliAdd(args []string) int {
 	if *stage != "" {
 		name, ok := board.canonicalStage(*stage)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "taskr add: unknown stage %q (configured: %s)\n", *stage, strings.Join(board.pending(), ", "))
+			fmt.Fprintf(os.Stderr, "tjek add: unknown stage %q (configured: %s)\n", *stage, strings.Join(board.pending(), ", "))
 			return 2
 		}
 		stageName = name
@@ -144,14 +144,14 @@ func cliAdd(args []string) int {
 	for i, ti := range titles {
 		parsedTitles[i] = parseQuickAdd(ti)
 		if parsedTitles[i].title == "" {
-			fmt.Fprintf(os.Stderr, "taskr add: title required (%q has nothing but tokens)\n", strings.TrimSpace(ti))
+			fmt.Fprintf(os.Stderr, "tjek add: title required (%q has nothing but tokens)\n", strings.TrimSpace(ti))
 			return 2
 		}
 		if len(parsedTitles[i].deps) > 0 {
 			anyTokenDeps = true
 		}
 		for _, tok := range parsedTitles[i].unparsed {
-			fmt.Fprintf(os.Stderr, "taskr add: warning: %q not understood, kept in the title\n", tok)
+			fmt.Fprintf(os.Stderr, "tjek add: warning: %q not understood, kept in the title\n", tok)
 		}
 	}
 
@@ -317,7 +317,7 @@ func cliAdd(args []string) int {
 }
 
 // readTitlesFromStdin returns one trimmed, non-empty title per line of r. Used
-// by `taskr add -` for batch creation from a pipe or heredoc.
+// by `tjek add -` for batch creation from a pipe or heredoc.
 func readTitlesFromStdin(r io.Reader) ([]string, error) {
 	b, err := io.ReadAll(r)
 	if err != nil {
@@ -332,7 +332,7 @@ func readTitlesFromStdin(r io.Reader) ([]string, error) {
 	return titles, nil
 }
 
-// emitAddResultsBatch renders the outcome of a batch `taskr add -`: a JSON array
+// emitAddResultsBatch renders the outcome of a batch `tjek add -`: a JSON array
 // under --json, one bare id per line under --quiet-id, else one human line each.
 func emitAddResultsBatch(tasks []todo.Todo, asJSON, quietID bool) int {
 	switch {
@@ -350,9 +350,9 @@ func emitAddResultsBatch(tasks []todo.Todo, asJSON, quietID bool) int {
 	return 0
 }
 
-// emitAddResult renders the outcome of `taskr add`. --json emits the full
+// emitAddResult renders the outcome of `tjek add`. --json emits the full
 // created task so a script can read .id (or any other field); --quiet-id prints
-// only the full UUID for shell capture (id=$(taskr add … --quiet-id)); otherwise
+// only the full UUID for shell capture (id=$(tjek add … --quiet-id)); otherwise
 // the usual human line. started selects the --start variant's message. dep, when
 // non-nil, triggers a follow-up confirmation line so the user can see that the
 // dependency link took effect. Any --start "stopped:" notices already went to
@@ -382,8 +382,8 @@ func cliSubtask(args []string) int {
 	each := fs.Bool("each", false, "treat each remaining positional as a separate subtask title")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, `usage:
-  taskr subtask <parent-ref> "title"                   one subtask (args after parent are joined)
-  taskr subtask <parent-ref> --each "title1" "title2"  one subtask per remaining positional`)
+  tjek subtask <parent-ref> "title"                   one subtask (args after parent are joined)
+  tjek subtask <parent-ref> --each "title1" "title2"  one subtask per remaining positional`)
 		fs.PrintDefaults()
 	}
 	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
@@ -425,7 +425,7 @@ func cliSubtask(args []string) int {
 		subs = append(subs, &s)
 	}
 	if len(subs) == 0 {
-		fmt.Fprintln(os.Stderr, "taskr subtask: no non-empty titles")
+		fmt.Fprintln(os.Stderr, "tjek subtask: no non-empty titles")
 		return 2
 	}
 	if err := repo.Save(subs, nil); err != nil {

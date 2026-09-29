@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/bubbles/textinput"
 )
 

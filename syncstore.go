@@ -6,16 +6,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/tasksync"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/tasksync"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // syncstore.go is the one place a sync merge touches the database. Both sides
-// of a sync — `taskr serve` folding a client's push into the authoritative
-// store, and `taskr sync` applying the server's response locally — run
+// of a sync — `tjek serve` folding a client's push into the authoritative
+// store, and `tjek sync` applying the server's response locally — run
 // load → Merge → save inside one SQLite transaction. As three separate steps,
-// a writer in another process (a CLI `taskr add` on the same host) could
+// a writer in another process (a CLI `tjek add` on the same host) could
 // commit between the load and the save and have its edit overwritten, or a
 // just-added comment tombstoned as "vanished" and deleted on every device.
 

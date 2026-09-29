@@ -7,7 +7,7 @@ import (
 )
 
 // synctoken_test.go and the update-host cases below cover the two places where
-// taskr's security posture depends on something other than careful downstream
+// tjek's security posture depends on something other than careful downstream
 // code: the strength of a secret the user chose, and the origin of a binary it
 // is about to run.
 
@@ -53,7 +53,7 @@ func TestWeakTokenJudgement(t *testing.T) {
 }
 
 // The warning names the problem without ever repeating the secret — the same
-// rule `taskr doctor` output follows, since it is meant to be pasteable.
+// rule `tjek doctor` output follows, since it is meant to be pasteable.
 func TestWeakTokenWarningNeverQuotesTheToken(t *testing.T) {
 	const token = "hunter2"
 	if why := weakSyncToken(token); strings.Contains(why, token) {
@@ -68,7 +68,7 @@ func TestWeakTokenWarningNeverQuotesTheToken(t *testing.T) {
 // wrote that body.
 func TestUpdateRefusesAssetsFromElsewhere(t *testing.T) {
 	allowed := []string{
-		"https://github.com/iliorn/taskr/releases/download/v1/taskr",
+		"https://github.com/iliorn/tjek/releases/download/v1/tjek",
 		"https://objects.githubusercontent.com/foo",
 		"https://release-assets.githubusercontent.com/bar", // the host GitHub moved to
 	}
@@ -79,11 +79,11 @@ func TestUpdateRefusesAssetsFromElsewhere(t *testing.T) {
 	}
 
 	refused := []string{
-		"http://github.com/iliorn/taskr/releases/download/v1/taskr", // no TLS
-		"https://github.com.evil.test/taskr",                        // suffix that only looks right
-		"https://evil.test/taskr",
-		"https://githubXcom/taskr",
-		"ftp://github.com/taskr",
+		"http://github.com/iliorn/tjek/releases/download/v1/tjek", // no TLS
+		"https://github.com.evil.test/tjek",                       // suffix that only looks right
+		"https://evil.test/tjek",
+		"https://githubXcom/tjek",
+		"ftp://github.com/tjek",
 		"://",
 	}
 	for _, raw := range refused {
@@ -97,10 +97,10 @@ func TestUpdateRefusesAssetsFromElsewhere(t *testing.T) {
 // follows redirects, so a 302 off GitHub would walk straight past it.
 func TestUpdateRefusesARedirectOffGitHub(t *testing.T) {
 	srv := releaseServer(t, func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "https://evil.test/taskr", http.StatusFound)
+		http.Redirect(w, r, "https://evil.test/tjek", http.StatusFound)
 	})
 
-	_, err := downloadReleaseAsset(releaseAsset{Name: "taskr", URL: srv.URL + "/taskr"}, t.TempDir()+"/taskr")
+	_, err := downloadReleaseAsset(releaseAsset{Name: "tjek", URL: srv.URL + "/tjek"}, t.TempDir()+"/tjek")
 	if err == nil {
 		t.Fatal("a redirect to a non-GitHub host was followed")
 	}
@@ -111,7 +111,7 @@ func TestUpdateRefusesARedirectOffGitHub(t *testing.T) {
 
 // ── Where a weak token is refused, and where it must not be ───────────────────
 
-// The server token is the one taskr wholly owns, and ctrl+g is one keystroke
+// The server token is the one tjek wholly owns, and ctrl+g is one keystroke
 // away, so a weak value is refused outright rather than warned about.
 func TestServerTokenEditorRefusesWeakTokens(t *testing.T) {
 	m := settingsModel(t)
@@ -171,7 +171,7 @@ func TestServerTokenEditorStillClears(t *testing.T) {
 	}
 }
 
-// The client token is the other end's choice, not taskr's. Refusing a weak one
+// The client token is the other end's choice, not tjek's. Refusing a weak one
 // here would not make anything safer — it would make a server that already uses
 // a short token unreachable, which is a worse outcome than the risk.
 func TestClientTokenEditorAcceptsWhateverTheServerUses(t *testing.T) {

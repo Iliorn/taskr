@@ -15,10 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/tasksync"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/tasksync"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // defaultServerListen is the bind address used when none is configured —
@@ -43,10 +43,10 @@ func startSyncServer(listen, token string) (*http.Server, func(), error) {
 		return nil, nil, err
 	}
 	srv := newAppSyncServer(token)
-	// Watch the store so out-of-process writes (a CLI taskr add on this host)
+	// Watch the store so out-of-process writes (a CLI tjek add on this host)
 	// also push to clients. Non-fatal if it can't start.
 	stopWatch := func() {}
-	if stop, werr := startChangeWatcher(srv.Hub, taskrDir()); werr == nil {
+	if stop, werr := startChangeWatcher(srv.Hub, tjekDir()); werr == nil {
 		stopWatch = stop
 	}
 	// Addr is informational here (Serve uses ln); it reflects the actually-bound
@@ -57,14 +57,14 @@ func startSyncServer(listen, token string) (*http.Server, func(), error) {
 		// ErrServerClosed is the expected stop signal, anything else is a real
 		// failure that would otherwise vanish into this goroutine.
 		if err := httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
-			log.Printf("taskr serve: %v", err)
+			log.Printf("tjek serve: %v", err)
 		}
 	}()
 	return httpServer, stopWatch, nil
 }
 
-// serve.go implements `taskr serve`: a small self-hosted HTTP endpoint that
-// merges task sets pushed by `taskr sync` clients. It is taskr in another mode —
+// serve.go implements `tjek serve`: a small self-hosted HTTP endpoint that
+// merges task sets pushed by `tjek sync` clients. It is tjek in another mode —
 // it reuses the exact storage and merge code of the app and persists to its own
 // tasks.db. One endpoint, POST /v1/sync, does push+pull in a single
 // round trip: the client sends its full task set (tombstones included), the
@@ -80,8 +80,8 @@ func cliServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	listen := fs.String("listen", "127.0.0.1:8765",
 		"address to bind (e.g. a Tailscale IP like 100.x.y.z:8765, or 127.0.0.1:8765 behind a reverse proxy)")
-	token := fs.String("token", os.Getenv("TASKR_SYNC_TOKEN"),
-		"shared bearer token clients must present (or set TASKR_SYNC_TOKEN)")
+	token := fs.String("token", os.Getenv("TJEK_SYNC_TOKEN"),
+		"shared bearer token clients must present (or set TJEK_SYNC_TOKEN)")
 	newToken := fs.Bool("new-token", false,
 		"mint a strong token, store it as this machine's server token, print it, and exit")
 	tlsCert := fs.String("tls-cert", "",
@@ -94,18 +94,18 @@ func cliServe(args []string) int {
 		return cliNewServerToken()
 	}
 	if *token == "" {
-		fmt.Fprintln(os.Stderr, "taskr serve: a token is required (--token or TASKR_SYNC_TOKEN); refusing to run unauthenticated")
-		fmt.Fprintln(os.Stderr, "taskr serve: `taskr serve --new-token` mints one and stores it")
+		fmt.Fprintln(os.Stderr, "tjek serve: a token is required (--token or TJEK_SYNC_TOKEN); refusing to run unauthenticated")
+		fmt.Fprintln(os.Stderr, "tjek serve: `tjek serve --new-token` mints one and stores it")
 		return 2
 	}
 	// A warning, not a refusal: a working deployment must keep working, and
 	// the person who put a short token behind a Tailscale-only listener is
 	// better placed to judge it than a length check is.
 	if why := weakSyncToken(*token); why != "" {
-		fmt.Fprintf(os.Stderr, "taskr serve: warning: the token is %s\n", why)
+		fmt.Fprintf(os.Stderr, "tjek serve: warning: the token is %s\n", why)
 	}
 	if (*tlsCert == "") != (*tlsKey == "") {
-		fmt.Fprintln(os.Stderr, "taskr serve: --tls-cert and --tls-key go together; pass both, or neither for plain http")
+		fmt.Fprintln(os.Stderr, "tjek serve: --tls-cert and --tls-key go together; pass both, or neither for plain http")
 		return 2
 	}
 	// Loaded before the store is opened or the port bound, so a wrong path is
@@ -114,20 +114,20 @@ func cliServe(args []string) int {
 	if *tlsCert != "" {
 		certs, err := newCertReloader(*tlsCert, *tlsKey, log.Printf)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "taskr serve: %v\n", err)
+			fmt.Fprintf(os.Stderr, "tjek serve: %v\n", err)
 			return 1
 		}
 		tlsConfig = serveTLSConfig(certs)
 	}
 	if err := openStore(); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr serve: open store: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek serve: open store: %v\n", err)
 		return 1
 	}
 	srv := newAppSyncServer(*token)
-	// Watch the store so out-of-process writes (a CLI taskr add on this host)
+	// Watch the store so out-of-process writes (a CLI tjek add on this host)
 	// also push to clients in real time, not just client-initiated merges.
-	if stop, werr := startChangeWatcher(srv.Hub, taskrDir()); werr != nil {
-		fmt.Fprintf(os.Stderr, "taskr serve: change watcher unavailable (%v); out-of-process writes won't push in real time\n", werr)
+	if stop, werr := startChangeWatcher(srv.Hub, tjekDir()); werr != nil {
+		fmt.Fprintf(os.Stderr, "tjek serve: change watcher unavailable (%v); out-of-process writes won't push in real time\n", werr)
 	} else {
 		defer stop()
 	}
@@ -140,7 +140,7 @@ func cliServe(args []string) int {
 	}
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr serve: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek serve: %v\n", err)
 		return 1
 	}
 	// Graceful stop: SIGINT/SIGTERM (^C, systemctl stop) closes the listener
@@ -156,9 +156,9 @@ func cliServe(args []string) int {
 	if tlsConfig != nil {
 		scheme = "https"
 	}
-	fmt.Fprintf(os.Stderr, "taskr serve: listening on %s://%s (POST /v1/sync)\n", scheme, *listen)
+	fmt.Fprintf(os.Stderr, "tjek serve: listening on %s://%s (POST /v1/sync)\n", scheme, *listen)
 	if err := serveOn(httpServer, ln); err != nil && err != http.ErrServerClosed {
-		fmt.Fprintf(os.Stderr, "taskr serve: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek serve: %v\n", err)
 		return 1
 	}
 	checkpointStore()
@@ -182,24 +182,24 @@ func serveOn(s *http.Server, ln net.Listener) error {
 func cliNewServerToken() int {
 	token, err := newSyncToken()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr serve: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek serve: %v\n", err)
 		return 1
 	}
 	cfg := loadSyncConfigFile()
 	had := cfg.ServerToken != ""
 	cfg.ServerToken = token
 	if err := saveSyncConfig(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr serve: could not store the token: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek serve: could not store the token: %v\n", err)
 		return 1
 	}
 	// The token itself goes to stdout so it can be piped into a secret store;
 	// everything else is commentary and goes to stderr.
 	fmt.Println(token)
-	fmt.Fprintf(os.Stderr, "taskr serve: stored as this machine's server token in %s\n", syncConfigPath())
+	fmt.Fprintf(os.Stderr, "tjek serve: stored as this machine's server token in %s\n", syncConfigPath())
 	if had {
-		fmt.Fprintln(os.Stderr, "taskr serve: this replaced the previous token; every client needs the new one before it can sync again")
+		fmt.Fprintln(os.Stderr, "tjek serve: this replaced the previous token; every client needs the new one before it can sync again")
 	}
-	fmt.Fprintln(os.Stderr, "taskr serve: for the headless server, pass it as --token or TASKR_SYNC_TOKEN")
+	fmt.Fprintln(os.Stderr, "tjek serve: for the headless server, pass it as --token or TJEK_SYNC_TOKEN")
 	return 0
 }
 
@@ -218,7 +218,7 @@ func (d dbStore) MergeIn(incoming []todo.Todo) ([]todo.Todo, bool, error) {
 
 // newAppSyncServer wires a tasksync.Server to this app: the shared SQLite
 // store, a fresh SSE hub, and the serve-state file (throttled) so
-// `taskr sync --status` on this host can report the last client contact.
+// `tjek sync --status` on this host can report the last client contact.
 func newAppSyncServer(token string) *tasksync.Server {
 	return &tasksync.Server{
 		Token:        token,
@@ -250,7 +250,7 @@ func noteClientSync(now time.Time) {
 
 // serveState records hub-side sync facts, currently just the last time any
 // authenticated client completed a /v1/sync against this host. Written by the
-// serve process (headless or in-process), read by `taskr sync --status`.
+// serve process (headless or in-process), read by `tjek sync --status`.
 type serveState struct {
 	LastClientSync time.Time `json:"last_client_sync"`
 }

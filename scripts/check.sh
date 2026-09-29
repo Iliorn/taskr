@@ -13,7 +13,7 @@
 #
 # golangci-lint is required rather than skipped when missing: a gate that
 # quietly drops the check that failed is not a gate. Install it from
-# https://golangci-lint.run/welcome/install/, or set TASKR_CHECK_NO_LINT=1
+# https://golangci-lint.run/welcome/install/, or set TJEK_CHECK_NO_LINT=1
 # to skip it on purpose.
 set -eu
 
@@ -32,14 +32,14 @@ fi
 step "go vet"
 go vet ./...
 
-if [ "${TASKR_CHECK_NO_LINT:-}" = "1" ]; then
-	step "golangci-lint (skipped: TASKR_CHECK_NO_LINT=1)"
+if [ "${TJEK_CHECK_NO_LINT:-}" = "1" ]; then
+	step "golangci-lint (skipped: TJEK_CHECK_NO_LINT=1)"
 elif command -v golangci-lint >/dev/null 2>&1; then
 	step golangci-lint
 	golangci-lint run ./...
 else
 	echo "golangci-lint is not installed; CI runs it on every push." >&2
-	echo "Install it (https://golangci-lint.run/welcome/install/) or set TASKR_CHECK_NO_LINT=1." >&2
+	echo "Install it (https://golangci-lint.run/welcome/install/) or set TJEK_CHECK_NO_LINT=1." >&2
 	exit 1
 fi
 

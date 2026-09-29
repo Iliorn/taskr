@@ -9,11 +9,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/todo"
 )
 
-// `taskr doctor` — diagnose this installation.
+// `tjek doctor` — diagnose this installation.
 //
 // This is the output to paste into a bug report, so it answers the questions a
 // maintainer would otherwise have to ask: version, platform, where the data
@@ -41,7 +41,7 @@ func cliDoctor(args []string) int {
 	fs.SetOutput(os.Stderr)
 	asJSON := fs.Bool("json", false, "emit the report as JSON")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: taskr doctor [--json]   report this installation's health (paste into a bug report)")
+		fmt.Fprintln(os.Stderr, "usage: tjek doctor [--json]   report this installation's health (paste into a bug report)")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -61,7 +61,7 @@ func cliDoctor(args []string) int {
 		printDiagnostics(os.Stdout, report)
 	}
 
-	// A failure is worth a non-zero exit so `taskr doctor` can gate a script
+	// A failure is worth a non-zero exit so `tjek doctor` can gate a script
 	// or a CI step. A warning is not: warnings are things a healthy
 	// installation can legitimately have (no sync configured, no editor set).
 	for _, d := range report {
@@ -80,7 +80,7 @@ func collectDiagnostics() []diagnostic {
 	var out []diagnostic
 	add := func(d diagnostic) { out = append(out, d) }
 
-	add(diagnostic{Name: "taskr version", Value: appVersion})
+	add(diagnostic{Name: "tjek version", Value: appVersion})
 	if !isReleaseVersion(appVersion) {
 		out[len(out)-1].Status = statusWarn
 		out[len(out)-1].Detail = "not a released build, so self-update is disabled for it"
@@ -93,7 +93,7 @@ func collectDiagnostics() []diagnostic {
 		d := diagnostic{Name: "terminal charset", Value: note}
 		if strings.Contains(note, "garbled") {
 			d.Status = statusWarn
-			d.Detail = "run in Windows Terminal, or `chcp 65001` before taskr"
+			d.Detail = "run in Windows Terminal, or `chcp 65001` before tjek"
 		}
 		add(d)
 	}
@@ -111,15 +111,15 @@ func collectDiagnostics() []diagnostic {
 
 func diagnoseStorage() []diagnostic {
 	var out []diagnostic
-	dir := taskrDir()
+	dir := tjekDir()
 	out = append(out, diagnostic{Name: "data directory", Value: dir})
 	if paths.UsingLegacyLayout() {
 		out = append(out, diagnostic{
 			Name: "layout", Value: "legacy (~/" + paths.LegacyDirName + ")",
-			Detail: "kept because the directory exists; move it to switch to the XDG paths, or set TASKR_HOME",
+			Detail: "kept because the directory exists; move it to switch to the XDG paths, or set TJEK_HOME",
 		})
 	} else if home := paths.HomeOverride(); home != "" {
-		out = append(out, diagnostic{Name: "layout", Value: "single directory (TASKR_HOME)"})
+		out = append(out, diagnostic{Name: "layout", Value: "single directory (TJEK_HOME)"})
 	} else {
 		for _, k := range []struct {
 			name string
@@ -134,13 +134,13 @@ func diagnoseStorage() []diagnostic {
 	if info, err := os.Stat(dir); err != nil {
 		out = append(out, diagnostic{
 			Name: "data directory state", Value: "missing", Status: statusWarn,
-			Detail: "it is created on first run; nothing is wrong if you have not used taskr yet",
+			Detail: "it is created on first run; nothing is wrong if you have not used tjek yet",
 		})
 		return out
 	} else if !info.IsDir() {
 		out = append(out, diagnostic{
 			Name: "data directory state", Value: "not a directory", Status: statusFail,
-			Detail: "a file is sitting where taskr's storage directory should be",
+			Detail: "a file is sitting where tjek's storage directory should be",
 		})
 		return out
 	}
@@ -164,13 +164,13 @@ func diagnoseStorage() []diagnostic {
 		Status: statusOK,
 		Detail: humanBytes(info.Size()),
 	})
-	// A WAL left behind is normal while taskr runs and after a crash; it is
+	// A WAL left behind is normal while tjek runs and after a crash; it is
 	// folded back in on the next clean exit. Worth showing, never a failure.
 	for _, sidecar := range []string{"-wal", "-shm"} {
 		if si, err := os.Stat(path + sidecar); err == nil {
 			out = append(out, diagnostic{
 				Name: "database" + sidecar, Value: humanBytes(si.Size()),
-				Detail: "normal while taskr is running; folded back in on exit",
+				Detail: "normal while tjek is running; folded back in on exit",
 			})
 		}
 	}
@@ -213,7 +213,7 @@ func integrityCheck(db *sql.DB) diagnostic {
 	}
 	return diagnostic{
 		Name: "integrity check", Value: "failed", Status: statusFail,
-		Detail: result + "; restore from a -pre-migration backup in " + taskrDir(),
+		Detail: result + "; restore from a -pre-migration backup in " + tjekDir(),
 	}
 }
 
@@ -245,7 +245,7 @@ func diagnoseSettings() []diagnostic {
 	if err != nil {
 		return []diagnostic{{
 			Name: "settings", Value: path, Status: statusFail,
-			Detail: err.Error() + "; taskr falls back to defaults, and saving will overwrite the file",
+			Detail: err.Error() + "; tjek falls back to defaults, and saving will overwrite the file",
 		}}
 	}
 	out := []diagnostic{{
@@ -320,7 +320,7 @@ func diagnoseSync() []diagnostic {
 	if _, err := os.Stat(syncLogPath()); err == nil {
 		out = append(out, diagnostic{
 			Name: "sync.log", Value: "present", Status: statusWarn,
-			Detail: "local edits that lost a conflict were recorded; see `taskr sync --recover`",
+			Detail: "local edits that lost a conflict were recorded; see `tjek sync --recover`",
 		})
 	}
 	return out
@@ -378,7 +378,7 @@ func printDiagnostics(w *os.File, report []diagnostic) {
 	switch {
 	case failures > 0:
 		fmt.Fprintf(w, "%s found. Include this output in a bug report:\n", plural(failures, "problem"))
-		fmt.Fprintln(w, "https://github.com/Iliorn/taskr/issues/new")
+		fmt.Fprintln(w, "https://github.com/Iliorn/tjek/issues/new")
 	case warnings > 0:
 		fmt.Fprintf(w, "No problems. %s worth a look, marked !\n", plural(warnings, "thing"))
 	default:
@@ -421,7 +421,7 @@ func orDefault(v, fallback string) string {
 func diagnoseLiveReload() diagnostic {
 	if watcherDisabled() {
 		return diagnostic{
-			Name: "live reload", Value: "off (TASKR_NO_WATCH)",
+			Name: "live reload", Value: "off (TJEK_NO_WATCH)",
 			Detail: "another shell's changes appear on the next reload, not immediately",
 		}
 	}

@@ -45,12 +45,12 @@ func TestPackageManagerForNamesTheOwner(t *testing.T) {
 		path string
 		want string
 	}{
-		{"/opt/homebrew/Cellar/taskr/1.33.1/bin/taskr", "brew update && brew upgrade taskr"},
-		{`C:\Users\mark\scoop\apps\taskr\current\taskr.exe`, "scoop update taskr"},
-		{"/usr/bin/taskr", "your distribution's package manager"},
-		{"/usr/local/bin/taskr", ""},
-		{"/home/mark/.local/bin/taskr", ""},
-		{"/home/mark/src/taskr/taskr", ""},
+		{"/opt/homebrew/Cellar/tjek/1.33.1/bin/tjek", "brew update && brew upgrade tjek"},
+		{`C:\Users\mark\scoop\apps\tjek\current\tjek.exe`, "scoop update tjek"},
+		{"/usr/bin/tjek", "your distribution's package manager"},
+		{"/usr/local/bin/tjek", ""},
+		{"/home/mark/.local/bin/tjek", ""},
+		{"/home/mark/src/tjek/tjek", ""},
 	} {
 		if got := packageManagerFor(tc.path); got != tc.want {
 			t.Errorf("packageManagerFor(%q) = %q, want %q", tc.path, got, tc.want)
@@ -72,7 +72,7 @@ func withVersion(t *testing.T, v string) {
 func newerReleaseServer(t *testing.T, tag string) {
 	t.Helper()
 	releaseServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprintf(w, `{"tag_name":%q,"assets":[{"name":"taskr","browser_download_url":"https://example.invalid/taskr"}]}`, tag)
+		fmt.Fprintf(w, `{"tag_name":%q,"assets":[{"name":"tjek","browser_download_url":"https://example.invalid/tjek"}]}`, tag)
 	})
 }
 

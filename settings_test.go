@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -356,7 +356,7 @@ func TestSettingsFooterWrapsTheSyncStatus(t *testing.T) {
 	m.tab = tabSettings
 	m.termHeight = 40
 	m.ensureCache()
-	m.syncStatus = "Last sync failed: sync server runs taskr v1.25.0, this device runs v1.33.1 — restart the sync server (it answered 500 Internal Server Error: merge failed: no such table: task_learnings)"
+	m.syncStatus = "Last sync failed: sync server runs tjek v1.25.0, this device runs v1.33.1 — restart the sync server (it answered 500 Internal Server Error: merge failed: no such table: task_learnings)"
 
 	const paneW = 50
 	preferences, _ := m.renderSettingsSection(paneW)

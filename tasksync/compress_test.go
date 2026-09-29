@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // compress_test.go covers the gzip negotiation on /v1/sync. The mixed-version

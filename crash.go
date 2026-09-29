@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/tjek/paths"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -101,7 +101,7 @@ func writeCrashReport(r any, stack []byte, stage string, m *model) string {
 	path := filepath.Join(dir, "crash-"+now.Format("20060102-150405.000")+".log")
 
 	var b strings.Builder
-	b.WriteString("taskr crash report\n\n")
+	b.WriteString("tjek crash report\n\n")
 	fmt.Fprintf(&b, "time:     %s\n", now.Format(time.RFC3339))
 	fmt.Fprintf(&b, "version:  %s\n", appVersion)
 	fmt.Fprintf(&b, "runtime:  %s %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
@@ -143,12 +143,12 @@ func noteCrashToUser() {
 	if lastCrashReport == "" {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "\ntaskr %s crashed.\n", appVersion)
+	fmt.Fprintf(os.Stderr, "\ntjek %s crashed.\n", appVersion)
 	if lastCrashSaved {
 		fmt.Fprintf(os.Stderr, "Unsaved edits were written to the database before exiting.\n")
 	} else {
 		fmt.Fprintf(os.Stderr, "The last few seconds of edits could not be saved: the crash happened mid-write.\n")
 	}
 	fmt.Fprintf(os.Stderr, "A report with the stack trace is at:\n  %s\n"+
-		"Please attach it to an issue at https://github.com/Iliorn/taskr/issues\n", lastCrashReport)
+		"Please attach it to an issue at https://github.com/Iliorn/tjek/issues\n", lastCrashReport)
 }

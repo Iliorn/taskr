@@ -27,7 +27,7 @@ var migrationFS embed.FS
 var goMigrations = map[int]func(*sql.Tx) error{}
 
 // errSchemaTooNew is returned when the store is stamped with a schema version
-// this build has no migration for — i.e. a newer taskr already upgraded it.
+// this build has no migration for — i.e. a newer tjek already upgraded it.
 //
 // Migrating forward is the loud case: migration 011 drops task_learnings, so
 // an older binary fails with "no such table" on the first query and nobody
@@ -37,7 +37,7 @@ var goMigrations = map[int]func(*sql.Tx) error{}
 // through the newer build. With self-update on two machines and a sync server
 // between them, running mixed versions against one store is the normal state
 // of an upgrade, not an exotic mistake, so this fails closed instead.
-var errSchemaTooNew = errors.New("store was written by a newer taskr")
+var errSchemaTooNew = errors.New("store was written by a newer tjek")
 
 func runMigrations(db *sql.DB) error {
 	if _, err := db.Exec(`
@@ -70,7 +70,7 @@ func runMigrations(db *sql.DB) error {
 			return fmt.Errorf("pre-migration backup failed: %w", err)
 		} else if path != "" {
 			// Say what the backup is FOR. Migrating is one-way: a store this
-			// build has upgraded can no longer be opened by an older taskr —
+			// build has upgraded can no longer be opened by an older tjek —
 			// migration 011 drops task_learnings, and a 1.25 binary querying
 			// it fails with "no such table" on every command. That is exactly
 			// what happens when a newer build (a dev build, or a second
@@ -79,9 +79,9 @@ func runMigrations(db *sql.DB) error {
 			// the difference between a two-second rollback and a debugging
 			// session; the message is unconditional because a migration that
 			// only ever adds a column today can still remove one tomorrow.
-			fmt.Fprintf(os.Stderr, "taskr: wrote pre-migration backup to %s\n", path)
-			fmt.Fprintf(os.Stderr, "taskr: schema %d → %d. Older taskr builds can no longer open this store;\n"+
-				"       to go back, stop anything using it (e.g. systemctl --user stop taskr-sync),\n"+
+			fmt.Fprintf(os.Stderr, "tjek: wrote pre-migration backup to %s\n", path)
+			fmt.Fprintf(os.Stderr, "tjek: schema %d → %d. Older tjek builds can no longer open this store;\n"+
+				"       to go back, stop anything using it (e.g. systemctl --user stop tjek-sync),\n"+
 				"       copy that backup over the database, and delete the -wal/-shm sidecars.\n",
 				from, pending[len(pending)-1].version)
 		}
@@ -196,7 +196,7 @@ func pendingMigrations(db *sql.DB) ([]migration, error) {
 	if len(all) > 0 {
 		if newest := all[len(all)-1].version; current > newest {
 			return nil, fmt.Errorf("%w: it is at schema %d and this build only knows %d.\n"+
-				"       Update taskr (Settings → \"Update to latest release\", or `brew upgrade taskr`).\n"+
+				"       Update tjek (Settings → \"Update to latest release\", or `brew upgrade tjek`).\n"+
 				"       To go back to this version instead, stop anything using the store, copy the\n"+
 				"       newest tasks.db-pre-migration-*.bak over tasks.db and delete the -wal/-shm sidecars",
 				errSchemaTooNew, current, newest)

@@ -1,7 +1,7 @@
-taskr
-taskr.exe
+tjek
+tjek.exe
 *.tmp
 *.bak
-taskr-macos-*
+tjek-macos-*
 *.test
 *.prof

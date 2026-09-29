@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/todo"
 )
 
-// cli_sync_recover.go implements `taskr sync --recover` and `taskr sync
+// cli_sync_recover.go implements `tjek sync --recover` and `tjek sync
 // --recover=<ref>`. The sync log (sync.log, state directory) is an append-only file
 // of JSON lines written by logDroppedEdits. This file parses those lines,
 // presents them human-readably, and reapplies one entry through the normal
@@ -131,7 +131,7 @@ func activeDroppedEdits(entries []syncLogEntry) (byID map[string]syncLogEntry, o
 func printDroppedEdits(logPath string) int {
 	entries, err := parseSyncLog(logPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync --recover: read log: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek sync --recover: read log: %v\n", err)
 		return 1
 	}
 	byID, order := activeDroppedEdits(entries)
@@ -191,12 +191,12 @@ func printDroppedEdits(logPath string) int {
 func reapplyDroppedEdit(logPath, ref string) int {
 	entries, err := parseSyncLog(logPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync --recover: read log: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek sync --recover: read log: %v\n", err)
 		return 1
 	}
 	byID, order := activeDroppedEdits(entries)
 	if len(order) == 0 {
-		fmt.Fprintln(os.Stderr, "taskr sync --recover: no dropped edits in sync log")
+		fmt.Fprintln(os.Stderr, "tjek sync --recover: no dropped edits in sync log")
 		return 1
 	}
 
@@ -209,27 +209,27 @@ func reapplyDroppedEdit(logPath, ref string) int {
 
 	loggedTask, err := findTaskByRef(todoPtrs(loggedTasks), ref)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync --recover: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek sync --recover: %v\n", err)
 		return 2
 	}
 
 	// Load the live store to check the task still exists.
 	repo, liveTodos, loadErr := loadForCLI()
 	if loadErr != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync --recover: load store: %v\n", loadErr)
+		fmt.Fprintf(os.Stderr, "tjek sync --recover: load store: %v\n", loadErr)
 		return 1
 	}
 
 	live, findErr := findTaskByRef(todoPtrs(liveTodos), loggedTask.ID)
 	if findErr != nil {
 		// The task is gone from the live store (deleted elsewhere). Don't resurrect it.
-		fmt.Fprintf(os.Stderr, "taskr sync --recover: task %s no longer exists locally (it may have been deleted), so it cannot be reapplied\n",
+		fmt.Fprintf(os.Stderr, "tjek sync --recover: task %s no longer exists locally (it may have been deleted), so it cannot be reapplied\n",
 			loggedTask.ID[:8])
 		return 1
 	}
 
 	// Apply the logged scalar fields onto the live task. Use the set-methods
-	// that call StampModified internally, just like `taskr edit` does, so the
+	// that call StampModified internally, just like `tjek edit` does, so the
 	// monotonic clock-skew clamp is guaranteed. We apply each field
 	// unconditionally from the log entry (the user asked to restore exactly
 	// that state). Child collections (comments, time entries) and
@@ -286,18 +286,18 @@ func reapplyDroppedEdit(logPath, ref string) int {
 	}
 
 	if err := repo.Save([]*todo.Todo{live}, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync --recover: save: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek sync --recover: save: %v\n", err)
 		return 1
 	}
 
 	// Append the recovery marker to the log so --recover no longer shows this entry.
 	if markerErr := appendRecoveryMarker(logPath, byID[loggedTask.ID]); markerErr != nil {
-		fmt.Fprintf(os.Stderr, "taskr sync --recover: warning: could not write recovery marker: %v\n", markerErr)
+		fmt.Fprintf(os.Stderr, "tjek sync --recover: warning: could not write recovery marker: %v\n", markerErr)
 		// Don't fail — the task was saved successfully.
 	}
 
 	fmt.Printf("recovered  %s  %s\n", live.ID[:8], live.Title)
-	fmt.Fprintln(os.Stderr, "(changes will propagate on the next taskr sync)")
+	fmt.Fprintln(os.Stderr, "(changes will propagate on the next tjek sync)")
 	return 0
 }
 

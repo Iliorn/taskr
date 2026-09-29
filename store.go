@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // Store is the single source of truth: the task set, the undo history, and the
@@ -305,7 +305,7 @@ func (s *Store) pushUndo(desc string, ids ...string) {
 		s.undoStack = s.undoStack[:maxUndoStack]
 	}
 	// Persist the last few task/subtask deletions so they survive a restart —
-	// the user expects deletions to be reversible even after closing taskr,
+	// the user expects deletions to be reversible even after closing tjek,
 	// since they're the destructive op with no in-app fallback. Other undo
 	// kinds stay in-memory only. A persist failure is swallowed; the worst
 	// case is losing the cross-restart safety net, never blocking the delete.

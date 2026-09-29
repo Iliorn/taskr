@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// The --json modes are taskr's only machine-readable surface, and the only
+// The --json modes are tjek's only machine-readable surface, and the only
 // part of it somebody else's script depends on. A rename in a struct tag, a
 // field dropped during a refactor, an array that quietly becomes an object —
 // none of that fails a build, none of it fails an existing test that checks
@@ -116,7 +116,7 @@ func checkContract(t *testing.T, name string, got string) {
 	// that does not depend on the clone being configured correctly.
 	want := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	if got != want {
-		t.Errorf("`taskr %s --json` shape changed.\n%s\nRerun with -update-json-contract if this is intended — and consider whether it breaks somebody's script.",
+		t.Errorf("`tjek %s --json` shape changed.\n%s\nRerun with -update-json-contract if this is intended — and consider whether it breaks somebody's script.",
 			name, diffLines(want, got))
 	}
 }
@@ -222,7 +222,7 @@ func TestJSONContractStats(t *testing.T) {
 	checkContract(t, "stats", contractOf(t, "stats", "--format", "json", "--seq"))
 }
 
-// The waybar shape is a third-party contract, not taskr's own: a waybar
+// The waybar shape is a third-party contract, not tjek's own: a waybar
 // custom module reads exactly text/tooltip/class and nothing else.
 func TestJSONContractWaybar(t *testing.T) {
 	jsonContractFixture(t)
@@ -258,7 +258,7 @@ func TestJSONContractCoversEveryJSONCommand(t *testing.T) {
 				continue
 			}
 			if !covered[spec.name] {
-				t.Errorf("`taskr %s --json` has no contract test — add one in cli_json_contract_test.go", spec.name)
+				t.Errorf("`tjek %s --json` has no contract test — add one in cli_json_contract_test.go", spec.name)
 			}
 		}
 	}

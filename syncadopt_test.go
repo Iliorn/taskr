@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/paths"
-	"github.com/Iliorn/taskr/tasksync"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/paths"
+	"github.com/Iliorn/tjek/tasksync"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // firstSyncHome sets up a private home with a store holding n live tasks and
@@ -158,7 +158,7 @@ func TestCLISyncAdoptRemote(t *testing.T) {
 		t.Fatalf("want exactly one backup in the state dir, got %v (err %v)", matches, err)
 	}
 	path := matches[0]
-	if want := "taskr import " + shellArg(path, runtime.GOOS); !strings.Contains(out, want) {
+	if want := "tjek import " + shellArg(path, runtime.GOOS); !strings.Contains(out, want) {
 		t.Errorf("the notice should carry a pasteable %q:\n%s", want, out)
 	}
 	b, err := os.ReadFile(path)
@@ -215,7 +215,7 @@ func TestAutoSyncPausesOnAnUnansweredFirstSync(t *testing.T) {
 	if pushed != 0 {
 		t.Errorf("CLI auto-sync uploaded on an unanswered first sync (%d request(s))", pushed)
 	}
-	if !strings.Contains(out, "auto-sync paused") || !strings.Contains(out, "taskr sync") {
+	if !strings.Contains(out, "auto-sync paused") || !strings.Contains(out, "tjek sync") {
 		t.Errorf("auto-sync should say why it paused and where to choose:\n%s", out)
 	}
 
@@ -239,10 +239,10 @@ func TestAutoSyncPausesOnAnUnansweredFirstSync(t *testing.T) {
 // the only honest test of a quoting rule.
 func TestShellArgQuotesWhatAShellWouldSplit(t *testing.T) {
 	cases := []struct{ in, goos, want string }{
-		{"/home/u/.local/state/taskr/b.json", "linux", "/home/u/.local/state/taskr/b.json"},
-		{"/Users/u/Library/Application Support/taskr/b.json", "darwin", "'/Users/u/Library/Application Support/taskr/b.json'"},
+		{"/home/u/.local/state/tjek/b.json", "linux", "/home/u/.local/state/tjek/b.json"},
+		{"/Users/u/Library/Application Support/tjek/b.json", "darwin", "'/Users/u/Library/Application Support/tjek/b.json'"},
 		{"/tmp/it's/b.json", "linux", `'/tmp/it'\''s/b.json'`},
-		{`C:\Users\u\AppData\Local\taskr\b.json`, "windows", `"C:\Users\u\AppData\Local\taskr\b.json"`},
+		{`C:\Users\u\AppData\Local\tjek\b.json`, "windows", `"C:\Users\u\AppData\Local\tjek\b.json"`},
 		{"", "linux", "''"},
 	}
 	for _, c := range cases {

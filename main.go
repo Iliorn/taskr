@@ -10,7 +10,7 @@ import (
 
 // appVersion is the current build version. Override at build time with:
 //
-//	go build -ldflags "-X main.appVersion=v1.8.0" -o taskr .
+//	go build -ldflags "-X main.appVersion=v1.8.0" -o tjek .
 //
 // When no version is injected, init() in version.go replaces this default
 // with whatever the Go toolchain recorded — the module version for a
@@ -18,7 +18,7 @@ import (
 var appVersion = "dev"
 
 func main() {
-	// Windows terminals get UTF-8 wrong in two ways, and taskr writes UTF-8 —
+	// Windows terminals get UTF-8 wrong in two ways, and tjek writes UTF-8 —
 	// borders, chips and the user's own æøå alike. First thing, before
 	// anything can print (console.go; a no-op everywhere else).
 	restoreConsole := prepareConsole()
@@ -29,8 +29,12 @@ func main() {
 		_ = os.Remove(execPath + ".old")
 	}
 
+	// An install from before the rename: move its files and its binary to
+	// tjek's names before anything looks for them.
+	adoptFormerName()
+
 	// CLI mode: when the first arg names a subcommand, run the non-TUI
-	// dispatcher and exit. Bare `taskr` (no args, or only flags meant for the
+	// dispatcher and exit. Bare `tjek` (no args, or only flags meant for the
 	// TUI) still launches the Bubble Tea program below.
 	if len(os.Args) > 1 && isCLICommand(os.Args[1]) {
 		code := runCLI(os.Args[1:])
@@ -39,18 +43,18 @@ func main() {
 		os.Exit(code)
 	}
 
-	// Fail closed when the store was written by a newer taskr. Every other
+	// Fail closed when the store was written by a newer tjek. Every other
 	// load error is reported inside the TUI, which is right for "the disk is
 	// full" but wrong here: the app would come up showing an empty list over a
 	// full database, and the first save would write this build's older columns
 	// back over it (migrator.go).
 	if err := openStore(); errors.Is(err, errSchemaTooNew) {
-		fmt.Fprintf(os.Stderr, "taskr: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tjek: %v\n", err)
 		restoreConsole()
 		os.Exit(1)
 	}
 
-	// Opt-in latency trace (TASKR_TRACE=1). Started before the model so the
+	// Opt-in latency trace (TJEK_TRACE=1). Started before the model so the
 	// startup load is in the log too.
 	stopTrace := startTrace()
 	defer stopTrace()

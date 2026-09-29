@@ -8,7 +8,7 @@ import (
 
 // Atomic file replacement.
 //
-// Everything taskr keeps outside SQLite (settings.json, sync.json, sync state,
+// Everything tjek keeps outside SQLite (settings.json, sync.json, sync state,
 // the undo stack, task notes) goes through here. A plain os.WriteFile
 // truncates first, so a crash mid-write leaves a half-written file. Instead:
 // write a temp file beside the target, flush it, rename it over the target.

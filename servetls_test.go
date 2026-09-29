@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/tasksync"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/tasksync"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // writeSelfSigned writes a fresh self-signed pair for 127.0.0.1 to cert/key in
@@ -37,7 +37,7 @@ func writeSelfSigned(t *testing.T, dir string, serial int64) (certPath, keyPath 
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(serial),
-		Subject:      pkix.Name{CommonName: "taskr test"},
+		Subject:      pkix.Name{CommonName: "tjek test"},
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(time.Hour),
 		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
@@ -89,7 +89,7 @@ func servingSerial(t *testing.T, addr string) int64 {
 	return conn.ConnectionState().PeerCertificates[0].SerialNumber.Int64()
 }
 
-// startTLSServe runs the real `taskr serve` handler over serveOn with a TLS
+// startTLSServe runs the real `tjek serve` handler over serveOn with a TLS
 // configuration from the reloader, on a free port.
 func startTLSServe(t *testing.T, certs *certReloader, token string) string {
 	t.Helper()
@@ -195,7 +195,7 @@ func TestServeSyncsOverTLS(t *testing.T) {
 			t.Error("the TLS port answered plain http with a 200")
 		}
 	}
-	// TLS 1.1 is refused: every taskr client is a Go binary, there is no old
+	// TLS 1.1 is refused: every tjek client is a Go binary, there is no old
 	// peer to keep it for.
 	old, err := tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true, MaxVersion: tls.VersionTLS11}) //nolint:gosec // probing the floor
 	if err == nil {
@@ -257,7 +257,7 @@ func TestServeTLSPicksUpARenewedCertificate(t *testing.T) {
 }
 
 // The Settings row asks whether this machine already runs a server. A
-// headless `taskr serve --tls-cert` answers plain http with a 400, which must
+// headless `tjek serve --tls-cert` answers plain http with a 400, which must
 // still read as "something is running here".
 func TestHealthProbeSeesPlainAndTLSServers(t *testing.T) {
 	setTestHome(t, t.TempDir())

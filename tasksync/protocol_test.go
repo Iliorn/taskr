@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // protocol_test.go covers the wire: the /v1/sync round trip, authentication,
@@ -562,7 +562,7 @@ func TestSyncErrorNamesBothVersionsWhenTheyDiffer(t *testing.T) {
 	}
 	// The version gap is the actionable half, so it has to survive a surface
 	// that shortens the message — it must lead, not trail.
-	if !strings.HasPrefix(msg, "sync server runs taskr") {
+	if !strings.HasPrefix(msg, "sync server runs tjek") {
 		t.Errorf("error must lead with the version gap, got %q", msg)
 	}
 }

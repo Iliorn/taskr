@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── show ─────────────────────────────────────────────────────────────────────
@@ -19,8 +19,8 @@ func cliShow(args []string) int {
 	fs := flag.NewFlagSet("show", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	asJSON := fs.Bool("json", false, "emit JSON instead of a formatted view")
-	// Route through splitFlagsAndPositionals so `taskr show <ref> --json` works
-	// the same as `taskr show --json <ref>`. Stdlib flag.Parse stops at the
+	// Route through splitFlagsAndPositionals so `tjek show <ref> --json` works
+	// the same as `tjek show --json <ref>`. Stdlib flag.Parse stops at the
 	// first non-flag token, which otherwise turns a trailing --json into a
 	// second positional and trips the usage check below.
 	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
@@ -28,7 +28,7 @@ func cliShow(args []string) int {
 		return 2
 	}
 	if len(positionals) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr show <ref>")
+		fmt.Fprintln(os.Stderr, "usage: tjek show <ref>")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -59,7 +59,7 @@ func cliShow(args []string) int {
 
 // cliWhy prints the same answer the TUI's w overlay gives: the score broken
 // into its causes, the margins to the tasks either side, and the moments the
-// ranking moves on its own. `taskr top` says what is next; this says why, which
+// ranking moves on its own. `tjek top` says what is next; this says why, which
 // is the difference between a ranking you follow and one you argue with.
 func cliWhy(args []string) int {
 	fs := flag.NewFlagSet("why", flag.ContinueOnError)
@@ -70,7 +70,7 @@ func cliWhy(args []string) int {
 		return 2
 	}
 	if len(positionals) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr why <ref>")
+		fmt.Fprintln(os.Stderr, "usage: tjek why <ref>")
 		return 2
 	}
 	repo, todos, err := loadForCLI()
@@ -94,7 +94,7 @@ func cliWhy(args []string) int {
 	return 0
 }
 
-// seqExplainJSON is the wire shape of `taskr why --json`. The internal
+// seqExplainJSON is the wire shape of `tjek why --json`. The internal
 // rank.Explanation carries reason codes and a rank.Level, which mean nothing outside
 // the binary, so the JSON form resolves them to the same sentences the text
 // form prints.
@@ -180,7 +180,7 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo, rk rank.
 		// `D/P/M/A` was a stat-readout cliff for anyone not already steeped in
 		// the sequencing engine's terminology.
 		// Percent of the current field, with the points that produced it —
-		// `taskr why` spells out where each of them came from.
+		// `tjek why` spells out where each of them came from.
 		fmt.Printf("Score:    %s  (%.1f pts: Deadline %.1f · Priority %.1f · Momentum %.1f · Size %.1f · Age %.1f)\n",
 			rk.FormatPercent(sc.Total), sc.Total,
 			sc.Urgency, sc.Importance, sc.Momentum, sc.Size, sc.Age)
@@ -223,7 +223,7 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo, rk rank.
 	}
 	if len(t.Comments) > 0 {
 		// 1-based indices so the user can pass them directly to
-		// `taskr comment <ref> --edit=N` / `--delete=N`. Timestamp includes
+		// `tjek comment <ref> --edit=N` / `--delete=N`. Timestamp includes
 		// HH:MM so multiple comments on the same day stay ordered/readable.
 		fmt.Printf("\nComments (%d):\n", len(t.Comments))
 		for i, c := range t.Comments {
@@ -340,7 +340,7 @@ func cliStats(args []string) int {
 	default:
 		// A status-bar script that misspells the format would otherwise get
 		// the text line and fail to parse it, far from the cause.
-		fmt.Fprintf(os.Stderr, "taskr stats: unknown --format %q (use text|json|waybar)\n", *format)
+		fmt.Fprintf(os.Stderr, "tjek stats: unknown --format %q (use text|json|waybar)\n", *format)
 		return 2
 	}
 	repo, todos, err := loadForCLI()

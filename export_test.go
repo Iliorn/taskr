@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── parseExportData unit tests ────────────────────────────────────────────────
@@ -433,7 +433,7 @@ func TestCliImportNonExistentFileExitsWithError(t *testing.T) {
 	}
 }
 
-// TestCliExportEmitsEnvelope verifies that `taskr export` now produces a
+// TestCliExportEmitsEnvelope verifies that `tjek export` now produces a
 // versioned envelope rather than a bare JSON array.
 func TestCliExportEmitsEnvelope(t *testing.T) {
 	// Seed a task so the export is non-empty.

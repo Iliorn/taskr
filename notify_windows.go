@@ -16,7 +16,7 @@ import (
 // The Windows toast, shown through the Windows Runtime's notification API
 // over COM with nothing but golang.org/x/sys: activate an XmlDocument and load
 // the toast into it, wrap it in a ToastNotification, and hand that to the
-// notifier for taskr's AppUserModelID. The sequence is the one Microsoft
+// notifier for tjek's AppUserModelID. The sequence is the one Microsoft
 // documents for desktop apps; a COM object here is a pointer to a pointer to
 // its method table, and a method is called by its index in that table (the
 // first six belong to IUnknown and IInspectable).
@@ -48,8 +48,8 @@ const (
 	slotShow                      = 6 // IToastNotifier
 )
 
-// toastAppID is the AppUserModelID Windows files taskr's toasts under.
-const toastAppID = "taskr"
+// toastAppID is the AppUserModelID Windows files tjek's toasts under.
+const toastAppID = "tjek"
 
 const (
 	roInitMultithreaded = 1
@@ -66,12 +66,12 @@ var registerToastApp = sync.OnceValue(func() error {
 		return err
 	}
 	defer key.Close()
-	return key.SetStringValue("DisplayName", "taskr")
+	return key.SetStringValue("DisplayName", "tjek")
 })
 
 func windowsToast(title, body string) error {
 	if err := registerToastApp(); err != nil {
-		return fmt.Errorf("registering taskr for notifications: %w", err)
+		return fmt.Errorf("registering tjek for notifications: %w", err)
 	}
 	return withWinRT(func() error {
 		toast, err := newToastNotification(toastXML(title, body))

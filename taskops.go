@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // taskops.go — task-tree operations shared by the TUI model and the CLI.

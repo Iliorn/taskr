@@ -15,8 +15,8 @@ import (
 // redirect actually took, rather than trusting that it did.
 var testHome string
 
-// TestMain isolates the entire test binary from the real ~/.taskr. Storage
-// paths derive from os.UserHomeDir (getStoragePath/dbPath/taskrDir), and several
+// TestMain isolates the entire test binary from the real ~/.tjek. Storage
+// paths derive from os.UserHomeDir (getStoragePath/dbPath/tjekDir), and several
 // tests build a model via initialModel — which opens the store — so without
 // this redirect a plain `go test` would read and create files under the
 // developer's real task directory.
@@ -26,7 +26,7 @@ var testHome string
 // pointed at the real home — the exact accident this function exists to
 // prevent — so both are set.
 func TestMain(m *testing.M) {
-	tmp, err := os.MkdirTemp("", "taskr-test-home")
+	tmp, err := os.MkdirTemp("", "tjek-test-home")
 	if err != nil {
 		panic(err)
 	}
@@ -36,7 +36,7 @@ func TestMain(m *testing.M) {
 	// Windows resolves config to %APPDATA% and everything else to
 	// %LOCALAPPDATA% *before* it ever looks at the home directory (the paths package),
 	// so redirecting the home alone left the whole Windows suite reading and
-	// writing the runner's real C:\Users\…\AppData\Local\taskr — the
+	// writing the runner's real C:\Users\…\AppData\Local\tjek — the
 	// accident this function exists to prevent, and the reason
 	// TestStorageStaysInsideTheTestHome was failing on that platform only.
 	// Pointed into the temp home rather than unset, so the branch real Windows
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"} {
 		os.Unsetenv(v)
 	}
-	os.Unsetenv("TASKR_HOME")
+	os.Unsetenv("TJEK_HOME")
 	code := m.Run()
 	// The last test to open the store leaves it open; on Windows that is
 	// enough to keep the temp home from being removed.
@@ -74,10 +74,10 @@ func setTestHome(t *testing.T, dir string) {
 	// one real AppData directory with every other test — and with the person
 	// running the suite.
 	setWindowsAppData(func(k, v string) error { t.Setenv(k, v); return nil }, dir)
-	// Same reason TestMain clears these: an absolute XDG_* or TASKR_HOME would
+	// Same reason TestMain clears these: an absolute XDG_* or TJEK_HOME would
 	// override the home this function just redirected, and the test would write
 	// outside its own directory.
-	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "TASKR_HOME"} {
+	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "TJEK_HOME"} {
 		t.Setenv(v, "")
 	}
 	// Redirecting the paths is only half of it: the store the paths lead to is
@@ -134,7 +134,7 @@ func testStore(t *testing.T) *sql.DB {
 }
 
 // The redirect is load-bearing: if it silently stops working on some platform,
-// the suite starts writing to the developer's real ~/.taskr. Assert every
+// the suite starts writing to the developer's real ~/.tjek. Assert every
 // storage path lands inside the temp home instead of finding out the hard way.
 func TestStorageStaysInsideTheTestHome(t *testing.T) {
 	if testHome == "" {
@@ -152,7 +152,7 @@ func TestStorageStaysInsideTheTestHome(t *testing.T) {
 	// cache resolve through different roots now, and each is a way out of the
 	// temp home if the redirect misses one.
 	for _, path := range []string{
-		taskrDir(), dbPath(), getStoragePath(), settingsPath(),
+		tjekDir(), dbPath(), getStoragePath(), settingsPath(),
 		syncConfigPath(), syncStatePath(), syncLogPath(), serveStatePath(),
 		undoPersistPath(), lastAddedPath(), remindedPath(), notesFilePath("some-task-id"),
 	} {
@@ -189,7 +189,7 @@ func TestNoBareHomeRedirectsInTests(t *testing.T) {
 }
 
 // mustMkdirFor creates the directory a path lives in. Tests that write one of
-// taskr's files directly need it now that config, data and state resolve to
+// tjek's files directly need it now that config, data and state resolve to
 // three different directories, only one of which the app creates eagerly.
 func mustMkdirFor(t *testing.T, path string) {
 	t.Helper()

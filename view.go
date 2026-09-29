@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -288,7 +288,7 @@ func (m model) View() string {
 	// reaches the whole app, and the columns a sentence would cost go to the
 	// tab labels instead.
 	shortcutHint := helpStyle.Render("?")
-	title := titleStyle.Render("taskr")
+	title := titleStyle.Render("tjek")
 	// Right margin of the line, then the blank columns the hint is held off the
 	// tab bar by. The bar is budgeted against both, so a bar that exactly fills
 	// its budget still leaves the gap standing rather than costing the hint.

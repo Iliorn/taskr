@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/tjek/paths"
 )
 
 // The "last added" pointer backs the `dep:^` / `--depends ^` shorthand: a

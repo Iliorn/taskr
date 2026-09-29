@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 
 	_ "modernc.org/sqlite"
 )
@@ -37,7 +37,7 @@ func TestSnapshotFileBackedProducesOpenableCopy(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "tasks.db")
 
-	// openStoreAt applies migrations and produces a normal taskr DB.
+	// openStoreAt applies migrations and produces a normal tjek DB.
 	h, err := openStoreAt(dbPath)
 	if err != nil {
 		t.Fatalf("openStoreAt: %v", err)
@@ -140,7 +140,7 @@ func TestNormalizeStoredTagsMigration(t *testing.T) {
 	task := todo.New("legacy spaced tags")
 	task.ModifiedAt = time.Now().Add(-time.Hour)
 	before := task.ModifiedAt
-	// Bypass AddTag to model rows written by an older taskr version.
+	// Bypass AddTag to model rows written by an older tjek version.
 	task.Tags = []string{"Deep Work", "deep-work", "Personal   Admin"}
 	saveTodos(t, h, []todo.Todo{task})
 
@@ -257,7 +257,7 @@ func TestOpenRefusesAStoreFromANewerBuild(t *testing.T) {
 		t.Fatalf("openStoreAt: %v", err)
 	}
 	saveTodos(t, h, []todo.Todo{todo.New("written by the newer build")})
-	// Stamp a version no migration in this tree provides, as a later taskr
+	// Stamp a version no migration in this tree provides, as a later tjek
 	// would have done on its way past.
 	if _, err := h.Exec(`INSERT INTO schema_version (version, applied_at) VALUES (?, ?)`,
 		9999, time.Now().UTC().Format(time.RFC3339)); err != nil {
@@ -271,9 +271,9 @@ func TestOpenRefusesAStoreFromANewerBuild(t *testing.T) {
 	if !errors.Is(err, errSchemaTooNew) {
 		t.Fatalf("openStoreAt on a newer store = %v, want errSchemaTooNew", err)
 	}
-	// The message has to carry both numbers: "which taskr do I need" is the
+	// The message has to carry both numbers: "which tjek do I need" is the
 	// first question it will be read to answer.
-	for _, want := range []string{"9999", "brew upgrade taskr", ".bak"} {
+	for _, want := range []string{"9999", "brew upgrade tjek", ".bak"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error message missing %q: %v", want, err)
 		}

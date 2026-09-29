@@ -12,7 +12,7 @@ import "testing"
 // interactive session, and a test run should not put toasts on the screen.
 func TestWindowsToastUpToShow(t *testing.T) {
 	err := withWinRT(func() error {
-		toast, err := newToastNotification(toastXML("taskr: 1 due today", "• Pay <rent> & \"bills\"\n• Second"))
+		toast, err := newToastNotification(toastXML("tjek: 1 due today", "• Pay <rent> & \"bills\"\n• Second"))
 		if err != nil {
 			return err
 		}

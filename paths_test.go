@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Iliorn/taskr/paths"
+	"github.com/Iliorn/tjek/paths"
 )
 
 // clearPathEnv puts one test in a known state: a fresh home, no XDG variables,
-// no TASKR_HOME, no legacy directory.
+// no TJEK_HOME, no legacy directory.
 func clearPathEnv(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -19,8 +19,8 @@ func clearPathEnv(t *testing.T) string {
 	return dir
 }
 
-// An existing ~/.taskr keeps everything where it was. This is the promise that
-// makes the whole change safe: nobody's database moves because taskr grew an
+// An existing ~/.tjek keeps everything where it was. This is the promise that
+// makes the whole change safe: nobody's database moves because tjek grew an
 // opinion about the XDG spec.
 func TestLegacyDirectoryKeepsItsFiles(t *testing.T) {
 	home := clearPathEnv(t)
@@ -39,34 +39,34 @@ func TestLegacyDirectoryKeepsItsFiles(t *testing.T) {
 		}
 	}
 	if !paths.UsingLegacyLayout() {
-		t.Error("usingLegacyLayout() = false with ~/.taskr present")
+		t.Error("usingLegacyLayout() = false with ~/.tjek present")
 	}
 }
 
-// A file called .taskr is not a legacy install.
+// A file called .tjek is not a legacy install.
 func TestLegacyDetectionIgnoresAFile(t *testing.T) {
 	home := clearPathEnv(t)
 	if err := os.WriteFile(filepath.Join(home, paths.LegacyDirName), []byte("not a dir"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if paths.UsingLegacyLayout() {
-		t.Error("a regular file named .taskr was treated as the legacy directory")
+		t.Error("a regular file named .tjek was treated as the legacy directory")
 	}
 }
 
-// TASKR_HOME collapses the split back into one directory, for people who would
+// TJEK_HOME collapses the split back into one directory, for people who would
 // rather back up a single path.
-func TestTaskrHomeOverridesEverything(t *testing.T) {
+func TestTjekHomeOverridesEverything(t *testing.T) {
 	clearPathEnv(t)
 	one := t.TempDir()
-	t.Setenv("TASKR_HOME", one)
+	t.Setenv("TJEK_HOME", one)
 	for _, got := range []string{dbPath(), settingsPath(), undoPersistPath(), syncLogPath(), notesFilePath("x")} {
 		if !strings.HasPrefix(got, one) {
-			t.Errorf("%q ignored TASKR_HOME=%q", got, one)
+			t.Errorf("%q ignored TJEK_HOME=%q", got, one)
 		}
 	}
 	if paths.UsingLegacyLayout() {
-		t.Error("TASKR_HOME should not report the legacy layout")
+		t.Error("TJEK_HOME should not report the legacy layout")
 	}
 }
 
@@ -165,5 +165,53 @@ func TestTheFourKindsAreDistinct(t *testing.T) {
 	if len(seen) != want {
 		t.Errorf("the four kinds resolve to %d directories on %s, want %d: %v",
 			len(seen), runtime.GOOS, want, seen)
+	}
+}
+
+// An install from before the rename keeps its data: ~/.taskr and each
+// platform directory's taskr folder take tjek's names, once, and never over
+// data that is already there.
+func TestAdoptFormerDirsMovesTaskrData(t *testing.T) {
+	home := t.TempDir()
+	setTestHome(t, home)
+	oldLegacy := filepath.Join(home, ".taskr")
+	oldConfig := filepath.Join(home, ".config", "taskr")
+	for _, dir := range []string{oldLegacy, oldConfig} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "tasks.db"), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A tjek state directory already holds data: its taskr twin stays put.
+	oldState := filepath.Join(home, ".local", "state", "taskr")
+	newState := filepath.Join(home, ".local", "state", "tjek")
+	for _, dir := range []string{oldState, newState} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	moved, err := paths.AdoptFormerDirs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(moved) != 2 {
+		t.Fatalf("moved %v, want ~/.taskr and ~/.config/taskr", moved)
+	}
+	for _, f := range []string{filepath.Join(home, ".tjek", "tasks.db"), filepath.Join(home, ".config", "tjek", "tasks.db")} {
+		if _, err := os.Stat(f); err != nil {
+			t.Errorf("%s should exist after the move: %v", f, err)
+		}
+	}
+	if _, err := os.Stat(oldState); err != nil {
+		t.Error("a taskr directory whose tjek name is taken must be left where it is")
+	}
+	if again, _ := paths.AdoptFormerDirs(); len(again) != 0 {
+		t.Errorf("a second run should move nothing, moved %v", again)
+	}
+	if !paths.FormerExecutable(filepath.Join(home, "bin", "taskr"+map[bool]string{true: ".exe"}[runtime.GOOS == "windows"])) {
+		t.Error("a binary named taskr is the former executable")
 	}
 }

@@ -100,7 +100,7 @@ func reconcileStaleTimersCLI(cmd string) {
 	// Commands that say nothing about tasks have no business opening the
 	// store — and opening it is not free: a store older than this binary is
 	// migrated on open, which is a one-way change for anyone still running an
-	// older taskr elsewhere. `taskr update --check` asking GitHub for a tag
+	// older tjek elsewhere. `tjek update --check` asking GitHub for a tag
 	// must not be what upgrades a database schema.
 	case "help", "-h", "--help", "--version", "update", "completion", "man":
 		return
@@ -114,7 +114,7 @@ func reconcileStaleTimersCLI(cmd string) {
 	}
 	for _, r := range recovered {
 		fmt.Fprintf(os.Stderr,
-			"taskr: auto-stopped a timer left running on %q since %s (idle over %s); logged %s. Fix it in the task's detail view if that's wrong.\n",
+			"tjek: auto-stopped a timer left running on %q since %s (idle over %s); logged %s. Fix it in the task's detail view if that's wrong.\n",
 			r.Title, r.Started.Local().Format("Jan 2 15:04"), shortDur(idleThreshold), shortDur(r.Logged))
 	}
 }

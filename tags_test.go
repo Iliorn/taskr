@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/x/ansi"
 )
 
 // newTagModel returns a model with a known, hermetic set of todos (initialModel
 // loads from disk, so we replace its tasks wholesale). initialModel also applies
 // the developer's stored language; pin English so these tests, which assert
-// English labels, are deterministic regardless of ~/.taskr/settings.json.
+// English labels, are deterministic regardless of ~/.tjek/settings.json.
 func newTagModel(todos ...todo.Todo) model {
 	m := newTestModel()
 	applyLang(string(langEN))

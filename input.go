@@ -27,11 +27,11 @@ import (
 // path. The cost is that console resize events only arrive on the first path,
 // so on Windows we poll the size instead (startResizePoller).
 
-// consoleInputForced reports whether TASKR_WIN_CONSOLE_INPUT asks for Bubble
+// consoleInputForced reports whether TJEK_WIN_CONSOLE_INPUT asks for Bubble
 // Tea's console-event reader — the polling one. It exists as a way back if the
 // escape-sequence path misbehaves on a particular console; on every other
 // platform it does nothing.
 func consoleInputForced() bool {
-	v := strings.TrimSpace(os.Getenv("TASKR_WIN_CONSOLE_INPUT"))
+	v := strings.TrimSpace(os.Getenv("TJEK_WIN_CONSOLE_INPUT"))
 	return v != "" && v != "0" && v != "false"
 }

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Iliorn/taskr/rank"
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // lang_test.go pins the one way a fallback-to-English translation scheme fails

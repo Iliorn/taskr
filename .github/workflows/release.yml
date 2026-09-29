@@ -50,13 +50,25 @@ jobs:
           LDFLAGS: -s -w -X main.appVersion=${{ github.ref_name }}
           CGO_ENABLED: 0
         run: |
-          GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o taskr .
-          GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o taskr-linux-arm64 .
-          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o taskr.exe .
+          GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o tjek .
+          GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o tjek-linux-arm64 .
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o tjek.exe .
+
+      # tjek was called taskr, and an install from then updates itself by
+      # fetching the asset with its own name (selfUpdateAsset in the build it
+      # runs). The same bytes under those names let it update into tjek, which
+      # then renames itself on its first run (adoptFormerName).
+      - name: Assets under the former names
+        run: |
+          cp tjek taskr
+          cp tjek-linux-arm64 taskr-linux-arm64
+          cp tjek.exe taskr.exe
 
       # Lets anyone verify a download, and gives packagers something to pin.
+      # The former names are in it because an old install verifies its
+      # download against its own name's line.
       - name: Checksums
-        run: sha256sum taskr taskr-linux-arm64 taskr.exe > SHA256SUMS
+        run: sha256sum tjek tjek-linux-arm64 tjek.exe taskr taskr-linux-arm64 taskr.exe > SHA256SUMS
 
       # SHA256SUMS proves a download matches what this workflow published. It
       # cannot prove anything about the publisher, because it is published by
@@ -70,17 +82,21 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: taskr, taskr-linux-arm64, taskr.exe
+          subject-path: tjek, tjek-linux-arm64, tjek.exe
 
       # The Scoop manifest pins a version and a checksum, so a copy kept by
       # hand in the tree is stale the moment the next tag is pushed, and stale
       # in the checksum, which is the part users trust. Generating it here from
       # the binaries just built makes it correct by construction. It ships as
       # a release asset so
-      # `scoop install .../releases/latest/download/taskr.json` always points
+      # `scoop install .../releases/latest/download/tjek.json` always points
       # at the newest release without anything to bump.
+      # taskr.json is the same manifest under the name a Scoop install made
+      # before the rename fetches on `scoop update`; it installs tjek.
       - name: Package manifests
-        run: packaging/generate-packages.sh "${{ github.ref_name }}" .
+        run: |
+          packaging/generate-packages.sh "${{ github.ref_name }}" .
+          cp tjek.json taskr.json
 
       # The release body is this tag's CHANGELOG section, so the release page
       # says what changed in the words it was written in rather than listing
@@ -92,7 +108,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V: ${{ github.ref_name }}
         run: |
-          assets=(taskr taskr-linux-arm64 taskr.exe SHA256SUMS taskr.json)
+          assets=(tjek tjek-linux-arm64 tjek.exe SHA256SUMS tjek.json taskr taskr-linux-arm64 taskr.exe taskr.json)
           if packaging/release-notes.sh "$V" CHANGELOG.md > "$RUNNER_TEMP/notes.md"; then
             gh release create "$V" --title "$V" --notes-file "$RUNNER_TEMP/notes.md" "${assets[@]}"
           else
@@ -116,7 +132,7 @@ jobs:
           DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
         run: |
           set -euo pipefail
-          url="https://github.com/Iliorn/taskr/archive/refs/tags/${V}.tar.gz"
+          url="https://github.com/Iliorn/tjek/archive/refs/tags/${V}.tar.gz"
           sha="$(curl -fsSL "$url" | sha256sum | cut -d' ' -f1)"
 
           install -m 700 -d ~/.ssh
@@ -130,13 +146,13 @@ jobs:
           sed -i -E \
             -e "s|^(  url \")[^\"]*(\")$|\1${url}\2|" \
             -e "s|^(  sha256 \")[^\"]*(\")$|\1${sha}\2|" \
-            Formula/taskr.rb
+            Formula/tjek.rb
           if git diff --quiet; then
-            echo "Formula/taskr.rb already points at ${V}"
+            echo "Formula/tjek.rb already points at ${V}"
             exit 0
           fi
           git diff
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -am "taskr ${V}"
+              commit -am "tjek ${V}"
           git push origin HEAD

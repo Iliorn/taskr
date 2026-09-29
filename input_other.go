@@ -12,5 +12,5 @@ func inputProgramOptions() []tea.ProgramOption { return nil }
 // startResizePoller is a no-op off Windows, where SIGWINCH does the job.
 func startResizePoller(*tea.Program) (stop func()) { return func() {} }
 
-// inputPathName describes the input path for `taskr doctor`.
+// inputPathName describes the input path for `tjek doctor`.
 func inputPathName() string { return "default (event-driven)" }

@@ -1,15 +1,15 @@
-# taskr
+# tjek
 
 A keyboard-driven task manager for the terminal that tells you what to do next.
 
-[![CI](https://github.com/Iliorn/taskr/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/Iliorn/taskr/actions/workflows/ci.yml?query=branch%3Amain)
+[![CI](https://github.com/Iliorn/tjek/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/Iliorn/tjek/actions/workflows/ci.yml?query=branch%3Amain)
 ![Go](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat&logo=go)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=flat)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat)
 
 ![The Tasks tab: a ranked list beside the selected task's details](docs/img/tasks.png)
 
-taskr runs on Linux, macOS and Windows and keeps everything in a local file.
+tjek runs on Linux, macOS and Windows and keeps everything in a local file.
 It can sync between your machines through a small server you run yourself.
 No account, no cloud service.
 
@@ -35,18 +35,18 @@ No account, no cloud service.
 
 | | |
 |---|---|
-| macOS | `brew install iliorn/tap/taskr` |
-| Windows | `scoop install https://github.com/Iliorn/taskr/releases/latest/download/taskr.json` |
-| Linux / Windows binary | [Releases](https://github.com/iliorn/taskr/releases) |
-| Anywhere Go runs | `go install github.com/Iliorn/taskr@latest` |
+| macOS | `brew install iliorn/tap/tjek` |
+| Windows | `scoop install https://github.com/Iliorn/tjek/releases/latest/download/tjek.json` |
+| Linux / Windows binary | [Releases](https://github.com/iliorn/tjek/releases) |
+| Anywhere Go runs | `go install github.com/Iliorn/tjek@latest` |
 
-taskr updates itself from Settings → "Update to latest release".
+tjek updates itself from Settings → "Update to latest release".
 [docs/install.md](docs/install.md) covers building from source and verifying
 a download.
 
 ## Getting started
 
-Run `taskr`.
+Run `tjek`.
 
 | Key | Action |
 |-----|--------|
@@ -68,8 +68,8 @@ Dates can be `today`, `tomorrow`, `monday`, `+3d`, `-2d`, `15-06-25` and more.
 
 ## Learn more
 
-- [Using taskr](docs/guide.md): every tab, search, the board, reminders and custom keys
-- [Command line](docs/cli.md): `taskr add`, `list`, `done`, JSON output, export and import
+- [Using tjek](docs/guide.md): every tab, search, the board, reminders and custom keys
+- [Command line](docs/cli.md): `tjek add`, `list`, `done`, JSON output, export and import
 - [Sync between devices](docs/sync.md): running a server and connecting your machines
 - [Files and troubleshooting](docs/troubleshooting.md): where data lives, backups, crashes
 - [Changelog](CHANGELOG.md)
@@ -77,7 +77,7 @@ Dates can be `today`, `tomorrow`, `monday`, `+3d`, `-2d`, `15-06-25` and more.
 ## Contributing
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers building and testing, and
-[ARCHITECTURE.md](ARCHITECTURE.md) how taskr is put together. Security issues
+[ARCHITECTURE.md](ARCHITECTURE.md) how tjek is put together. Security issues
 go through [SECURITY.md](SECURITY.md).
 
 ## License

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // ── Detail pages ──────────────────────────────────────────────────────────────
@@ -184,7 +184,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		// "(D 10.5 · P 10 · M 10 · S…" they explain nothing and cost a row
 		// saying so. When the column cannot hold the whole account, keep the
 		// percentage — which is the part the list column and the row's
-		// position agree on — and leave the breakdown to `w` and `taskr why`,
+		// position agree on — and leave the breakdown to `w` and `tjek why`,
 		// which have the width for it.
 		if len([]rune(breakdown)) > valW {
 			breakdown = m.rank.FormatPercent(ranked) + lift

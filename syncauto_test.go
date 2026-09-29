@@ -56,7 +56,7 @@ func TestHandleSyncDoneFirstFailureTogglesToast(t *testing.T) {
 // naming the stale server sat just past the cut.
 func TestSyncFailureKeepsTheWholeExplanation(t *testing.T) {
 	m := modelWithTasks(t)
-	detail := "sync server runs taskr v1.25.0, this device runs v1.33.1 — restart the sync server (it answered 500 Internal Server Error: merge failed: no such table: task_learnings)"
+	detail := "sync server runs tjek v1.25.0, this device runs v1.33.1 — restart the sync server (it answered 500 Internal Server Error: merge failed: no such table: task_learnings)"
 
 	next, _ := m.handleSyncDone(syncDoneMsg{err: errors.New(detail)})
 	m = next.(model)
@@ -70,7 +70,7 @@ func TestSyncFailureKeepsTheWholeExplanation(t *testing.T) {
 // answering 200 while dropping whatever it has no column for.
 func TestSyncSuccessReportsAVersionGap(t *testing.T) {
 	m := modelWithTasks(t)
-	gap := "sync server runs taskr v1.25.0, this device runs v1.33.1"
+	gap := "sync server runs tjek v1.25.0, this device runs v1.33.1"
 
 	next, _ := m.handleSyncDone(syncDoneMsg{summary: syncSummary{sent: 2, received: 0, versionGap: gap}})
 	m = next.(model)

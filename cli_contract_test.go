@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/Iliorn/taskr/todo"
+	"github.com/Iliorn/tjek/todo"
 )
 
 // The CLI's routing tables are three parallel lists that have to agree:
@@ -129,13 +129,13 @@ func TestCliHelpListsEveryRoutableCommand(t *testing.T) {
 		if spec.name == "help" {
 			continue // documented by being the thing you are reading
 		}
-		if !strings.Contains(out, "taskr "+spec.name) {
-			t.Errorf("`taskr %s` is routable but absent from the help output", spec.name)
+		if !strings.Contains(out, "tjek "+spec.name) {
+			t.Errorf("`tjek %s` is routable but absent from the help output", spec.name)
 		}
 	}
 }
 
-// `taskr help` is read in a terminal, most of which open 80 columns wide; a
+// `tjek help` is read in a terminal, most of which open 80 columns wide; a
 // longer line wraps mid-word into the next command's column.
 func TestCliHelpFitsEightyColumns(t *testing.T) {
 	out := captureStdout(t, func() { cliHelp() })

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// completion.go — `taskr completion <shell>` and `taskr man`.
+// completion.go — `tjek completion <shell>` and `tjek man`.
 //
 // Both are generated from one table, cliCommandSpecs, rather than written out
 // per shell: three hand-maintained scripts plus a roff file is four places for
@@ -87,10 +87,10 @@ func specFor(name string) (cliCommandSpec, bool) {
 	return cliCommandSpec{}, false
 }
 
-// cliCompletion implements `taskr completion <shell>`.
+// cliCompletion implements `tjek completion <shell>`.
 func cliCompletion(args []string) int {
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: taskr completion bash|zsh|fish")
+		fmt.Fprintln(os.Stderr, "usage: tjek completion bash|zsh|fish")
 		return 2
 	}
 	var script string
@@ -102,7 +102,7 @@ func cliCompletion(args []string) int {
 	case "fish":
 		script = fishCompletion()
 	default:
-		fmt.Fprintf(os.Stderr, "taskr completion: unknown shell %q (want bash, zsh or fish)\n", args[0])
+		fmt.Fprintf(os.Stderr, "tjek completion: unknown shell %q (want bash, zsh or fish)\n", args[0])
 		return 2
 	}
 	fmt.Print(script)
@@ -110,17 +110,17 @@ func cliCompletion(args []string) int {
 }
 
 // refCompletionNote explains the one dynamic completion: task refs come from
-// `taskr list --json`, so the shells stay in sync with the store without this
+// `tjek list --json`, so the shells stay in sync with the store without this
 // file knowing anything about it.
-const refCompletionNote = "# Task refs are completed from the live store via `taskr list`."
+const refCompletionNote = "# Task refs are completed from the live store via `tjek list`."
 
 func bashCompletion() string {
 	var b strings.Builder
-	b.WriteString("# bash completion for taskr. Install with:\n")
-	b.WriteString("#   taskr completion bash > /etc/bash_completion.d/taskr\n")
+	b.WriteString("# bash completion for tjek. Install with:\n")
+	b.WriteString("#   tjek completion bash > /etc/bash_completion.d/tjek\n")
 	b.WriteString("#   (or source it from ~/.bashrc)\n")
 	b.WriteString(refCompletionNote + "\n\n")
-	b.WriteString("_taskr() {\n")
+	b.WriteString("_tjek() {\n")
 	b.WriteString("  local cur prev cmd\n")
 	b.WriteString("  cur=\"${COMP_WORDS[COMP_CWORD]}\"\n")
 	b.WriteString("  cmd=\"${COMP_WORDS[1]}\"\n")
@@ -141,7 +141,7 @@ func bashCompletion() string {
 			b.WriteString("      fi\n")
 		}
 		if c.refArg {
-			b.WriteString("      COMPREPLY=( $(compgen -W \"$(taskr list --json 2>/dev/null | sed -n 's/.*\"title\": *\"\\([^\"]*\\)\".*/\\1/p')\" -- \"$cur\") )\n")
+			b.WriteString("      COMPREPLY=( $(compgen -W \"$(tjek list --json 2>/dev/null | sed -n 's/.*\"title\": *\"\\([^\"]*\\)\".*/\\1/p')\" -- \"$cur\") )\n")
 		}
 		b.WriteString("      ;;\n")
 	}
@@ -150,17 +150,17 @@ func bashCompletion() string {
 	b.WriteString("      ;;\n")
 	b.WriteString("  esac\n")
 	b.WriteString("}\n")
-	b.WriteString("complete -F _taskr taskr\n")
+	b.WriteString("complete -F _tjek tjek\n")
 	return b.String()
 }
 
 func zshCompletion() string {
 	var b strings.Builder
-	b.WriteString("#compdef taskr\n")
-	b.WriteString("# zsh completion for taskr. Install with:\n")
-	b.WriteString("#   taskr completion zsh > \"${fpath[1]}/_taskr\"\n")
+	b.WriteString("#compdef tjek\n")
+	b.WriteString("# zsh completion for tjek. Install with:\n")
+	b.WriteString("#   tjek completion zsh > \"${fpath[1]}/_tjek\"\n")
 	b.WriteString(refCompletionNote + "\n\n")
-	b.WriteString("_taskr() {\n")
+	b.WriteString("_tjek() {\n")
 	b.WriteString("  local -a commands\n")
 	b.WriteString("  commands=(\n")
 	for _, c := range cliCommandSpecs {
@@ -168,7 +168,7 @@ func zshCompletion() string {
 	}
 	b.WriteString("  )\n")
 	b.WriteString("  if (( CURRENT == 2 )); then\n")
-	b.WriteString("    _describe -t commands 'taskr command' commands\n")
+	b.WriteString("    _describe -t commands 'tjek command' commands\n")
 	b.WriteString("    return\n")
 	b.WriteString("  fi\n")
 	b.WriteString("  case \"${words[2]}\" in\n")
@@ -180,11 +180,11 @@ func zshCompletion() string {
 		if len(c.flags) > 0 {
 			b.WriteString("      _arguments " + zshFlagArgs(c.flags))
 			if c.refArg {
-				b.WriteString(" '*:task:_taskr_refs'")
+				b.WriteString(" '*:task:_tjek_refs'")
 			}
 			b.WriteString("\n")
 		} else if c.refArg {
-			b.WriteString("      _arguments '*:task:_taskr_refs'\n")
+			b.WriteString("      _arguments '*:task:_tjek_refs'\n")
 		}
 		b.WriteString("      ;;\n")
 	}
@@ -193,38 +193,38 @@ func zshCompletion() string {
 	b.WriteString("      ;;\n")
 	b.WriteString("  esac\n")
 	b.WriteString("}\n\n")
-	b.WriteString("_taskr_refs() {\n")
+	b.WriteString("_tjek_refs() {\n")
 	b.WriteString("  local -a refs\n")
-	b.WriteString("  refs=(${(f)\"$(taskr list --json 2>/dev/null | sed -n 's/.*\"title\": *\"\\([^\"]*\\)\".*/\\1/p')\"})\n")
+	b.WriteString("  refs=(${(f)\"$(tjek list --json 2>/dev/null | sed -n 's/.*\"title\": *\"\\([^\"]*\\)\".*/\\1/p')\"})\n")
 	b.WriteString("  _describe -t tasks task refs\n")
 	b.WriteString("}\n")
-	b.WriteString("_taskr \"$@\"\n")
+	b.WriteString("_tjek \"$@\"\n")
 	return b.String()
 }
 
 func fishCompletion() string {
 	var b strings.Builder
-	b.WriteString("# fish completion for taskr. Install with:\n")
-	b.WriteString("#   taskr completion fish > ~/.config/fish/completions/taskr.fish\n")
+	b.WriteString("# fish completion for tjek. Install with:\n")
+	b.WriteString("#   tjek completion fish > ~/.config/fish/completions/tjek.fish\n")
 	b.WriteString(refCompletionNote + "\n\n")
-	b.WriteString("complete -c taskr -f\n")
-	b.WriteString("function __taskr_refs\n")
-	b.WriteString("  taskr list --json 2>/dev/null | string match -r '\"title\": *\"(.*)\"' -g\n")
+	b.WriteString("complete -c tjek -f\n")
+	b.WriteString("function __tjek_refs\n")
+	b.WriteString("  tjek list --json 2>/dev/null | string match -r '\"title\": *\"(.*)\"' -g\n")
 	b.WriteString("end\n")
 	for _, c := range cliCommandSpecs {
-		b.WriteString("complete -c taskr -n '__fish_use_subcommand' -a " + c.name +
+		b.WriteString("complete -c tjek -n '__fish_use_subcommand' -a " + c.name +
 			" -d '" + fishEscape(c.summary) + "'\n")
 	}
 	for _, c := range cliCommandSpecs {
 		for _, f := range c.flags {
-			b.WriteString("complete -c taskr -n '__fish_seen_subcommand_from " + c.name + "' -l " + f + "\n")
+			b.WriteString("complete -c tjek -n '__fish_seen_subcommand_from " + c.name + "' -l " + f + "\n")
 		}
 		if c.refArg {
-			b.WriteString("complete -c taskr -n '__fish_seen_subcommand_from " + c.name +
-				"' -a '(__taskr_refs)'\n")
+			b.WriteString("complete -c tjek -n '__fish_seen_subcommand_from " + c.name +
+				"' -a '(__tjek_refs)'\n")
 		}
 	}
-	b.WriteString("complete -c taskr -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'\n")
+	b.WriteString("complete -c tjek -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'\n")
 	return b.String()
 }
 
@@ -253,13 +253,13 @@ func fishEscape(s string) string {
 
 // ── Man page ──────────────────────────────────────────────────────────────────
 
-// cliMan prints a roff man page on stdout, for `taskr man >
-// /usr/local/share/man/man1/taskr.1`. Generated rather than committed as a file
+// cliMan prints a roff man page on stdout, for `tjek man >
+// /usr/local/share/man/man1/tjek.1`. Generated rather than committed as a file
 // so it cannot drift from the command table, and so the version line matches the
 // binary that printed it.
 func cliMan(args []string) int {
 	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "usage: taskr man")
+		fmt.Fprintln(os.Stderr, "usage: tjek man")
 		return 2
 	}
 	fmt.Print(manPage())
@@ -269,11 +269,11 @@ func cliMan(args []string) int {
 func manPage() string {
 	var b strings.Builder
 	// .TH sets the header; section 1 is user commands.
-	fmt.Fprintf(&b, ".TH TASKR 1 \"\" \"taskr %s\" \"User Commands\"\n", appVersion)
-	b.WriteString(".SH NAME\ntaskr \\- keyboard-driven task manager for the terminal\n")
-	b.WriteString(".SH SYNOPSIS\n.B taskr\n[\\fIcommand\\fR] [\\fIflags\\fR]\n")
+	fmt.Fprintf(&b, ".TH TJEK 1 \"\" \"tjek %s\" \"User Commands\"\n", appVersion)
+	b.WriteString(".SH NAME\ntjek \\- keyboard-driven task manager for the terminal\n")
+	b.WriteString(".SH SYNOPSIS\n.B tjek\n[\\fIcommand\\fR] [\\fIflags\\fR]\n")
 	b.WriteString(".SH DESCRIPTION\n")
-	b.WriteString("Run with no arguments, \\fBtaskr\\fR launches its terminal UI: tasks, a\n")
+	b.WriteString("Run with no arguments, \\fBtjek\\fR launches its terminal UI: tasks, a\n")
 	b.WriteString("calendar with time tracking, projects, tags, a kanban board and a stats\n")
 	b.WriteString("dashboard, all keyboard-driven. Press \\fB?\\fR inside the app for the key\n")
 	b.WriteString("reference, or \\fBctrl+k\\fR for the command palette.\n.PP\n")
@@ -283,34 +283,34 @@ func manPage() string {
 	b.WriteString("candidates.\n")
 	b.WriteString(".SH COMMANDS\n")
 	for _, c := range cliCommandSpecs {
-		fmt.Fprintf(&b, ".TP\n.B taskr %s\n%s.\n", c.name, manEscape(c.summary))
+		fmt.Fprintf(&b, ".TP\n.B tjek %s\n%s.\n", c.name, manEscape(c.summary))
 		if len(c.flags) > 0 {
 			fmt.Fprintf(&b, "Flags: %s.\n", manEscape(flagWords(c.flags)))
 		}
 	}
 	b.WriteString(".SH QUICK-ADD SYNTAX\n")
-	b.WriteString("Titles accept inline tokens, in the app and in \\fBtaskr add\\fR alike:\n")
+	b.WriteString("Titles accept inline tokens, in the app and in \\fBtjek add\\fR alike:\n")
 	b.WriteString(".B #tag\n,\n.B @project\n,\n.B due:tomorrow\n,\n.B p:high\n,\n.B s:l\n,\n")
 	b.WriteString(".B r:weekly\n and\n.B dep:^\n(the last-added task).\n")
 	b.WriteString(".SH FILES\n")
 	b.WriteString("Each file lives in the directory for its kind, which follows the platform:\n")
-	b.WriteString("XDG on Linux (\\fI~/.config/taskr\\fR, \\fI~/.local/share/taskr\\fR,\n")
-	b.WriteString("\\fI~/.local/state/taskr\\fR), %APPDATA% and %LOCALAPPDATA% on Windows,\n")
-	b.WriteString("\\fI~/Library/Application Support\\fR on macOS. An existing \\fI~/.taskr\\fR\n")
-	b.WriteString("holds all of them, and so does \\fBTASKR_HOME\\fR when set.\n")
-	b.WriteString("\\fBtaskr doctor\\fR prints the directories in use.\n")
+	b.WriteString("XDG on Linux (\\fI~/.config/tjek\\fR, \\fI~/.local/share/tjek\\fR,\n")
+	b.WriteString("\\fI~/.local/state/tjek\\fR), %APPDATA% and %LOCALAPPDATA% on Windows,\n")
+	b.WriteString("\\fI~/Library/Application Support\\fR on macOS. An existing \\fI~/.tjek\\fR\n")
+	b.WriteString("holds all of them, and so does \\fBTJEK_HOME\\fR when set.\n")
+	b.WriteString("\\fBtjek doctor\\fR prints the directories in use.\n")
 	b.WriteString(".TP\n.I tasks.db\nThe task store (SQLite, WAL mode). Data directory.\n")
 	b.WriteString(".TP\n.I settings.json\nPreferences: theme, language, sequencing weights, board columns. Config directory.\n")
 	b.WriteString(".TP\n.I sync.json\nSync server URL and token, when configured. Config directory.\n")
-	b.WriteString(".TP\n.I sync.log\nLocal edits that lost a sync conflict; \\fBtaskr sync --recover\\fR reapplies them. State directory.\n")
+	b.WriteString(".TP\n.I sync.log\nLocal edits that lost a sync conflict; \\fBtjek sync --recover\\fR reapplies them. State directory.\n")
 	b.WriteString(".SH ENVIRONMENT\n")
 	b.WriteString(".TP\n.B EDITOR\nEditor used for task notes. Falls back to notepad on Windows.\n")
-	b.WriteString(".TP\n.B TASKR_SYNC_URL, TASKR_SYNC_TOKEN\nOverride the stored sync configuration.\n")
-	b.WriteString(".TP\n.B TASKR_HOME\nKeep every file in this one directory.\n")
+	b.WriteString(".TP\n.B TJEK_SYNC_URL, TJEK_SYNC_TOKEN\nOverride the stored sync configuration.\n")
+	b.WriteString(".TP\n.B TJEK_HOME\nKeep every file in this one directory.\n")
 	b.WriteString(".SH EXIT STATUS\n")
 	b.WriteString("0 on success, 1 on a runtime error, 2 on a usage error or an ambiguous\ntask reference.\n")
 	b.WriteString(".SH SEE ALSO\n")
-	b.WriteString("Full documentation at\n.UR https://github.com/Iliorn/taskr\n.UE\n")
+	b.WriteString("Full documentation at\n.UR https://github.com/Iliorn/tjek\n.UE\n")
 	return b.String()
 }
 
