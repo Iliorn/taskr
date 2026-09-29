@@ -11,6 +11,20 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [1.44.0] - 2026-09-29
+
+### Changed
+
+- Sync merges each field and tag on its own, so two devices' edits to different fields both survive.
+- An edit made after seeing another device's edit wins, even on a device whose clock is behind.
+- `tjek sync --recover` puts back only the fields that lost a conflict.
+- The orange sync mark names both versions when there is room ("! server v1.43.0, app v1.44.0").
+- The calendar's month panel grows with the window, so Coming up shows more of each name.
+
+### Fixed
+
+- A recurring task closed on two devices, or closed twice, spawned its next instance twice.
+
 ## [1.43.0] - 2026-09-29
 
 ### Added
