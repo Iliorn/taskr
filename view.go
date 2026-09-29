@@ -405,6 +405,14 @@ func (m model) buildStackedDetail(w int) (string, int) {
 			// unclipped line pushes the whole box past the terminal edge on a
 			// narrow window — every other pane clips for the same reason.
 			detailBody := strings.Split(m.applyDetailScroll(detailContent), "\n")
+			if n := m.stackedTaskDetailLines(); n > 0 {
+				// A stacked task detail fills the share splitStack gave it,
+				// so the list above ends where its rows do.
+				detailBody = strings.Split(m.applyDetailScrollN(detailContent, n-detailBorderLines), "\n")
+				for len(detailBody) < n-detailBorderLines {
+					detailBody = append(detailBody, "")
+				}
+			}
 			if m.tab == tabTags && !m.drillDetailOpen() {
 				// The stacked tag pane takes its share of the height whole, so
 				// the list above it is only as tall as its rows (tagStackRows).

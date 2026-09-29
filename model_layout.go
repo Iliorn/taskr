@@ -120,6 +120,9 @@ func detailScrollWindow(offset, cursor, visible, total int) int {
 // never a cursor scrolled out of sight.
 func (m model) detailViewportHeight() int {
 	h := m.termHeight*detailMaxHeightPct/100 - 2
+	if n := m.stackedTaskDetailLines(); n > 0 {
+		h = n - detailBorderLines
+	}
 	if m.sideBySide() {
 		// A full-height column beside the list: the window less the fixed
 		// header and footer, less the panel's two borders and the blank row
@@ -334,21 +337,41 @@ func (m model) listVisible() int {
 // the scroll clamps keep the cursor inside them, so the selected row can never
 // sit below the panel's edge.
 func (m model) taskListRows() int {
+	return max(m.taskStackArea()-m.stackedTaskDetailLines()-taskListChromeLines, 1)
+}
+
+// taskListChromeLines is what the task list panel spends on anything but rows:
+// its two borders, the blank row under its title and the column header.
+const taskListChromeLines = 4
+
+// taskStackArea is the height the task list and a detail stacked under it
+// share: the window less the header and the footer as drawn.
+func (m model) taskStackArea() int {
 	footer := 0
 	if f := m.footerContentFor(m.termWidth - 6); f != "" {
 		footer = strings.Count(f, "\n") + 1
 	}
-	return max(m.termHeight-minHeaderLines-footer-m.stackedTaskDetailLines()-4, 1)
+	return m.termHeight - minHeaderLines - footer
 }
 
-// stackedTaskDetailLines is the height of a task detail stacked under the list:
-// its document up to the viewport View windows it to, plus the panel's
-// borders and title row. Zero when the detail sits beside the list or is shut.
+// stackedTaskDetailLines is the height of a task detail stacked under the list,
+// borders and title row included. The two split the height as the Tags and
+// Projects tabs do (splitStack): a short list keeps only its rows and the
+// detail takes the rest, and two full panels get half each. Zero when the
+// detail sits beside the list or is shut.
 func (m model) stackedTaskDetailLines() int {
 	if !m.detailVisible() || (m.tab != tabTasks && !m.drillDetailOpen()) {
 		return 0
 	}
-	return min(m.detailContentHeight(), m.detailViewportHeight()) + detailBorderLines
+	area := m.taskStackArea()
+	rows := 0
+	if tasks, drilled := m.drillTaskList(); drilled {
+		rows = len(tasks)
+	} else {
+		rows = m.currentTaskListLen()
+	}
+	listOuter := splitStack(area, rows+taskListChromeLines, m.detailContentHeight()+detailBorderLines)
+	return max(area-listOuter, minDetailHeight+detailBorderLines)
 }
 
 func (m model) estimateListHeight() int {

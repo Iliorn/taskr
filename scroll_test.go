@@ -150,3 +150,28 @@ func TestRandomKeysKeepTheSelectionOnScreen(t *testing.T) {
 		}
 	}
 }
+
+// A detail stacked under the task list takes the rows a short list leaves
+// over, and when both are full the two split the height evenly.
+func TestStackedTaskDetailTakesWhatTheListLeaves(t *testing.T) {
+	split := func(n int) (listRows, detail, area int) {
+		var ts []todo.Todo
+		for i := 0; i < n; i++ {
+			ts = append(ts, todo.New(fmt.Sprintf("task %d", i)))
+		}
+		m := modelWithTasks(t, ts...)
+		m.termWidth, m.termHeight = 100, 40
+		m.detailPos = detailBottom
+		m = script(t, m, "enter")
+		if got := strings.Count(m.View(), "\n") + 1; got != m.termHeight {
+			t.Fatalf("%d tasks: frame is %d lines, window is %d", n, got, m.termHeight)
+		}
+		return m.taskListRows(), m.stackedTaskDetailLines(), m.taskStackArea()
+	}
+	if rows, detail, area := split(3); rows != 3 || detail != area-3-taskListChromeLines {
+		t.Errorf("3 tasks: list shows %d rows and detail has %d of %d lines; want 3 rows and the rest", rows, detail, area)
+	}
+	if _, detail, area := split(60); detail != area-area/2 {
+		t.Errorf("a full list and a long detail: detail has %d of %d lines, want half", detail, area)
+	}
+}

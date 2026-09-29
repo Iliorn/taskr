@@ -603,8 +603,10 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   of `buildSideBySide`. Unknown values read as `right`. It holds on every tab:
   a task opened from a tag's or project's list (`drillDetailOpen`) is laid out
   as the Tasks tab is, with that list (`drillListLines`) in the list's place,
-  so no tab places its detail by a rule of its own. A stacked detail is sized
-  by `estimateListHeight` from the document it holds, and the list above it
+  so no tab places its detail by a rule of its own. A stacked task detail
+  shares the height with the list above it as the group tabs do
+  (`stackedTaskDetailLines` through `splitStack`): a short list keeps its
+  rows and the detail takes the rest, two full panels get half each. The list
   keeps the open task in view (`clampCursors`).
 
 ## Rendering conventions
