@@ -165,6 +165,11 @@ var (
 	detailLabelStyle    lipgloss.Style
 	detailValueStyle    lipgloss.Style
 	detailSelectedStyle lipgloss.Style
+	// The detail pane's section bar is in its own colour, apart from the
+	// accent the field labels under it use, so the row reads as navigation
+	// rather than as one more label. Blue, not purple: purple is the tags'.
+	sectionStyle        lipgloss.Style
+	sectionCurrentStyle lipgloss.Style
 
 	inputStyle   lipgloss.Style
 	confirmStyle lipgloss.Style
@@ -265,6 +270,8 @@ func applyTheme(t theme) {
 	detailLabelStyle = lipgloss.NewStyle().Bold(true).Foreground(t.accent)
 	detailValueStyle = lipgloss.NewStyle().Foreground(t.fg)
 	detailSelectedStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
+	sectionStyle = lipgloss.NewStyle().Foreground(t.blue)
+	sectionCurrentStyle = sectionStyle.Bold(true).Underline(true)
 
 	// The boxed footer fields carry the panels' MarginLeft(2) so their borders
 	// sit in the same two columns as the pane above them — without it the box

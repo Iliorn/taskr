@@ -14,8 +14,8 @@ import (
 
 // detailSectionBar is the line at the top of a task's detail pane that names
 // its sections, the current one lit while the pane has focus, so ←/→ says
-// what it will do before it is pressed. It takes the row the panel's top
-// padding would otherwise leave blank. When the names do not fit in width,
+// what it will do before it is pressed. It sits under the panel's blank top
+// row (detailSectionBarLines). When the names do not fit in width,
 // it keeps the current section and as many neighbours as fit, with … where
 // the rest are.
 func (m model) detailSectionBar(width int) string {
@@ -63,9 +63,9 @@ func (m model) detailSectionBar(width int) string {
 			b.WriteString(dimStyle.Render(sep))
 		}
 		if i == cur && focused {
-			b.WriteString(headerStyle.Render(labels[i]))
+			b.WriteString(sectionCurrentStyle.Render(labels[i]))
 		} else {
-			b.WriteString(dimStyle.Render(labels[i]))
+			b.WriteString(sectionStyle.Render(labels[i]))
 		}
 	}
 	if hi < len(labels)-1 {
