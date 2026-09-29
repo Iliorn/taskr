@@ -634,6 +634,9 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
 
 - **Settings is one pane of grouped rows** (`settingsGroups`, view_lists.go).
   A row in no group is never drawn, so a new setting needs a group entry.
+  The pane's first row names the groups (`settingsSectionBar`, the detail
+  pane's `sectionBar`), and `[`/`]` or pgup/pgdn jump between them
+  (`settingsGroupJump`), since ←/→ change values here.
   `settingsNavOrder` skips rows that `settingsSelectable` rejects (Version) or
   `settingsRowVisible` hides (Listen and Server token while no server runs).
   `renderSettingsSection` returns the content *and* the cursor row's line,

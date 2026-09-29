@@ -641,3 +641,33 @@ func TestScriptEditName(t *testing.T) {
 		t.Errorf("name = %q after esc, want Mark", m.userName)
 	}
 }
+
+// [ and ] (and pgup/pgdn) step the cursor to the first row of the previous
+// or next group, skipping rows it cannot land on, and stop at the ends.
+func TestSettingsBracketsJumpBetweenGroups(t *testing.T) {
+	m := settingsModel(t)
+	m.settingsCursor = settingsGroups[0].rows[0]
+	for g := 1; g < len(settingsGroups); g++ {
+		m = sendKey(t, m, "]")
+		if got := settingsGroupOf(m.settingsCursor); got != g {
+			t.Fatalf("after %d × ]: in group %q, want %q", g, settingsGroups[got].title, settingsGroups[g].title)
+		}
+		if !settingsSelectable(m.settingsCursor) {
+			t.Fatalf("] landed on a row the cursor cannot stop on (%d)", m.settingsCursor)
+		}
+	}
+	last := m.settingsCursor
+	if m = sendKey(t, m, "]"); m.settingsCursor != last {
+		t.Error("] past the last group moved the cursor")
+	}
+	m = sendKey(t, m, "pgup")
+	if got := settingsGroupOf(m.settingsCursor); got != len(settingsGroups)-2 {
+		t.Errorf("pgup: in group %d, want %d", got, len(settingsGroups)-2)
+	}
+	for i := 0; i < len(settingsGroups); i++ {
+		m = sendKey(t, m, "[")
+	}
+	if m.settingsCursor != settingsGroups[0].rows[0] {
+		t.Errorf("[ to the start: cursor %d, want the first row", m.settingsCursor)
+	}
+}

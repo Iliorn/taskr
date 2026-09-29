@@ -633,6 +633,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "[", "]":
+			if m.tab == tabSettings {
+				m.settingsGroupJump(map[string]int{"[": -1, "]": 1}[key.String()])
+			}
 			if m.tab == tabCalendar {
 				months := 1
 				if key.String() == "[" {
@@ -694,9 +697,17 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "end":
 			m.listJumpBottom()
 		case "pgup":
-			m.listPage(-1)
+			if m.tab == tabSettings {
+				m.settingsGroupJump(-1)
+			} else {
+				m.listPage(-1)
+			}
 		case "pgdown":
-			m.listPage(1)
+			if m.tab == tabSettings {
+				m.settingsGroupJump(1)
+			} else {
+				m.listPage(1)
+			}
 
 		case "enter":
 			return m.handleListEnter()

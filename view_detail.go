@@ -19,14 +19,20 @@ import (
 // it keeps the current section and as many neighbours as fit, with … where
 // the rest are.
 func (m model) detailSectionBar(width int) string {
-	// Indented like the field labels, which sit after the cursor's gutter.
-	width -= len([]rune(cursorGap))
-	cur := detailSectionOf(m.detail.field)
-	focused := m.pane == paneDetail
 	labels := make([]string, len(detailSections))
 	for i, s := range detailSections {
 		labels[i] = tr(s.label)
 	}
+	return sectionBar(labels, detailSectionOf(m.detail.field), m.pane == paneDetail, width)
+}
+
+// sectionBar is a row naming a pane's sections, cur lit while the pane has
+// focus: the detail pane's and the Settings pane's. When the names do not
+// fit in width it keeps cur and as many neighbours as fit, with … where the
+// rest are.
+func sectionBar(labels []string, cur int, focused bool, width int) string {
+	// Indented like the rows below it, which sit after the cursor's gutter.
+	width -= len([]rune(cursorGap))
 	const sep = " · "
 	fits := func(lo, hi int) bool {
 		w := 0

@@ -11,6 +11,12 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Added
+
+- Settings names its sections along the top; `[` and `]` (or PgUp/PgDn) jump between them.
+
 ## [1.46.0] - 2026-09-29
 
 ### Added

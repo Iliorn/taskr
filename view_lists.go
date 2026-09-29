@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1477,6 +1478,41 @@ func (m model) visibleGroupRows(g settingsGroup) []int {
 	return out
 }
 
+// settingsGroupOf is the index in settingsGroups of the group row id is in.
+func settingsGroupOf(id int) int {
+	for i, g := range settingsGroups {
+		if slices.Contains(g.rows, id) {
+			return i
+		}
+	}
+	return 0
+}
+
+// settingsGroupJump moves the cursor to the first row of the group dir away
+// from the cursor's, skipping a group with no row it can land on, and stays
+// put past either end: [ and ], as ←/→ step through the detail pane's
+// sections, since ←/→ change values here.
+func (m *model) settingsGroupJump(dir int) {
+	for g := settingsGroupOf(m.settingsCursor) + dir; g >= 0 && g < len(settingsGroups); g += dir {
+		for _, id := range settingsGroups[g].rows {
+			if settingsSelectable(id) && m.settingsRowVisible(id) {
+				m.settingsCursor = id
+				return
+			}
+		}
+	}
+}
+
+// settingsSectionBar names the Settings groups above the pane, the cursor's
+// lit, so [ and ] say where they go.
+func (m model) settingsSectionBar(width int) string {
+	labels := make([]string, len(settingsGroups))
+	for i, g := range settingsGroups {
+		labels[i] = tr(g.title)
+	}
+	return sectionBar(labels, settingsGroupOf(m.settingsCursor), true, width)
+}
+
 // settingsCursorStep advances the settings cursor by delta along the visual
 // traversal order, clamping at the ends so up at the top / down at the bottom
 // are no-ops.
@@ -1830,7 +1866,10 @@ func (m model) buildSettingsContent(w, outerH int) string {
 	// pane one row taller than it drew, so the last row — and, when the cursor
 	// was on it, the row the scroll had just been asked to reveal — fell off
 	// the bottom.
-	lines := fitSettingsPane(content, panelContentHeight(outerH), w-2, selected)
+	// The section bar takes the pane's first row, as in the detail pane.
+	lines := append([]string{m.settingsSectionBar(w - 2)},
+		fitSettingsPane(content, max(panelContentHeight(outerH)-detailSectionBarLines, 1), w-2, selected)...)
+	truncateLines(lines[:1], max(w-2, 0))
 	panel := listPanelFocusedStyle.Width(w).Render(strings.Join(lines, "\n"))
 	return withBorderTitle(panel, m.listPanelTitle(), w, true)
 }

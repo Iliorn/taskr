@@ -177,6 +177,7 @@ var keymap = []binding{
 	// ── Settings ─────────────────────────────────────────────────────────
 	{ctxSettings, "↑/↓ · j/k", "navigate", "select setting", secSettings, true, false},
 	{ctxSettings, "←/→", "setchange", "change value / theme", secSettings, true, false},
+	{ctxSettings, "[ / ]", "setsection", "previous / next section", secSettings, true, false},
 	{ctxSettings, "enter", "setapply", "activate / edit the selected setting", secSettings, true, false},
 	{ctxSettings, "y / n", "confirmupdate", "confirm update when one is offered", secSettings, false, false},
 
