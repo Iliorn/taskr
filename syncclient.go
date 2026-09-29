@@ -375,76 +375,18 @@ type syncSummary struct {
 // untouched.
 // b scores the rows the merge writes; board is this device's column list as
 // offered to the fleet (boardConfig.wire), nil to leave the fleet's alone.
-//
-// With local edits the server has not seen, to tasks it has, the sync pulls
-// before it pushes. The server merges a push last-writer-wins, whole task, so
-// pushed first, a later edit here would replace another device's edit to a
-// different field of the same task on the server, where no client could see
-// what it replaced. Pulled first, the two meet here with the base they last
-// agreed on (mergeServerIntoStore), and what goes up is both.
 func runClientSync(h *sql.DB, cfg syncConfig, timeout time.Duration, b rank.Biases, board *tasksync.Board) (syncSummary, error) {
-	var lastSync time.Time
-	if st, ok, _ := readSyncState(); ok {
-		lastSync = st.LastSync
-	}
-	pull, err := hasUnsyncedEdits(h)
+	local, err := loadTodosForSync(h)
 	if err != nil {
 		return syncSummary{}, err
 	}
-	var sum syncSummary
-	if pull {
-		// An empty push is a pull: the server has nothing to merge and
-		// answers with its whole set. A nil board leaves the fleet's alone.
-		if err := runClientSyncRound(h, cfg, timeout, b, nil, true, lastSync, &sum); err != nil {
-			return syncSummary{}, err
-		}
-	}
-	if err := runClientSyncRound(h, cfg, timeout, b, board, false, lastSync, &sum); err != nil {
+	resp, err := tasksync.PostSync(cfg.URL, cfg.Token, appVersion, local, board, timeout)
+	if err != nil {
 		return syncSummary{}, err
 	}
-	// Record status for `tjek sync --status`. Best-effort: a write failure here
-	// must not fail an otherwise-successful sync.
-	_ = writeSyncState(sum)
-	return sum, nil
-}
-
-// hasUnsyncedEdits reports whether a task the server knows (one with a base
-// row) differs here from the version the two last agreed on.
-func hasUnsyncedEdits(h *sql.DB) (bool, error) {
-	base, err := loadSyncBase(h)
-	if err != nil || len(base) == 0 {
-		return false, err
-	}
-	local, err := loadTodosForSync(h)
-	if err != nil {
-		return false, err
-	}
-	for _, t := range local {
-		if raw, ok := base[t.ID]; ok && syncBaseJSON(t) != raw {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// runClientSyncRound is one exchange with the server, adding what it saw to
-// sum: a push of the whole local set, or with pullOnly an empty one.
-func runClientSyncRound(h *sql.DB, cfg syncConfig, timeout time.Duration, b rank.Biases, board *tasksync.Board, pullOnly bool, lastSync time.Time, sum *syncSummary) error {
-	local, err := loadTodosForSync(h)
-	if err != nil {
-		return err
-	}
-	var push []todo.Todo
-	if !pullOnly {
-		push = local
-	}
-	resp, err := tasksync.PostSync(cfg.URL, cfg.Token, appVersion, push, board, timeout)
-	if err != nil {
-		return err
-	}
-	// A skewed clock silently corrupts LWW conflict resolution and nothing
-	// else in the protocol surfaces it — warn loudly on every sync until the
-	// user fixes the clock.
+	// A skewed clock no longer decides a conflict (stamps order edits by what
+	// each device had seen), but it still makes the times the app shows wrong,
+	// so warn on every sync until the user fixes it.
 	if w := tasksync.ClockSkewWarning(resp.ServerTime, time.Now()); w != "" {
 		fmt.Fprintln(os.Stderr, "tjek sync: "+w)
 	}
@@ -452,42 +394,42 @@ func runClientSyncRound(h *sql.DB, cfg syncConfig, timeout time.Duration, b rank
 	// (the TUI's debounced save, another CLI command) is missing from the
 	// response. Saving that blind would overwrite those rows — worse,
 	// saveChildren would tombstone a just-added comment as "vanished", and that
-	// deletion would then propagate to every device. mergeServerIntoStore
-	// re-merges against the store as it is NOW, transactionally, so even a
-	// writer racing this exact moment either lands before our snapshot or
-	// forces a retry; whatever the server hasn't seen yet goes out on the next
-	// sync. Its no-op guard also keeps the fs watcher from waking the TUI on an
-	// unchanged periodic pull.
-	merged, rb, err := mergeServerIntoStore(h, resp.Tasks, b)
+	// deletion would then propagate to every device. mergeIntoStore re-merges
+	// against the store as it is NOW, transactionally, so even a writer racing
+	// this exact moment either lands before our snapshot or forces a retry;
+	// whatever the server hasn't seen yet goes out on the next sync. Its no-op
+	// guard also keeps the fs watcher from waking the TUI on an unchanged
+	// periodic pull.
+	merged, _, err := mergeIntoStore(h, resp.Tasks, b)
 	if err != nil {
-		return err
+		return syncSummary{}, err
 	}
-	// Record dropped local edits for the recovery log: local versions the
-	// store no longer holds after the merge. The baseline is the last
-	// successful sync: only edits made here since then can genuinely lose the
-	// merge. A zero baseline (no state file) logs everything, the conservative
-	// recovery-net default. A task whose local edits the merge kept, beside
-	// another device's, lost nothing.
-	var dropped []todo.Todo
-	for _, t := range tasksync.DroppedLocalEdits(local, merged, lastSync) {
-		if !rb.kept[t.ID] {
-			dropped = append(dropped, t)
-		}
+	// Record dropped local edits for the recovery log: units set here that
+	// another device set later. The baseline is the last successful sync: only
+	// edits made here since then can have lost. A missing or corrupt state file
+	// reads as zero → log everything, the conservative recovery-net default.
+	var lastSync time.Time
+	if st, ok, _ := readSyncState(); ok {
+		lastSync = st.LastSync
 	}
+	dropped := tasksync.DroppedLocalEdits(local, merged, lastSync)
 	if err := logDroppedEdits(dropped); err != nil {
 		fmt.Fprintf(os.Stderr, "tjek sync: warning: could not write sync log: %v\n", err)
 	}
 	// Count live tasks only: the wire sets include every tombstone ever made,
 	// so raw lengths would overstate forever ("received 400" on a no-op sync).
-	sum.sent = countLive(push)
-	sum.received = countLive(resp.Tasks)
-	sum.conflicts += len(dropped)
-	sum.versionGap = tasksync.VersionGapWarning(resp.ServerVersion, appVersion)
-	sum.serverVersion = resp.ServerVersion
-	if !pullOnly {
-		sum.board = resp.Board
+	sum := syncSummary{
+		sent:          countLive(local),
+		received:      countLive(resp.Tasks),
+		conflicts:     len(dropped),
+		versionGap:    tasksync.VersionGapWarning(resp.ServerVersion, appVersion),
+		serverVersion: resp.ServerVersion,
+		board:         resp.Board,
 	}
-	return nil
+	// Record status for `tjek sync --status`. Best-effort: a write failure here
+	// must not fail an otherwise-successful sync.
+	_ = writeSyncState(sum)
+	return sum, nil
 }
 
 func countLive(ts []todo.Todo) int {
@@ -511,8 +453,9 @@ func syncLogPath() string {
 const syncLogMaxBytes = 1 << 20 // 1 MiB
 
 // logDroppedEdits appends one JSON line per dropped local edit to
-// sync.log so a wrongly-overwritten edit can be recovered.
-func logDroppedEdits(dropped []todo.Todo) error {
+// sync.log so a wrongly-overwritten edit can be recovered: the local version,
+// and the units that lost, which are all `tjek sync --recover` puts back.
+func logDroppedEdits(dropped []tasksync.DroppedEdit) error {
 	if len(dropped) == 0 {
 		return nil
 	}
@@ -529,12 +472,8 @@ func logDroppedEdits(dropped []todo.Todo) error {
 	}
 	defer f.Close()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	for _, t := range dropped {
-		line, err := json.Marshal(struct {
-			At      string    `json:"at"`
-			Note    string    `json:"note"`
-			Dropped todo.Todo `json:"dropped"`
-		}{now, "local edit superseded by sync (last-writer-wins)", t})
+	for _, d := range dropped {
+		line, err := json.Marshal(syncLogEntry{At: now, Note: syncLogNoteDropped, Dropped: d.Local, Units: d.Units})
 		if err != nil {
 			return err
 		}

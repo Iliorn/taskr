@@ -1,4 +1,4 @@
--- Migration 013: per-field sync stamps.
+-- Migration 012: per-field sync stamps.
 --
 -- `stamps` holds a task's Stamps as JSON: per merge unit (todo/fields.go),
 -- the hlc stamp of the edit that set it. '' for a row saved before stamps

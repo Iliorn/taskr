@@ -117,7 +117,7 @@ The main fields of each task:
 | `status` | int | 0 = pending, 1 = done |
 | `priority` | int | 0 = low, 1 = medium, 2 = high |
 | `size` | int | 0 = medium, 1 = small, 2 = large |
-| `created_at` / `modified_at` | RFC 3339 | the later `modified_at` wins a conflict |
+| `created_at` / `modified_at` | RFC 3339 | when the task was made and last changed; sync merges each field on its own |
 | `due_date` | RFC 3339 (omitempty) | |
 | `project` | string (omitempty) | |
 | `tags` | string array (omitempty) | |

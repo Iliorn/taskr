@@ -18,7 +18,10 @@ const (
 	// ProtocolVersion is the wire version this build speaks. Bump it in the
 	// same commit that changes the meaning of a field in Request or Response
 	// — adding a field that older peers can safely ignore does not need one.
-	ProtocolVersion = 1
+	// v2: tasks carry per-field stamps and merge unit by unit. A v1 peer
+	// still syncs; its tasks carry no stamps and merge whole, by their
+	// modification times, as before (todo.Stamp).
+	ProtocolVersion = 2
 
 	// MinProtocolVersion is the oldest client wire this build still accepts.
 	// Raise it only to drop support deliberately; every raise strands the

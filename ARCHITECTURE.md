@@ -428,8 +428,8 @@ Rules:
 - **`storage_sqlite.go`** is the SQLite backend behind the `Repository` port
   (repository.go): schema, `openStore`/`openStoreAt`, `sqliteRepo.Save`, row
   encoding, and the first-run import of legacy `tasks.json`.
-- **Adding a field to `todo.Todo` requires a migration.** The schema is fully
-  normalized (child records in `task_tags`/`task_comments`/
+- **Adding a field to `todo.Todo` requires a migration** and a unit in
+  `todo.Fields`. The schema is fully normalized (child records in `task_tags`/`task_comments`/
   `task_time_entries`/`task_dependencies`). A new field needs a
   `migrations/NNN_*.sql`, plus wiring into the `sqliteRepo.Save` upsert and the
   `loadTodosCore` scan. A field with only a struct tag silently drops on the
@@ -508,18 +508,22 @@ and Bubble Tea glue stay in the app.
   is set only by `applyStageEdit`. The server keeps the fleet's list in
   `board.json`. An adopted list does not re-stage cards: an unknown stage falls
   into the first column.
-- **Edits to different fields of one task both survive**
-  (`tasksync/threeway.go`, `mergeServerIntoStore` in `syncstore.go`). The
-  server's merge stays whole-task last-writer-wins. The client keeps each
-  task's last-agreed version in `sync_base` (local, never synced), and with
-  edits the server has not seen it pulls before it pushes (an empty push is
-  a pull), so the two versions meet on the client: pushed first, the later
-  edit would replace the other on the server, where no client sees it.
-  `ThreeWay` combines them field by field, tags and dependencies as sets,
-  and stamps the result newer than both. A field both sides changed stays
-  last-writer-wins and goes to sync.log; `KeepsLocalEdits` keeps a combined
-  task out of it. `TestThreeWayCoversEveryField` fails for a new `todo.Todo`
-  field until `taskFields` decides it.
+- **Every field merges on its own stamp** (`hlc/`, `todo/fields.go`,
+  `stamps.go`, `tasksync/merge.go`). A task carries one hybrid-logical-clock
+  stamp per merge unit: each of `todo.Fields` (a field, or fields that change
+  together), each tag and dependency, and a membership baseline (`SetsKey`).
+  `Merge` keeps each unit from the later stamp, so edits to different fields
+  of one task on two devices both survive, in any sync order; it is
+  commutative, associative and idempotent (`TestMergeIsACRDT`). Stamps are set
+  in one place: `saveStamped`, behind `sqliteRepo.Save`, compares each task
+  with the stored version and stamps only what differs, so the code that
+  edits tasks knows nothing of them. A merge writes the stamps it received and
+  moves the device's clock (`hlc_clock`) past them, so an edit made after
+  seeing another device's edit stamps later whatever the wall clocks say. A
+  task saved before stamps reads them from its modification and deletion
+  times (`todo.Stamp`), the whole-task order it had, and so does anything an
+  older peer sends. `TestFieldsCoverTheTodo` fails for a `todo.Todo` field in
+  no unit.
 - **First sync asks before uploading** (`syncadopt.go`). The merge is a union
   by ID, so a device's first sync hands every local task to every other device,
   with no undo. `firstSyncNeedsChoice` (never synced, has live tasks, no answer

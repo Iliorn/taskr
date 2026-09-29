@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/tjek/hlc"
 	"github.com/Iliorn/tjek/todo"
 )
 
@@ -30,8 +31,8 @@ func TestDroppedLocalEdits(t *testing.T) {
 		local := []todo.Todo{edited("a", "my version", localEdit)}
 		merged := []todo.Todo{edited("a", "their version", remoteEdit)}
 		got := DroppedLocalEdits(local, merged, since)
-		if len(got) != 1 || got[0].Title != "My version" {
-			t.Fatalf("dropped = %+v, want the local version", got)
+		if len(got) != 1 || got[0].Local.Title != "My version" || len(got[0].Units) != 1 || got[0].Units[0] != "title" {
+			t.Fatalf("dropped = %+v, want the local version with its title", got)
 		}
 	})
 
@@ -102,48 +103,34 @@ func TestDroppedLocalEdits(t *testing.T) {
 	})
 }
 
-// scalarHash decides what counts as "overwritten", so it has to react to every
-// conflict-relevant field and ignore the ones that merge on their own.
-func TestScalarHashCoversTheConflictFields(t *testing.T) {
-	base := todo.New("task")
-	base.ID = "a"
+// With stamps, an edit is only lost where both devices set the same unit:
+// the local description beside another device's later priority is kept by
+// the merge, and nothing is reported. A tag removed here and added back
+// later elsewhere is reported as that tag alone.
+func TestDroppedLocalEditsAreUnitsBothSidesSet(t *testing.T) {
+	since := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	here, there := hlc.New("here", ""), hlc.New("there", "")
+	s1 := here.Now(since.Add(time.Hour))
+	s2 := there.Now(since.Add(2 * time.Hour))
 
-	changed := map[string]func(*todo.Todo){
-		"title":      func(x *todo.Todo) { x.Title = "other" },
-		"status":     func(x *todo.Todo) { x.Status = todo.Done },
-		"priority":   func(x *todo.Todo) { x.Priority = todo.PriorityHigh },
-		"size":       func(x *todo.Todo) { x.Size = todo.SizeLarge },
-		"project":    func(x *todo.Todo) { x.Project = "p" },
-		"notes":      func(x *todo.Todo) { x.Notes = "n" },
-		"parent":     func(x *todo.Todo) { x.ParentID = "parent" },
-		"recurrence": func(x *todo.Todo) { x.Recurrence = "weekly" },
-		"due":        func(x *todo.Todo) { x.DueDate = time.Now() },
-		"start":      func(x *todo.Todo) { x.StartDate = time.Now() },
-		"completed":  func(x *todo.Todo) { x.CompletedAt = time.Now() },
-		"deleted":    func(x *todo.Todo) { x.Deleted = true },
-	}
-	for name, mutate := range changed {
-		other := base
-		mutate(&other)
-		if scalarHash(base) == scalarHash(other) {
-			t.Errorf("%s does not affect the conflict hash — an overwrite of it would go unlogged", name)
-		}
-	}
+	local := todo.New("rent")
+	local.ID = "a"
+	local.Notes = "mine"
+	local.Stamps = map[string]hlc.Stamp{"notes": s1, "priority": hlc.At(since), todo.TagKey("home"): s1}
 
-	// Children and collections merge independently, so they must not read as a
-	// scalar overwrite.
-	unchanged := map[string]func(*todo.Todo){
-		"tags":         func(x *todo.Todo) { x.AddTag("later") },
-		"comments":     func(x *todo.Todo) { x.AddComment("hi") },
-		"dependencies": func(x *todo.Todo) { x.AddDependency("b") },
-		"modifiedAt":   func(x *todo.Todo) { x.ModifiedAt = time.Now().Add(time.Hour) },
+	remote := local
+	remote.Notes = ""
+	remote.Priority = todo.PriorityHigh
+	remote.Tags = []string{"home"}
+	remote.Stamps = map[string]hlc.Stamp{"notes": hlc.At(since), "priority": s2, todo.TagKey("home"): s2}
+
+	merged := Merge([]todo.Todo{remote}, []todo.Todo{local})
+	got := DroppedLocalEdits([]todo.Todo{local}, merged, since)
+	if len(got) != 1 || len(got[0].Units) != 1 || got[0].Units[0] != todo.TagKey("home") {
+		t.Fatalf("dropped = %+v, want only the removed tag the other device re-added later", got)
 	}
-	for name, mutate := range unchanged {
-		other := base
-		mutate(&other)
-		if scalarHash(base) != scalarHash(other) {
-			t.Errorf("%s changes the conflict hash — it merges on its own and would be logged as a lost edit", name)
-		}
+	if merged[0].Notes != "mine" || merged[0].Priority != todo.PriorityHigh {
+		t.Errorf("merge kept notes %q priority %v; want both sides' edits", merged[0].Notes, merged[0].Priority)
 	}
 }
 

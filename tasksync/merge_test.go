@@ -186,16 +186,21 @@ func TestMergeTagsFollowScalarWinner(t *testing.T) {
 
 // ── Whole-set Merge: orphans, propagation, order, idempotency ──────────────────
 
-func TestMergeReHomesOrphan(t *testing.T) {
+// Merge keeps a link to a deleted parent, so a parent restored later finds
+// its subtask again; ResolveParents shows the subtask at the top level
+// meanwhile.
+func TestMergeKeepsAnOrphansLinkAndResolveParentsReHomesIt(t *testing.T) {
 	parent := mkTomb("p", at(2*time.Hour))
 	child := mkTask("c", "child", at(time.Hour))
 	child.ParentID = "p"
-	got := indexByID(Merge([]todo.Todo{parent}, []todo.Todo{child}))
-	if got["c"].ParentID != "" {
-		t.Errorf("orphan not re-homed, ParentID = %q", got["c"].ParentID)
+	merged := Merge([]todo.Todo{parent}, []todo.Todo{child})
+	got := indexByID(merged)
+	if got["c"].ParentID != "p" || !got["p"].Deleted {
+		t.Fatalf("merge changed the link (%q) or lost the tombstone", got["c"].ParentID)
 	}
-	if !got["p"].Deleted {
-		t.Errorf("parent tombstone lost")
+	ResolveParents(merged)
+	if got := indexByID(merged); got["c"].ParentID != "" {
+		t.Errorf("orphan not re-homed for the app, ParentID = %q", got["c"].ParentID)
 	}
 }
 
@@ -203,22 +208,26 @@ func TestMergeKeepsLiveParentLink(t *testing.T) {
 	parent := mkTask("p", "P", at(time.Hour))
 	child := mkTask("c", "C", at(time.Hour))
 	child.ParentID = "p"
-	got := indexByID(Merge([]todo.Todo{parent}, []todo.Todo{child}))
-	if got["c"].ParentID != "p" {
+	merged := Merge([]todo.Todo{parent}, []todo.Todo{child})
+	ResolveParents(merged)
+	if got := indexByID(merged); got["c"].ParentID != "p" {
 		t.Errorf("live parent link dropped")
 	}
 }
 
-// A corrupt store or hostile peer could send a ParentID chain that loops back
-// on itself; Merge must break it so the parent-chain walkers can't hang. The
-// cut is deterministic — the highest-ID member of the cycle is re-homed.
-func TestMergeBreaksParentCycle(t *testing.T) {
+// A corrupt store, or two devices each moving one task under the other, can
+// leave a ParentID chain that loops; ResolveParents must break it so the
+// parent-chain walkers can't hang. The cut is deterministic: the highest-ID
+// member of the cycle is re-homed.
+func TestResolveParentsBreaksACycle(t *testing.T) {
 	t.Run("mutual A<->B cycle", func(t *testing.T) {
 		a := mkTask("a", "A", at(time.Hour))
 		a.ParentID = "b"
 		b := mkTask("b", "B", at(time.Hour))
 		b.ParentID = "a"
-		got := indexByID(Merge([]todo.Todo{a, b}, nil))
+		tasks := []todo.Todo{a, b}
+		ResolveParents(tasks)
+		got := indexByID(tasks)
 		// Highest ID ("b") is cut; "a" keeps its link to the now-rooted "b".
 		if got["b"].ParentID != "" {
 			t.Errorf("highest-ID cycle member not re-homed, b.ParentID = %q", got["b"].ParentID)
@@ -230,9 +239,10 @@ func TestMergeBreaksParentCycle(t *testing.T) {
 	t.Run("self-parent", func(t *testing.T) {
 		a := mkTask("a", "A", at(time.Hour))
 		a.ParentID = "a"
-		got := indexByID(Merge([]todo.Todo{a}, nil))
-		if got["a"].ParentID != "" {
-			t.Errorf("self-parent not re-homed, a.ParentID = %q", got["a"].ParentID)
+		tasks := []todo.Todo{a}
+		ResolveParents(tasks)
+		if tasks[0].ParentID != "" {
+			t.Errorf("self-parent not re-homed, a.ParentID = %q", tasks[0].ParentID)
 		}
 	})
 }

@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Iliorn/tjek/hlc"
 	"github.com/Iliorn/tjek/todo"
 )
 
@@ -306,17 +308,18 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 // maxClientClockSkew bounds how far ahead of the server's clock a client's
-// merge-ordering timestamps may run. The merge is last-writer-wins by
-// ModifiedAt/DeletedAt, all stamped from device wall clocks — a device with a
-// clock hours in the future would win every conflict it touches until real
-// time catches up (and its edits would be unbeatable by devices with correct
-// clocks). Five minutes tolerates ordinary NTP drift without letting a broken
+// merge-ordering times may run: the field stamps, and the task and child
+// modification and deletion times the merge reads for versions without
+// stamps. A stamp carries its device's wall clock, so a device with a clock
+// hours in the future would win every conflict it touches until real time
+// catches up, and every device that saw its stamps would carry the future
+// forward. Five minutes tolerates ordinary NTP drift without letting a broken
 // clock own the store.
 const maxClientClockSkew = 5 * time.Minute
 
-// clampFutureEventTimes pulls any merge-ordering timestamp (task and child
-// ModifiedAt/DeletedAt) that is more than maxClientClockSkew ahead of now back
-// to now, in place. Domain dates (DueDate, StartDate, time-entry bounds) are
+// clampFutureEventTimes pulls any merge-ordering time (field stamps, task and
+// child ModifiedAt/DeletedAt) that is more than maxClientClockSkew ahead of now
+// back to now, in place. Domain dates (DueDate, StartDate, time-entry bounds) are
 // deliberately untouched — a future due date is data, not clock skew.
 func clampFutureEventTimes(tasks []todo.Todo, now time.Time) {
 	limit := now.Add(maxClientClockSkew)
@@ -329,6 +332,18 @@ func clampFutureEventTimes(tasks []todo.Todo, now time.Time) {
 		t := &tasks[i]
 		clamp(&t.ModifiedAt)
 		clamp(&t.DeletedAt)
+		var stamps map[string]hlc.Stamp
+		for k, s := range t.Stamps {
+			if s.Time().After(limit) {
+				if stamps == nil {
+					stamps = maps.Clone(t.Stamps)
+				}
+				stamps[k] = hlc.At(now)
+			}
+		}
+		if stamps != nil {
+			t.Stamps = stamps
+		}
 		for j := range t.Comments {
 			clamp(&t.Comments[j].ModifiedAt)
 			clamp(&t.Comments[j].DeletedAt)

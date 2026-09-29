@@ -9,6 +9,7 @@ import (
 
 	"github.com/Iliorn/tjek/paths"
 	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/tasksync"
 	"github.com/Iliorn/tjek/todo"
 
 	_ "modernc.org/sqlite"
@@ -401,8 +402,8 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 				return err
 			}
 			// Tags and dependencies are value-sets (no per-row identity), so
-			// they are replaced wholesale — matching their whole-set
-			// last-writer-wins resolution during sync.
+			// they are replaced wholesale; what the sync merge knows of each
+			// member, removed ones included, is in the stamps.
 			for _, del := range []*sql.Stmt{delTags, delDeps} {
 				if _, err := del.Exec(t.ID); err != nil {
 					return err
@@ -677,6 +678,11 @@ func loadTodosCore(h querier, includeDeleted bool) ([]todo.Todo, error) {
 	out := make([]todo.Todo, 0, len(ordered))
 	for _, id := range ordered {
 		out = append(out, *todos[id])
+	}
+	// The live list is what the app shows and walks, so every parent link in
+	// it must lead somewhere; the sync path gets the links as stored.
+	if !includeDeleted {
+		tasksync.ResolveParents(out)
 	}
 	return out, nil
 }

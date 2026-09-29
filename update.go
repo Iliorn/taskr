@@ -374,12 +374,12 @@ func (m *model) performUndo() tea.Cmd {
 // touchRestored stamps a fresh ModifiedAt on each task an undo just restored
 // and clears any pending tombstone for it — a restoration overrides a deletion
 // that has not been flushed yet. (Clearing happens here, after the stamp, so
-// the clamp below can still read the deletion's event time.) The
-// restored state carries its original (old) ModifiedAt, and the sync merge is
-// last-writer-wins by that timestamp — without the bump, the state being undone
-// (a delete's tombstone with a newer DeletedAt, or an already-synced edit with a
-// newer ModifiedAt) wins the merge and silently re-applies itself on the next
-// sync. Stamping now makes the undo the latest writer, so it propagates.
+// the clamp below can still read the deletion's event time.) The save stamps
+// each unit the undo changed, which is what the sync merge orders by; the
+// modification time is what a peer on an older build merges whole tasks by,
+// and without the bump the state being undone (a delete's tombstone with a
+// newer DeletedAt, or an already-synced edit with a newer ModifiedAt) would
+// win there and re-apply itself.
 func (m *model) touchRestored(ids []string) {
 	for _, id := range ids {
 		if t := m.get(id); t != nil {

@@ -49,9 +49,14 @@ var Fields = []Field{
 }
 
 // Set member keys: TagKey("home") is "tag:home", DepKey(id) "dep:<id>".
+//
+// SetsKey is the task's membership baseline: every tag and dependency with no
+// stamp of its own was absent as of this stamp. It is what a removal made
+// before stamps existed, or a member a device never heard of, is ordered by.
 const (
 	TagKeyPrefix = "tag:"
 	DepKeyPrefix = "dep:"
+	SetsKey      = "sets"
 )
 
 func TagKey(name string) string { return TagKeyPrefix + name }
@@ -60,8 +65,8 @@ func DepKey(id string) string   { return DepKeyPrefix + id }
 // Stamp is the stamp of key on t. A task saved before stamps existed has
 // none, and gets one reconstructed from the time it records: its last
 // modification, or for a deleted task's "deleted" unit the deletion. A set
-// member it does not hold and has no stamp for was never there, and has no
-// stamp. A reconstructed stamp sorts below any real edit in the same
+// member t does not hold and has no stamp for is absent as of t's baseline
+// (SetsKey). A reconstructed stamp sorts below any real edit in the same
 // millisecond (hlc.At), which is the order the whole-task merge before stamps
 // gave them.
 func (t *Todo) Stamp(key string) hlc.Stamp {
@@ -71,10 +76,23 @@ func (t *Todo) Stamp(key string) hlc.Stamp {
 	if key == "deleted" && t.Deleted {
 		return hlc.At(t.DeletedAt)
 	}
-	if isSetKey(key) && !t.HasMember(key) {
-		return ""
+	if key == SetsKey || (isSetKey(key) && !t.HasMember(key)) {
+		return t.baseline()
 	}
 	return hlc.At(t.ModifiedAt)
+}
+
+// baseline is the stamp as of which t's unlisted set members were absent: its
+// recorded baseline, or for a task from before stamps its modification, when
+// it was a whole snapshot. A task with stamps and no baseline has none.
+func (t *Todo) baseline() hlc.Stamp {
+	if s, ok := t.Stamps[SetsKey]; ok {
+		return s
+	}
+	if len(t.Stamps) == 0 {
+		return hlc.At(t.ModifiedAt)
+	}
+	return ""
 }
 
 // SetKeys is every set member key t holds or has a stamp for: the members

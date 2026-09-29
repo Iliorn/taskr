@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Iliorn/tjek/hlc"
 	"github.com/Iliorn/tjek/todo"
 )
 
@@ -21,6 +22,9 @@ func TestClampFutureEventTimes(t *testing.T) {
 	skewed.DueDate = farFuture // domain date: must survive
 	skewed.Comments = []todo.Comment{{ID: "c1", Text: "hi", ModifiedAt: farFuture}}
 	skewed.TimeEntries = []todo.TimeEntry{{ID: "e1", DeletedAt: farFuture}}
+	farStamp := hlc.New("fast", "").Now(farFuture)
+	okStamp := hlc.New("ok", "").Now(slightlyAhead)
+	skewed.Stamps = map[string]hlc.Stamp{"title": farStamp, "notes": okStamp}
 	ok := todo.New("healthy clock")
 	ok.ModifiedAt = slightlyAhead
 
@@ -38,6 +42,12 @@ func TestClampFutureEventTimes(t *testing.T) {
 	}
 	if !tasks[0].TimeEntries[0].DeletedAt.Equal(now) {
 		t.Errorf("entry DeletedAt = %v, want clamped", tasks[0].TimeEntries[0].DeletedAt)
+	}
+	if got := tasks[0].Stamps["title"]; got != hlc.At(now) {
+		t.Errorf("future stamp = %q, want clamped to %q", got, hlc.At(now))
+	}
+	if got := tasks[0].Stamps["notes"]; got != okStamp {
+		t.Errorf("within-allowance stamp = %q, want untouched %q", got, okStamp)
 	}
 	if !tasks[1].ModifiedAt.Equal(slightlyAhead) {
 		t.Errorf("within-allowance ModifiedAt = %v, want untouched %v", tasks[1].ModifiedAt, slightlyAhead)

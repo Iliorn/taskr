@@ -61,8 +61,10 @@ func TestFieldsCoverTheTodo(t *testing.T) {
 }
 
 // A task saved before stamps existed reads its stamps from the times it
-// records; a recorded stamp wins over that; a set member it never held has
-// no stamp.
+// records, a set member it lacks included: it was a whole snapshot, so the
+// member was absent as of its modification. A recorded stamp wins over that,
+// and a task with stamps says nothing of a member it has no stamp or
+// baseline for.
 func TestStampFallsBackToTheRecordedTimes(t *testing.T) {
 	mod := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
 	del := mod.Add(time.Hour)
@@ -74,8 +76,8 @@ func TestStampFallsBackToTheRecordedTimes(t *testing.T) {
 	if got := task.Stamp(TagKey("home")); got != hlc.At(mod) {
 		t.Errorf("present tag stamp %q, want %q", got, hlc.At(mod))
 	}
-	if got := task.Stamp(TagKey("never")); got != "" {
-		t.Errorf("a tag never held has stamp %q", got)
+	if got := task.Stamp(TagKey("never")); got != hlc.At(mod) {
+		t.Errorf("an absent tag on a snapshot has stamp %q, want its modification's %q", got, hlc.At(mod))
 	}
 	task.Deleted, task.DeletedAt = true, del
 	if got := task.Stamp("deleted"); got != hlc.At(del) {
@@ -86,6 +88,13 @@ func TestStampFallsBackToTheRecordedTimes(t *testing.T) {
 	task.Stamps = map[string]hlc.Stamp{"title": real, TagKey("gone"): real}
 	if task.Stamp("title") != real || task.Stamp(TagKey("gone")) != real {
 		t.Error("a recorded stamp should win over the reconstructed one")
+	}
+	if got := task.Stamp(TagKey("never")); got != "" {
+		t.Errorf("a task with stamps and no baseline gave an unknown tag stamp %q", got)
+	}
+	task.Stamps[SetsKey] = real
+	if got := task.Stamp(TagKey("never")); got != real {
+		t.Errorf("an unknown tag should be absent as of the baseline %q, got %q", real, got)
 	}
 	if !task.LatestStamp().After(real) {
 		t.Errorf("LatestStamp %q should be the deletion, the latest moment", task.LatestStamp())

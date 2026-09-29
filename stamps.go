@@ -112,7 +112,12 @@ func stampEdit(old, t *todo.Todo, clock *hlc.Clock, now time.Time) map[string]hl
 		for _, k := range t.SetKeys() {
 			stamps[k] = next()
 		}
+		// A new task had no other member before this.
+		stamps[todo.SetsKey] = next()
 		return stamps
+	}
+	if s := old.Stamp(todo.SetsKey); s != "" {
+		stamps[todo.SetsKey] = s
 	}
 	for _, f := range todo.Fields {
 		if f.Same(old, t) {

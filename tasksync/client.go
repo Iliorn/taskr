@@ -2,7 +2,6 @@ package tasksync
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/tjek/hlc"
 	"github.com/Iliorn/tjek/todo"
 )
 
@@ -191,70 +191,60 @@ func InsecureURLWarning(rawURL string) string {
 	return fmt.Sprintf("warning: %s is plain http to a public host: the sync token and your tasks travel unencrypted; prefer a Tailscale IP, or https (tjek serve --tls-cert)", rawURL)
 }
 
-// DroppedLocalEdits returns the local versions of tasks whose scalar fields
-// were overwritten by the merge — a local edit that lost last-writer-wins.
-// Only tasks the client had live are considered, and only ones actually
-// modified here since the last successful sync (`since`). Without that
-// baseline, every remote edit arriving via a pull read as a "conflict" — the
-// local copy differs from the merged result, but it's merely stale, nothing
-// was lost. A zero `since` (no sync recorded yet) logs everything: when
-// unsure, over-log — it's a recovery net.
-func DroppedLocalEdits(local, merged []todo.Todo, since time.Time) []todo.Todo {
+// DroppedEdit is an edit made on this device that a merge did not keep: the
+// local version of the task, and the units (todo.Fields keys, set member
+// keys, or "deleted" for an edit to a task deleted elsewhere) whose local
+// value lost.
+type DroppedEdit struct {
+	Local todo.Todo
+	Units []string
+}
+
+// DroppedLocalEdits returns the edits made here since the last successful
+// sync (`since`) that the merge did not keep: a unit set here after `since`
+// that came out with another device's value, stamped later or equal (an equal
+// stamp is two versions from before stamps, and the local one lost the tie),
+// and an edit to a task another device deleted after it. A unit changed on one side only is never
+// among them; it survives the merge. Without the baseline every remote edit
+// arriving via a pull would read as a conflict, the local copy merely stale;
+// a zero `since` (no sync recorded yet) lists everything that differs: when
+// unsure, over-log, it is a recovery net.
+func DroppedLocalEdits(local, merged []todo.Todo, since time.Time) []DroppedEdit {
 	mergedByID := make(map[string]todo.Todo, len(merged))
 	for _, t := range merged {
 		mergedByID[t.ID] = t
 	}
-	var dropped []todo.Todo
+	editedHere := func(s hlc.Stamp) bool { return s.Time().After(since) }
+	var dropped []DroppedEdit
 	for _, l := range local {
-		if l.Deleted {
-			continue
-		}
-		if !l.ModifiedAt.After(since) {
-			// Untouched here since the last sync: an overwrite is inbound
-			// propagation of another device's edit, not a lost local one.
-			continue
-		}
 		m, ok := mergedByID[l.ID]
-		if !ok {
+		if !ok || l.Deleted {
 			continue
 		}
 		if m.Deleted {
-			// The authoritative version is a tombstone while we still had it
-			// live: another device deleted it. That's only a genuine dropped
-			// edit if our copy was modified *after* the deletion (an edit that
-			// lost to a delete). A plain deletion propagating to us is not a
-			// conflict — surfacing it as one nags on every remote delete.
-			if l.ModifiedAt.After(m.DeletedAt) {
-				dropped = append(dropped, l)
+			// A deletion propagating to us is not a conflict; an edit made
+			// here after it is, since the deletion still stands.
+			if last := l.LatestStamp(); editedHere(last) && last.After(m.Stamp("deleted")) {
+				dropped = append(dropped, DroppedEdit{Local: l, Units: []string{"deleted"}})
 			}
 			continue
 		}
-		if scalarHash(l) != scalarHash(m) {
-			dropped = append(dropped, l)
+		var units []string
+		for _, f := range todo.Fields {
+			ls := l.Stamp(f.Key)
+			if editedHere(ls) && !f.Same(&l, &m) && !ls.After(m.Stamp(f.Key)) {
+				units = append(units, f.Key)
+			}
+		}
+		for _, k := range l.SetKeys() {
+			ls := l.Stamp(k)
+			if editedHere(ls) && l.HasMember(k) != m.HasMember(k) && !ls.After(m.Stamp(k)) {
+				units = append(units, k)
+			}
+		}
+		if len(units) > 0 {
+			dropped = append(dropped, DroppedEdit{Local: l, Units: units})
 		}
 	}
 	return dropped
-}
-
-// scalarHash hashes only the conflict-relevant scalar fields of a task (not
-// children, tags or deps, which merge independently) so DroppedLocalEdits can
-// tell whether the authoritative version replaced the local one.
-func scalarHash(t todo.Todo) [32]byte {
-	key := struct {
-		Title      string
-		Status     todo.Status
-		Priority   todo.Priority
-		Size       todo.Size
-		Project    string
-		Notes      string
-		ParentID   string
-		Recurrence string
-		Due        time.Time
-		Start      time.Time
-		Completed  time.Time
-		Deleted    bool
-	}{t.Title, t.Status, t.Priority, t.Size, t.Project, t.Notes, t.ParentID,
-		t.Recurrence, t.DueDate, t.StartDate, t.CompletedAt, t.Deleted}
-	b, _ := json.Marshal(key)
-	return sha256.Sum256(b)
 }

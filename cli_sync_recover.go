@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -60,6 +61,9 @@ type syncLogEntry struct {
 	At      string    `json:"at"`
 	Note    string    `json:"note"`
 	Dropped todo.Todo `json:"dropped"`
+	// Units names what lost (tasksync.DroppedEdit), so a recovery puts back
+	// only those. Absent in entries logged before units were recorded.
+	Units []string `json:"units,omitempty"`
 }
 
 // parseSyncLog reads all entries from the log file at path. Missing file
@@ -228,62 +232,18 @@ func reapplyDroppedEdit(logPath, ref string) int {
 		return 1
 	}
 
-	// Apply the logged scalar fields onto the live task. Use the set-methods
-	// that call StampModified internally, just like `tjek edit` does, so the
-	// monotonic clock-skew clamp is guaranteed. We apply each field
-	// unconditionally from the log entry (the user asked to restore exactly
-	// that state). Child collections (comments, time entries) and
-	// tags/deps merge independently in the sync engine — we only touch the
-	// scalar fields that DroppedLocalEdits compares in scalarHash.
-	logged := loggedTask
-
-	// Title: set directly then stamp (mirrors cliEdit's title path).
-	live.Title = todo.CapitalizeTitle(logged.Title)
+	// Put back what lost: the units the log names, or every scalar field for
+	// an entry logged before units were. The save stamps each unit it changes,
+	// so the recovered values win the next sync, and a unit the other device
+	// changed that did not conflict keeps its value.
+	units := byID[loggedTask.ID].Units
+	if len(units) == 0 {
+		for _, f := range todo.Fields {
+			units = append(units, f.Key)
+		}
+	}
+	restoreUnits(live, loggedTask, units)
 	live.ModifiedAt = todo.StampModified(live.ModifiedAt)
-
-	// Status: use Toggle only if it needs to change to avoid double-toggling.
-	if live.Status != logged.Status {
-		live.Toggle() // Toggle calls StampModified internally
-	}
-
-	// Priority, Size, Project, Due, Start, Notes: use the setter methods.
-	if live.Priority != logged.Priority {
-		live.SetPriority(logged.Priority)
-	}
-	if live.Size != logged.Size {
-		live.SetSize(logged.Size)
-	}
-	if live.Project != logged.Project {
-		live.SetProject(logged.Project)
-	}
-	if !live.DueDate.Equal(logged.DueDate) {
-		if logged.DueDate.IsZero() {
-			live.DueDate = time.Time{}
-			live.ModifiedAt = todo.StampModified(live.ModifiedAt)
-		} else {
-			live.SetDueDate(logged.DueDate)
-		}
-	}
-	if !live.StartDate.Equal(logged.StartDate) {
-		if logged.StartDate.IsZero() {
-			live.StartDate = time.Time{}
-			live.ModifiedAt = todo.StampModified(live.ModifiedAt)
-		} else {
-			// SetStartDate normalises "today" to wall-clock — use it directly.
-			live.StartDate = logged.StartDate
-			live.ModifiedAt = todo.StampModified(live.ModifiedAt)
-		}
-	}
-	if live.Notes != logged.Notes {
-		live.SetNotes(logged.Notes)
-	}
-	if live.Recurrence != logged.Recurrence {
-		if logged.Recurrence == "" {
-			live.ClearRecurrence()
-		} else {
-			live.SetRecurrence(logged.Recurrence)
-		}
-	}
 
 	if err := repo.Save([]*todo.Todo{live}, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "tjek sync --recover: save: %v\n", err)
@@ -299,6 +259,39 @@ func reapplyDroppedEdit(logPath, ref string) int {
 	fmt.Printf("recovered  %s  %s\n", live.ID[:8], live.Title)
 	fmt.Fprintln(os.Stderr, "(changes will propagate on the next tjek sync)")
 	return 0
+}
+
+// restoreUnits copies the named units from src onto dst: a scalar unit's
+// fields, or a tag's or dependency's presence. "deleted" is never restored
+// here; a task deleted elsewhere is not on the live list to restore into.
+func restoreUnits(dst, src *todo.Todo, units []string) {
+	for _, key := range units {
+		if key == "deleted" {
+			continue
+		}
+		for _, f := range todo.Fields {
+			if f.Key == key {
+				f.Copy(dst, src)
+			}
+		}
+		if src.HasMember(key) == dst.HasMember(key) {
+			continue
+		}
+		if name, ok := strings.CutPrefix(key, todo.TagKeyPrefix); ok {
+			if src.HasMember(key) {
+				dst.Tags = append(dst.Tags, name)
+			} else {
+				dst.Tags = slices.DeleteFunc(dst.Tags, func(t string) bool { return t == name })
+			}
+		}
+		if id, ok := strings.CutPrefix(key, todo.DepKeyPrefix); ok {
+			if src.HasMember(key) {
+				dst.Dependencies = append(dst.Dependencies, id)
+			} else {
+				dst.Dependencies = slices.DeleteFunc(dst.Dependencies, func(d string) bool { return d == id })
+			}
+		}
+	}
 }
 
 // appendRecoveryMarker appends a "recovered" marker line to the log at path
