@@ -82,7 +82,7 @@ func (m *model) refreshCaches() {
 	// The percentage scale is relative to the current field, so its 100% mark
 	// is refreshed in the same step — and after the heat, since the scores it
 	// takes the maximum of read momentum from it.
-	m.rank.Max = rank.MaxRanked(all, m.cache.rankScore, m.rank.Score)
+	m.rank.Max = rank.MaxRanked(all, m.cache.rankScore, m.rank.Score, m.frameTime)
 	m.repo.SetRanker(m.rank)
 
 	for k := range m.cache.overdueSet {

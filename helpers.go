@@ -848,6 +848,23 @@ func formatDueShort(due, now time.Time) string {
 	}
 }
 
+// startsCell is what a task that starts on a later day shows in the Score
+// column: the day it can be picked up, as a weekday within the week and as
+// dd-mm beyond it. It sorts below the startable work, so a percentage there
+// would contradict its place in the list.
+func startsCell(start, now time.Time) string {
+	days := int(math.Round(startOfDay(start).Sub(startOfDay(now)).Hours() / 24))
+	if days >= 1 && days <= 6 {
+		return localizedWeekdayShort(start.Weekday())
+	}
+	return start.Format("02-01")
+}
+
+// startsLong is startsCell for a row with room: "starts Fri 02-10-26".
+func startsLong(start time.Time) string {
+	return fmt.Sprintf(tr("starts %s"), localizedWeekdayShort(start.Weekday())+" "+start.Format("02-01-06"))
+}
+
 // formatDurationLive renders a running duration with seconds, for the
 // live timer indicator in the footer.
 func formatDurationLive(d time.Duration) string {

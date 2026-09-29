@@ -174,7 +174,9 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo, rk rank.
 	fmt.Printf("Created:  %s\n", t.CreatedAt.Format("2006-01-02 15:04"))
 	fmt.Printf("Modified: %s\n", t.ModifiedAt.Format("2006-01-02 15:04"))
 
-	if t.Status == todo.Pending {
+	if t.Status == todo.Pending && rank.StartsLater(t, time.Now()) {
+		fmt.Printf("Score:    %s (ranked below the tasks that can start today until then)\n", startsLong(t.StartDate))
+	} else if t.Status == todo.Pending {
 		sc := rk.Components(t)
 		// Spelled-out component names instead of single letters — the previous
 		// `D/P/M/A` was a stat-readout cliff for anyone not already steeped in

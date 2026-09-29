@@ -596,7 +596,7 @@ func TestRankedScoreShowsWhatTheSortRankedBy(t *testing.T) {
 	}
 	// And the scale it is measured against has room for it, so the top of the
 	// list is 100% rather than several rows clamped there.
-	if max := rank.MaxRanked(all, rank.Lifts(all, rank.Default().Score), rank.Default().Score); max < shown {
+	if max := rank.MaxRanked(all, rank.Lifts(all, rank.Default().Score), rank.Default().Score, time.Now()); max < shown {
 		t.Errorf("field maximum %.2f is below the highest ranked score %.2f", max, shown)
 	}
 }

@@ -1232,7 +1232,11 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		// number". Right-aligned in the field so every score ends in the same
 		// column and the % signs line up; the field's trailing listColGap is
 		// the gap to Due.
-		r.add(pal.meta, padRight(padLeft(m.rank.FormatPercent(m.rankedScore(t)), cols.lastW-listColGap), cols.lastW))
+		score := m.rank.FormatPercent(m.rankedScore(t))
+		if rank.StartsLater(t, m.frameTime) {
+			score = startsCell(t.StartDate, m.frameTime)
+		}
+		r.add(pal.meta, padRight(padLeft(truncate(score, cols.lastW-listColGap), cols.lastW-listColGap), cols.lastW))
 	}
 	if cols.showDue {
 		// Right-aligned for the same reason: "2d" and "20-09-27" share a right

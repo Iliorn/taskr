@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/tjek/rank"
 	"github.com/Iliorn/tjek/todo"
 )
 
@@ -188,6 +189,9 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		// which have the width for it.
 		if len([]rune(breakdown)) > valW {
 			breakdown = m.rank.FormatPercent(ranked) + lift
+		}
+		if rank.StartsLater(t, m.frameTime) {
+			breakdown = startsLong(t.StartDate)
 		}
 		roField(tr("Score:"), plainVal, breakdown)
 	}

@@ -326,7 +326,7 @@ func ExplainAt(now time.Time, t *todo.Todo, all []*todo.Todo, b Biases, heat Hea
 	rows, eff := Ranking(all, now, score)
 	e.Of = len(rows)
 	// eff already carries the lifts, so the overlay's 100% is the list's 100%.
-	e.FieldMax = MaxRanked(all, eff, score)
+	e.FieldMax = MaxRanked(all, eff, score, now)
 	for i := range rows {
 		if rows[i].ID != t.ID {
 			continue

@@ -598,3 +598,40 @@ func TestSequenceSortIsDeterministicForIdenticalTasks(t *testing.T) {
 		t.Errorf("tie-break did not fall through to ID: got %s first, want aaaa", forward[0].ID)
 	}
 }
+
+// A task parked until a start date ages from that day, not from its creation:
+// it was not being neglected while it waited.
+func TestAgeCountsFromTheStartDate(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.Local)
+	parked := todo.New("parked")
+	parked.CreatedAt = now.AddDate(0, 0, -40)
+	parked.StartDate = now.AddDate(0, 0, -10)
+	plain := todo.New("plain")
+	plain.CreatedAt = startOfDay(now.AddDate(0, 0, -10)) // start dates are days
+	b := DefaultBiases()
+	if got, want := ComponentsAt(now, &parked, b, Heat{}).Age, ComponentsAt(now, &plain, b, Heat{}).Age; !approxEq(got, want) {
+		t.Errorf("a task started 10 days ago ages like one created then: age %.3f, want %.3f", got, want)
+	}
+	early := todo.New("start before creation")
+	early.CreatedAt = plain.CreatedAt
+	early.StartDate = now.AddDate(0, 0, -30)
+	if got, want := ComponentsAt(now, &early, b, Heat{}).Age, ComponentsAt(now, &plain, b, Heat{}).Age; !approxEq(got, want) {
+		t.Errorf("a start date before creation should not add age: %.3f, want %.3f", got, want)
+	}
+}
+
+// The 100% mark is the best task that can be picked up today: one waiting for
+// a later start date is not in the field, however high it would score.
+func TestWaitingTasksAreNotTheTopOfTheScale(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.Local)
+	waiting := todo.New("waiting")
+	waiting.Priority = todo.PriorityHigh
+	waiting.StartDate = now.AddDate(0, 0, 3)
+	ready := todo.New("ready")
+	ready.Priority = todo.PriorityLow
+	all := []*todo.Todo{&waiting, &ready}
+	score := func(x *todo.Todo) float64 { return ComponentsAt(now, x, DefaultBiases(), Heat{}).Total }
+	if got, want := MaxScore(all, score, now), score(&ready); !approxEq(got, want) {
+		t.Errorf("100%% mark = %.3f, want the ready task's %.3f", got, want)
+	}
+}

@@ -55,7 +55,7 @@ func TestFieldMaximumIgnoresDoneAndDeleted(t *testing.T) {
 	score := func(t *todo.Todo) float64 {
 		return rank.ComponentsAt(explainNow, t, rank.Biases{Aging: true}, rank.Heat{}).Total
 	}
-	max := rank.MaxScore(all, score)
+	max := rank.MaxScore(all, score, time.Now())
 	if want := score(&live); !approxEq(max, want) {
 		t.Errorf("field maximum = %v, want the only live task's score %v", max, want)
 	}
@@ -201,5 +201,27 @@ func TestBoardCursorSurvivesAFilterThatEmptiesIt(t *testing.T) {
 	}
 	if got := m.View(); got == "" {
 		t.Error("an empty filtered board rendered nothing")
+	}
+}
+
+// A task that starts on a later day shows that day in the Score column, not a
+// percentage: it sorts below every task that can start today, and "100%" at
+// the bottom of the list read as a contradiction.
+func TestScoreColumnShowsTheStartOfAWaitingTask(t *testing.T) {
+	waiting := todo.New("waiting for the parts")
+	waiting.Priority = todo.PriorityHigh
+	m := modelWithTasks(t, waiting, todo.New("ready now"))
+	start := m.frameTime.AddDate(0, 0, 3)
+	m.get(waiting.ID).StartDate = start
+	m.markModified(waiting.ID)
+	want := startsCell(start, m.frameTime)
+	var row string
+	for _, line := range strings.Split(ansi.Strip(m.View()), "\n") {
+		if strings.Contains(line, "Waiting for the parts") {
+			row = line
+		}
+	}
+	if !strings.Contains(row, want) || strings.Contains(row, "%") {
+		t.Errorf("the waiting task's row should show %q in place of a percentage:\n%s", want, row)
 	}
 }

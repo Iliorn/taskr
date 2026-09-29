@@ -15,7 +15,8 @@
 //	              (completion, timer, comment) inside MomentumWindow, 5 when
 //	              only one of its tags did, 0 cold
 //	Size          quick-win nudge (S=2, M=1, L=0)
-//	Age           rot-guard: +0.1/day, +0.2/day past 30
+//	Age           rot-guard: +0.1/day, +0.2/day past 30, counted from the
+//	              start date when that is later than creation
 //	Wd Wp Wm      Deadline / Priority / Momentum bias multipliers
 //
 // Done tasks score 0.
@@ -335,8 +336,20 @@ func rawDimensionsAt(now time.Time, t *todo.Todo, heat Heat) (u, i, m, size, age
 	i = importanceDim(t.Priority)
 	m = momentumDim(t, heat)
 	size = sizeDim(t.Size)
-	age = ageDim(now, t.CreatedAt)
+	age = ageDim(now, ageFrom(t))
 	return
+}
+
+// ageFrom is when a task starts to age: its creation, or its start date when
+// that is later. A task parked until a start date was not being neglected
+// while it waited, so the rot guard counts from the day it could be picked up.
+func ageFrom(t *todo.Todo) time.Time {
+	if !t.StartDate.IsZero() {
+		if start := startOfDay(t.StartDate); start.After(t.CreatedAt) {
+			return start
+		}
+	}
+	return t.CreatedAt
 }
 
 // urgencyDim implements the Deadline rule from the design:
@@ -516,7 +529,7 @@ func (r Ranker) ScoreAt(now time.Time) func(*todo.Todo) float64 {
 // tasks, so they rank identically.
 func (r Ranker) Refreshed(now time.Time, todos []*todo.Todo) Ranker {
 	r.Heat = ComputeHeat(now, todos)
-	r.Max = MaxRanked(todos, Lifts(todos, r.ScoreAt(now)), r.ScoreAt(now))
+	r.Max = MaxRanked(todos, Lifts(todos, r.ScoreAt(now)), r.ScoreAt(now), now)
 	return r
 }
 
@@ -540,8 +553,8 @@ func (r Ranker) Refreshed(now time.Time, todos []*todo.Todo) Ranker {
 // against its own clock and biases. One definition of "the field" keeps the
 // overlay's percentage and the list column's from disagreeing about the same
 // task.
-func MaxScore(todos []*todo.Todo, score func(*todo.Todo) float64) float64 {
-	return MaxRanked(todos, nil, score)
+func MaxScore(todos []*todo.Todo, score func(*todo.Todo) float64, now time.Time) float64 {
+	return MaxRanked(todos, nil, score, now)
 }
 
 // MaxRanked is the top of the field with lifts counted — the highest
@@ -552,10 +565,14 @@ func MaxScore(todos []*todo.Todo, score func(*todo.Todo) float64) float64 {
 // from, hiding a difference the ranking still makes. The caller supplies the
 // lift map (nil for the raw field) and the score function, so the explain view
 // can establish the mark against its own clock and biases.
-func MaxRanked(todos []*todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64) float64 {
+//
+// A task that starts on a later day is not in the field: it shows its start
+// instead of a percentage, and a waiting task at 100% would push every task
+// that can be picked up today below the top of the scale.
+func MaxRanked(todos []*todo.Todo, rollup map[string]float64, score func(*todo.Todo) float64, now time.Time) float64 {
 	max := 0.0
 	for _, t := range todos {
-		if t.Deleted || t.Status != todo.Pending {
+		if t.Deleted || t.Status != todo.Pending || StartsLater(t, now) {
 			continue
 		}
 		if s := ScoreOf(t, rollup, score); s > max {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Iliorn/tjek/rank"
 	"github.com/Iliorn/tjek/todo"
 )
 
@@ -302,6 +303,7 @@ func cliTop(args []string) int {
 	}
 	rk := repo.ranker()
 	rows := rk.Top(todoPtrs(todos))
+	now := time.Now()
 	if *n > 0 && len(rows) > *n {
 		rows = rows[:*n]
 	}
@@ -354,7 +356,7 @@ func cliTop(args []string) int {
 			}
 			tags := truncate(tagStrings[i], tagW)
 			fmt.Printf("%-8s  %5s  %-3s  %-10s  %-*s  %s\n",
-				rows[i].ID[:8], rk.FormatPercent(rk.Score(&rows[i])),
+				rows[i].ID[:8], cliScoreCell(rk, &rows[i], now),
 				priorityLetter(rows[i].Priority), due, tagW, tags,
 				truncate(rows[i].Title, 60))
 		}
@@ -362,7 +364,7 @@ func cliTop(args []string) int {
 	}
 	for i := range rows {
 		fmt.Printf("%-8s %5s  %s\n", rows[i].ID[:8],
-			rk.FormatPercent(rk.Score(&rows[i])), truncate(rows[i].Title, 60))
+			cliScoreCell(rk, &rows[i], now), truncate(rows[i].Title, 60))
 	}
 	return 0
 }
@@ -422,4 +424,13 @@ func cliRemind(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// cliScoreCell is a task's percentage in tjek top, or the day it starts when
+// that is a later day, as the TUI's Score column shows it.
+func cliScoreCell(rk rank.Ranker, t *todo.Todo, now time.Time) string {
+	if rank.StartsLater(t, now) {
+		return startsCell(t.StartDate, now)
+	}
+	return rk.FormatPercent(rk.Score(t))
 }

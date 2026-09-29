@@ -408,6 +408,10 @@ Rules:
   explained (the `w` overlay, `tjek why`, `stats --seq`), and those state
   what 100% currently costs. A hypothetical field (the Settings knob preview)
   passes its own maximum to `PercentOfField`.
+- **A task that starts later is out of the field.** It sorts below the work
+  that can start today (`Sunk`), so it shows its start day instead of a
+  percentage (`startsCell`), and `MaxRanked` leaves it out of the 100% mark.
+  Its age counts from the start date (`ageFrom`).
 - **The reading side is in the app.** `view_explain.go` owns the sentences
   (`trSeqReason`), the row layout, the `w` overlay and the `tjek why` output,
   so the two surfaces cannot describe one score differently.

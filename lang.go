@@ -855,6 +855,7 @@ var daTranslations = map[string]string{
 	"ID:":    "ID:",
 	" ◉":     " ◉",
 	"%s  (%sD %s · P %s · M %s · S %s · A %s)": "%s  (%sD %s · P %s · M %s · S %s · A %s)",
+	"starts %s": "starter %s",
 
 	// ── Bias levels (shown in the ‹ … › pickers) ──
 	"relaxed":  "afslappet",
@@ -1508,6 +1509,7 @@ var deTranslations = map[string]string{
 	"ID:":    "ID:",
 	" ◉":     " ◉",
 	"%s  (%sD %s · P %s · M %s · S %s · A %s)": "%s  (%sF %s · P %s · M %s · G %s · A %s)",
+	"starts %s": "beginnt %s",
 
 	// ── Bias levels (shown in the ‹ … › pickers) ──
 	"relaxed":  "gelassen",
