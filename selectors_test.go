@@ -696,3 +696,31 @@ func TestLaterStartSinksBelowStartableWork(t *testing.T) {
 		t.Errorf("starting today, the overdue task should lead, got %q", first.Title)
 	}
 }
+
+// The sigil alone, as it stands the moment it is typed, narrows to what it
+// is about: "#" to the tagged tasks, "@" to those in a project, and either
+// to a title that has the character itself, so the list does not go blank
+// under the first keystroke of a tag or project.
+func TestBareSigilMatchesAnyTagOrProject(t *testing.T) {
+	tagged := mkTodo("a", "Buy milk", todo.Pending)
+	tagged.Tags = []string{"shop"}
+	inProject := mkTodo("b", "Plan trip", todo.Pending)
+	inProject.Project = "Travel"
+	plain := mkTodo("c", "Call dentist", todo.Pending)
+	hashTitle := mkTodo("d", "Fix issue #12", todo.Pending)
+
+	for _, c := range []struct {
+		q    string
+		want []bool // tagged, inProject, plain, hashTitle
+	}{
+		{"#", []bool{true, false, false, true}},
+		{"@", []bool{false, true, false, false}},
+	} {
+		match := compileSearch(c.q)
+		for i, task := range []todo.Todo{tagged, inProject, plain, hashTitle} {
+			if got := match(task); got != c.want[i] {
+				t.Errorf("compileSearch(%q)(%q) = %v, want %v", c.q, task.Title, got, c.want[i])
+			}
+		}
+	}
+}

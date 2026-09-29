@@ -134,7 +134,8 @@ grcrs                           # finds "Buy groceries"
 ```
 
 Supported: `#tag`, `@project`, `p:high/medium/low`, `due:<date`,
-`due:>date`, `due:date` (`<=` and `>=` too) and the word `overdue`. Anything
+`due:>date`, `due:date` (`<=` and `>=` too) and the word `overdue`. A `#` on
+its own shows every tagged task, and an `@` every task in a project. Anything
 else matches the title loosely (every letter in order, so `dply` finds
 "Deploy release") or the description as plain text.
 

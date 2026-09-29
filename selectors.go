@@ -26,7 +26,7 @@ func todoMatchesSearch(t todo.Todo, search string) bool {
 //
 // The query is tokenised on whitespace and the tokens are ANDed together,
 // reusing the quick-add vocabulary: `#tag` (tag substring), `@project` (project
-// substring), `p:high|med|low`, `due:<date` / `due:>date` / `due:date`
+// substring), a bare `#` or `@` (has any tag / a project), `p:high|med|low`, `due:<date` / `due:>date` / `due:date`
 // (comparison, "<"/">"/"<="/">=" or exact day), and the bare keyword `overdue`.
 // Any leftover bare words are joined and fuzzy-matched against the title
 // (subsequence, so "grcrs" finds "Buy groceries") or matched as a substring of
@@ -48,6 +48,16 @@ func compileSearch(search string) func(todo.Todo) bool {
 		// field prefix back to English so the branches know one spelling.
 		lower := canonicalInputToken(strings.ToLower(tok))
 		switch {
+		case tok == "#":
+			// The sigil alone, as typed on the way to a tag: every tagged
+			// task, and a title that has the character itself.
+			preds = append(preds, func(t todo.Todo) bool {
+				return len(t.Tags) > 0 || strings.Contains(t.Title, "#")
+			})
+		case tok == "@":
+			preds = append(preds, func(t todo.Todo) bool {
+				return t.Project != "" || strings.Contains(t.Title, "@")
+			})
 		case strings.HasPrefix(tok, "#") && len(tok) > 1:
 			q := strings.ToLower(tok[1:])
 			preds = append(preds, func(t todo.Todo) bool {

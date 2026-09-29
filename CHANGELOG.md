@@ -11,6 +11,12 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Fixed
+
+- A `#` or `@` alone in the filter shows the tagged tasks, or those in a project, instead of none.
+
 ## [1.45.0] - 2026-09-29
 
 ### Added
