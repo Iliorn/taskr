@@ -197,7 +197,9 @@ func TestCommentLineCount(t *testing.T) {
 		{"short text", "hello", 80, 1},
 		{"exact fit", "hello", 5, 1},
 		{"wraps to 2", "hello world", 6, 2},
-		{"wraps to 3", "this is a longer sentence here", 10, 3},
+		{"wraps to 3", "this is a longer sentence", 10, 3},
+		// Broken at spaces, so more lines than 30 runes / 10 per line.
+		{"word wrap takes a fourth", "this is a longer sentence here", 10, 4},
 		{"single char available", "hello", 1, 5},
 	}
 

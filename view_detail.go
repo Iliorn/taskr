@@ -490,10 +490,7 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 	if len(t.Comments) == 0 {
 		b.WriteString("  " + emptySection(isDetailFocused && m.detail.field == fieldComments, tr("No comments yet. Press 'a' to add one.")) + "\n")
 	} else {
-		available := innerW - commentPrefixLen
-		if available < 10 {
-			available = 10
-		}
+		available := m.detailCommentWidth()
 		for i, c := range t.Comments {
 			isSelected := isDetailFocused && m.detail.field == fieldComments && i == m.detail.commentCursor
 			pfx := cursorGap

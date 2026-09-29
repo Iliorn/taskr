@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Iliorn/tjek/todo"
 	"github.com/charmbracelet/x/ansi"
@@ -173,5 +174,67 @@ func TestStackedTaskDetailTakesWhatTheListLeaves(t *testing.T) {
 	}
 	if _, detail, area := split(60); detail != area-area/2 {
 		t.Errorf("a full list and a long detail: detail has %d of %d lines, want half", detail, area)
+	}
+}
+
+// detailWalkTasks is one task with a random mix of every detail section, some
+// of them empty and some with comments long enough to wrap, plus the
+// subtasks and blockers it refers to. The task the pane opens on comes first.
+func detailWalkTasks(r *rand.Rand) []todo.Todo {
+	main := todo.New("main task " + strings.Repeat("word ", r.Intn(20)))
+	for i := 0; i < r.Intn(8); i++ {
+		main.AddTag(fmt.Sprintf("tag%d", i))
+	}
+	for i := 0; i < r.Intn(6); i++ {
+		main.AddComment(strings.Repeat("comment text that is long ", 1+r.Intn(8)))
+	}
+	for i := 0; i < r.Intn(6); i++ {
+		main.AddTimeEntry(time.Now().Add(-time.Duration(i+2)*time.Hour), time.Now().Add(-time.Duration(i+1)*time.Hour))
+	}
+	if r.Intn(2) == 0 {
+		main.Notes = strings.Repeat("a long description line\n", 1+r.Intn(10))
+	}
+	var rest []todo.Todo
+	for i := 0; i < r.Intn(4); i++ {
+		b := todo.New(fmt.Sprintf("blocker %d", i))
+		main.AddDependency(b.ID)
+		rest = append(rest, b)
+	}
+	for i := 0; i < r.Intn(8); i++ {
+		s := todo.New(fmt.Sprintf("sub %d %s", i, strings.Repeat("x", r.Intn(80))))
+		s.ParentID = main.ID
+		rest = append(rest, s)
+	}
+	return append([]todo.Todo{main}, rest...)
+}
+
+// The detail pane's ▶ must be on screen too. Its window is placed from an
+// estimate of the cursor's line, and the ↑/↓ markers take a line at each end,
+// so an estimate one line off, or a window that ends on the cursor, hides it.
+// Short windows are where that shows, so most of the sizes are short.
+func TestRandomDetailKeysKeepTheCursorOnScreen(t *testing.T) {
+	keys := []string{"up", "down", "left", "right", "pgup", "pgdown", "home", "end"}
+	sizes := [][2]int{{60, 20}, {70, 15}, {80, 24}, {120, 40}, {150, 25}}
+	for seed := int64(1); seed <= 120; seed++ {
+		r := rand.New(rand.NewSource(seed))
+		tasks := detailWalkTasks(r)
+		m := modelWithTasks(t, tasks...)
+		sz := sizes[r.Intn(len(sizes))]
+		m.termWidth, m.termHeight = sz[0], sz[1]
+		m.detailPos = detailPos(r.Intn(3))
+		m.followTask(tasks[0].ID)
+		m, _ = sendKeyCmd(t, m, keyMsgFor("enter"))
+		var trail []string
+		for step := 0; step < 30; step++ {
+			k := keys[r.Intn(len(keys))]
+			trail = append(trail, k)
+			m, _ = sendKeyCmd(t, m, keyMsgFor(k))
+			if m.pane != paneDetail || m.mode != modeNormal {
+				break
+			}
+			if !strings.Contains(ansi.Strip(m.View()), "▶") {
+				t.Fatalf("seed %d, %dx%d, detail %s: no ▶ on screen after %v", seed, sz[0], sz[1], m.detailPos, trail)
+			}
+		}
 	}
 }

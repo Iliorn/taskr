@@ -35,6 +35,17 @@ func (m model) estimateDetailCursorLine() int {
 			return i
 		}
 	}
+	// An empty section draws its cursor on its label, one line above where
+	// its first row would be.
+	if m.detailSectionEmpty(t) {
+		return m.estimateSectionRowLine(t) - 1
+	}
+	return m.estimateSectionRowLine(t)
+}
+
+// estimateSectionRowLine is the line of the cursor's row in one of the list
+// sections below the fields (tags, relations, time entries, comments).
+func (m model) estimateSectionRowLine(t *todo.Todo) int {
 	if m.detail.field == fieldTags {
 		// Tags label sits below the fields block; +1 skips the label row.
 		return m.detailMainHeight(t) - m.detailTagsRows(t) + m.detail.tagCursor
@@ -65,14 +76,29 @@ func (m model) estimateDetailCursorLine() int {
 	// in narrow columns and the window loses the selected comment off the
 	// bottom.
 	line := teStart + m.detailTimeEntriesHeight(t) + 1
-	available := m.termWidth - 32
-	if available < 10 {
-		available = 10
-	}
+	available := m.detailCommentWidth()
 	for i := 0; i < m.detail.commentCursor && i < len(t.Comments); i++ {
 		line += commentLineCount(t.Comments[i].Text, available)
 	}
 	return line
+}
+
+// detailSectionEmpty reports whether the section under the cursor has no rows
+// and shows only its label and a placeholder.
+func (m model) detailSectionEmpty(t *todo.Todo) bool {
+	switch m.detail.field {
+	case fieldTags:
+		return len(t.Tags) == 0
+	case fieldSubtasks:
+		return m.subtaskCount(t.ID) == 0
+	case fieldDependencies:
+		return len(t.Dependencies) == 0 && len(dependentsOf(m.allTodos(), t.ID)) == 0
+	case fieldTimeEntries:
+		return len(t.TimeEntries) == 0
+	case fieldComments:
+		return len(t.Comments) == 0
+	}
+	return false
 }
 
 // ── Detail scroll window ──────────────────────────────────────────────────────
@@ -545,6 +571,12 @@ func (m model) detailTimeEntriesHeight(t *todo.Todo) int {
 	return 1 + rows + 1
 }
 
+// detailCommentWidth is the width a comment's text wraps to in the detail
+// pane, beside its cursor and timestamp.
+func (m model) detailCommentWidth() int {
+	return max(max(m.termWidth-10, minInnerWidth)-commentPrefixLen, 10)
+}
+
 // detailCommentsHeight is the rendered height of the comments section:
 // label plus wrapped comment lines (or the one-line empty hint).
 func (m model) detailCommentsHeight(t *todo.Todo) int {
@@ -552,10 +584,7 @@ func (m model) detailCommentsHeight(t *todo.Todo) int {
 	if len(t.Comments) == 0 {
 		return lines + 1
 	}
-	available := m.termWidth - 32
-	if available < 10 {
-		available = 10
-	}
+	available := m.detailCommentWidth()
 	for _, c := range t.Comments {
 		lines += commentLineCount(c.Text, available)
 	}

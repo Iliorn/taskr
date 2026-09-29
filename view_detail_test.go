@@ -415,6 +415,30 @@ func TestDetailCursorEstimateMatchesTheRenderedDocument(t *testing.T) {
 		}
 	}
 
+	// An empty section draws its cursor on the section's label, one line above
+	// where a first row would be.
+	bare := todo.New("a task with every section empty")
+	mb := modelWithTasks(t, bare)
+	mb.termWidth, mb.termHeight = 120, 40
+	mb.pane = paneDetail
+	mb.detailTaskID = bare.ID
+	for _, f := range []detailField{fieldTags, fieldSubtasks, fieldDependencies, fieldTimeEntries, fieldComments} {
+		mm := mb
+		mm.detail = detailState{field: f}
+		mm.invalidateDetailCache()
+		lines := strings.Split(strings.TrimRight(mm.buildDetailContent(), "\n"), "\n")
+		marked := -1
+		for i, line := range lines {
+			if strings.HasPrefix(strings.TrimLeft(ansi.Strip(line), " "), "▶") {
+				marked = i
+				break
+			}
+		}
+		if got := mm.estimateDetailCursorLine(); got != marked {
+			t.Errorf("empty field %d: estimate = %d, rendered on line %d", f, got, marked)
+		}
+	}
+
 	// And the document height helper agrees with the same rendering, or the
 	// window is sized against a document of a different length.
 	m.detail = detailState{field: fieldStartDate}

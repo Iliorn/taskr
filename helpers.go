@@ -172,15 +172,14 @@ func clampLines(lines []string, max int) []string {
 	return out
 }
 
+// commentLineCount is how many lines the detail pane draws for a comment:
+// wrapText's word wrap, which can take more lines than the rune count
+// divided by the width.
 func commentLineCount(text string, available int) int {
-	n := len([]rune(text))
-	if n == 0 {
+	if text == "" {
 		return 1
 	}
-	if lines := (n + available - 1) / available; lines > 1 {
-		return lines
-	}
-	return 1
+	return len(wrapText(text, available))
 }
 
 func renderTagsPart(tags []string) string {

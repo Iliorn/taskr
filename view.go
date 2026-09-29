@@ -591,8 +591,9 @@ func (m model) applyDetailScrollN(content string, maxVisible int) string {
 	// model's estimate of them.
 	scrollStart := detailScrollWindow(m.detail.scroll, cursorLine, maxVisible, len(lines))
 	// Within a margin of the top there is nothing to gain by hiding the first
-	// rows behind a marker that costs one of them.
-	if scrollStart <= detailScrollMargin {
+	// rows behind a marker that costs one of them, as long as the cursor stays
+	// above the bottom marker. In a short pane it would not.
+	if scrollStart <= detailScrollMargin && cursorLine < maxVisible-1 {
 		scrollStart = 0
 	}
 	end := scrollStart + maxVisible
