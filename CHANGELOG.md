@@ -11,6 +11,14 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Added
+
+- A task's detail pane ends with its history: who changed, closed or reopened it, and when.
+- Settings → "Your name" signs your changes; `TJEK_AUTHOR` lets a script sign as itself.
+- `tjek show` prints the task's history, and `--json` output carries it as `history`.
+
 ## [1.44.1] - 2026-09-29
 
 ### Changed

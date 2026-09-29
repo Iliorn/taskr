@@ -668,8 +668,8 @@ func TestModalMutationSchedulesSaveImmediately(t *testing.T) {
 
 // The detail cursor walks one continuous chain over the whole column
 // (originally per-page wrap, backlog item 37e22859; chain since the [1/3]
-// pages were removed): up at the very top wraps to the last comment, down
-// past the tags continues into subtasks.
+// pages were removed): up at the very top wraps to the oldest history row,
+// down past the tags continues into subtasks.
 func TestDetailCursorChainAtTop(t *testing.T) {
 	task := todo.New("wrap p0")
 	task.AddTag("alpha")
@@ -680,8 +680,8 @@ func TestDetailCursorChainAtTop(t *testing.T) {
 	m.detail = detailState{field: fieldStartDate}
 
 	m.detailCursorUp()
-	if m.detail.field != fieldComments {
-		t.Fatalf("up at StartDate: field = %v, want fieldComments (column wrap)", m.detail.field)
+	if m.detail.field != fieldHistory {
+		t.Fatalf("up at StartDate: field = %v, want fieldHistory (column wrap)", m.detail.field)
 	}
 
 	m.detail = detailState{field: fieldTags, tagCursor: 1}
@@ -746,17 +746,27 @@ func TestDetailCursorChainAtComments(t *testing.T) {
 		t.Errorf("up at first comment: field = %v, want fieldTimeEntries", m.detail.field)
 	}
 
-	// Down from the last comment wraps the whole column to the top.
+	// Down from the last comment continues into the history, which closes
+	// the column: down from it wraps to the top.
 	m.detail = detailState{field: fieldComments, commentCursor: 2}
 	m.detailCursorDown()
+	if m.detail.field != fieldHistory {
+		t.Errorf("down at last comment: field = %v, want fieldHistory", m.detail.field)
+	}
+	m.detailCursorDown()
 	if m.detail.field != fieldStartDate {
-		t.Errorf("down at last comment: field = %v, want fieldStartDate (wrap)", m.detail.field)
+		t.Errorf("down at the end of the history: field = %v, want fieldStartDate (wrap)", m.detail.field)
 	}
 
-	// Up from the very top wraps to the last comment.
+	// Up from the very top wraps to the history, and up from its first row
+	// comes back to the last comment.
+	m.detailCursorUp()
+	if m.detail.field != fieldHistory {
+		t.Errorf("up at top: field=%v, want fieldHistory", m.detail.field)
+	}
 	m.detailCursorUp()
 	if m.detail.field != fieldComments || m.detail.commentCursor != 2 {
-		t.Errorf("up at top: field=%v cursor=%d, want fieldComments/2", m.detail.field, m.detail.commentCursor)
+		t.Errorf("up at the history: field=%v cursor=%d, want fieldComments/2", m.detail.field, m.detail.commentCursor)
 	}
 }
 

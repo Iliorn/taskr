@@ -88,6 +88,7 @@ type detailRenderCache struct {
 	depCursor     int
 	subtaskCursor int
 	commentCursor int
+	historyCursor int
 	termW         int
 	pane          pane
 	rendered      string
@@ -112,6 +113,7 @@ func (m *model) getCachedDetailContent() string {
 		rc.depCursor == m.detail.depCursor &&
 		rc.subtaskCursor == m.detail.subtaskCursor &&
 		rc.commentCursor == m.detail.commentCursor &&
+		rc.historyCursor == m.detail.historyCursor &&
 		rc.termW == m.termWidth &&
 		rc.pane == m.pane {
 		return rc.rendered
@@ -124,6 +126,7 @@ func (m *model) getCachedDetailContent() string {
 	rc.depCursor = m.detail.depCursor
 	rc.subtaskCursor = m.detail.subtaskCursor
 	rc.commentCursor = m.detail.commentCursor
+	rc.historyCursor = m.detail.historyCursor
 	rc.termW = m.termWidth
 	rc.pane = m.pane
 	rc.rendered = content

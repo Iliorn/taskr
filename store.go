@@ -248,6 +248,9 @@ func (s *Store) drainDirty() (dirty []*todo.Todo, tombstones map[string]time.Tim
 			}
 			cp := copyTodo(*t)
 			dirty = append(dirty, &cp)
+			// The copy takes the Auto note to the save; the next edit of
+			// this task is someone's own unless flagged again.
+			t.Auto = false
 		}
 	}
 	if n := len(s.tombstones); n > 0 {

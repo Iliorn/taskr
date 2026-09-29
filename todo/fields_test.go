@@ -22,6 +22,8 @@ func TestFieldsCoverTheTodo(t *testing.T) {
 		"TimeEntries":  "records with their own IDs",
 		"Stamps":       "the stamps themselves",
 		"DeletedAt":    "travels with the deleted unit",
+		"History":      "records with their own IDs",
+		"Auto":         "a note for the next save, never stored",
 	}
 	typ := reflect.TypeOf(Todo{})
 	for i := 0; i < typ.NumField(); i++ {

@@ -73,12 +73,18 @@ func (m model) estimateSectionRowLine(t *todo.Todo) int {
 		return teStart + 1 + m.detail.timeEntryCursor
 	}
 
-	// Comments close the document, straight after the time-entry block's own
-	// trailing blank. Comments wrap, so sum the rendered line counts of
-	// everything above the cursor — counting one line per comment undershoots
-	// in narrow columns and the window loses the selected comment off the
-	// bottom.
-	line := teStart + m.detailTimeEntriesHeight(t) + 1
+	// History closes the document, a blank row after the comments: its
+	// label, then one row per history row.
+	commentsStart := teStart + m.detailTimeEntriesHeight(t)
+	if m.detail.field == fieldHistory {
+		return commentsStart + m.detailCommentsHeight(t) + 2 + m.detail.historyCursor
+	}
+
+	// Comments come straight after the time-entry block's own trailing
+	// blank. Comments wrap, so sum the rendered line counts of everything
+	// above the cursor — counting one line per comment undershoots in narrow
+	// columns and the window loses the selected comment off the bottom.
+	line := commentsStart + 1
 	available := m.detailCommentWidth()
 	for i := 0; i < m.detail.commentCursor && i < len(t.Comments); i++ {
 		line += commentLineCount(t.Comments[i].Text, available)
@@ -100,6 +106,8 @@ func (m model) detailSectionEmpty(t *todo.Todo) bool {
 		return len(t.TimeEntries) == 0
 	case fieldComments:
 		return len(t.Comments) == 0
+	case fieldHistory:
+		return len(t.History) == 0
 	}
 	return false
 }
@@ -599,6 +607,13 @@ func (m model) detailCommentsHeight(t *todo.Todo) int {
 	return lines
 }
 
+// detailHistoryHeight is the rendered height of the history section: the
+// blank row above it, its label, and a row per history row (or the one-line
+// empty hint).
+func (m model) detailHistoryHeight(t *todo.Todo) int {
+	return 2 + max(len(historyRows(t.History)), 1)
+}
+
 // detailContentHeight is the full single-column detail document height. The
 // two bare +1s are the blank rows buildDetailContent puts between its three
 // pages; the time-entry block carries its own trailing blank.
@@ -610,7 +625,8 @@ func (m model) detailContentHeight() int {
 	return m.detailMainHeight(t) + 1 +
 		m.detailRelationsHeight(t) + 1 +
 		m.detailTimeEntriesHeight(t) +
-		m.detailCommentsHeight(t)
+		m.detailCommentsHeight(t) +
+		m.detailHistoryHeight(t)
 }
 
 func (m model) extraOverheadLines() int {
@@ -618,7 +634,7 @@ func (m model) extraOverheadLines() int {
 	case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeEditDue,
 		modeSearch, modeAddSubtask,
 		modeEditSubtask, modeEditProjectInline, modeEditTimeEntry,
-		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken,
+		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken, modeEditName,
 		modeEditServerListen, modeEditServerToken, modeEditStages,
 		modeEditExportFolder, modeImportFile:
 		return 3

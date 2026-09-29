@@ -515,6 +515,27 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 			}
 		}
 	}
+
+	// ── History ──────────────────────────────────────────────────────────────
+	b.WriteString("\n")
+	rows := historyRows(t.History)
+	histCur := cursorGap
+	if isDetailFocused && m.detail.field == fieldHistory && len(rows) == 0 {
+		histCur = cursorMark
+	}
+	b.WriteString(histCur + detailLabelStyle.Render(tr("History:")) + "\n")
+	if len(rows) == 0 {
+		b.WriteString("  " + emptySection(isDetailFocused && m.detail.field == fieldHistory, tr("Nothing recorded yet.")) + "\n")
+	}
+	// The row is the cursor's gutter and the line; innerW is what the pane
+	// leaves beside the gutter.
+	for i, line := range historyLines(rows, time.Now(), max(innerW, 10)) {
+		if isDetailFocused && m.detail.field == fieldHistory && i == m.detail.historyCursor {
+			b.WriteString(detailSelectedStyle.Render(cursorMark+line) + "\n")
+		} else {
+			b.WriteString(detailValueStyle.Render(cursorGap+line) + "\n")
+		}
+	}
 	return b.String()
 }
 

@@ -65,6 +65,10 @@ The app and the CLI share one database. A running app notices changes made
 from the command line (or synced from another device) and reloads, waiting
 until you finish any edit you are in the middle of.
 
+A change made from the command line shows in the task's history marked
+`cli`, under the name from Settings. Set `TJEK_AUTHOR` to sign a script's
+changes with a name of its own; `tjek show` prints the history at the end.
+
 ## The `--json` output is a contract
 
 `list`, `search`, `top`, `show`, `why`, `add`, `tags`, `projects`, `doctor`,

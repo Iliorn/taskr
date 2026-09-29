@@ -104,6 +104,10 @@ func (rp *replica) edit(r *rand.Rand) {
 		t.Notes = fmt.Sprintf("notes %d", r.Intn(3))
 	}
 	t.ModifiedAt = todo.StampAt(rp.now, before.ModifiedAt)
+	// Every edit leaves a history event, as the app's save does; a stamp
+	// is unique to its replica, so it makes the event's ID.
+	t.History = append(append([]todo.Event(nil), t.History...),
+		todo.Event{ID: string(rp.clock.Now(rp.now)), At: rp.now, Action: todo.ActionEdited})
 	if !rp.legacy {
 		t.Stamps = stampLike(before, t, ok, rp.clock, rp.now)
 	}

@@ -7,8 +7,8 @@ version; the [CLI reference](cli.md) covers the `tjek <command>` side.
 
 - **Tasks**: the main list. Add, complete, delete, rename, set priority,
   size (S/M/L), due and start dates. The detail pane (`enter`) holds comments,
-  dependencies, subtasks, a description (opened in `$EDITOR`) and a live score
-  breakdown.
+  dependencies, subtasks, a description (opened in `$EDITOR`), a live score
+  breakdown and the task's [history](#history).
 - **Calendar**: a per-day activity timeline with project and tag roll-ups
   and a tracked-time heatmap. Time entries can be edited or deleted in place.
 - **Projects**: tasks grouped by project, with a timeline when an open task
@@ -37,6 +37,35 @@ parent's project, deadline and tags, and never outranks its parent's
 priority. Moving a parent to another project takes its subtasks along. If you
 would rather tag each step yourself, turn off Settings → "Subtasks copy
 tags".
+
+## History
+
+The last section of a task's detail pane is its history: who created,
+changed, closed, reopened, deleted or restored it, and when, newest first.
+
+```
+Historik:
+  i dag 14:32    Anna         lukkede
+  i dag 09:10    Mark · cli   genåbnede
+  i går 11:02    Mark         ændrede forfaldsdato, prioritet
+  28-09 08:30    automatisk   oprettede
+```
+
+- **Every way of changing a task is recorded**: the app, the command line
+  (marked `cli`), an import. A comment, tracked time or a new score is not a
+  change to the task and adds no row.
+- **"automatic"** is tjek's own doing: the next instance of a repeating task,
+  a parent closed with its last subtask, a due date or priority carried along
+  a tree of subtasks.
+- **Edits close together share a row.** Changes one person makes within ten
+  minutes read as one row, and edits right after a task was created are part
+  of its creation.
+- **The name** is Settings → "Your name", or your account's name until you
+  set one. A script or an agent can sign as itself with `TJEK_AUTHOR`:
+  `TJEK_AUTHOR=Claude tjek done 3f2a`.
+
+History syncs with the task, so every device shows the same rows. Tasks from
+before history existed start with none.
 
 ## Keyboard shortcuts
 

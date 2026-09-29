@@ -210,6 +210,7 @@ func (m *model) detailSectionJump(dir int) {
 	m.detail.depCursor = 0
 	m.detail.timeEntryCursor = 0
 	m.detail.commentCursor = 0
+	m.detail.historyCursor = 0
 	m.invalidateDetailCache()
 	// The section opens at the top of the pane, the way a page would, rather
 	// than wherever the least scrolling leaves it. The offset is the blank line
@@ -232,6 +233,7 @@ var detailSections = []detailSection{
 	{fieldDependencies, "Dependencies"},
 	{fieldTimeEntries, "Time"},
 	{fieldComments, "Comments"},
+	{fieldHistory, "History"},
 }
 
 // detailSectionOf is the index in detailSections of the section a field is
@@ -249,6 +251,8 @@ func detailSectionOf(f detailField) int {
 		return 4
 	case fieldComments:
 		return 5
+	case fieldHistory:
+		return 6
 	}
 	return 0
 }
@@ -261,11 +265,11 @@ func (m *model) detailCursorUp() {
 	t := m.currentTodo()
 	switch m.detail.field {
 	case fieldStartDate:
-		// Wrap to the bottom of the column: last comment.
-		m.detail.field = fieldComments
-		m.detail.commentCursor = 0
-		if t != nil && len(t.Comments) > 0 {
-			m.detail.commentCursor = len(t.Comments) - 1
+		// Wrap to the bottom of the column: the oldest history row.
+		m.detail.field = fieldHistory
+		m.detail.historyCursor = 0
+		if t != nil {
+			m.detail.historyCursor = max(len(historyRows(t.History))-1, 0)
 		}
 	case fieldDueDate:
 		m.detail.field = fieldStartDate
@@ -335,6 +339,16 @@ func (m *model) detailCursorUp() {
 				m.detail.timeEntryCursor = len(t.TimeEntries) - 1
 			}
 		}
+	case fieldHistory:
+		if m.detail.historyCursor > 0 {
+			m.detail.historyCursor--
+		} else {
+			m.detail.field = fieldComments
+			m.detail.commentCursor = 0
+			if t != nil && len(t.Comments) > 0 {
+				m.detail.commentCursor = len(t.Comments) - 1
+			}
+		}
 	}
 }
 
@@ -399,9 +413,16 @@ func (m *model) detailCursorDown() {
 		if t != nil && m.detail.commentCursor < len(t.Comments)-1 {
 			m.detail.commentCursor++
 		} else {
+			m.detail.field = fieldHistory
+			m.detail.historyCursor = 0
+		}
+	case fieldHistory:
+		if t != nil && m.detail.historyCursor < len(historyRows(t.History))-1 {
+			m.detail.historyCursor++
+		} else {
 			// Wrap to the top of the column.
 			m.detail.field = fieldStartDate
-			m.detail.commentCursor = 0
+			m.detail.historyCursor = 0
 		}
 	}
 }

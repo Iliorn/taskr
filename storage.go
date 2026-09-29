@@ -45,6 +45,10 @@ type appSettings struct {
 	Theme        string          `json:"theme"`
 	Language     string          `json:"language"`
 
+	// Name is what this device's edits are signed with in a task's history.
+	// Empty means the account's name (authorName); TJEK_AUTHOR overrides it.
+	Name string `json:"name,omitempty"`
+
 	// Sequencing biases: ints 0/1/2 mapping to rank.Balanced/Relaxed/Intense.
 	// Stored as ints (not enum names) to match the existing convention used by
 	// TaskSort and friends. Zero value = rank.Balanced, which is the neutral

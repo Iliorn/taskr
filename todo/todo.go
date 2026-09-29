@@ -236,6 +236,16 @@ type Todo struct {
 	Deleted   bool      `json:"deleted,omitempty"`
 	DeletedAt time.Time `json:"deleted_at,omitempty"`
 
+	// History is who changed the task and when, oldest first (history.go).
+	History []Event `json:"history,omitempty"`
+
+	// Auto marks a task changed by tjek itself rather than by hand: the next
+	// instance of a recurring task, a parent closed with its last subtask, a
+	// date or priority carried along a tree. The save records its event as
+	// SourceAuto. Never stored or synced; the app clears it once a save has
+	// taken the task.
+	Auto bool `json:"-"`
+
 	// Stamps holds, per field, the stamp of the edit that set it: a sync
 	// merge keeps each field from the version with the later stamp (see
 	// fields.go for the keys). The store sets them when it saves a task, by

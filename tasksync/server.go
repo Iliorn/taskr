@@ -416,6 +416,14 @@ func canonicalizeForDigest(t *todo.Todo) {
 		}
 		t.TimeEntries = e
 	}
+	if len(t.History) > 0 {
+		h := append([]todo.Event(nil), t.History...)
+		for i := range h {
+			h[i].At = h[i].At.UTC()
+		}
+		todo.SortHistory(h)
+		t.History = h
+	}
 }
 
 func sortedStrings(s []string) []string {

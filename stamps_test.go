@@ -24,7 +24,7 @@ func stampSave(t *testing.T, h *sql.DB, now time.Time, tasks []todo.Todo, tombst
 			dead[id] = now
 		}
 	}
-	if err := saveStamped(h, ptrs, dead, rank.Default().Score, now); err != nil {
+	if err := saveStamped(h, ptrs, dead, rank.Default().Score, now, editor{name: "Tester"}); err != nil {
 		t.Fatalf("saveStamped: %v", err)
 	}
 }

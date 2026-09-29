@@ -368,6 +368,11 @@ func TestDetailCursorEstimateMatchesTheRenderedDocument(t *testing.T) {
 	task.AddComment("second comment")
 	task.AddTimeEntry(time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour))
 	task.AddTimeEntry(time.Now().Add(-30*time.Minute), time.Now().Add(-10*time.Minute))
+	task.History = []todo.Event{
+		{ID: "e1", At: time.Now().Add(-3 * time.Hour), Author: "Anna", Action: todo.ActionCreated},
+		{ID: "e2", At: time.Now().Add(-2 * time.Hour), Author: "Mark", Action: todo.ActionEdited, Fields: []string{"due"}},
+		{ID: "e3", At: time.Now().Add(-time.Hour), Author: "Anna", Action: todo.ActionClosed},
+	}
 	blocker := todo.New("the blocker")
 	task.AddDependency(blocker.ID)
 	sub := todo.New("a subtask")
@@ -391,6 +396,7 @@ func TestDetailCursorEstimateMatchesTheRenderedDocument(t *testing.T) {
 		{"dependency", fieldDependencies, nil},
 		{"second time entry", fieldTimeEntries, func(m *model) { m.detail.timeEntryCursor = 1 }},
 		{"second comment", fieldComments, func(m *model) { m.detail.commentCursor = 1 }},
+		{"second history row", fieldHistory, func(m *model) { m.detail.historyCursor = 1 }},
 	} {
 		mm := m
 		mm.detail = detailState{field: c.field}
@@ -422,7 +428,7 @@ func TestDetailCursorEstimateMatchesTheRenderedDocument(t *testing.T) {
 	mb.termWidth, mb.termHeight = 120, 40
 	mb.pane = paneDetail
 	mb.detailTaskID = bare.ID
-	for _, f := range []detailField{fieldTags, fieldSubtasks, fieldDependencies, fieldTimeEntries, fieldComments} {
+	for _, f := range []detailField{fieldTags, fieldSubtasks, fieldDependencies, fieldTimeEntries, fieldComments, fieldHistory} {
 		mm := mb
 		mm.detail = detailState{field: f}
 		mm.invalidateDetailCache()

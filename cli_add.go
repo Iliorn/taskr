@@ -56,7 +56,7 @@ func cliAdd(args []string) int {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
 	board := boardConfigFromSettings(settings)
-	repo := newSQLiteRepo()
+	repo := newCLIRepo(settings)
 	repo.SetRanker(rank.Ranker{Biases: biasesFromSettings(settings)})
 
 	// Resolve everything that's shared across all created tasks exactly once

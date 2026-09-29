@@ -9,6 +9,12 @@ tasks[].created_at
 tasks[].deleted_at
 tasks[].dependencies[]
 tasks[].due_date
+tasks[].history[].action
+tasks[].history[].at
+tasks[].history[].author
+tasks[].history[].fields[]
+tasks[].history[].id
+tasks[].history[].source
 tasks[].id
 tasks[].modified_at
 tasks[].notes

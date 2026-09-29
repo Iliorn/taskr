@@ -136,6 +136,8 @@ func (m model) updateForMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateImportFile(msg)
 	case modeEditSyncURL:
 		return m.updateEditSyncURL(msg)
+	case modeEditName:
+		return m.updateEditName(msg)
 	case modeEditSyncToken:
 		return m.updateEditSyncToken(msg)
 	case modeEditServerListen:
@@ -1534,6 +1536,7 @@ func (m *model) persistSettings() {
 		SubtaskTagsDisabled: !m.subtaskTags,
 		ReminderOff:         !m.reminderOn,
 		ExportFolder:        m.exportFolder,
+		Name:                m.userName,
 	}); err != nil {
 		m.flashError(fmt.Sprintf(tr("Error saving settings: %v"), err))
 	}
@@ -1785,6 +1788,12 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		m.mode = modeEditStages
 		m.textInput.SetValue(m.boardCfg.stagesDisplay())
 		m.textInput.Placeholder = tr("Board columns, comma-separated")
+		m.textInput.Focus()
+		return m, textinput.Blink
+	case settingName:
+		m.mode = modeEditName
+		m.textInput.SetValue(m.userName)
+		m.textInput.Placeholder = tr("Your name, as a task's history shows it")
 		m.textInput.Focus()
 		return m, textinput.Blink
 	case settingSyncServer:

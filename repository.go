@@ -25,6 +25,9 @@ type Repository interface {
 	// SetRanker hands the repository the ranker it scores the persisted
 	// `sequence` column with. Safe to call while a Save is running.
 	SetRanker(rank.Ranker)
+	// SetAuthor sets the name a save signs the history events it writes
+	// with. Safe to call while a Save is running.
+	SetAuthor(name string)
 	// ResyncScores rewrites the persisted `sequence` column for every live
 	// row with the current rank.Ranker. Without this, a bias change or
 	// passage of time (Age drift) leaves the column stale relative to the

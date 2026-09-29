@@ -108,6 +108,13 @@ func dynamicUIStrings() []string {
 		out = append(out, sz.String())
 	}
 	out = append(out, "daily", "weekly", "monthly", "yearly", "weekdays")
+	// A history row names its action and fields through maps.
+	for _, w := range historyActionWords {
+		out = append(out, w)
+	}
+	for _, n := range historyFieldNames {
+		out = append(out, n)
+	}
 	// The explain overlay labels its rows with the dimension names the scoring
 	// code holds, so they reach tr() through a slice rather than a literal.
 	out = append(out, rank.DimNames[:]...)

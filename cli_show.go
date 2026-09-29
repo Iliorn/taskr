@@ -235,6 +235,13 @@ func printTaskDetail(t *todo.Todo, subs []todo.Todo, todos []todo.Todo, rk rank.
 	if t.Notes != "" {
 		fmt.Printf("\nNotes:\n%s\n", t.Notes)
 	}
+	if rows := historyRows(t.History); len(rows) > 0 {
+		// Unclipped: a pipe has no width, and a terminal wraps.
+		fmt.Printf("\nHistory:\n")
+		for _, line := range historyLines(rows, time.Now(), math.MaxInt32) {
+			fmt.Println("  " + line)
+		}
+	}
 }
 
 // ── stats ────────────────────────────────────────────────────────────────────

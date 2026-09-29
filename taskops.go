@@ -75,6 +75,7 @@ func cloneSubtreeResetFrom(children func(string) []string, get func(string) *tod
 			}
 			clone := todo.NewSubtask(child.Title, p.newPID)
 			clone.ID = nextInstanceID(p.newPID + "/" + child.ID)
+			clone.Auto = true
 			clone.Priority = child.Priority
 			clone.Size = child.Size
 			clone.Project = child.Project
@@ -115,6 +116,7 @@ func extendAncestorsDue(get func(string) *todo.Todo, child *todo.Todo) []*todo.T
 			break
 		}
 		parent.SetDueDate(cur.DueDate)
+		parent.Auto = true
 		bumped = append(bumped, parent)
 		cur = parent
 	}
@@ -136,6 +138,7 @@ func propagateDescendantsDue(children func(string) []string, get func(string) *t
 			continue
 		}
 		child.SetDueDate(parent.DueDate)
+		child.Auto = true
 		changed = append(changed, child)
 	}
 	return changed
@@ -158,6 +161,7 @@ func propagateDescendantsProject(children func(string) []string, get func(string
 			continue
 		}
 		child.SetProject(parent.Project)
+		child.Auto = true
 		changed = append(changed, child)
 	}
 	return changed
@@ -219,6 +223,7 @@ func clampDescendantsPriority(children func(string) []string, get func(string) *
 			continue
 		}
 		child.SetPriority(parent.Priority)
+		child.Auto = true
 		changed = append(changed, child)
 	}
 	return changed

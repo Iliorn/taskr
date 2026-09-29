@@ -1341,6 +1341,7 @@ var settingsGroups = []settingsGroup{
 		settingDetailPos,
 	}},
 	{title: "General", rows: []int{
+		settingName,
 		settingAutoCloseParent,
 		settingAutoCloseSubtasks,
 		settingSubtaskTags,
@@ -1420,7 +1421,7 @@ func (m model) settingsRowVisible(id int) bool {
 func settingsEditsText(id int) bool {
 	switch id {
 	case settingStages, settingSyncServer, settingSyncToken, settingServerListen, settingServerToken,
-		settingExportFolder, settingImportFile:
+		settingExportFolder, settingImportFile, settingName:
 		return true
 	}
 	return false
@@ -1527,6 +1528,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingExportFolder:      tr("Auto-export folder"),
 		settingImportFile:        tr("Import from file"),
 		settingSubtaskTags:       tr("Subtasks copy tags"),
+		settingName:              tr("Your name"),
 	}
 	agingVal := tr("Off")
 	if m.rank.Biases.Aging {
@@ -1618,6 +1620,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingExportFolder:      exportFolderDisplay(m.exportFolder),
 		settingImportFile:        tr("choose a file"),
 		settingSubtaskTags:       "‹ " + subtaskTagsVal + " ›",
+		settingName:              authorName(appSettings{Name: m.userName}),
 	}
 
 	// One label column across every group, so the values line up down the

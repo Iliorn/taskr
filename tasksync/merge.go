@@ -30,7 +30,8 @@ import (
 //     modification and deletion times (todo.Stamp), which is the whole-task
 //     last-writer-wins those versions were merged by.
 //   - Child collections (comments, time entries) merge by their own UUIDs.
-//     A child tombstone is sticky.
+//     A child tombstone is sticky. History events are never changed, so
+//     they merge as a plain union by ID.
 //   - Tombstones (task and child) are retained, never pruned, so deletions keep
 //     propagating instead of a stale device resurrecting the row. Deletion is
 //     the "deleted" unit, so an edit elsewhere does not undo it; only a later
@@ -127,6 +128,7 @@ func mergeTask(a, b todo.Todo) todo.Todo {
 	}
 	out.Comments = mergeComments(a.Comments, b.Comments)
 	out.TimeEntries = mergeTimeEntries(a.TimeEntries, b.TimeEntries)
+	out.History = todo.MergeHistory(a.History, b.History)
 	return out
 }
 

@@ -143,6 +143,7 @@ func cliDone(args []string) int {
 				}
 				rank.CaptureRankAtDone(repo.ranker(), todoPtrs(todos), s)
 				s.Toggle()
+				s.Auto = true
 				closed[s.ID] = true
 				cascaded = append(cascaded, s)
 			}
@@ -440,7 +441,8 @@ func cliUndelete(args []string) int {
 	for i := range restored {
 		ptrs[i] = &restored[i]
 	}
-	repo := newSQLiteRepo()
+	settings, _ := loadSettings() // a broken file already warned at load; the name is optional
+	repo := newCLIRepo(settings)
 	if err := repo.Save(ptrs, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "undelete: %v\n", err)
 		return 1

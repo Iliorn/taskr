@@ -440,6 +440,14 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 				}); err != nil {
 				return err
 			}
+			// History events are written once and never change, so a save
+			// only adds the ones the store lacks; one missing from the task
+			// is not a deletion, just a copy that has not heard of it yet.
+			for _, e := range t.History {
+				if err := insertEvent(tx, t.ID, e); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
@@ -675,8 +683,23 @@ func loadTodosCore(h querier, includeDeleted bool) ([]todo.Todo, error) {
 		return nil, err
 	}
 
+	if err := loadChildren(h, todos, "task_events", eventColumns, "",
+		func(s *sql.Rows) error {
+			taskID, e, err := scanEvent(s)
+			if err != nil {
+				return err
+			}
+			if t := todos[taskID]; t != nil {
+				t.History = append(t.History, e)
+			}
+			return nil
+		}); err != nil {
+		return nil, err
+	}
+
 	out := make([]todo.Todo, 0, len(ordered))
 	for _, id := range ordered {
+		todo.SortHistory(todos[id].History)
 		out = append(out, *todos[id])
 	}
 	// The live list is what the app shows and walks, so every parent link in
@@ -767,9 +790,31 @@ func safeSize(raw int, taskID string) todo.Size {
 type sqliteRepo struct {
 	mu   sync.Mutex
 	rank rank.Ranker
+	by   editor
 }
 
 func newSQLiteRepo() *sqliteRepo { return &sqliteRepo{rank: rank.Default()} }
+
+// newCLIRepo is the repository a CLI command saves through: its history
+// events carry the settings' name and say they came from the command line.
+func newCLIRepo(s appSettings) *sqliteRepo {
+	r := newSQLiteRepo()
+	r.by = editor{name: authorName(s), source: todo.SourceCLI}
+	return r
+}
+
+// SetAuthor sets the name the history events of later saves carry.
+func (r *sqliteRepo) SetAuthor(name string) {
+	r.mu.Lock()
+	r.by.name = name
+	r.mu.Unlock()
+}
+
+func (r *sqliteRepo) editor() editor {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.by
+}
 
 func (r *sqliteRepo) SetRanker(rk rank.Ranker) {
 	r.mu.Lock()
@@ -861,5 +906,5 @@ func (r *sqliteRepo) Save(dirty []*todo.Todo, tombstones map[string]time.Time) e
 	if err := openStore(); err != nil {
 		return err
 	}
-	return saveStamped(db, dirty, tombstones, r.ranker().ScoreNow(), time.Now())
+	return saveStamped(db, dirty, tombstones, r.ranker().ScoreNow(), time.Now(), r.editor())
 }

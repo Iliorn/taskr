@@ -62,6 +62,7 @@ const (
 	settingReminderTime
 	settingExportFolder
 	settingImportFile
+	settingName
 	numSettingsRows
 )
 
@@ -105,6 +106,7 @@ const (
 	fieldSubtasks
 	fieldTimeEntries
 	fieldComments
+	fieldHistory
 )
 
 type appMode int
@@ -134,6 +136,7 @@ const (
 	modeEditSubtask
 	modeAddTimeEntry
 	modeEditSyncURL
+	modeEditName
 	modeEditSyncToken
 	modeEditServerListen
 	modeEditServerToken
@@ -213,7 +216,10 @@ func (m *model) flashInfo(s string)    { m.err, m.errKind = s, toastInfo }
 // ── Messages ──────────────────────────────────────────────────────────────────
 
 type clearErrMsg struct{}
-type saveDoneMsg struct{}
+
+// saveDoneMsg carries the tasks a save wrote, each with its full stored
+// history, the event this save recorded included.
+type saveDoneMsg struct{ saved []*todo.Todo }
 type saveErrMsg struct{ err error }
 type editorFinishedMsg struct {
 	taskID   string
@@ -242,6 +248,7 @@ type detailState struct {
 	tagCursor       int
 	subtaskCursor   int
 	timeEntryCursor int
+	historyCursor   int
 	// scroll is the first line of the detail document the pane shows. It
 	// persists between keystrokes on purpose: deriving the top from the cursor
 	// instead glues the cursor to a fixed row and slides the whole document
@@ -474,6 +481,10 @@ type model struct {
 	// written to the DB (see the timer tick) so a live timer stays "fresh"
 	// against the stale-timer recoverer without writing every second.
 	lastTimerHeartbeat time.Time
+
+	// userName is the Settings name this device signs its history events
+	// with; empty means the account's (authorName).
+	userName string
 }
 
 func initialModel(repo Repository) model {
@@ -596,6 +607,8 @@ func initialModel(repo Repository) model {
 		m.searchInput.SetValue(settings.Search)
 		m.pushFocus(stateSearch)
 	}
+	m.userName = settings.Name
+	m.repo.SetAuthor(authorName(settings))
 	m.applyLangPlaceholders()
 	m.refreshCaches()
 	// Absorb Age drift since the last open: every task's score creeps daily,
@@ -825,6 +838,9 @@ func copyTodo(t todo.Todo) todo.Todo {
 	if len(t.Stamps) > 0 {
 		cp.Stamps = maps.Clone(t.Stamps)
 	}
+	if len(t.History) > 0 {
+		cp.History = append([]todo.Event{}, t.History...)
+	}
 	return cp
 }
 
@@ -980,6 +996,7 @@ func buildNextRecurrence(src todo.Todo) (todo.Todo, bool) {
 
 	clone := todo.New(src.Title)
 	clone.ID = nextInstanceID(src.ID)
+	clone.Auto = true
 	clone.Priority = src.Priority
 	clone.Size = src.Size
 	clone.Project = src.Project
@@ -1373,6 +1390,7 @@ func (m *model) autoCloseAncestorsIfAllDone(childID string) []string {
 			m.stopTimer(parent.ID)
 		}
 		parent.Toggle()
+		parent.Auto = true
 		closed = append(closed, parent.ID)
 		if parent.IsRecurring() {
 			if newID := m.spawnNextRecurrence(parent); newID != "" {
@@ -1401,6 +1419,7 @@ func (m *model) closePendingSubtree(parentID string) []string {
 		}
 		rank.CaptureRankAtDone(m.rank, m.allTodos(), s)
 		s.Toggle()
+		s.Auto = true
 		closed = append(closed, s.ID)
 	}
 	return closed

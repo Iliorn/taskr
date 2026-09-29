@@ -8,6 +8,12 @@ created_at
 deleted_at
 dependencies[]
 due_date
+history[].action
+history[].at
+history[].author
+history[].fields[]
+history[].id
+history[].source
 id
 modified_at
 notes

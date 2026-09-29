@@ -443,6 +443,19 @@ Rules:
   `errSchemaTooNew` when `schema_version` is newer than this build knows, and
   `main` exits rather than show an empty list over a full database and write
   older columns back.
+- **History is written by the save.** `saveStamped` compares each task with
+  the stored version (as it does for the stamps) and records one `todo.Event`
+  (`historyEvent`): created, closed, reopened, deleted, restored, or edited
+  with the changed units. So the TUI, the CLI and an import leave the same
+  trail and no mutation site knows about history. The author is the repo's
+  `editor` (`SetAuthor` from Settings or `TJEK_AUTHOR`; `newCLIRepo` marks the
+  CLI's); a change tjek makes itself is flagged `todo.Todo.Auto` where it
+  happens (taskops.go, recurrence, auto-close), never stored, cleared by
+  `drainDirty`. Events are insert-only (`task_events`, `INSERT OR IGNORE`), a
+  sync merge unions them by ID and records none of its own, and the save hands
+  each task back with its full stored history, which `saveDoneMsg` merges into
+  the live store (`adoptSavedHistory`). `view_history.go` folds runs of edits
+  into rows (`historyRows`) for the detail pane's last section and `tjek show`.
 - **Saves are debounced and differential.** Mutations set
   `dirty`/`savePending`; a `saveTickMsg` (300ms) drains the change set with
   `Store.drainDirty()` (deep copies, so the save goroutine never reads a task

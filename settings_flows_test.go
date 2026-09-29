@@ -608,3 +608,36 @@ func TestDetailPositionReadsTheSettingsWord(t *testing.T) {
 		}
 	}
 }
+
+// ── The name editor ─────────────────────────────────────────────────────────
+
+// The name a device signs its history with is set in Settings, reaches
+// settings.json, and survives a later save of an unrelated setting.
+func TestScriptEditName(t *testing.T) {
+	t.Setenv("TJEK_AUTHOR", "")
+	m := settingsModel(t)
+	m = openSetting(t, m, settingName)
+	if m.mode != modeEditName {
+		t.Fatalf("mode = %v, want modeEditName", m.mode)
+	}
+	m.textInput.SetValue("")
+	m = script(t, m, "Mark", "enter")
+	if m.mode != modeNormal || m.userName != "Mark" {
+		t.Fatalf("mode = %v, name = %q; want normal mode and Mark", m.mode, m.userName)
+	}
+	m = openSetting(t, m, settingAutoCloseParent)
+	s, err := loadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Name != "Mark" {
+		t.Errorf("settings.json name = %q after saving another setting, want Mark", s.Name)
+	}
+
+	// esc leaves the name as it was.
+	m = openSetting(t, m, settingName)
+	m = script(t, m, " Bauer", "esc")
+	if m.userName != "Mark" {
+		t.Errorf("name = %q after esc, want Mark", m.userName)
+	}
+}

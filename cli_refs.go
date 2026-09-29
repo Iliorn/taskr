@@ -21,7 +21,7 @@ func loadForCLI() (*sqliteRepo, []todo.Todo, error) {
 	if sErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
-	repo := newSQLiteRepo()
+	repo := newCLIRepo(settings)
 	repo.SetRanker(rank.Ranker{Biases: biasesFromSettings(settings)})
 	todos, err := repo.Load()
 	if err == nil {

@@ -673,7 +673,7 @@ func (m model) footerContentFor(w int) string {
 	case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeEditDue,
 		modeAddSubtask, modeEditSubtask,
 		modeEditProjectInline, modeEditTimeEntry, modeAddTimeEntry,
-		modeEditSyncURL, modeEditSyncToken,
+		modeEditSyncURL, modeEditSyncToken, modeEditName,
 		modeEditServerListen, modeEditServerToken, modeEditStages,
 		modeEditExportFolder, modeImportFile:
 		field := inputStyle.Width(w).Render(m.textInput.View())

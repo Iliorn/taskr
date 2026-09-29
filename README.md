@@ -19,7 +19,8 @@ No account, no cloud service.
   the order, and a task that blocks something urgent rises with it. Press `w`
   to see why a task ranks where it does.
 - **Holds the details.** Due and start dates, priority, size, tags, projects,
-  subtasks, dependencies, comments, descriptions and repeating tasks.
+  subtasks, dependencies, comments, descriptions and repeating tasks, and a
+  history of who changed what.
 - **Adds in one line.** `Buy milk #shopping due:friday p:high @home`
 - **Shows the same tasks five ways:** a list, a calendar with tracked time,
   projects with a timeline, tags, and a kanban board. Plus a stats page.
