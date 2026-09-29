@@ -878,7 +878,12 @@ func formatDurationLive(d time.Duration) string {
 }
 
 // formatDurationCompact renders without spaces for narrow columns: 48m, 1h39m, 12h.
+// Under a minute it counts seconds, as formatDuration does, so a breakdown
+// never reads 0m under a total that reads 40s.
 func formatDurationCompact(d time.Duration) string {
+	if d > 0 && d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
 	mins := int(d.Minutes())
 	if mins < 60 {
 		return fmt.Sprintf("%dm", mins)

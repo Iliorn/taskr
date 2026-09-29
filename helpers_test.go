@@ -1393,3 +1393,16 @@ func TestTranslatedListHeadingsKeepTheProjectColumn(t *testing.T) {
 		}
 	}
 }
+
+// The compact form agrees with formatDuration under a minute, so the calendar's
+// per-project rows never read 0m under a day total that reads 40s.
+func TestFormatDurationCompactCountsSecondsUnderAMinute(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		0: "0m", 40 * time.Second: "40s", 59 * time.Second: "59s",
+		time.Minute: "1m", 99 * time.Minute: "1h39m", 12 * time.Hour: "12h",
+	} {
+		if got := formatDurationCompact(d); got != want {
+			t.Errorf("formatDurationCompact(%v) = %q, want %q", d, got, want)
+		}
+	}
+}
