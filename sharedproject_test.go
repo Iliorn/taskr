@@ -112,9 +112,13 @@ func TestSharedEditsToDifferentFieldsBothSurvive(t *testing.T) {
 	task := todo.New("Plan the route")
 	task.Project = "Trip"
 	anna.save(t, s0, task)
-	startSharing(&anna.cfg, "Trip", folder)
+	if _, err := startSharing(&anna.cfg, "Trip", folder); err != nil {
+		t.Fatal(err)
+	}
 	anna.sync(t, "Trip")
-	joinShared(&mark.cfg, folder)
+	if _, err := joinShared(&mark.cfg, folder); err != nil {
+		t.Fatal(err)
+	}
 	mark.sync(t, "Trip")
 
 	a, _ := anna.task(t, task.ID)
@@ -146,9 +150,13 @@ func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 	private := todo.New("Dentist")
 	anna.save(t, s0, task)
 	mark.save(t, s0, private)
-	startSharing(&anna.cfg, "Trip", folder)
+	if _, err := startSharing(&anna.cfg, "Trip", folder); err != nil {
+		t.Fatal(err)
+	}
 	anna.sync(t, "Trip")
-	joinShared(&mark.cfg, folder)
+	if _, err := joinShared(&mark.cfg, folder); err != nil {
+		t.Fatal(err)
+	}
 	mark.sync(t, "Trip")
 	own := mark.cfg.memberPath(mark.cfg.Projects[0])
 
@@ -251,7 +259,9 @@ func TestUnchangedSharedProjectIsNotRewritten(t *testing.T) {
 	task := todo.New("Book the ferry")
 	task.Project = "Trip"
 	anna.save(t, s0, task)
-	startSharing(&anna.cfg, "Trip", folder)
+	if _, err := startSharing(&anna.cfg, "Trip", folder); err != nil {
+		t.Fatal(err)
+	}
 	if !anna.sync(t, "Trip").wrote {
 		t.Fatal("the first sync wrote nothing")
 	}
