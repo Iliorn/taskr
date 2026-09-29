@@ -11,6 +11,20 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [1.44.1] - 2026-09-29
+
+### Changed
+
+- A task's detail pane has a blank row above its section bar, like every other panel.
+- A board card's "!" means overdue, as it does on the task list, rather than high priority.
+- `tjek` with an unknown command says so and suggests the nearest one, instead of opening the app.
+
+### Fixed
+
+- A text field whose value filled its box jumped between one and two lines as the caret blinked.
+- Renaming a tag or project in its list no longer ends the row in a stray "…".
+- The calendar's per-project and per-tag times show seconds under a minute instead of "0m".
+
 ## [1.44.0] - 2026-09-29
 
 ### Changed
