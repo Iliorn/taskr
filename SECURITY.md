@@ -32,7 +32,7 @@ that is not true:
   server's response.
 - **The self-update path** on Linux and Windows, which downloads and replaces
   the running binary.
-- **Token and file handling** — anything that writes a sync token somewhere
+- **Token and file handling**: anything that writes a sync token somewhere
   it should not be, or that widens the permissions of a file taskr keeps.
 - **Parsing of files taskr reads**: the SQLite database, `settings.json`,
   `sync.json`, an imported export file, and the legacy `tasks.json`.
@@ -65,8 +65,8 @@ direction:
 `api.github.com` with the standard certificate validation of Go's `net/http`.
 The asset URL that comes back is confined to `github.com` and
 `githubusercontent.com` over TLS, on the initial request *and* on every
-redirect. The download is staged in a private temporary directory — not a
-predictable path another local user could write to — hashed as it is written,
+redirect. The download is staged in a private temporary directory (not a
+predictable path another local user could write to), hashed as it is written,
 and compared against the `SHA256SUMS` published with that release. It fails
 closed: no sums file, no entry for this platform, or a mismatch means nothing
 is installed and the staged file is removed. The install itself is an atomic
@@ -85,7 +85,7 @@ workflow attests every published binary with
 signed statement that these exact bytes were produced by this repository's
 release workflow, at a named commit, recorded in a public transparency log.
 The signing certificate is short-lived and minted from the workflow's own OIDC
-identity, so there is no key for anyone — including me — to steal or misuse,
+identity, so there is no key for anyone, me included, to steal or misuse,
 and the log entry cannot be withdrawn after the fact. Verify a download with:
 
 ```sh
@@ -94,8 +94,8 @@ gh attestation verify taskr --repo Iliorn/taskr
 
 That checks the provenance, not just the bytes: it names the workflow, the
 commit and the run that built the file in front of you. The in-app updater
-does **not** perform this check — verifying an attestation needs the Sigstore
-verification stack, which taskr does not carry — so it remains a checksum-level
+does **not** perform this check (verifying an attestation needs the Sigstore
+verification stack, which taskr does not carry), so it remains a checksum-level
 guarantee, and this is the check to run by hand when that is not enough.
 
 If that trade is not one you want to make, do not use the in-app updater:
@@ -125,7 +125,7 @@ Whether a weak token is **refused** or merely **flagged** depends on whose
 choice it is:
 
 - **Settings → Server token is refused.** This is the token for the endpoint on
-  this machine — taskr's to choose — and `ctrl+g` is one keystroke away, so a
+  this machine, which taskr gets to choose, and `ctrl+g` is one keystroke away, so a
   weak value is rejected with the text left in the field to fix.
 - **Settings → Sync token is accepted as typed.** That one has to equal
   whatever the *server* already uses. Refusing a short one would not make
@@ -154,4 +154,4 @@ where it is exposed, that is in scope and worth reporting.
 ## Supported versions
 
 Fixes land on `main` and go out in the next release. Only the latest release
-is supported — there are no backports to older tags.
+is supported; there are no backports to older tags.

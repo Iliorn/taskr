@@ -4,9 +4,9 @@ Notable changes to taskr. The format follows [Keep a Changelog](https://keepacha
 and versions are the git tags the [release workflow](.github/workflows/release.yml) builds from.
 
 Entries describe what changed for someone *using* taskr. Refactors and test work
-belong in the commit log, not here — unless they change behaviour.
+belong in the commit log, not here, unless they change behaviour.
 
-**One line per entry.** No explanation, no rationale, no second sentence — the
+**One line per entry.** No explanation, no rationale, no second sentence: the
 reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
@@ -212,7 +212,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Subtasks fold with `+`/`-` instead of a second triangle beside the cursor.
 - The Stage row sits in `‹ … ›` brackets like the Settings values you cycle.
 - Package-managed installs are told to update through their own manager.
-- `taskr completion`, `man` and `update` no longer open — or migrate — the database.
+- `taskr completion`, `man` and `update` no longer open or migrate the database.
 
 ## [1.33.1] - 2026-08-19
 
@@ -231,7 +231,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 ### Added
 
 - Backlog-review flags on `list`: `--stale=30d`, `--sort=seq|due|size|age|idle|pri`, `--wide`.
-- `list --unblocked-since=14d` — tasks whose last dependency closed inside the window.
+- `list --unblocked-since=14d` lists tasks whose last dependency closed inside the window.
 - `taskr reopen <ref>...`, the counterpart to `done`.
 - `taskr edit` takes several refs; `--title` still takes one.
 - Whole-word and regexp search: `--search-word` / `--word`, `--search-re` / `--re`.
@@ -245,7 +245,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ### Fixed
 
-- Equal-scoring tasks sort in a stable order — one clock per sort, so ties break by ID.
+- Equal-scoring tasks sort in a stable order: one clock per sort, so ties break by ID.
 - `taskr help` no longer claims only auto-sync pauses past the deletion-memory window.
 
 ## [1.32.0] - 2026-08-16

@@ -5,27 +5,27 @@ version; the [CLI reference](cli.md) covers the `taskr <command>` side.
 
 ## The tabs
 
-- **Tasks** — the main list. Add, complete, delete, rename, set priority,
+- **Tasks**: the main list. Add, complete, delete, rename, set priority,
   size (S/M/L), due and start dates. The detail pane (`enter`) holds comments,
   dependencies, subtasks, notes (opened in `$EDITOR`) and a live score
   breakdown.
-- **Calendar** — a per-day activity timeline with project and tag roll-ups
+- **Calendar**: a per-day activity timeline with project and tag roll-ups
   and a tracked-time heatmap. Time entries can be edited or deleted in place.
-- **Projects** — tasks grouped by project, with a timeline when an open task
+- **Projects**: tasks grouped by project, with a timeline when an open task
   has a date. `enter` walks into a project's tasks, where the task keys
   (`d` done, `t` track, `p` priority, `r` rename, `x` delete, `enter`
   details) all work; `a` adds a task already in that project, `x` on the
   project row clears the project from its tasks.
-- **Tags** — the same, grouped by tag. Tags can be renamed, merged or deleted
+- **Tags**: the same, grouped by tag. Tags can be renamed, merged or deleted
   across every task; `f` shows a tag's tasks on the Tasks tab as a filter.
-- **Board** — a kanban view; see [The board](#the-board).
-- **Stats** — a productivity overview with an activity heatmap. It follows
+- **Board**: a kanban view; see [The board](#the-board).
+- **Stats**: a productivity overview with an activity heatmap. It follows
   the active search, so `#tag` scopes every number to that tag.
-- **Settings** — the sequencing knobs, theme, language (English, Dansk,
+- **Settings**: the sequencing knobs, theme, language (English, Dansk,
   Deutsch), the daily reminder, board columns, sync, and in-app update.
 
-On Tags and Projects, `enter` walks in one level at a time — row → its tasks
-→ the selected task's detail — and `esc` walks back out the same way. Inside,
+On Tags and Projects, `enter` walks in one level at a time (row, then its
+tasks, then the selected task's detail) and `esc` walks back out the same way. Inside,
 `→` unfolds a task's subtasks and `←` folds them, as on the Tasks tab.
 
 ## Subtasks
@@ -52,14 +52,14 @@ tags".
 | `f` | Focus mode (today + overdue) |
 | `h` | Toggle history |
 | `s` | Cycle sort: Sequence → Due → Size |
-| `w` | Why this rank — the points behind the percentage and what moves it next |
+| `w` | Why this rank: the points behind the percentage and what moves it next |
 | `/` | Search / filter |
 | `enter` | Open detail view |
 | `u` | Undo |
 | `↑`/`↓` or `j`/`k` | Move the cursor |
 | `tab` / `shift+tab` | Next / previous tab |
 | `1–7` | Jump straight to a tab (7 = Settings) |
-| `ctrl+k` | Command palette — find any action by name |
+| `ctrl+k` | Command palette: find any action by name |
 | `?` | Show all shortcuts (`/` filters them) |
 
 ## What to work on next
@@ -84,14 +84,14 @@ Buy groceries #shopping due:friday p:high size:s @personal
 
 The add field understands `#tag`, `@project`, `due:date`,
 `p:high/medium/low` and `size:s/m/l`. Typing `#` or `@` offers your existing
-tags and projects, most recently used first — `tab` inserts the highlighted
+tags and projects, most recently used first; `tab` inserts the highlighted
 one, `↑/↓` pick another. Projects whose name contains a space aren't offered
 there, since the field splits on spaces; set those from the detail pane's `@`
 picker. Tags are lowercase, and spaces become `-` (`Deep Work` becomes
 `#deep-work`).
 
 Dates: `today` · `tomorrow` · `next week` · `monday` · `15-06-25` · `+3d` ·
-`+2w` · `+1m`
+`+2w` · `+1m` · `-2d` (counting back)
 
 ## Searching
 
@@ -106,14 +106,14 @@ grcrs                           # finds "Buy groceries"
 
 Supported: `#tag`, `@project`, `p:high/medium/low`, `due:<date`,
 `due:>date`, `due:date` (`<=` and `>=` too) and the word `overdue`. Anything
-else matches the title loosely — every letter in order, so `dply` finds
-"Deploy release" — or the notes as plain text.
+else matches the title loosely (every letter in order, so `dply` finds
+"Deploy release") or the notes as plain text.
 
 ## In your own language
 
 With the interface set to Dansk or Deutsch, adding and searching accept that
-language's words too — `frist:imorgen p:høj størrelse:lille`,
-`fällig:freitag p:hoch überfällig` — and the hints show those spellings.
+language's words too, such as `frist:imorgen p:høj størrelse:lille` or
+`fällig:freitag p:hoch überfällig`, and the hints show those spellings.
 English always works. Only what you type is translated: tags, repeat rules
 and everything else stored stays in English, so devices set to different
 languages sync without trouble. The CLI is English throughout.
@@ -149,8 +149,8 @@ what is due today. Settings → "Daily reminder" turns it off and on again,
 keeping the time. Opening taskr after the reminder time counts as that day's
 reminder, since the list on screen already says the same thing.
 
-When the desktop can't show the pop-up — no notification service on a Linux
-session over ssh, for example — the app still shows the reminder in its
+When the desktop can't show the pop-up (no notification service on a Linux
+session over ssh, for example), the app still shows the reminder in its
 status line, and `taskr remind --now` prints it with a line saying why the
 pop-up was unavailable.
 
@@ -160,7 +160,7 @@ time comes, and reminds only once a day however many times it runs.
 `taskr remind --now` sends one straight away, which is a quick way to check
 notifications work.
 
-**Linux** — notifications need `notify-send` (Debian/Ubuntu:
+**Linux**: notifications need `notify-send` (Debian/Ubuntu:
 `apt install libnotify-bin`). A systemd user timer keeps the reminder
 running:
 
@@ -183,10 +183,10 @@ WantedBy=timers.target
 systemctl --user enable --now taskr-remind.timer
 ```
 
-**macOS** — notifications use the built-in `osascript`; a launchd agent with
+**macOS**: notifications use the built-in `osascript`; a launchd agent with
 `StartInterval` 900 running `taskr remind` does the scheduling.
 
-**Windows** — notifications appear under "taskr" in the notification
+**Windows**: notifications appear under "taskr" in the notification
 centre. taskr calls the Windows notification API itself rather than going
 through PowerShell, so it works on work PCs where PowerShell is locked down.
 The first one registers taskr for notifications under your own user
@@ -204,14 +204,14 @@ same job.
 ## Export and import
 
 Settings → Export keeps a copy of all your tasks, finished ones included, in
-a folder you choose — handy in a OneDrive or Dropbox folder as a backup, or
-for another tool to read.
+a folder you choose. In a OneDrive or Dropbox folder it doubles as a backup,
+and another tool can read it.
 
-- **Auto-export folder** — press enter, type or paste the folder (`tab`
+- **Auto-export folder**: press enter, type or paste the folder (`tab`
   completes folder names), and enter again. taskr writes
   `taskr-export.json` there straight away, then keeps it current: within a
   minute of a change, and again when you quit. Clear the path to turn it off.
-- **Import from file** — press enter and give the path to a taskr export
+- **Import from file**: press enter and give the path to a taskr export
   (`tab` completes). Its tasks are merged in: new ones are added, ones you
   already have take the newer version, and nothing is deleted, so importing
   the same file twice changes nothing. `u` takes the whole import back.
@@ -238,5 +238,5 @@ The action names are listed in the `?` overlay. A rebind moves the action:
 the old key stops working, and the footer hints, the help overlay and the
 command palette all show the new key. An entry that names an unknown action,
 uses more than one key, or clashes with another binding in the same view is
-ignored with a warning — as is `ctrl+c`, which always quits. Bindings written
+ignored with a warning, and so is `ctrl+c`, which always quits. Bindings written
 as a pair or range (`←/→`, `H/L`) can't be rebound.

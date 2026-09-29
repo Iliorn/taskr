@@ -79,7 +79,7 @@ curl -LO https://github.com/Iliorn/taskr/releases/latest/download/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
 ```
 
-That it was built by this repository's release workflow — every release
+That it was built by this repository's release workflow. Every release
 binary is signed through Sigstore and recorded in a public log:
 
 ```sh

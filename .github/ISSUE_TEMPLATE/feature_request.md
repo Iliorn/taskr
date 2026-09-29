@@ -6,7 +6,7 @@ labels: enhancement
 
 **What are you trying to do**
 
-The workflow you're after, not just the feature — the shape of the answer often
+The workflow you're after, not just the feature. The shape of the answer often
 turns out to be something else.
 
 **How you handle it today**

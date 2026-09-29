@@ -1,6 +1,6 @@
 # Syncing between devices
 
-taskr syncs through a small server you run yourself — one machine holds the
+taskr syncs through a small server you run yourself. One machine holds the
 shared copy, and there is no third-party service. The same `taskr` program is
 both the server and the client.
 
@@ -33,9 +33,9 @@ in an `EnvironmentFile` (mode 600) and enable lingering. See
 
 The server keeps its own `tasks.db` and answers on:
 
-- `POST /v1/sync` — sync (needs the token)
-- `GET  /v1/health` — a liveness check
-- `GET  /v1/events` — a stream that tells connected clients to pull now
+- `POST /v1/sync`: sync (needs the token)
+- `GET  /v1/health`: a liveness check
+- `GET  /v1/events`: a stream that tells connected clients to pull now
 
 ## Point a device at it
 
@@ -45,8 +45,8 @@ taskr sync --url http://100.x.y.z:8765 --token "<token>" --save
 
 `--save` stores the address and token, so later syncs need no flags;
 `TASKR_SYNC_URL` / `TASKR_SYNC_TOKEN` work too. From then on the app syncs by
-itself — at launch and exit, every few minutes, and immediately when another
-device changes something — and CLI commands sync in the background. Set
+itself (at launch and exit, every few minutes, and as soon as another device
+changes something), and CLI commands sync in the background. Set
 `"auto_sync": false` in `sync.json` to sync only when you run `taskr sync`.
 
 All of this is also in the app's **Settings** tab: turn auto-sync on or off,
@@ -56,10 +56,10 @@ server.
 Your own copy of the tasks always comes first: a network failure never blocks
 the app.
 
-The first sync from a device that already has tasks asks what to do with them
-— add them to the shared copy (`--adopt-local`) or replace them with it
-(`--adopt-remote`, which saves a backup first) — since there is no undoing
-either once the other devices have them.
+The first sync from a device that already has tasks asks what to do with
+them: add them to the shared copy (`--adopt-local`) or replace them with it
+(`--adopt-remote`, which saves a backup first). It asks because neither can
+be undone once the other devices have them.
 
 ## How changes are merged
 

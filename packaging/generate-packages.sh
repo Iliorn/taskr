@@ -38,7 +38,7 @@ sha_windows="$(sha taskr.exe)"
 cat > "$outdir/taskr.json" <<EOF
 {
     "version": "${bare}",
-    "description": "A fast, keyboard-driven task manager for the terminal",
+    "description": "A keyboard-driven task manager for the terminal that tells you what to do next",
     "homepage": "https://github.com/Iliorn/taskr",
     "license": "MIT",
     "architecture": {
@@ -74,7 +74,7 @@ cat > "$outdir/PKGBUILD" <<EOF
 pkgname=taskr-bin
 pkgver=${bare}
 pkgrel=1
-pkgdesc="A fast, keyboard-driven task manager for the terminal"
+pkgdesc="A keyboard-driven task manager for the terminal that tells you what to do next"
 arch=('x86_64' 'aarch64')
 url="https://github.com/Iliorn/taskr"
 license=('MIT')

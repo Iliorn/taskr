@@ -9,17 +9,17 @@ its output into a bug report.
 Tasks are kept in a SQLite database. Where it and taskr's other files go
 depends on what taskr finds, in this order:
 
-1. **`TASKR_HOME`**, if set — everything in that one directory.
-2. **`~/.taskr/`**, if that directory exists — installs from before v1.32
+1. **`TASKR_HOME`**, if set: everything in that one directory.
+2. **`~/.taskr/`**, if that directory exists. Installs from before v1.32
    keep everything there, and nothing is moved.
 3. Otherwise each platform's usual places:
 
 | | Linux / BSD | macOS | Windows |
 |---|---|---|---|
-| Settings — `settings.json`, `sync.json` | `~/.config/taskr` | `~/Library/Application Support/taskr` | `%APPDATA%\taskr` |
-| Tasks — `tasks.db` | `~/.local/share/taskr` | `~/Library/Application Support/taskr` | `%LOCALAPPDATA%\taskr` |
-| State — undo history, sync state, logs | `~/.local/state/taskr` | `~/Library/Application Support/taskr` | `%LOCALAPPDATA%\taskr` |
-| Cache — the `$EDITOR` scratch file | `~/.cache/taskr` | `~/Library/Caches/taskr` | `%LOCALAPPDATA%\taskr` |
+| Settings: `settings.json`, `sync.json` | `~/.config/taskr` | `~/Library/Application Support/taskr` | `%APPDATA%\taskr` |
+| Tasks: `tasks.db` | `~/.local/share/taskr` | `~/Library/Application Support/taskr` | `%LOCALAPPDATA%\taskr` |
+| State: undo history, sync state, logs | `~/.local/state/taskr` | `~/Library/Application Support/taskr` | `%LOCALAPPDATA%\taskr` |
+| Cache: the `$EDITOR` scratch file | `~/.cache/taskr` | `~/Library/Caches/taskr` | `%LOCALAPPDATA%\taskr` |
 
 An `XDG_*` variable you have set wins on every platform, macOS and Windows
 included.
@@ -35,9 +35,9 @@ next to it.
 
 ## After a crash
 
-taskr writes `crash-<timestamp>.log` to the state directory — the error, the
-version, the platform, the window size and what was on screen — and saves any
-edits that were still waiting to be written. The newest five are kept.
+taskr writes `crash-<timestamp>.log` to the state directory, with the error,
+the version, the platform, the window size and what was on screen, and saves
+any edits that were still waiting to be written. The newest five are kept.
 Attaching one to an issue is the whole bug report.
 
 ## When something feels slow
@@ -68,7 +68,7 @@ Quitting adds a summary, which is usually all a report needs:
 
 Large `update_ms` or `view_ms` means taskr itself is slow; a slow frame where
 `gc` moved is garbage collection; a fast frame with a long `gap_ms` means the
-time went somewhere outside the app — the terminal, ssh, or the keyboard
+time went somewhere outside the app: the terminal, ssh, or the keyboard
 reader.
 
 **On Windows**, taskr reads the keyboard as a stream so a key arriving after

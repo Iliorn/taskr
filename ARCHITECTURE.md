@@ -12,7 +12,7 @@ audiences cannot be told different things.
 ## What this is
 
 `taskr` is a keyboard-driven terminal task manager built with Go and Bubble Tea
-(Charm). It is a standalone app with its own SQLite storage — **not** a
+(Charm). It is a standalone app with its own SQLite storage, **not** a
 Taskwarrior frontend. Beyond tasks it has a calendar/time-tracking view,
 projects (Gantt), tags, a kanban board, a stats dashboard, a CLI, cross-device
 sync, and in-app self-update.
@@ -59,7 +59,7 @@ git push origin v1.10.0       # ← triggers the build + release
   injected at build time. Take the next number from `gh release list`, not the
   local `git tag` (remote tags may be missing locally). Patch bumps for
   stat/layout tweaks, minor bumps for new interactive features.
-- **Asset names are load-bearing — never rename one.** An installed binary
+- **Asset names are load-bearing; never rename one.** An installed binary
   looks for the name it was built with, so a name can be added but not
   changed: `taskr` (Linux x64), `taskr-linux-arm64`, `taskr.exe` (Windows
   x64), plus `SHA256SUMS`. `selfUpdateAsset(goos, goarch)` is the one map
@@ -90,23 +90,23 @@ git push origin v1.10.0       # ← triggers the build + release
 The app is package `main`, split into files by concern. Four packages sit
 beside it, each with a boundary the compiler enforces:
 
-- **`todo/`** — the domain: `todo.Todo` and its methods (`Toggle`, `AddTag`,
+- **`todo/`**: the domain: `todo.Todo` and its methods (`Toggle`, `AddTag`,
   `StartTimer`, `IsOverdue`, subtask/comment/time-entry mutations). No Bubble
   Tea, no rendering.
-- **`rank/`** — the sequencing engine. It imports only `todo`, so it is
+- **`rank/`**: the sequencing engine. It imports only `todo`, so it is
   locale-free and model-free by construction. See *The ranking engine*.
-- **`paths/`** — where files live. See *Paths*.
-- **`tasksync/`** — the sync engine. See *Sync*.
+- **`paths/`**: where files live. See *Paths*.
+- **`tasksync/`**: the sync engine. See *Sync*.
 
 ## The app (package main)
 
 Standard Bubble Tea MVU with one large `model` struct threaded through
 everything.
 
-- **`model.go`** — the `model` struct, the enums (`tab`, `appMode`, `pane`,
+- **`model.go`**: the `model` struct, the enums (`tab`, `appMode`, `pane`,
   sort modes), message types, `initialModel`, the undo stack, and most pure
   lookup/mutation helpers.
-- **`model_layout.go`** — geometry on the model: detail/list heights,
+- **`model_layout.go`**: geometry on the model: detail/list heights,
   list-offset clamping, and detail scrolling. The detail pane's scroll is a
   **persistent offset** (`detail.scroll`) that `detailScrollWindow` moves only
   when the cursor comes within `detailScrollMargin` of an edge; deriving the
@@ -114,49 +114,49 @@ everything.
   under it. It runs twice per key: `clampDetailScroll` (from `clampCursors`)
   against an estimate, then `applyDetailScrollN` against the lines actually
   rendered. So `estimateDetailCursorLine` and the `detail*Height` helpers must
-  track `view_detail.go` section for section —
+  track `view_detail.go` section for section;
   `TestDetailCursorEstimateMatchesTheRenderedDocument` checks by finding the
   `▶` in the rendered pane.
-- **`update.go`** — top-level `Update`, list keys, tab switching, editor
+- **`update.go`**: top-level `Update`, list keys, tab switching, editor
   launching, self-update. Row-level task keys (`d`/`t`/`p`/`T`/`r`/`x`) gate on
   `drilledIntoTasks()`, so the Tasks tab and both drill-in lists behave as one.
-- **`update_detail.go`** — the detail pane's input side (`updateDetail`,
+- **`update_detail.go`**: the detail pane's input side (`updateDetail`,
   `detailAdd`/`detailDelete`, `startEditing`); mirrors `view_detail.go`.
-- **`update_modes.go`** — text-entry and search modes (`updateInput`,
+- **`update_modes.go`**: text-entry and search modes (`updateInput`,
   `updateSearch`, `updateEditTitle`, …). A new modal handler usually goes here.
-- **`view.go`** — top-level `View`, the Tasks tab, shared rendering helpers,
+- **`view.go`**: top-level `View`, the Tasks tab, shared rendering helpers,
   and the help overlay (`helpBodyLines` builds `helpSec` blocks from the keymap
   registry plus reference sections; `filterHelpSections` serves its `/`
   filter). `TestHelpDocumentsEveryToken` ties the token sections to
   `parseQuickAdd`/`compileSearch`. Other tabs render from `view_lists.go`,
   `view_calendar.go`, `view_board.go` and `view_detail.go`.
-- **`cache.go`** — `cacheState`; see *The derived-view cache*.
-- **`storage_sqlite.go`** — see *Storage*. **`storage.go`** holds settings
+- **`cache.go`**: `cacheState`; see *The derived-view cache*.
+- **`storage_sqlite.go`**: see *Storage*. **`storage.go`** holds settings
   load/save, the legacy JSON envelope (`taskFile`/`migrate`/`decodeTaskFile`,
   now only an import source), and the task comparators.
-- **`helpers.go`** — parsing (quick-add syntax, dates, time-entry edits),
+- **`helpers.go`**: parsing (quick-add syntax, dates, time-entry edits),
   formatting, column layout, editor resolution, self-update file operations.
-- **`cli.go` + `cli_*.go`** — the command-line verbs, one file per group:
+- **`cli.go` + `cli_*.go`**: the command-line verbs, one file per group:
   `cli.go` (dispatch table, `help`, `update`, shared helpers), `cli_add.go`,
   `cli_edit.go`, `cli_lifecycle.go` (done, reopen, delete, undelete, undo),
   `cli_time.go`, `cli_query.go` (list, search, tags, projects, top),
   `cli_show.go` (show, why, stats). A new verb goes in the group it reads like,
   and into `dispatchCLI` and `cliCommandSpecs`. The CLI stays English: it never
   calls `applyLang`.
-- **`cli_refs.go`** — ref resolution, `loadForCLI`, and the list filter behind
+- **`cli_refs.go`**: ref resolution, `loadForCLI`, and the list filter behind
   `list` and `search` (`listFilterOpts`/`filterTopLevel`), including the
   review filters (`staleFor`, `unblockedFor`, word and regexp matching) and the
-  CLI-only sorts in `sortTodosByCLIMode` (age/idle/pri — the TUI's sort modes
+  CLI-only sorts in `sortTodosByCLIMode` (age/idle/pri; the TUI's sort modes
   must each line up with a visible column). `now` is injectable for tests.
-- **`completion.go`** — `taskr completion bash|zsh|fish` and `taskr man`,
+- **`completion.go`**: `taskr completion bash|zsh|fish` and `taskr man`,
   generated from `cliCommandSpecs`. `TestCompletionMatchesFlagSets` compares
   the table with each command's real `flag.FlagSet`;
   `TestCompletionCoversEveryCommand` ties it to the dispatch.
-- **`keymap.go`** — the keymap registry: every binding with its action id,
+- **`keymap.go`**: the keymap registry: every binding with its action id,
   contexts and description. It generates the footer hints, the help overlay
   and the command palette, so a new key is added there first.
   `TestKeymapActionsAreConsistent` keeps one action on one key everywhere.
-- **`keys.go`** — keybinding overrides as an overlay on the keymap registry.
+- **`keys.go`**: keybinding overrides as an overlay on the keymap registry.
   `navAlias` maps j/k to down/up at dispatch (after the override pass, so a
   rebind onto j or k wins). `sanitizeKeyOverrides` drops unknown actions,
   multi-key values, `ctrl+c` and per-context collisions, each with a reason.
@@ -164,21 +164,21 @@ everything.
   `update*` switches expect, so dispatch never learns about rebinding; a key
   that a rebind freed is swallowed. Everything user-facing renders through
   `effectiveKey`, so hints, help and palette move together.
-- **`palette.go`** — the command palette (`ctrl+k`, `modePalette`). Entries
+- **`palette.go`**: the command palette (`ctrl+k`, `modePalette`). Entries
   come from the keymap registry and **press their key** rather than call the
   action, so the palette cannot grow a second code path. Multi-key bindings
   are skipped by `paletteSendable`; the few worth listing are in
   `paletteExtras`. Ranking: whole-query substring, then per-word substring,
   then subsequence for queries of ≤ 3 runes.
-- **`suggest.go`** — inline `#tag`/`@project` completion for both the
+- **`suggest.go`**: inline `#tag`/`@project` completion for both the
   quick-add and search fields. `completionMatches` decides which field is
   completing and `applyCompletionKey` drives it, so the two share one
   implementation. It renders on the single footer line
   (`renderQuickAddSuggestions`), which the parse preview takes back once the
-  caret leaves the token. Both are gated on `searchUsesTokenGrammar` — true for
+  caret leaves the token. Both are gated on `searchUsesTokenGrammar`: true for
   Tasks, Board and Stats, which run `compileSearch`; false for Projects, which
   filters project names.
-- **`groups.go`** — **the Tags and Projects tabs are one implementation.** A
+- **`groups.go`**: **the Tags and Projects tabs are one implementation.** A
   tag and a project are both a named group of tasks, so the row summary
   (`groupSummary`), order (`groupSort`, persisted as `tag_order`/
   `project_order`), hide-finished rule (`visibleGroups`, toggled by `h` via
@@ -192,7 +192,7 @@ everything.
   `groupNestedRows` indents exactly that run. Summaries are built in
   `refreshCaches` (`refreshGroups`). Both lists
   draw through `renderGroupRows` and their panes through `groupPane`: the
-  group's summary over its task list, which enter walks in place — the group
+  group's summary over its task list, which enter walks in place, and the group
   list stays above it on both tabs. Stacked, the list and its pane split the
   height by need (`splitStack`): each gets its rows while both fit, and two
   full panels get half each. `tagStackRows`/`projectListOuter` are read by
@@ -203,11 +203,11 @@ everything.
   column they show at full width (`groupTaskCols`), a timeline strip
   (`renderGanttStrip`) runs beside the task rows, bar for row, and it always
   reaches today (`ganttDateWindow`).
-- **`board.go` / `view_board.go` / `update_board.go` / `board_carry.go`** —
+- **`board.go` / `view_board.go` / `update_board.go` / `board_carry.go`**:
   the kanban tab; see *The board*.
 - **`input.go`** and **`console.go`** (each with `_windows`/`_other`
-  variants) — see *Terminals*.
-- **`trace.go`** — opt-in latency tracing (`TASKR_TRACE=1` →
+  variants): see *Terminals*.
+- **`trace.go`**: opt-in latency tracing (`TASKR_TRACE=1` →
   `trace.log` in the state dir): per frame, the wall clock, gap since the previous
   frame, `Update` and `View` durations, GC count and message. It writes on its
   own goroutine and drops rather than blocks. Measured: a keystroke costs
@@ -215,7 +215,7 @@ everything.
   no messages, so a late keystroke is not the model's compute.
   `TASKR_NO_WATCH=1` removes the file watcher, the app's only continuous OS
   interaction; bisect with it first.
-- **`crash.go`** — the panic path. Bubble Tea already recovers panics (on its
+- **`crash.go`**: the panic path. Bubble Tea already recovers panics (on its
   loop and in commands) and restores the terminal, so the guard is deferred
   *inside* `Update` and `View` and re-panics: that is the only place holding
   both the stack from the panic site and the live model. It writes
@@ -223,7 +223,7 @@ everything.
   and records the path for `main` to print after `Run` returns. `msg` is
   formatted (`msgKind`) only on the panic path, keeping the guard
   allocation-neutral (`BenchmarkView`, `BenchmarkSearchKeystroke`).
-- **`exportsettings.go`** — Settings → Export. The auto-export keeps
+- **`exportsettings.go`**: Settings → Export. The auto-export keeps
   `exportFileName` current in a folder: scheduled after a save or an
   external reload (`exportSoon`), soon after the first change and then at
   most once per `exportInterval`, since the folder is usually synced and each
@@ -231,7 +231,7 @@ everything.
   `flushPendingWrites`. The import runs `importTasks`, the core `taskr
   import` shares, after saving pending edits, as one undo step naming every
   task in the file. Path prompts complete with `completePath`.
-- **`reminder.go` / `notify.go`** — the daily reminder. At the Settings time
+- **`reminder.go` / `notify.go`**: the daily reminder. At the Settings time
   (`reminder` in settings.json, default 09:00) a desktop notification lists
   the overdue tasks and those due today. Due dates are calendar days, so it is
   one reminder a day rather than a per-task alarm. The TUI checks on a minute
@@ -249,7 +249,7 @@ everything.
   and method slot short of Show on the Windows CI runner. A failure is one
   line (`notifyFailureReason`), and the TUI keeps the reminder on screen when
   the pop-up cannot be shown.
-- **`layout.go` / `styles.go` / `constants.go`** — width/height math, theming,
+- **`layout.go` / `styles.go` / `constants.go`**: width/height math, theming,
   magic numbers.
 
 ## Patterns that matter most
@@ -257,17 +257,17 @@ everything.
 ### The derived-view cache
 
 The `Store`'s `tasks` map (`map[string]*todo.Todo`, store.go) is the single
-source of truth. Everything the UI shows — active and done lists, tag and
-project summaries, the overdue set, subtask progress — is derived and cached on
+source of truth. Everything the UI shows (active and done lists, tag and
+project summaries, the overdue set, subtask progress) is derived and cached on
 the model. The store keeps two indexes itself, `subtaskOf` and
 `runningTimers`; only its own mutators may write them. After **any** mutation,
 call the right invalidator or the UI goes stale:
 
-- `m.markModified(ids...)` — mark tasks dirty for the next save, invalidate
+- `m.markModified(ids...)`: mark tasks dirty for the next save, invalidate
   caches, refresh, re-anchor the cursor. Push the undo snapshot yourself
   (`m.pushUndo`) *before* mutating.
-- `m.markCacheDirty()` — caches only; no save.
-- `m.markFilterDirty()` — only the filter-derived views, for a changed search
+- `m.markCacheDirty()`: caches only; no save.
+- `m.markFilterDirty()`: only the filter-derived views, for a changed search
   or focus filter.
 
 `refreshCaches()` rebuilds derived data and calls `followTask`, so the cursor
@@ -321,11 +321,11 @@ finished, and `clampCursors` re-finds it (`followPinnedGroups`).
 Preferences that code on another goroutine also needs are **values held by the
 model and copied out**, never package variables:
 
-- `m.rank` — the ranker (bias knobs, activity heat, the 100% mark), refreshed
+- `m.rank`: the ranker (bias knobs, activity heat, the 100% mark), refreshed
   in `refreshCaches`. The repository keeps its own copy through `SetRanker`
   (mutex-guarded, because saves run on a background command), and a sync merge
   scores with biases it is handed.
-- `m.boardCfg` — a `boardConfig` (column list, board shown, last edited,
+- `m.boardCfg`: a `boardConfig` (column list, board shown, last edited,
   shared with the fleet). A sync is handed the wire form; an arriving list is
   adopted on the loop.
 
@@ -365,7 +365,7 @@ support, so name-bearing layouts go through `localized*` helpers).
   `TestHintsOnlyAdvertiseTokensThatParse` parses each back in every language.
 - **Every string must be translated.** `TestEveryLanguageTranslatesEveryUIString`
   scans for `tr("…")` literals (skipping `lang.go` itself) and enumerates the
-  strings that reach `tr` through a variable — keymap descriptions,
+  strings that reach `tr` through a variable: keymap descriptions,
   `shortLabel`, help titles, bias levels, the words behind
   `trPriority`/`trSize`/`trRecurrence`. A string that reaches the screen some
   other way goes in `dynamicUIStrings`. Sentences therefore live outside
@@ -376,15 +376,15 @@ support, so name-bearing layouts go through `localized*` helpers).
 
 ## The ranking engine (`rank/`)
 
-- **`score.go`** — the score: five dimensions, three bias knobs, the
+- **`score.go`**: the score: five dimensions, three bias knobs, the
   activity-heat snapshot behind Momentum, the `Ranker` value that carries all
   three inputs, hit rate and miss analysis.
-- **`explain.go`** — one task's score as a breakdown with per-factor reason
+- **`explain.go`**: one task's score as a breakdown with per-factor reason
   codes, its position and margins to its neighbours, and a forecast of the
   moments its rank moves on its own (the midnight deadline step, momentum
   expiring). Heat maps each key to its newest signal *instant*, which is what
   lets `Expire`/`HeatExpiries` say when heat runs out.
-- **`order.go`** — the lifts a task inherits from its subtasks and from the
+- **`order.go`**: the lifts a task inherits from its subtasks and from the
   work waiting on it (`Lifts`), the partition that sinks blocked work
   (`DependencySets`), the sequence sort (`SortPtrs`, `SortValues`) and `Top`.
 
@@ -396,7 +396,7 @@ Rules:
   differ by ~1e-11 and never reach the tie-break
   (`TestSequenceSortIsDeterministicForIdenticalTasks`).
 - **Displayed scores are percentages.** The raw score is unbounded, so every
-  surface that shows one renders `FormatPercent` — a share of the
+  surface that shows one renders `FormatPercent`, a share of the
   highest-scoring pending task. Points appear only where the arithmetic is
   explained (the `w` overlay, `taskr why`, `stats --seq`), and those state
   what 100% currently costs. A hypothetical field (the Settings knob preview)
@@ -414,7 +414,7 @@ Rules:
   normalized (child records in `task_tags`/`task_comments`/
   `task_time_entries`/`task_dependencies`). A new field needs a
   `migrations/NNN_*.sql`, plus wiring into the `sqliteRepo.Save` upsert and the
-  `loadTodosCore` scan — a field with only a struct tag silently drops on the
+  `loadTodosCore` scan. A field with only a struct tag silently drops on the
   first round trip.
 - **Deletes are tombstones.** `Save` upserts the dirty set and marks the IDs it
   is handed `deleted=1`, so a deletion syncs. The tombstone map carries *when*
@@ -435,8 +435,8 @@ Rules:
 ## Paths (`paths/`)
 
 Resolve every path through `paths.Dir`/`paths.For`/`paths.Ensure`, never
-`os.UserHomeDir` plus a literal. There are four kinds — config, data, state,
-cache — mapped to XDG, `%APPDATA%`/`%LOCALAPPDATA%` or `~/Library`. Two
+`os.UserHomeDir` plus a literal. There are four kinds (config, data, state,
+cache), mapped to XDG, `%APPDATA%`/`%LOCALAPPDATA%` or `~/Library`. Two
 overrides come first: `TASKR_HOME` collapses all four into one directory, and
 an existing `~/.taskr` pins an old install there for good (no migration, by
 design). Only the data directory is created eagerly, so a new writer calls
@@ -461,7 +461,7 @@ and Bubble Tea glue stay in the app.
 - **Two versions, two questions.** `ProtocolVersion` is the wire *format*; a
   mismatch is refused with a 409 before merging. `VersionHeader`
   (`Taskr-Version`) is the *build*, stamped by `stampVersion` on every
-  response — including a bare 500 from `http.Error`, which is what a stale
+  response, including a bare 500 from `http.Error`, which is what a stale
   server answers after a newer build migrated its store. `PostSync` puts it in
   the error text (`serverError`) and on `Response.ServerVersion`, where
   `VersionGapWarning` warns about the case that does *not* fail: an additive
@@ -472,7 +472,7 @@ and Bubble Tea glue stay in the app.
   `Accept-Encoding: gzip`; a 400/415 to a compressed request drops the
   capability and resends plain once. The 64 MB request cap applies after
   decompression (`cappedReader`). The SSE stream is never compressed.
-- **`servetls.go`** — https for headless `taskr serve`
+- **`servetls.go`**: https for headless `taskr serve`
   (`--tls-cert`/`--tls-key`). The pair is loaded before binding, then re-read
   by `certReloader.getCertificate` whenever a file's mtime moves, since
   `tailscale cert` and Let's Encrypt renew in place. A failed reload keeps the
@@ -495,7 +495,7 @@ and Bubble Tea glue stay in the app.
   through `resolveFirstSync` and needs `--adopt-local` or `--adopt-remote`.
   The answer is stored in sync.json (`Adopted`), so losing the state directory
   does not ask again. `--adopt-remote` exports a backup, clears local rows
-  outright (no tombstones — these IDs never left the machine), then pulls.
+  outright (no tombstones: these IDs never left the machine), then pulls.
 
 ## The board
 
@@ -513,7 +513,7 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   shows, so `/` on the Board is the shared search and there is no board-only
   filter state.
 - **One close path.** `closePendingTask` (update_board.go) is the only
-  pending→done transition — Tasks `d`, Board `d` and a card dropped in Done all
+  pending→done transition. Tasks `d`, Board `d` and a card dropped in Done all
   use it, or timer/subtask/rank/recurrence handling forks.
 - **Carrying** (`modeBoardCarry`): enter picks a card up, ←/→ carry it,
   enter/esc put it down. Nothing is stored until the drop
@@ -536,7 +536,7 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   column (`board.addCol`).
 - **Hiding the board** (settings `board_disabled`) removes the tab from the
   bar, tab cycling, the digit keys and the palette (`tabVisible`), and the
-  detail pane's Stage row (`stageFieldVisible`). Tab numbers never renumber —
+  detail pane's Stage row (`stageFieldVisible`). Tab numbers never renumber;
   they are part of the translated labels (`tr("6 Stats")`).
 
 ## Terminals
@@ -548,7 +548,7 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   the console size (`startResizePoller`). `TASKR_WIN_CONSOLE_INPUT=1` goes back.
 - **Encoding (`console.go`).** A Windows console decodes output with its code
   page (CP850 on a Danish install), which garbles UTF-8. `useUTF8Console` sets
-  the output and input code pages to 65001 for the run and restores them — on
+  the output and input code pages to 65001 for the run and restores them on
   every exit path, since `os.Exit` skips defers. `taskr doctor` reports the
   page. mintty (Git Bash, MSYS2) is not a console: its charset comes from the
   locale, so `prepareConsole` sends OSC 701 (`minttyUTF8Sequence`, only when
@@ -572,8 +572,8 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   with a `ParentID`), so global operations loop the whole set
   (`renameTagGlobally`, `summarizeGroups`). Three fields are tree-scoped: a
   deadline runs *up* (`extendAncestorsDue`), priority runs *down*
-  (`clampPriorityToParent`, `clampDescendantsPriority`) — raising a child
-  never lifts a parked parent, and the TUI says the child was capped — and a
+  (`clampPriorityToParent`, `clampDescendantsPriority`; raising a child
+  never lifts a parked parent, and the TUI says the child was capped), and a
   project runs *down* too (`propagateDescendantsProject`), since a subtask is
   a step of its parent's work. All live in `taskops.go` and are called from
   the TUI (`cyclePriority`, `setProject`) and the CLI (`editOneTask`) alike.
@@ -594,7 +594,7 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
 - **ANSI-aware width math.** After a lipgloss `.Render`, `len([]rune(s))`
   counts escape sequences. Measure styled text with `ansi.StringWidth` and clip
   it with `ansi.Truncate`. Width tests assert no line exceeds the pane's inner
-  width (`termWidth-8`) — the no-wrap contract.
+  width (`termWidth-8`): the no-wrap contract.
 - **Shared name column.** The leading column on Tasks/Projects/Tags is sized by
   `contentFitWidth` (layout.go). Reuse it for a new list tab.
 - **Small terminals are supported.** Width budgets go negative on a tiny

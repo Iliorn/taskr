@@ -31,7 +31,7 @@ loudly if that ever stops working on a platform.
 
 - **Match the file you are editing.** No blanket reformatting, and keep any
   formatting-only change in its own commit.
-- **The architecture notes are in [ARCHITECTURE.md](ARCHITECTURE.md)** — the
+- **The architecture notes are in [ARCHITECTURE.md](ARCHITECTURE.md)**: the
   cache invalidation rules, the keymap registry, the rendering width contracts.
   Read the section for the area you are touching; most review comments would
   otherwise just be quotes from it.
@@ -43,8 +43,8 @@ loudly if that ever stops working on a platform.
   but isn't registered is invisible; a key registered but not dispatched fails
   the keymap tests.
 - **Small terminals are a supported size.** Width budgets derive from the
-  window and go negative on a narrow one — use the shared `truncate`/`padRight`
-  helpers, which clamp.
+  window and go negative on a narrow one, so use the shared
+  `truncate`/`padRight` helpers, which clamp.
 
 ## Tests
 
@@ -53,7 +53,7 @@ step: the keymap registry against dispatch, the help overlay against the
 parsers, the completion table against each command's own flags, and the
 architecture notes against the symbols they name. If one of them fails, it is
 usually telling you that something you changed is now described wrongly
-somewhere else — that is what they are for.
+somewhere else. That is what they are for.
 
 For anything in `tasksync/`, add tests. It is the one package where a bug loses
 tasks instead of mis-rendering them.
