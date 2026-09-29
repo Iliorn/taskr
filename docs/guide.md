@@ -7,7 +7,7 @@ version; the [CLI reference](cli.md) covers the `tjek <command>` side.
 
 - **Tasks**: the main list. Add, complete, delete, rename, set priority,
   size (S/M/L), due and start dates. The detail pane (`enter`) holds comments,
-  dependencies, subtasks, notes (opened in `$EDITOR`) and a live score
+  dependencies, subtasks, a description (opened in `$EDITOR`) and a live score
   breakdown.
 - **Calendar**: a per-day activity timeline with project and tag roll-ups
   and a tracked-time heatmap. Time entries can be edited or deleted in place.
@@ -48,7 +48,7 @@ tags".
 | `D` | Set / clear the due date |
 | `r` | Rename |
 | `x` / `del` | Delete |
-| `n` | Edit notes in `$EDITOR` |
+| `n` | Edit the description in `$EDITOR` |
 | `f` | Focus mode (today + overdue) |
 | `h` | Toggle history |
 | `s` | Cycle sort: Sequence → Due → Size |
@@ -107,7 +107,7 @@ grcrs                           # finds "Buy groceries"
 Supported: `#tag`, `@project`, `p:high/medium/low`, `due:<date`,
 `due:>date`, `due:date` (`<=` and `>=` too) and the word `overdue`. Anything
 else matches the title loosely (every letter in order, so `dply` finds
-"Deploy release") or the notes as plain text.
+"Deploy release") or the description as plain text.
 
 ## In your own language
 

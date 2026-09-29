@@ -1412,7 +1412,7 @@ func (m model) helpBodyLines() []string {
 		{"p:" + inputWord("high"), tr("only that priority")},
 		{inputWord("due:") + "<" + strings.ToLower(localizedWeekday(time.Friday)), tr("due before a date (also >, <=, >= and an exact date)")},
 		{inputWord("overdue"), tr("only overdue tasks")},
-		{"grcrs", tr("anything else fuzzy-matches the title, or the notes as text")},
+		{"grcrs", tr("anything else fuzzy-matches the title, or the description as text")},
 	}})
 
 	// Reference section: the annotation glyphs a task row can carry. Not key

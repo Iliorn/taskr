@@ -445,7 +445,7 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 		}
 	case fieldNotes:
 		if t.Notes != "" {
-			m.pushUndo("clear notes", t.ID)
+			m.pushUndo("clear description", t.ID)
 			t.SetNotes("")
 			m.markModified(t.ID)
 		}

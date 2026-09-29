@@ -443,7 +443,7 @@ func (m *model) openEditorForNotes() tea.Cmd {
 	taskID := t.ID
 
 	if err := writeNotesFile(taskID, t.Notes); err != nil {
-		m.flashError(fmt.Sprintf("Error writing notes file: %v", err))
+		m.flashError(fmt.Sprintf("Error writing description file: %v", err))
 		return clearErrAfter()
 	}
 
@@ -513,7 +513,7 @@ func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) 
 	taskID := msg.taskID
 	content, err := readNotesFile(taskID)
 	if err != nil {
-		m.flashError(fmt.Sprintf("Error reading notes: %v", err))
+		m.flashError(fmt.Sprintf("Error reading description: %v", err))
 		return m, clearErrAfter()
 	}
 
@@ -535,7 +535,7 @@ func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) 
 	if t := m.get(taskID); t != nil {
 		newNotes := strings.TrimRight(content, "\n\r ")
 		if newNotes != t.Notes {
-			m.pushUndo("edit notes", t.ID)
+			m.pushUndo("edit description", t.ID)
 			t.SetNotes(newNotes)
 			m.markDirty(t.ID)
 			m.dirty = true

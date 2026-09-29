@@ -125,7 +125,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		left.WriteString(renderField(tr("Stage"), stageVal, fieldStage) + "\n")
 	}
 	left.WriteString(renderField(tr("Project"), projectVal, fieldProject) + "\n")
-	left.WriteString(renderField(tr("Notes"), notesVal, fieldNotes) + "\n")
+	left.WriteString(renderField(tr("Description"), notesVal, fieldNotes) + "\n")
 
 	// Right column (or continuation in single-col mode): read-only metadata.
 	right := getBuilder()

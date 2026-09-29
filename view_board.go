@@ -792,7 +792,7 @@ func (m model) renderBoardCardView() string {
 		}
 	}
 	if strings.TrimSpace(t.Notes) != "" {
-		section("Notes")
+		section("Description")
 		for _, para := range strings.Split(strings.TrimRight(t.Notes, "\n"), "\n") {
 			for _, l := range wrapText(para, w-2) {
 				lines = append(lines, normalStyle.Render("  "+l))
