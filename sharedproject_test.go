@@ -23,12 +23,30 @@ type sharer struct {
 }
 
 func newSharer(t *testing.T, name string) *sharer {
-	return &sharer{h: openTestDB(t), cfg: sharedConfig{Device: strings.ToLower(name)}, by: editor{name: name}}
+	return &sharer{h: openTestDB(t), by: editor{name: name}}
 }
 
 func (s *sharer) save(t *testing.T, at time.Time, tasks ...todo.Todo) {
 	t.Helper()
 	historySave(t, s.h, at, s.by, tasks)
+}
+
+func (s *sharer) share(t *testing.T, name, folder string) sharedProject {
+	t.Helper()
+	p, err := startSharing(&s.cfg, name, folder)
+	if err != nil {
+		t.Fatalf("%s sharing %q: %v", s.by.name, name, err)
+	}
+	return p
+}
+
+func (s *sharer) join(t *testing.T, path string) sharedProject {
+	t.Helper()
+	p, err := joinShared(&s.cfg, path)
+	if err != nil {
+		t.Fatalf("%s joining %s: %v", s.by.name, path, err)
+	}
+	return p
 }
 
 func (s *sharer) sync(t *testing.T, name string) sharedResult {
@@ -37,7 +55,7 @@ func (s *sharer) sync(t *testing.T, name string) sharedResult {
 	if !ok {
 		t.Fatalf("%s does not share %q", s.by.name, name)
 	}
-	res, err := syncShared(s.h, s.cfg, p, s.by.name, rank.Biases{})
+	res, err := syncShared(s.h, p, rank.Biases{})
 	if err != nil {
 		t.Fatalf("%s syncing %q: %v", s.by.name, name, err)
 	}
@@ -58,28 +76,33 @@ func (s *sharer) task(t *testing.T, id string) (todo.Todo, bool) {
 	return todo.Todo{}, false
 }
 
-// Anna shares a project through a folder and Mark joins it: he gets its
-// tasks and none of her others, and each one's changes reach the other with
-// the history saying who made them.
-func TestTwoPeopleShareAProjectThroughAFolder(t *testing.T) {
+// tripTask is a task in the project the tests share.
+func tripTask(title string) todo.Todo {
+	t := todo.New(title)
+	t.Project = "Trip"
+	return t
+}
+
+// Anna shares a project in a file and Mark joins it: he gets its tasks and
+// none of her others, and each one's changes reach the other with the
+// history saying who made them.
+func TestTwoPeopleShareAProjectInOneFile(t *testing.T) {
 	folder := t.TempDir()
 	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
-
-	trip := todo.New("Book the ferry")
-	trip.Project = "Trip"
-	private := todo.New("Dentist")
+	trip, private := tripTask("Book the ferry"), todo.New("Dentist")
 	anna.save(t, s0, trip, private)
 
-	if _, err := startSharing(&anna.cfg, "Trip", folder); err != nil {
-		t.Fatal(err)
+	p := anna.share(t, "Trip", folder)
+	if p.File != filepath.Join(folder, "Trip.tjek") {
+		t.Fatalf("shared in %s, want Trip.tjek in the folder", p.File)
 	}
-	if res := anna.sync(t, "Trip"); !res.wrote {
-		t.Fatal("sharing wrote no file for Anna's device")
+	anna.sync(t, "Trip")
+	entries, _ := os.ReadDir(folder)
+	if len(entries) != 1 {
+		t.Fatalf("the folder holds %d entries, want the one file", len(entries))
 	}
 
-	if _, err := joinShared(&mark.cfg, folder); err != nil {
-		t.Fatal(err)
-	}
+	mark.join(t, p.File)
 	mark.sync(t, "Trip")
 	got, ok := mark.task(t, trip.ID)
 	if !ok || got.Title != "Book the ferry" {
@@ -89,7 +112,6 @@ func TestTwoPeopleShareAProjectThroughAFolder(t *testing.T) {
 		t.Fatal("a task outside the shared project reached Mark")
 	}
 
-	// Mark closes it; Anna sees it closed, and by whom.
 	got.Toggle()
 	mark.save(t, s0.Add(time.Minute), got)
 	mark.sync(t, "Trip")
@@ -98,27 +120,21 @@ func TestTwoPeopleShareAProjectThroughAFolder(t *testing.T) {
 	if mine.Status != todo.Done {
 		t.Fatal("Mark's close did not reach Anna")
 	}
-	last := mine.History[len(mine.History)-1]
-	if last.Action != todo.ActionClosed || last.Author != "Mark" {
+	if last := mine.History[len(mine.History)-1]; last.Action != todo.ActionClosed || last.Author != "Mark" {
 		t.Errorf("Anna's history ends %+v, want closed by Mark", last)
 	}
 }
 
 // Two people editing different fields of one task at once both keep their
-// edit, whichever file is read first.
+// edit, whichever of them syncs first.
 func TestSharedEditsToDifferentFieldsBothSurvive(t *testing.T) {
 	folder := t.TempDir()
 	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
-	task := todo.New("Plan the route")
-	task.Project = "Trip"
+	task := tripTask("Plan the route")
 	anna.save(t, s0, task)
-	if _, err := startSharing(&anna.cfg, "Trip", folder); err != nil {
-		t.Fatal(err)
-	}
+	p := anna.share(t, "Trip", folder)
 	anna.sync(t, "Trip")
-	if _, err := joinShared(&mark.cfg, folder); err != nil {
-		t.Fatal(err)
-	}
+	mark.join(t, p.File)
 	mark.sync(t, "Trip")
 
 	a, _ := anna.task(t, task.ID)
@@ -139,28 +155,126 @@ func TestSharedEditsToDifferentFieldsBothSurvive(t *testing.T) {
 	}
 }
 
-// Leaving removes the project's tasks from this device outright and keeps
-// its file in the folder, so the others lose nothing; joining again brings
-// every task back, history and all, and deletes nothing for anyone.
-func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
+// Two devices that wrote the file at once leave a conflict copy beside it,
+// the way cloud services do; the next pass merges the copy in, writes the
+// result, and removes the copy.
+func TestConflictCopiesAreMergedAndRemoved(t *testing.T) {
 	folder := t.TempDir()
 	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
-	task := todo.New("Pack")
-	task.Project = "Trip"
-	private := todo.New("Dentist")
+	task := tripTask("Pack")
 	anna.save(t, s0, task)
-	mark.save(t, s0, private)
-	if _, err := startSharing(&anna.cfg, "Trip", folder); err != nil {
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+
+	// Both edit; Mark's write lands as the conflict copy, and the file keeps
+	// the version they both started from.
+	base, err := os.ReadFile(p.File)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := anna.task(t, task.ID)
+	a.AddComment("passports")
+	anna.save(t, s0.Add(time.Minute), a)
+	m, _ := mark.task(t, task.ID)
+	m.SetPriority(todo.PriorityHigh)
+	mark.save(t, s0.Add(time.Minute), m)
+	mark.sync(t, "Trip")
+	copyPath := filepath.Join(folder, "Trip (Mark's conflicted copy 2026-09-29).tjek")
+	if err := os.Rename(p.File, copyPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.File, base, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	anna.sync(t, "Trip")
-	if _, err := joinShared(&mark.cfg, folder); err != nil {
+
+	got, _ := anna.task(t, task.ID)
+	if got.Priority != todo.PriorityHigh || len(got.Comments) != 1 {
+		t.Fatalf("Anna has priority %v and %d comment(s), want both edits", got.Priority, len(got.Comments))
+	}
+	if _, err := os.Stat(copyPath); !os.IsNotExist(err) {
+		t.Error("the conflict copy is still there")
+	}
+	f, err := readSharedFile(p.File)
+	if err != nil || len(f.Tasks) != 1 || f.Tasks[0].Priority != todo.PriorityHigh || len(f.Tasks[0].Comments) != 1 {
+		t.Errorf("the file does not hold both edits after the merge (%v)", err)
+	}
+}
+
+// A cloud service that lets a later write replace an earlier one loses that
+// write only for a moment: the device that made it still holds it, sees the
+// file lacks it, and writes it back.
+func TestAnOverwrittenChangeComesBack(t *testing.T) {
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	task := tripTask("Pack")
+	anna.save(t, s0, task)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+	stale, err := os.ReadFile(p.File)
+	if err != nil {
 		t.Fatal(err)
 	}
-	mark.sync(t, "Trip")
-	own := mark.cfg.memberPath(mark.cfg.Projects[0])
 
-	p, n, err := leaveShared(mark.h, &mark.cfg, "Trip", "Mark", rank.Biases{})
+	a, _ := anna.task(t, task.ID)
+	a.SetNotes("the big suitcase")
+	anna.save(t, s0.Add(time.Minute), a)
+	anna.sync(t, "Trip")
+	// Mark's client, not having seen it, writes his older copy over it.
+	if err := os.WriteFile(p.File, stale, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if res := anna.sync(t, "Trip"); !res.wrote {
+		t.Fatal("Anna did not put her change back into the file")
+	}
+	mark.sync(t, "Trip")
+	if got, _ := mark.task(t, task.ID); got.Notes != "the big suitcase" {
+		t.Errorf("Mark has notes %q, want Anna's change", got.Notes)
+	}
+}
+
+// Once two devices agree, neither rewrites the file: each would otherwise
+// see the other's write as a change and answer it, forever.
+func TestAgreeingDevicesStopWriting(t *testing.T) {
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	task := tripTask("Pack")
+	task.AddTag("bags")
+	task.AddTag("abroad")
+	task.AddComment("first")
+	task.AddComment("second")
+	anna.save(t, s0, task)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	for i := 0; i < 2; i++ {
+		mark.sync(t, "Trip")
+		anna.sync(t, "Trip")
+	}
+	if mark.sync(t, "Trip").wrote || anna.sync(t, "Trip").wrote {
+		t.Error("a device rewrote a file that already said what it holds")
+	}
+}
+
+// Leaving removes the project's tasks from this device outright and leaves
+// the file to the others; joining again brings every task back, history and
+// all, and deletes nothing for anyone.
+func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	task, private := tripTask("Pack"), todo.New("Dentist")
+	anna.save(t, s0, task)
+	mark.save(t, s0, private)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+
+	_, n, err := leaveShared(mark.h, &mark.cfg, "Trip", rank.Biases{})
 	if err != nil || n != 1 {
 		t.Fatalf("leave: removed %d, %v; want the one task", n, err)
 	}
@@ -173,21 +287,18 @@ func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 	if _, ok := mark.task(t, private.ID); !ok {
 		t.Error("leaving removed a task outside the project")
 	}
-	if _, err := os.Stat(own); err != nil {
-		t.Errorf("Mark's file left the folder (%v); it is kept so nothing is lost", err)
+	if _, err := os.Stat(p.File); err != nil {
+		t.Errorf("leaving took the file away from the others: %v", err)
 	}
-	if _, _, err := leaveShared(mark.h, &mark.cfg, "Trip", "Mark", rank.Biases{}); err == nil {
+	if _, _, err := leaveShared(mark.h, &mark.cfg, "Trip", rank.Biases{}); err == nil {
 		t.Error("leaving a project that is not shared should say so")
 	}
 
-	// Anna keeps working; Mark rejoins and gets it all, and she loses nothing.
 	a, _ := anna.task(t, task.ID)
 	a.AddComment("don't forget the charger")
 	anna.save(t, s0.Add(time.Minute), a)
 	anna.sync(t, "Trip")
-	if _, err := joinShared(&mark.cfg, p.Folder); err != nil {
-		t.Fatal(err)
-	}
+	mark.join(t, p.File)
 	if len(mark.cfg.Left) != 0 {
 		t.Error("rejoining did not forget the removed tasks")
 	}
@@ -203,12 +314,9 @@ func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 }
 
 // The sync server neither gets nor gives a shared project's tasks, nor the
-// ones this device removed by leaving: those travel through the folder.
+// ones this device removed by leaving: those travel through the file.
 func TestSyncServerSkipsSharedProjects(t *testing.T) {
-	shared := todo.New("In the shared project")
-	shared.Project = "Trip"
-	left := todo.New("Removed by leaving")
-	mine := todo.New("Private")
+	shared, left, mine := tripTask("In the shared project"), todo.New("Removed by leaving"), todo.New("Private")
 	c := sharedConfig{
 		Projects: []sharedProject{{ID: "trip", Name: "Trip"}},
 		Left:     []sharedLeft{{ID: "work", Name: "Work", Tasks: []string{left.ID}}},
@@ -219,85 +327,128 @@ func TestSyncServerSkipsSharedProjects(t *testing.T) {
 	}
 }
 
-// A folder holds one project: sharing another there is refused, sharing the
-// same name joins it, and a file from a newer tjek is refused rather than
-// half-read.
-func TestSharedFolderGuards(t *testing.T) {
+// Sharing and joining refuse what would go wrong later: joining twice, a
+// missing folder, a folder holding more than one project to choose from, a
+// file of a newer format; and a folder that already holds the project's file
+// joins it rather than starting another.
+func TestSharedFileGuards(t *testing.T) {
 	folder := t.TempDir()
 	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
-	if _, err := startSharing(&anna.cfg, "Trip", folder); err != nil {
-		t.Fatal(err)
+	p := anna.share(t, "Trip", folder)
+	if q, err := startSharing(&mark.cfg, "Trip", folder); err != nil || q.ID != p.ID {
+		t.Errorf("sharing the folder's own project should join it: %+v, %v", q, err)
 	}
-	if _, err := startSharing(&mark.cfg, "Work", folder); err == nil {
-		t.Error("a second project in the same folder was accepted")
-	}
-	if p, err := startSharing(&mark.cfg, "Trip", folder); err != nil || p.ID != anna.cfg.Projects[0].ID {
-		t.Errorf("sharing the folder's own project should join it: %+v, %v", p, err)
-	}
-	if _, err := joinShared(&mark.cfg, folder); err == nil {
+	if _, err := joinShared(&mark.cfg, p.File); err == nil {
 		t.Error("joining a project twice was accepted")
 	}
-	if _, err := startSharing(&anna.cfg, "Trip", t.TempDir()+"/missing"); err == nil {
+	if _, err := startSharing(&anna.cfg, "Work", filepath.Join(folder, "missing")); err == nil {
 		t.Error("a folder that does not exist was accepted")
 	}
+	anna.share(t, "Work", folder)
+	carl := newSharer(t, "Carl")
+	if _, err := joinShared(&carl.cfg, folder); err == nil {
+		t.Error("a folder with two projects was joined without saying which")
+	}
+	if q := carl.join(t, filepath.Join(folder, "Work.tjek")); q.Name != "Work" {
+		t.Errorf("joined %q, want Work", q.Name)
+	}
 
-	newer := `{"format": 99, "project": "` + anna.cfg.Projects[0].ID + `", "tasks": []}`
-	if err := os.WriteFile(filepath.Join(folder, sharedMemberPrefix+"future.json"), []byte(newer), 0o644); err != nil {
+	newer := `{"format": 99, "id": "` + p.ID + `", "name": "Trip", "tasks": []}`
+	if err := os.WriteFile(p.File, []byte(newer), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p, _ := anna.cfg.find("Trip")
-	if _, err := syncShared(anna.h, anna.cfg, p, "Anna", rank.Biases{}); err == nil || !strings.Contains(err.Error(), "newer tjek") {
+	if _, err := syncShared(anna.h, p, rank.Biases{}); err == nil || !strings.Contains(err.Error(), "newer tjek") {
 		t.Errorf("a file from a newer format: %v, want it refused", err)
 	}
 }
 
-// A sync with nothing new leaves the device's file alone: in a synced folder
-// every write is an upload to everyone.
+// A project's file name is its name, less what some system cannot hold.
+func TestSharedFileName(t *testing.T) {
+	for name, want := range map[string]string{
+		"Trip":         "Trip.tjek",
+		"Work: Q3/Q4?": "Work- Q3-Q4-.tjek",
+		" .. ":         "project.tjek",
+	} {
+		if got := sharedFileName(name); got != want {
+			t.Errorf("sharedFileName(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+// The copies each cloud service makes are found, and neither the file
+// itself nor another project whose name merely starts the same.
+func TestSharedConflictCopiesAreRecognised(t *testing.T) {
+	folder := t.TempDir()
+	for _, name := range []string{
+		"Trip.tjek", "Trip-LAPTOP.tjek", "Trip (Mark's conflicted copy 2026-09-29).tjek",
+		"Trip (1).tjek", "Tripod.tjek", "Trip.tjek.bak",
+	} {
+		if err := os.WriteFile(filepath.Join(folder, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var got []string
+	for _, c := range sharedConflictCopies(filepath.Join(folder, "Trip.tjek")) {
+		got = append(got, filepath.Base(c))
+	}
+	want := "Trip (1).tjek|Trip (Mark's conflicted copy 2026-09-29).tjek|Trip-LAPTOP.tjek"
+	if strings.Join(got, "|") != want {
+		t.Errorf("copies %q, want %q", got, want)
+	}
+}
+
+// A pass with nothing new leaves the file alone: every write is an upload.
 func TestUnchangedSharedProjectIsNotRewritten(t *testing.T) {
 	folder := t.TempDir()
 	anna := newSharer(t, "Anna")
-	task := todo.New("Book the ferry")
-	task.Project = "Trip"
-	anna.save(t, s0, task)
-	if _, err := startSharing(&anna.cfg, "Trip", folder); err != nil {
-		t.Fatal(err)
-	}
+	anna.save(t, s0, tripTask("Book the ferry"))
+	anna.share(t, "Trip", folder)
 	if !anna.sync(t, "Trip").wrote {
-		t.Fatal("the first sync wrote nothing")
+		t.Fatal("the first pass wrote nothing")
 	}
 	if anna.sync(t, "Trip").wrote {
 		t.Error("an unchanged project rewrote its file")
 	}
 }
 
+// writeSharedFile puts an empty shared project's file at path, as sharing
+// from another device would have.
+func writeSharedFile(t *testing.T, path, id, name string) {
+	t.Helper()
+	data, err := encodeSharedFile(sharedFile{Format: sharedFormat, ID: id, Name: name, Tasks: []todo.Todo{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // `tjek share join` asks before handing over tasks this device already files
 // under the project's name, and --merge goes ahead.
 func TestCLIJoinAsksBeforeMergingALocalProject(t *testing.T) {
-	folder := t.TempDir()
+	file := filepath.Join(t.TempDir(), "Trip.tjek")
 	setTestHome(t, t.TempDir())
 	testStore(t)
 	t.Setenv("TJEK_AUTHOR", "")
 	captureStdout(t, func() { cliAdd([]string{"Mine already", "--project", "Trip"}) })
+	writeSharedFile(t, file, "trip-id", "Trip")
 
-	manifest := `{"format": 1, "id": "trip-id", "name": "Trip", "created": "2026-09-29T12:00:00Z"}`
-	if err := os.WriteFile(filepath.Join(folder, sharedManifestName), []byte(manifest), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	var code int
-	captureStderr(t, func() { code = cliShare([]string{"join", folder}) })
+	captureStderr(t, func() { code = cliShare([]string{"join", file}) })
 	if code != 2 {
 		t.Fatalf("join over a local project of the same name: exit %d, want 2", code)
 	}
 	if c, _ := loadSharedConfig(); len(c.Projects) != 0 {
 		t.Fatal("the refused join was recorded anyway")
 	}
-	captureStdout(t, func() { code = cliShare([]string{"join", folder, "--merge"}) })
+	captureStdout(t, func() { code = cliShare([]string{"join", file, "--merge"}) })
 	if code != 0 {
 		t.Fatalf("join --merge: exit %d", code)
 	}
-	c, _ := loadSharedConfig()
-	if _, err := os.Stat(c.memberPath(c.Projects[0])); err != nil {
-		t.Errorf("joining wrote no member file: %v", err)
+	f, err := readSharedFile(file)
+	if err != nil || len(f.Tasks) != 1 {
+		t.Errorf("the file holds %d task(s) after joining with --merge (%v), want the local one", len(f.Tasks), err)
 	}
 	captureStdout(t, func() { code = cliShare([]string{"leave", "Trip"}) })
 	if c, _ := loadSharedConfig(); code != 0 || len(c.Projects) != 0 {
@@ -305,9 +456,8 @@ func TestCLIJoinAsksBeforeMergingALocalProject(t *testing.T) {
 	}
 }
 
-// S on a Projects row shares it through a folder; S on a shared one asks,
-// and y leaves it and removes its tasks. The row carries the shared mark in
-// between.
+// S on a Projects row shares it in a file; S on a shared one asks, and y
+// leaves it and removes its tasks. The row carries the shared mark between.
 func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
 	folder := t.TempDir()
 	setTestHome(t, t.TempDir())
@@ -332,8 +482,8 @@ func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
 	if c, _ := loadSharedConfig(); len(c.Projects) != 1 {
 		t.Fatal("shared.json does not record the project")
 	}
-	if _, err := os.Stat(filepath.Join(folder, sharedManifestName)); err != nil {
-		t.Fatalf("no manifest in the folder: %v", err)
+	if _, err := os.Stat(filepath.Join(folder, "Trip.tjek")); err != nil {
+		t.Fatalf("no Trip.tjek in the folder: %v", err)
 	}
 	if !strings.Contains(ansi.Strip(m.View()), "Trip"+sharedMark) {
 		t.Error("the Projects row does not show the shared mark")
@@ -360,13 +510,9 @@ func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
 // Settings → Join a project asks before sharing tasks already filed under
 // the project's name, and joins on y.
 func TestScriptJoinFromSettingsAsksFirst(t *testing.T) {
-	folder := t.TempDir()
-	manifest := `{"format": 1, "id": "trip-id", "name": "Trip", "created": "2026-09-29T12:00:00Z"}`
-	if err := os.WriteFile(filepath.Join(folder, sharedManifestName), []byte(manifest), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	mine := todo.New("Mine already")
-	mine.Project = "Trip"
+	file := filepath.Join(t.TempDir(), "Trip.tjek")
+	writeSharedFile(t, file, "trip-id", "Trip")
+	mine := tripTask("Mine already")
 	m := settingsModel(t)
 	m.Store.add(mine)
 	m.refreshCaches()
@@ -375,7 +521,7 @@ func TestScriptJoinFromSettingsAsksFirst(t *testing.T) {
 	if m.mode != modeShareJoin {
 		t.Fatalf("mode = %v, want modeShareJoin", m.mode)
 	}
-	m = script(t, m, folder, "enter")
+	m = script(t, m, file, "enter")
 	if m.mode != modeConfirm {
 		t.Fatalf("join over a local project: mode = %v, want the question", m.mode)
 	}

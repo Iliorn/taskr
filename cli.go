@@ -344,10 +344,10 @@ var cliHelpBlocks = []helpBlock{
 		{"tjek sync --recover", "list dropped edits from sync.log (local only, no network)"},
 		{"tjek sync --recover=<ref>", "reapply one dropped edit by id-prefix or title substring; stamps a fresh ModifiedAt so the fix propagates on the next sync"},
 	}},
-	{"Shared projects (through a folder, e.g. OneDrive):", []helpRow{
+	{"Shared projects (through one file, e.g. in OneDrive):", []helpRow{
 		{"tjek share", "list the projects this device shares, and where"},
-		{"tjek share start <project> <folder>", "share a project with everyone who can reach the folder; each device writes its own file there, and changes merge like sync. A shared project travels only through its folder, not the sync server, so each of your machines joins it by itself"},
-		{"tjek share join <folder> [--merge]", "join the project a folder holds; --merge when you already have tasks in a project of that name, which then become shared"},
+		{"tjek share start <project> <folder>", "share a project with everyone who can reach the folder, in a new <project>.tjek file there; changes merge like sync. A shared project travels only through its file, not the sync server, so each of your machines joins it by itself"},
+		{"tjek share join <file> [--merge]", "join the project a .tjek file holds (or a folder holding one); --merge when you already have tasks in a project of that name, which then become shared"},
 		{"tjek share leave <project>", "leave a shared project: its tasks are removed from this device, the others keep theirs, and joining again brings them back"},
 		{"tjek share sync", "sync every shared project now (the app does it on its own, and so does every command that changes tasks)"},
 	}},

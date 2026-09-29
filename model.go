@@ -492,12 +492,12 @@ type model struct {
 	// shared is this device's shared.json: the projects it shares through a
 	// folder (sharedui.go). The pass over them runs off the loop; these
 	// record whether one is scheduled or running, and how the last went.
-	shared             sharedConfig
-	sharedScheduled    bool
-	sharedRunning      bool
-	sharedFailed       bool
-	sharedStatus       string
-	pendingShareFolder string
+	shared           sharedConfig
+	sharedScheduled  bool
+	sharedRunning    bool
+	sharedFailed     bool
+	sharedStatus     string
+	pendingShareFile string
 }
 
 func initialModel(repo Repository) model {

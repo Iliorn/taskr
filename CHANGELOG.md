@@ -11,6 +11,12 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Changed
+
+- A shared project is one `.tjek` file: `S` makes `Trip.tjek`, and joining names that file.
+
 ## [1.46.1] - 2026-09-29
 
 ### Added

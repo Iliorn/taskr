@@ -222,13 +222,16 @@ everything.
 - **`input.go`** and **`console.go`** (each with `_windows`/`_other`
   variants): see *Terminals*.
 - **`sharedproject.go` / `sharedui.go` / `cli_share.go`**: shared projects
-  through a folder, with no server. The folder holds a manifest
-  (`tjek-project.json`) and one file per device (`tjek-member-<device>.json`),
-  written only by that device so a cloud folder never sees two writers on one
-  file. A device's file is the project's tasks with stamps, tombstones and
-  history; `syncShared` folds the other files in with `mergeIntoStore` (the
-  sync merge, a CRDT, so read order and lateness do not matter) and rewrites
-  its own only when it changed. Which projects are shared lives in the local
+  through one file (`Trip.tjek`), with no server: the project's tasks with
+  stamps, tombstones and history. Every device reads and writes it.
+  `syncShared` folds the file and any conflict copies a cloud service made
+  of it (`sharedConflictCopies`) into the store with `mergeIntoStore` (the
+  sync merge, a CRDT), writes the project back when the file differs, and
+  removes the copies; a write a service let another replace comes back from
+  the device that still holds it. The file is written in one canonical form
+  (`encodeSharedFile`: `tasksync.CanonicalJSON`, ID order), or two devices
+  holding the same project would each see the other's bytes as a change and
+  rewrite the file forever. Which projects are shared lives in the local
   `shared.json`. A shared project never goes through the sync server
   (`keepsOutOfSync`, filtered both ways in `runClientSync`), so leaving can
   remove its tasks outright (`removeProjectTasks`, no tombstones, which would

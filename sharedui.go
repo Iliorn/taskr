@@ -11,11 +11,11 @@ import (
 )
 
 // sharedui.go is the app's side of shared projects (sharedproject.go): S on a
-// Projects row shares it through a folder or stops sharing it, Settings joins
-// a folder's project, and a background pass keeps every shared project in
-// step with its folder.
+// Projects row shares it in a file or leaves it, Settings joins a file's
+// project, and a background pass keeps every shared project in step with its
+// file.
 //
-// The pass runs soon after each save, so a change reaches the folder within
+// The pass runs soon after each save, so a change reaches the file within
 // seconds, and on a poll, so the others' changes arrive while nothing happens
 // here. Its merge writes the store, which the file watcher turns into a
 // reload, as it does a sync. It runs once more on quit.
@@ -62,9 +62,9 @@ func (m model) handleSharedTick(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if len(m.shared.Projects) > 0 && !m.sharedRunning && db != nil {
 		m.sharedRunning = true
-		author, b := authorName(appSettings{Name: m.userName}), m.rank.Biases
+		b := m.rank.Biases
 		cmds = append(cmds, func() tea.Msg {
-			changed, err := syncAllShared(db, author, b)
+			changed, err := syncAllShared(db, b)
 			return sharedDoneMsg{changed: changed, err: err}
 		})
 	}
@@ -96,13 +96,13 @@ func (m model) handleSharedDone(msg sharedDoneMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// flushShared brings the shared folders up to date on quit, after the last
+// flushShared brings the shared files up to date on quit, after the last
 // save, which cannot wait for a tick.
 func (m *model) flushShared() {
 	if len(m.shared.Projects) == 0 || db == nil {
 		return
 	}
-	if _, err := syncAllShared(db, authorName(appSettings{Name: m.userName}), m.rank.Biases); err != nil {
+	if _, err := syncAllShared(db, m.rank.Biases); err != nil {
 		fmt.Fprintf(os.Stderr, "Shared project sync on quit failed: %v\n", err)
 	}
 }
@@ -133,8 +133,8 @@ func (m model) startShareOrLeave(name string) (tea.Model, tea.Cmd) {
 }
 
 // confirmLeaveShared leaves the project and removes its tasks here. Edits
-// still inside the save debounce are written first, so the folder gets them
-// and no later save puts a removed task back; a pass over the folders that
+// still inside the save debounce are written first, so the file gets them
+// and no later save puts a removed task back; a pass over the files that
 // is running could merge the tasks back in behind the removal, so the leave
 // waits for it.
 func (m *model) confirmLeaveShared() tea.Cmd {
@@ -150,7 +150,7 @@ func (m *model) confirmLeaveShared() tea.Cmd {
 		}
 	}
 	c := m.shared.clone()
-	p, n, err := leaveShared(db, &c, m.pendingProjectName, authorName(appSettings{Name: m.userName}), m.rank.Biases)
+	p, n, err := leaveShared(db, &c, m.pendingProjectName, m.rank.Biases)
 	if err == nil {
 		err = saveSharedConfig(c)
 	}
@@ -167,8 +167,8 @@ func (m *model) confirmLeaveShared() tea.Cmd {
 	})
 }
 
-// updateShareFolder takes the folder to share a project in: tab completes a
-// folder name, enter shares, esc leaves it unshared.
+// updateShareFolder takes the folder to make a project's file in: tab
+// completes a folder name, enter shares, esc leaves it unshared.
 func (m model) updateShareFolder(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if key, ok := msg.(tea.KeyMsg); ok {
@@ -190,7 +190,7 @@ func (m model) updateShareFolder(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.shared = c
 			m.mode = modeNormal
 			m.markCacheDirty()
-			m.flashSuccess(fmt.Sprintf(tr("Sharing '%s' in %s"), p.Name, exportFolderDisplay(p.Folder)))
+			m.flashSuccess(fmt.Sprintf(tr("Sharing '%s' in %s"), p.Name, exportFolderDisplay(p.File)))
 			return m, tea.Batch(clearErrAfter(), m.runSharedNow())
 		case "esc":
 			m.mode = modeNormal
@@ -206,20 +206,21 @@ func (m model) updateShareFolder(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) openShareJoin() (tea.Model, tea.Cmd) {
 	m.mode = modeShareJoin
 	m.textInput.SetValue("")
-	m.textInput.Placeholder = tr("Folder someone shared a project in")
+	m.textInput.Placeholder = tr("The .tjek file of a shared project")
 	m.textInput.Focus()
 	return m, textinput.Blink
 }
 
-// updateShareJoin takes the folder to join. Joining hands every task already
-// filed under the project's name to everyone in the folder, so when there
+// updateShareJoin takes the file to join; tab completes files and folders.
+// Joining hands every task already filed under the project's name to
+// everyone sharing it, so when there
 // are any it asks first.
 func (m model) updateShareJoin(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "tab":
-			m.textInput.SetValue(completePath(m.textInput.Value(), true))
+			m.textInput.SetValue(completePath(m.textInput.Value(), false))
 			m.textInput.CursorEnd()
 			return m, nil
 		case "enter":
@@ -229,7 +230,7 @@ func (m model) updateShareJoin(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.flashError(fmt.Sprintf(tr("Shared project: %v"), err))
 				return m, clearErrAfter()
 			}
-			m.pendingShareFolder = p.Folder
+			m.pendingShareFile = p.File
 			n := 0
 			for _, t := range m.allTodos() {
 				if t.Project == p.Name {
@@ -239,7 +240,7 @@ func (m model) updateShareJoin(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if n > 0 {
 				m.mode = modeConfirm
 				m.confirmOnYes = (*model).confirmJoinShared
-				m.confirmMsg = fmt.Sprintf(tr("You have %d task(s) in '%s'. Share them with everyone in the folder? (y/n)"), n, p.Name)
+				m.confirmMsg = fmt.Sprintf(tr("You have %d task(s) in '%s'. Share them with everyone sharing it? (y/n)"), n, p.Name)
 				return m, nil
 			}
 			m.mode = modeNormal
@@ -255,7 +256,7 @@ func (m model) updateShareJoin(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) confirmJoinShared() tea.Cmd {
 	c := m.shared.clone()
-	p, err := joinShared(&c, m.pendingShareFolder)
+	p, err := joinShared(&c, m.pendingShareFile)
 	if err == nil {
 		err = saveSharedConfig(c)
 	}
@@ -279,5 +280,5 @@ func (m model) sharedJoinDisplay() string {
 		}
 		return strings.Join(names, ", ")
 	}
-	return tr("choose a folder")
+	return tr("choose a file")
 }

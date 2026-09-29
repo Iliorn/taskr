@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -349,8 +350,7 @@ func TestClientSyncLeavesSharedProjectsOut(t *testing.T) {
 	fromServer := todo.New("the server's copy")
 	fromServer.Project = "Trip"
 	if err := saveSharedConfig(sharedConfig{
-		Device:   "dev",
-		Projects: []sharedProject{{ID: "trip", Name: "Trip", Folder: t.TempDir()}},
+		Projects: []sharedProject{{ID: "trip", Name: "Trip", File: filepath.Join(t.TempDir(), "Trip.tjek")}},
 		Left:     []sharedLeft{{ID: "work", Name: "Work", Tasks: []string{gone.ID}}},
 	}); err != nil {
 		t.Fatal(err)

@@ -6,12 +6,12 @@ import (
 	"os"
 )
 
-// cli_share.go is `tjek share`: share a project through a folder, join one,
+// cli_share.go is `tjek share`: share a project through a file, join one,
 // leave one, list them, and sync them now (sharedproject.go).
 
 const shareUsage = `usage: tjek share                            list the shared projects
-       tjek share start <project> <folder>   share a project through a folder
-       tjek share join <folder> [--merge]    join the project a folder holds
+       tjek share start <project> <folder>   share a project in a new file in the folder
+       tjek share join <file> [--merge]      join the project a .tjek file holds
        tjek share leave <project>            leave a project and remove its tasks here
        tjek share sync                       sync every shared project now`
 
@@ -42,7 +42,7 @@ func cliShare(args []string) int {
 	if sErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v (using defaults)\n", sErr)
 	}
-	author, biases := authorName(settings), biasesFromSettings(settings)
+	biases := biasesFromSettings(settings)
 	c, err := loadSharedConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tjek share: %v\n", err)
@@ -60,12 +60,12 @@ func cliShare(args []string) int {
 			return 0
 		}
 		for _, p := range c.Projects {
-			fmt.Printf("%s\t%s\n", p.Name, p.Folder)
+			fmt.Printf("%s\t%s\n", p.Name, p.File)
 		}
 		return 0
 
 	case "sync":
-		if _, err := syncAllShared(db, author, biases); err != nil {
+		if _, err := syncAllShared(db, biases); err != nil {
 			fmt.Fprintf(os.Stderr, "tjek share: %v\n", err)
 			return 1
 		}
@@ -73,7 +73,7 @@ func cliShare(args []string) int {
 		return 0
 
 	case "leave":
-		p, n, err := leaveShared(db, &c, positionals[0], author, biases)
+		p, n, err := leaveShared(db, &c, positionals[0], biases)
 		if err == nil {
 			err = saveSharedConfig(c)
 		}
@@ -97,14 +97,14 @@ func cliShare(args []string) int {
 	}
 	if verb == "join" && !*merge {
 		// Joining hands every task already filed under the name to everyone
-		// in the folder, and nothing takes that back, so it is asked for.
+		// sharing the file, and nothing takes that back, so it is asked for.
 		todos, err := loadTodosFromDB(db)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "tjek share: %v\n", err)
 			return 1
 		}
 		if n := localProjectTasks(todos, p.Name); n > 0 {
-			fmt.Fprintf(os.Stderr, "tjek share: you already have %d task(s) in a project named %q; joining shares them with everyone in the folder.\nRun again with --merge to go ahead.\n", n, p.Name)
+			fmt.Fprintf(os.Stderr, "tjek share: you already have %d task(s) in a project named %q; joining shares them with everyone sharing it.\nRun again with --merge to go ahead.\n", n, p.Name)
 			return 2
 		}
 	}
@@ -112,15 +112,14 @@ func cliShare(args []string) int {
 		fmt.Fprintf(os.Stderr, "tjek share: %v\n", err)
 		return 1
 	}
-	res, err := syncShared(db, c, p, author, biases)
-	if err != nil {
+	if _, err := syncShared(db, p, biases); err != nil {
 		fmt.Fprintf(os.Stderr, "tjek share: %v\n", err)
 		return 1
 	}
 	if verb == "start" {
-		fmt.Printf("sharing %q in %s\n", p.Name, p.Folder)
+		fmt.Printf("sharing %q in %s\n", p.Name, p.File)
 	} else {
-		fmt.Printf("joined %q from %s (%d task(s) received)\n", p.Name, p.Folder, res.received)
+		fmt.Printf("joined %q from %s\n", p.Name, p.File)
 	}
 	return 0
 }
@@ -138,7 +137,7 @@ func maybeSharedSyncCLI() {
 		return
 	}
 	settings, _ := loadSettings()
-	if _, err := syncAllShared(db, authorName(settings), biasesFromSettings(settings)); err != nil {
+	if _, err := syncAllShared(db, biasesFromSettings(settings)); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: shared project sync: %v\n", err)
 	}
 }
