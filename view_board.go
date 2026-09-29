@@ -555,10 +555,12 @@ func (m model) renderBoardBox(t *todo.Todo, doneCol, selected bool, colW, maxLin
 	}
 
 	// The ▶ sits in the margin beside the selected box's first line, where it
-	// sits on a plain row, so every list marks its cursor the same way.
+	// sits on a plain row, so every list marks its cursor the same way. A held
+	// card has none: its lit frame is the mark, and an arrow as well read as a
+	// second thing selected.
 	boxW := colW - len([]rune(cursorGap))
 	lead := func(i int) string {
-		if selected && i == 0 {
+		if selected && !held && i == 0 {
 			return selectedStyle.Render(cursorMark)
 		}
 		return cursorGap
@@ -664,7 +666,7 @@ func (m model) renderBoardCard(t *todo.Todo, doneCol, selected bool, colW, maxLi
 	out := make([]string, len(text))
 	for i, line := range text {
 		lead := cursorGap
-		if i == 0 && selected {
+		if i == 0 && selected && !held {
 			lead = cursorMark
 		}
 		if i == 0 && held && m.carryGlowDone() {

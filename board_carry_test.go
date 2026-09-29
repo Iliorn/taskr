@@ -103,3 +103,20 @@ func TestBoardCarryMarksTheHeldCardInItsOwnColumn(t *testing.T) {
 		t.Errorf("lifting the card changed the column's count: %d, want %d", n, len(cols[col]))
 	}
 }
+
+// A held card is marked by its lit frame alone; the cursor's ▶ beside it read
+// as a second selection.
+func TestBoardHeldCardHasNoCursorArrow(t *testing.T) {
+	m, _ := boardWithOneCard(t)
+	if !strings.Contains(ansi.Strip(m.View()), cursorMark) {
+		t.Fatal("setup: the selected card should carry the ▶ before it is picked up")
+	}
+	m = script(t, m, "enter")
+	if strings.Contains(ansi.Strip(m.renderBoardList()), strings.TrimSpace(cursorMark)) {
+		t.Errorf("a held card should have no ▶:\n%s", ansi.Strip(m.renderBoardList()))
+	}
+	m = script(t, m, "right")
+	if strings.Contains(ansi.Strip(m.renderBoardList()), strings.TrimSpace(cursorMark)) {
+		t.Errorf("a card carried to the next column should have no ▶ either:\n%s", ansi.Strip(m.renderBoardList()))
+	}
+}
