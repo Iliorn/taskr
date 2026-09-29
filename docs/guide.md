@@ -38,6 +38,36 @@ priority. Moving a parent to another project takes its subtasks along. If you
 would rather tag each step yourself, turn off Settings → "Subtasks copy
 tags".
 
+## Shared projects
+
+A project can be shared with other people through a folder you can all
+reach: a shared OneDrive, Dropbox or network folder. There is no server to
+set up.
+
+- **Share**: on the Projects tab, select the project and press `S`, then type
+  the folder (`tab` completes the name). The project gets a `⇄` mark.
+- **Join**: Settings → Shared projects → "Join a project", and type the same
+  folder. If you already have tasks in a project with that name, tjek asks
+  before sharing them, since everyone in the folder gets them.
+- **Leave**: `S` on the shared project again. Its tasks stay with you as an
+  ordinary project, and the others keep theirs.
+
+Everything about the project's tasks is shared: fields, subtasks, comments,
+tracked time and history, each signed with the name of whoever made it (see
+[History](#history)). Changes made at the same time to different fields of
+one task both survive, as they do with [sync](sync.md). Your other tasks
+stay private.
+
+Each device writes only its own file in the folder, so the cloud service
+never has two people writing the same file. tjek writes a few seconds after
+a change and looks for the others' changes every 30 seconds while it runs;
+the command line does both after every command that changes tasks, and
+`tjek share sync` does it at once.
+
+Two things to know. Anyone who can open the folder can read and change the
+project, just as with any shared folder. And a task moved out of the shared
+project stays with the others under the project's name.
+
 ## History
 
 The last section of a task's detail pane is its history: who created,

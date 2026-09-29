@@ -13,7 +13,15 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+### Added
+
+- Share a project through a folder (OneDrive, Dropbox): `S` on the Projects tab, or `tjek share`.
+- Join a shared project from Settings, and leave it again with `S`; its tasks stay with you.
+- Comments and tracked time show who wrote or tracked them.
+
 ### Fixed
+
+- The Danish prompt to remove a project said "(j/n)" but only answered to y.
 
 - A `#` or `@` alone in the filter shows the tagged tasks, or those in a project, instead of none.
 

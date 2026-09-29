@@ -221,6 +221,18 @@ everything.
   the kanban tab; see *The board*.
 - **`input.go`** and **`console.go`** (each with `_windows`/`_other`
   variants): see *Terminals*.
+- **`sharedproject.go` / `sharedui.go` / `cli_share.go`**: shared projects
+  through a folder, with no server. The folder holds a manifest
+  (`tjek-project.json`) and one file per device (`tjek-member-<device>.json`),
+  written only by that device so a cloud folder never sees two writers on one
+  file. A device's file is the project's tasks with stamps, tombstones and
+  history; `syncShared` folds the other files in with `mergeIntoStore` (the
+  sync merge, a CRDT, so read order and lateness do not matter) and rewrites
+  its own only when it changed. Which projects are shared lives in the local
+  `shared.json`. The app runs `syncAllShared` off the loop after saves
+  (`sharedSoon`) and on a poll (`sharedPollMsg`), the watcher reloads what it
+  merged, and `flushShared` runs on quit; the CLI runs it after every
+  mutating command.
 - **`trace.go`**: opt-in latency tracing (`TJEK_TRACE=1` →
   `trace.log` in the state dir): per frame, the wall clock, gap since the previous
   frame, `Update` and `View` durations, GC count and message. It writes on its

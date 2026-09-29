@@ -26,6 +26,8 @@ No account, no cloud service.
   projects with a timeline, tags, and a kanban board. Plus a stats page.
 - **Tracks time.** Start and stop a timer on a task with `t`.
 - **Reminds you daily** with a desktop notification of what's due and overdue.
+- **Shares a project** with other people through a folder, a shared OneDrive
+  for instance, with no server.
 - **Syncs** between computers, **undoes** every change, and has a **command
   palette** (`ctrl+k`) and a **command line** for scripting.
 - **Speaks English, Danish and German**, with themes and rebindable keys.
