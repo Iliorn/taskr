@@ -160,6 +160,10 @@ func (m model) detailViewportHeight() int {
 		// the one fixed status line and cost the columns nothing.
 		h = m.termHeight - minHeaderLines - footerHeight - m.extraOverheadLines() - panelChromeLines
 	}
+	if m.sideBySide() || m.stackedTaskDetailLines() > 0 {
+		// A task's pane puts its section bar above the document.
+		h -= detailSectionBarLines
+	}
 	if h < 3 {
 		return 3
 	}
@@ -383,10 +387,10 @@ func (m model) taskStackArea() int {
 }
 
 // stackedTaskDetailLines is the height of a task detail stacked under the list,
-// borders and title row included. The two split the height as the Tags and
-// Projects tabs do (splitStack): a short list keeps only its rows and the
-// detail takes the rest, and two full panels get half each. Zero when the
-// detail sits beside the list or is shut.
+// borders, blank rows and section bar included. The two split the height as
+// the Tags and Projects tabs do (splitStack): a short list keeps only its rows
+// and the detail takes the rest, and two full panels get half each. Zero when
+// the detail sits beside the list or is shut.
 func (m model) stackedTaskDetailLines() int {
 	if !m.detailVisible() || (m.tab != tabTasks && !m.drillDetailOpen()) {
 		return 0
@@ -398,8 +402,9 @@ func (m model) stackedTaskDetailLines() int {
 	} else {
 		rows = m.currentTaskListLen()
 	}
-	listOuter := splitStack(area, rows+taskListChromeLines, m.detailContentHeight()+detailBorderLines)
-	return max(area-listOuter, minDetailHeight+detailBorderLines)
+	chrome := detailBorderLines + detailSectionBarLines
+	listOuter := splitStack(area, rows+taskListChromeLines, m.detailContentHeight()+chrome)
+	return max(area-listOuter, minDetailHeight+chrome)
 }
 
 func (m model) estimateListHeight() int {

@@ -405,11 +405,16 @@ func (m model) buildStackedDetail(w int) (string, int) {
 			// unclipped line pushes the whole box past the terminal edge on a
 			// narrow window — every other pane clips for the same reason.
 			detailBody := strings.Split(m.applyDetailScroll(detailContent), "\n")
+			sectionBar := m.stackedTaskDetailLines() > 0 && m.currentTodo() != nil
 			if n := m.stackedTaskDetailLines(); n > 0 {
 				// A stacked task detail fills the share splitStack gave it,
 				// so the list above ends where its rows do.
-				detailBody = strings.Split(m.applyDetailScrollN(detailContent, n-detailBorderLines), "\n")
-				for len(detailBody) < n-detailBorderLines {
+				rows := n - detailBorderLines
+				if sectionBar {
+					rows -= detailSectionBarLines
+				}
+				detailBody = strings.Split(m.applyDetailScrollN(detailContent, rows), "\n")
+				for len(detailBody) < rows {
 					detailBody = append(detailBody, "")
 				}
 			}
@@ -422,9 +427,7 @@ func (m model) buildStackedDetail(w int) (string, int) {
 					detailBody = append(detailBody, "")
 				}
 			}
-			if m.stackedTaskDetailLines() > 0 && m.currentTodo() != nil {
-				// The section bar takes the panel's blank top row.
-				dst = dst.PaddingTop(0)
+			if sectionBar {
 				detailBody = append([]string{m.detailSectionBar(w - 2)}, detailBody...)
 			}
 			truncateLines(detailBody, w-2)
@@ -1167,7 +1170,8 @@ func (m model) buildSideBySide(w, outerH int) string {
 	case m.currentTodo() == nil:
 		detailLines = []string{"", dimStyle.Render(tr("  No task selected."))}
 	default:
-		detailLines = strings.Split(dm.applyDetailScrollN(dm.buildDetailContent(), innerH), "\n")
+		detailLines = append([]string{m.detailSectionBar(detailW - 2)},
+			strings.Split(dm.applyDetailScrollN(dm.buildDetailContent(), innerH-detailSectionBarLines), "\n")...)
 	}
 
 	fitLines := func(lines []string, h, contentW int) []string {
@@ -1189,11 +1193,6 @@ func (m model) buildSideBySide(w, outerH int) string {
 		listStyle, detailStyle = listPanelStyle, detailPanelFocusedStyle
 	}
 	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
-	if m.currentTodo() != nil {
-		// The section bar takes the panel's blank top row.
-		detailStyle = detailStyle.PaddingTop(0)
-		detailLines = append([]string{m.detailSectionBar(detailW - 2)}, detailLines...)
-	}
 	detailPanel := detailStyle.Width(detailW).Render(strings.Join(detailLines, "\n"))
 	listPanel = withBorderTitle(listPanel, listTitle, listW, !detailFocused)
 	detailPanel = withBorderTitle(detailPanel, m.detailPanelTitle(), detailW, detailFocused)

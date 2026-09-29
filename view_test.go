@@ -149,6 +149,9 @@ func TestOverdueShowsExclamationInStatusColumn(t *testing.T) {
 
 	var lateLine, hiLine string
 	for _, line := range strings.Split(m.View(), "\n") {
+		// Only the list's column: the detail pane beside it has its own
+		// "! overdue" on whatever row it happens to share.
+		line, _, _ = strings.Cut(line, "│  │")
 		if strings.Contains(line, "Finish the audit") {
 			lateLine = line
 		}

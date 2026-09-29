@@ -178,9 +178,12 @@ const (
 	panelChromeLines = 4
 	// detailBorderLines is a stacked pane's chrome, the same as any panel's.
 	detailBorderLines = panelChromeLines
-	minListPanelLines = 3
-	minDetailHeight   = 3
-	minListHeight     = 1
+	// detailSectionBarLines is the row a task's detail pane gives its
+	// section bar, inside the blank rows, on top of the document.
+	detailSectionBarLines = 1
+	minListPanelLines     = 3
+	minDetailHeight       = 3
+	minListHeight         = 1
 
 	statsBarWidth   = 30
 	statsLabelWidth = 23
