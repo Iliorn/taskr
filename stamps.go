@@ -249,7 +249,7 @@ func saveClock(tx *sql.Tx, c *hlc.Clock) error {
 	return err
 }
 
-// encodeStamps is the stamps column: JSON, or '' for none.
+// encodeStamps is the stamps column: JSON, or ” for none.
 func encodeStamps(s map[string]hlc.Stamp) string {
 	if len(s) == 0 {
 		return ""
