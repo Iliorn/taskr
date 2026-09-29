@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/Iliorn/tjek/todo"
+	"github.com/google/uuid"
 )
 
 // taskops.go — task-tree operations shared by the TUI model and the CLI.
@@ -39,13 +40,25 @@ func descendantIDsFrom(children func(string) []string, rootID string) []string {
 	return out
 }
 
+// nextInstanceNamespace scopes nextInstanceID's name-based UUIDs to tjek's
+// recurrence, so they cannot collide with a UUID derived for anything else.
+var nextInstanceNamespace = uuid.MustParse("5b0e8d3c-7a41-4f6e-9c2d-1e3f5a7b9c0d")
+
+// nextInstanceID is the ID of the task a recurrence spawns from key: the same
+// on every device, so two devices that close the same task spawn one task.
+func nextInstanceID(key string) string {
+	return uuid.NewSHA1(nextInstanceNamespace, []byte(key)).String()
+}
+
 // cloneSubtreeResetFrom builds a fresh Pending copy of every descendant of
 // srcParentID, reparented under newParentID, with each clone's history wiped
 // (todo.NewSubtask starts clean) and DueDate/StartDate shifted by delta so the
 // subtree's internal scheduling stays relative to the new parent. BFS with
 // (srcID, newParentID) pairs so nested grandchildren land under their
-// freshly-cloned parent rather than the recurring root. Returns the clones;
-// the caller stores them (model.add / repo.Save).
+// freshly-cloned parent rather than the recurring root. Each clone's ID is
+// derived from its new parent's and its source's, so the whole checklist of a
+// next instance spawned on two devices is the same set of tasks. Returns the
+// clones; the caller stores them (model.add / repo.Save).
 func cloneSubtreeResetFrom(children func(string) []string, get func(string) *todo.Todo,
 	srcParentID, newParentID string, delta time.Duration,
 ) []todo.Todo {
@@ -61,6 +74,7 @@ func cloneSubtreeResetFrom(children func(string) []string, get func(string) *tod
 				continue
 			}
 			clone := todo.NewSubtask(child.Title, p.newPID)
+			clone.ID = nextInstanceID(p.newPID + "/" + child.ID)
 			clone.Priority = child.Priority
 			clone.Size = child.Size
 			clone.Project = child.Project

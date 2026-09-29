@@ -118,7 +118,9 @@ func cliDone(args []string) int {
 		closed[t.ID] = true
 		dirty = append(dirty, t)
 		if t.IsRecurring() {
-			if next, ok := buildNextRecurrence(*t); ok {
+			// A next instance already in the store was spawned by an earlier
+			// close, here or on another device; it keeps whatever it has.
+			if next, ok := buildNextRecurrence(*t); ok && get(next.ID) == nil {
 				spawned = append(spawned, next)
 				// Clone the subtree onto the new parent so a recurring
 				// "weekly review" keeps its checklist on each spawn. Same
@@ -150,6 +152,11 @@ func cliDone(args []string) int {
 	saveSet = append(saveSet, dirty...)
 	saveSet = append(saveSet, cascaded...)
 	for i := range spawned {
+		// One removed before (a deleted instance) comes back under the same
+		// ID and must outrank its tombstone, as the TUI's touchRestored does.
+		if d := tombstoneDeletedAt(db, spawned[i].ID); !d.Before(spawned[i].ModifiedAt) {
+			spawned[i].ModifiedAt = todo.StampModified(d)
+		}
 		saveSet = append(saveSet, &spawned[i])
 	}
 	if len(saveSet) > 0 {

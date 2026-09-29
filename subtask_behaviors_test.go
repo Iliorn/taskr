@@ -377,3 +377,93 @@ func TestSubtaskProgressCacheMatchesLiveWalk(t *testing.T) {
 		t.Errorf("after closing a subtask: %d/%d, want 2/2", d, total)
 	}
 }
+
+// Two devices that close the same recurring task before they sync each spawn
+// its next instance. The instance and its checklist carry IDs derived from
+// the source, so the two spawns are the same tasks and the merge folds them
+// into one rather than listing the next "weekly review" twice.
+func TestRecurrenceSpawnsTheSameTasksOnEveryDevice(t *testing.T) {
+	now := time.Now()
+	parent := makeSub("p", "weekly review", "", 0)
+	parent.Recurrence = "weekly"
+	parent.DueDate = now
+	child := makeSub("c1", "follow up", "p", time.Second)
+	grand := makeSub("g", "verify sent", "c1", 2*time.Second)
+
+	spawnOn := func() []string {
+		m := modelWithTasks(t, parent, child, grand)
+		newID := m.spawnNextRecurrence(m.get("p"))
+		ids := []string{newID}
+		for i := 0; i < len(ids); i++ {
+			ids = append(ids, m.subtaskIDs(ids[i])...)
+		}
+		return ids
+	}
+	laptop, desktop := spawnOn(), spawnOn()
+	if len(laptop) != 3 {
+		t.Fatalf("spawned %d tasks, want the instance and two checklist items", len(laptop))
+	}
+	for i := range laptop {
+		if laptop[i] != desktop[i] {
+			t.Errorf("spawn %d: laptop %s, desktop %s; want one ID", i, laptop[i], desktop[i])
+		}
+	}
+}
+
+// Closing a recurring task, reopening it and closing it again spawns its next
+// instance once: the second close finds the one the first made.
+func TestRecloseDoesNotSpawnASecondInstance(t *testing.T) {
+	task := todo.New("water the plants")
+	task.Recurrence = "weekly"
+	m := modelWithTasks(t, task)
+
+	m.closePendingTask(m.get(task.ID))
+	m.pendingReopenID = task.ID
+	m.confirmReopen()
+	m.closePendingTask(m.get(task.ID))
+
+	instances := 0
+	for _, x := range m.tasks {
+		if x.Title == task.Title && x.Status == todo.Pending {
+			instances++
+		}
+	}
+	if instances != 1 {
+		t.Errorf("%d pending next instances, want 1", instances)
+	}
+}
+
+// A close that is undone removes the instance it spawned, leaving a
+// tombstone. Closing again brings the instance back under the same ID, and
+// it has to outrank that tombstone or the next save or sync deletes it.
+func TestRespawnAfterUndoOutranksTheTombstone(t *testing.T) {
+	task := todo.New("pay rent")
+	task.Recurrence = "monthly"
+	m := modelWithTasks(t, task)
+
+	m = sendKey(t, m, "d")
+	nextID := nextInstanceID(task.ID)
+	if m.get(nextID) == nil {
+		t.Fatal("close did not spawn the next instance")
+	}
+	m = sendKey(t, m, "u")
+	if m.get(nextID) != nil {
+		t.Fatal("undo left the spawned instance in place")
+	}
+	deletedAt, tombstoned := m.tombstones[nextID]
+	if !tombstoned {
+		t.Fatal("undo of a spawn should tombstone the instance")
+	}
+
+	m.closePendingTask(m.get(task.ID))
+	back := m.get(nextID)
+	if back == nil {
+		t.Fatal("closing again did not bring the instance back")
+	}
+	if _, still := m.tombstones[nextID]; still {
+		t.Error("the respawned instance is still tombstoned, so the next save deletes it")
+	}
+	if !back.ModifiedAt.After(deletedAt) {
+		t.Errorf("respawn stamped %v, not after its deletion at %v", back.ModifiedAt, deletedAt)
+	}
+}

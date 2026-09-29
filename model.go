@@ -940,6 +940,10 @@ func (m *model) followTask(taskID string) {
 // way a long-overdue "monthly" task doesn't immediately reappear in the past.
 // StartDate, if set on the source, is shifted by the same delta the DueDate
 // moved by, so the lead time between start and due is preserved.
+//
+// The instance's ID is derived from the source's (nextInstanceID), so a
+// task closed on two devices before they sync spawns one next instance, not
+// two, and closing it again after a reopen finds the one already there.
 func buildNextRecurrence(src todo.Todo) (todo.Todo, bool) {
 	if !src.IsRecurring() {
 		return todo.Todo{}, false
@@ -971,6 +975,7 @@ func buildNextRecurrence(src todo.Todo) (todo.Todo, bool) {
 	}
 
 	clone := todo.New(src.Title)
+	clone.ID = nextInstanceID(src.ID)
 	clone.Priority = src.Priority
 	clone.Size = src.Size
 	clone.Project = src.Project
@@ -996,8 +1001,8 @@ func (m *model) spawnNextRecurrence(src *todo.Todo) string {
 		return ""
 	}
 	next, ok := buildNextRecurrence(*src)
-	if !ok {
-		return ""
+	if !ok || m.get(next.ID) != nil {
+		return "" // not recurring, or its next instance already exists
 	}
 	m.add(next)
 	// The whole-parent due-date delta shifts child dates by the same amount,
@@ -1007,7 +1012,11 @@ func (m *model) spawnNextRecurrence(src *todo.Todo) string {
 	if !src.DueDate.IsZero() && !next.DueDate.IsZero() {
 		delta = next.DueDate.Sub(src.DueDate)
 	}
-	m.cloneSubtreeReset(src.ID, next.ID, delta)
+	ids := append([]string{next.ID}, m.cloneSubtreeReset(src.ID, next.ID, delta)...)
+	// An instance that was spawned before and removed (the close undone, or
+	// the instance deleted) comes back under the same ID, so it has to
+	// outrank its own tombstone, as an undone delete does.
+	m.touchRestored(ids)
 	return next.ID
 }
 
@@ -1016,10 +1025,13 @@ func (m *model) spawnNextRecurrence(src *todo.Todo) string {
 // (CompletedAt, TimeEntries, Comments cleared). DueDate and
 // StartDate are shifted by `delta` so the subtree's internal scheduling is
 // preserved relative to the new parent. Shared traversal in taskops.go.
-func (m *model) cloneSubtreeReset(srcParentID, newParentID string, delta time.Duration) {
+func (m *model) cloneSubtreeReset(srcParentID, newParentID string, delta time.Duration) []string {
+	var ids []string
 	for _, clone := range cloneSubtreeResetFrom(m.subtaskIDs, m.get, srcParentID, newParentID, delta) {
 		m.add(clone)
+		ids = append(ids, clone.ID)
 	}
+	return ids
 }
 
 // ── Time tracking helpers ─────────────────────────────────────────────────────

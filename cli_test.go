@@ -1708,3 +1708,34 @@ func TestCliEditPriorityAlias(t *testing.T) {
 		t.Errorf("Priority = %v, want High (edit --priority h)", got.Priority)
 	}
 }
+
+// `tjek done` spawns a recurring task's next instance once: closing it again
+// after `tjek reopen` finds the instance the first close made.
+func TestCliRecloseDoesNotSpawnASecondInstance(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	id := strings.TrimSpace(captureStdout(t, func() {
+		if code := cliAdd([]string{"water the plants", "--recur", "weekly", "--quiet-id"}); code != 0 {
+			t.Fatalf("add: exit %d", code)
+		}
+	}))
+	captureStdout(t, func() {
+		for _, step := range []func([]string) int{cliDone, cliReopen, cliDone} {
+			if code := step([]string{id}); code != 0 {
+				t.Fatalf("exit %d", code)
+			}
+		}
+	})
+	_, todos, err := loadForCLI()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	pending := 0
+	for _, x := range todos {
+		if x.Title == "Water the plants" && x.Status == todo.Pending {
+			pending++
+		}
+	}
+	if pending != 1 {
+		t.Errorf("%d pending next instances, want 1", pending)
+	}
+}
