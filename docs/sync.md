@@ -63,13 +63,20 @@ be undone once the other devices have them.
 
 ## How changes are merged
 
-Each task is matched by its ID. For a field changed on two devices, the later
-edit wins; comments and time entries from both are kept. A deleted task
-leaves a marker so the delete reaches other devices instead of the task
-coming back. When an edit loses to a delete, tjek says so briefly and writes
-the lost version to `sync.log` in the state directory, so nothing is gone for
-good.
+Each task is matched by its ID, and each field of it is merged on its own:
+if one device changes a task's due date and another its priority, both
+changes are kept. Tags are merged one by one too, so a tag added on each
+device ends up on both. Only when two devices change the same field does one
+edit win, the later one, and the other is written to `sync.log` in the state
+directory; `tjek sync --recover` lists and restores it, putting back just the
+fields that lost. Comments and time entries from both devices are kept. A
+deleted task leaves a marker so the delete reaches other devices instead of
+the task coming back.
 
-Because "later" is decided by each device's clock, clocks should be roughly
-right (any normal NTP setup is enough). Tasks and the board's column names
-sync; other settings stay per device.
+"Later" means later as far as the devices know: an edit made after a device
+has seen another device's edit always wins over it, even if that device's
+clock is behind. Clocks should still be roughly right (any normal NTP setup
+is enough), since that is what orders two edits made without either device
+seeing the other. A device on an older tjek still syncs, but its changes are
+merged a whole task at a time, as they used to be. Tasks and the board's
+column names sync; other settings stay per device.
