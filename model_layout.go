@@ -332,8 +332,7 @@ func (m model) listVisible() int {
 // taskListRows is how many rows a task list shows under its column header —
 // the Tasks list, its history, and a tag's or project's list — measured the
 // way View lays the screen out: the window less the header, the footer as
-// drawn, a stacked task detail, and the panel's two borders, the blank row
-// under its title and the column header. The renderers draw this many rows and
+// drawn, a stacked task detail, and the panel's chrome (taskListChromeLines). The renderers draw this many rows and
 // the scroll clamps keep the cursor inside them, so the selected row can never
 // sit below the panel's edge.
 func (m model) taskListRows() int {
@@ -341,8 +340,9 @@ func (m model) taskListRows() int {
 }
 
 // taskListChromeLines is what the task list panel spends on anything but rows:
-// its two borders, the blank row under its title and the column header.
-const taskListChromeLines = 4
+// its two borders, the blank row under its title, the column header, and a
+// blank row above its bottom border to match the one at the top.
+const taskListChromeLines = 5
 
 // taskStackArea is the height the task list and a detail stacked under it
 // share: the window less the header and the footer as drawn.
