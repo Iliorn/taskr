@@ -422,6 +422,11 @@ func (m model) buildStackedDetail(w int) (string, int) {
 					detailBody = append(detailBody, "")
 				}
 			}
+			if m.stackedTaskDetailLines() > 0 && m.currentTodo() != nil {
+				// The section bar takes the panel's blank top row.
+				dst = dst.PaddingTop(0)
+				detailBody = append([]string{m.detailSectionBar(w - 2)}, detailBody...)
+			}
 			truncateLines(detailBody, w-2)
 			detailContent = dst.Width(w).Render(strings.Join(detailBody, "\n"))
 			detailContent = withBorderTitle(detailContent, m.detailPanelTitle(), w, focused)
@@ -1170,6 +1175,11 @@ func (m model) buildSideBySide(w, outerH int) string {
 		listStyle, detailStyle = listPanelStyle, detailPanelFocusedStyle
 	}
 	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
+	if m.currentTodo() != nil {
+		// The section bar takes the panel's blank top row.
+		detailStyle = detailStyle.PaddingTop(0)
+		detailLines = append([]string{m.detailSectionBar(detailW - 2)}, detailLines...)
+	}
 	detailPanel := detailStyle.Width(detailW).Render(strings.Join(detailLines, "\n"))
 	listPanel = withBorderTitle(listPanel, listTitle, listW, !detailFocused)
 	detailPanel = withBorderTitle(detailPanel, m.detailPanelTitle(), detailW, detailFocused)

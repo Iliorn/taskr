@@ -12,6 +12,68 @@ import (
 
 // ── Detail pages ──────────────────────────────────────────────────────────────
 
+// detailSectionBar is the line at the top of a task's detail pane that names
+// its sections, the current one lit while the pane has focus, so ←/→ says
+// what it will do before it is pressed. It takes the row the panel's top
+// padding would otherwise leave blank. When the names do not fit in width,
+// it keeps the current section and as many neighbours as fit, with … where
+// the rest are.
+func (m model) detailSectionBar(width int) string {
+	// Indented like the field labels, which sit after the cursor's gutter.
+	width -= len([]rune(cursorGap))
+	cur := detailSectionOf(m.detail.field)
+	focused := m.pane == paneDetail
+	labels := make([]string, len(detailSections))
+	for i, s := range detailSections {
+		labels[i] = tr(s.label)
+	}
+	const sep = " · "
+	fits := func(lo, hi int) bool {
+		w := 0
+		for i := lo; i <= hi; i++ {
+			w += len([]rune(labels[i]))
+		}
+		w += (hi - lo) * len([]rune(sep))
+		if lo > 0 {
+			w += 2 // "… "
+		}
+		if hi < len(labels)-1 {
+			w += 2 // " …"
+		}
+		return w <= width
+	}
+	lo, hi := cur, cur
+	for grew := true; grew; {
+		grew = false
+		if hi+1 < len(labels) && fits(lo, hi+1) {
+			hi++
+			grew = true
+		}
+		if lo > 0 && fits(lo-1, hi) {
+			lo--
+			grew = true
+		}
+	}
+	var b strings.Builder
+	if lo > 0 {
+		b.WriteString(dimStyle.Render(ellipsis + " "))
+	}
+	for i := lo; i <= hi; i++ {
+		if i > lo {
+			b.WriteString(dimStyle.Render(sep))
+		}
+		if i == cur && focused {
+			b.WriteString(headerStyle.Render(labels[i]))
+		} else {
+			b.WriteString(dimStyle.Render(labels[i]))
+		}
+	}
+	if hi < len(labels)-1 {
+		b.WriteString(dimStyle.Render(" " + ellipsis))
+	}
+	return cursorGap + truncateStyled(b.String(), max(width, 0))
+}
+
 func (m model) renderDetailPage1(t *todo.Todo) string {
 	b := getBuilder()
 	defer putBuilder(b)

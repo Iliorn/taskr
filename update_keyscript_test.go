@@ -625,12 +625,9 @@ func TestScriptToggleDoneStopsTimerAndMarksDone(t *testing.T) {
 
 func navToTimeEntries(t *testing.T, m model) model {
 	t.Helper()
-	// enter → detail pane; right×3 → fieldTimeEntries
-	// sections order: startDate(0) → tags(1) → subtasks(2) → timeEntries(3 rights)
-	// The section jump algorithm picks cur by last-matching iota, so the path
-	// from fieldSubtasks skips fieldDependencies (a lower iota value) and
-	// lands directly on fieldTimeEntries.
-	return script(t, m, "enter", "right", "right", "right")
+	// enter → detail pane; → steps fields, tags, subtasks, dependencies,
+	// time entries.
+	return script(t, m, "enter", "right", "right", "right", "right")
 }
 
 func TestScriptDetailTimeEntriesNavigate(t *testing.T) {
@@ -1523,5 +1520,51 @@ func TestScriptBoardColumnIconsFromSettings(t *testing.T) {
 	}
 	if again := boardConfigFromSettings(s); again.columnIcon(2) != "R" {
 		t.Errorf("icons read back from settings.json = %v", again.icons)
+	}
+}
+
+// → walks every section of the detail pane in document order, one press each,
+// and the bar at the top of the pane lights the one the cursor is in.
+func TestScriptDetailSectionsInOrder(t *testing.T) {
+	m := modelWithTasks(t, todo.New("Sectioned task"))
+	m.termWidth, m.termHeight = 160, 40
+	m = script(t, m, "enter")
+	for i, s := range detailSections {
+		if i > 0 {
+			m = script(t, m, "right")
+		}
+		if got := detailSectionOf(m.detail.field); got != i {
+			t.Fatalf("after %d presses of →: in section %d, want %d (%s)", i, got, i, s.label)
+		}
+		bar := m.detailSectionBar(200)
+		if lit := headerStyle.Render(tr(s.label)); !strings.Contains(bar, lit) {
+			t.Errorf("section %s: the bar does not light it: %q", s.label, bar)
+		}
+	}
+	m = script(t, m, "right")
+	if got := detailSectionOf(m.detail.field); got != len(detailSections)-1 {
+		t.Errorf("→ past the last section should stay on it, got section %d", got)
+	}
+	for i := len(detailSections) - 2; i >= 0; i-- {
+		m = script(t, m, "left")
+		if got := detailSectionOf(m.detail.field); got != i {
+			t.Fatalf("← back: in section %d, want %d", got, i)
+		}
+	}
+}
+
+// A narrow pane keeps the current section in the bar and shows that there is
+// more with an ellipsis, inside the width it is given.
+func TestDetailSectionBarFitsANarrowPane(t *testing.T) {
+	m := modelWithTasks(t, todo.New("Narrow"))
+	m = script(t, m, "enter", "right", "right", "right")
+	for _, w := range []int{60, 30, 20, 12} {
+		bar := ansi.Strip(m.detailSectionBar(w))
+		if got := ansi.StringWidth(bar); got > w {
+			t.Errorf("width %d: bar is %d wide: %q", w, got, bar)
+		}
+		if w >= 20 && !strings.Contains(bar, tr("Dependencies")) {
+			t.Errorf("width %d: the current section should stay in the bar: %q", w, bar)
+		}
 	}
 }

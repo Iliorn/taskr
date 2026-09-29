@@ -129,6 +129,9 @@ everything.
   `drilledIntoTasks()`, so the Tasks tab and both drill-in lists behave as one.
 - **`update_detail.go`**: the detail pane's input side (`updateDetail`,
   `detailAdd`/`detailDelete`, `startEditing`); mirrors `view_detail.go`.
+  ←/→ step through `detailSections` in document order and open the section
+  at the top of the pane; `detailSectionBar` names them in the panel's top
+  row, so the keys say what they do.
 - **`update_modes.go`**: text-entry and search modes (`updateInput`,
   `updateSearch`, `updateEditTitle`, …). A new modal handler usually goes here.
 - **`view.go`**: top-level `View`, the Tasks tab, shared rendering helpers,

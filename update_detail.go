@@ -200,28 +200,57 @@ func completedFieldVisible(t *todo.Todo) bool {
 // detailSectionJump moves the detail cursor to the next/previous section
 // head.
 func (m *model) detailSectionJump(dir int) {
-	sections := []detailField{fieldStartDate, fieldTags, fieldSubtasks, fieldDependencies, fieldTimeEntries, fieldComments}
-	cur := 0
-	for i, s := range sections {
-		if m.detail.field >= s {
-			cur = i
-		}
-	}
-	// Fields before tags all belong to the first section.
-	if m.detail.field < fieldTags {
-		cur = 0
-	}
-	next := cur + dir
-	if next < 0 || next >= len(sections) {
+	next := detailSectionOf(m.detail.field) + dir
+	if next < 0 || next >= len(detailSections) {
 		return
 	}
-	m.detail.field = sections[next]
+	m.detail.field = detailSections[next].first
 	m.detail.tagCursor = 0
 	m.detail.subtaskCursor = 0
 	m.detail.depCursor = 0
 	m.detail.timeEntryCursor = 0
 	m.detail.commentCursor = 0
 	m.invalidateDetailCache()
+	// The section opens at the top of the pane, the way a page would, rather
+	// than wherever the least scrolling leaves it. The offset is the blank line
+	// above its heading, which is as high as the scroll margin lets the cursor
+	// sit; clampDetailScroll keeps it inside the document.
+	m.detail.scroll = max(m.estimateDetailCursorLine()-detailScrollMargin, 0)
+}
+
+// detailSection is one stop of ←/→ in the detail pane, in document order, with
+// the field the cursor lands on and the name the section bar gives it.
+type detailSection struct {
+	first detailField
+	label string
+}
+
+var detailSections = []detailSection{
+	{fieldStartDate, "Fields"},
+	{fieldTags, "Tags"},
+	{fieldSubtasks, "Subtasks"},
+	{fieldDependencies, "Dependencies"},
+	{fieldTimeEntries, "Time"},
+	{fieldComments, "Comments"},
+}
+
+// detailSectionOf is the index in detailSections of the section a field is
+// in. The field enum is not in document order (Dependencies precedes
+// Subtasks), so it is a switch rather than a comparison.
+func detailSectionOf(f detailField) int {
+	switch f {
+	case fieldTags:
+		return 1
+	case fieldSubtasks:
+		return 2
+	case fieldDependencies:
+		return 3
+	case fieldTimeEntries:
+		return 4
+	case fieldComments:
+		return 5
+	}
+	return 0
 }
 
 // detailCursorUp/Down walk one continuous field chain over the whole detail
