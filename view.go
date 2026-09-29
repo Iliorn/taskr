@@ -1682,15 +1682,44 @@ func (m model) statsChartShown() bool {
 // axis-label rows. Capped both ways: a floor so a short window still shows a
 // chart, and a ceiling near the gradient's length, past which more blocks stop
 // reading as taller and the stats list is the better use of the rows.
+//
+// On a tall window the summary can end well above its panel's bottom edge.
+// Those rows go to the chart instead (statsChartSpareRows), up to what the
+// layout gives a stacked pane, so the space shows taller bars rather than
+// nothing.
 func (m model) statsChartHeight() int {
 	h := m.termHeight*detailMaxHeightPct/100 - 2 - 8
 	if h < statsChartMinH {
 		return statsChartMinH
 	}
 	if h > statsChartMaxH {
-		return statsChartMaxH
+		h = statsChartMaxH
+	}
+	if spare := m.statsChartSpareRows(h); spare > 0 {
+		h = min(h+spare, max(m.statsChartCeiling(), h))
 	}
 	return h
+}
+
+// statsChartCeiling is the most bar rows the layout's cap on a stacked pane
+// leaves room for once the pane's border and the baseline and label rows are
+// taken, so a chart grown into spare rows is never clipped at the bottom.
+func (m model) statsChartCeiling() int {
+	return m.termHeight*detailMaxHeightPct/100 - 2 - 2
+}
+
+// statsChartSpareRows is how many rows the Stats summary's panel would leave
+// blank under its last line if the chart drew chartH rows: the window less the
+// header, the footer, both panels' borders, the chart with its baseline and
+// label row, and the summary itself. Negative when the summary already
+// scrolls.
+func (m model) statsChartSpareRows(chartH int) int {
+	footerLines := footerHeight
+	if f := m.buildFooterContent(m.termWidth - 6); f != "" {
+		footerLines = strings.Count(f, "\n") + 1
+	}
+	summary := len(trimTrailingBlank(strings.Split(m.renderStatsList(), "\n")))
+	return m.termHeight - minHeaderLines - footerLines - 2 - summary - 2 - (chartH + 2)
 }
 
 // statsChartRows is the height the chart actually draws at: the budget, or the
@@ -1727,7 +1756,8 @@ func (m model) renderStatsDetail() string {
 	// shape.
 	_, buckets, weekly, total := m.statsActivity()
 
-	chartH := statsChartRows(m.statsChartHeight(), buckets)
+	budget := m.statsChartHeight()
+	chartH := statsChartRows(budget, buckets)
 
 	if total == 0 {
 		// The range and the count are on the border; all this row has to say
@@ -1771,10 +1801,23 @@ func (m model) renderStatsDetail() string {
 	// day collapses to half-height (with a ▄ cap for odd counts) instead of
 	// capping immediately with a `+`. One step (×2) keeps the chart honest.
 	blockScale := 1
+	peak := 0
 	for _, bk := range buckets {
-		if bk.count > chartH {
-			blockScale = 2
-			break
+		peak = max(peak, bk.count)
+	}
+	if peak > chartH {
+		blockScale = 2
+	}
+	// The other way, when the summary leaves rows blank under its last line,
+	// each task takes several rows, so the bars grow into that space rather
+	// than sit at its foot. A block is still one task: its rows share one
+	// colour.
+	rowsPerTask := 1
+	if peak > 0 && blockScale == 1 {
+		room := min(chartH+max(m.statsChartSpareRows(chartH+labelRows-1), 0), m.statsChartCeiling()-(labelRows-1))
+		if k := min(room/peak, statsChartRowsPerTaskMax); k > 1 {
+			rowsPerTask = k
+			chartH = peak * k
 		}
 	}
 
@@ -1809,9 +1852,9 @@ func (m model) renderStatsDetail() string {
 		cnt := buckets[k].count
 
 		if blockScale == 1 {
-			for r := 0; r < chartH && r < cnt; r++ {
+			for r := 0; r < chartH && r < cnt*rowsPerTask; r++ {
 				ch := '█'
-				gi := gradIdx(r)
+				gi := gradIdx(r / rowsPerTask)
 				if cnt > chartH && r == chartH-1 {
 					ch = '+'
 				}

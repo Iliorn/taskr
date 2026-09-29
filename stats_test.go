@@ -718,3 +718,41 @@ func TestStatsShortWindowDropsTheChart(t *testing.T) {
 		t.Error("enter should not change a range that is not on screen")
 	}
 }
+
+// On a tall window the summary ends well above its panel's edge, and the
+// chart takes those rows: each task's block grows taller, and the summary
+// still shows whole, without scrolling.
+func TestStatsChartGrowsIntoRowsTheSummaryLeaves(t *testing.T) {
+	now := time.Now()
+	var todos []todo.Todo
+	for i := 0; i < 3; i++ {
+		td := todo.New(fmt.Sprintf("done %d", i))
+		td.Status = todo.Done
+		td.CompletedAt = now
+		todos = append(todos, td)
+	}
+	chartRows := func(h int) (rows, maxScroll int) {
+		m := newTagModel(todos...)
+		m.termWidth, m.termHeight = 120, h
+		m.tab = tabStats
+		m.statsRange = statsRange7Days
+		m.refreshCaches()
+		for _, line := range strings.Split(m.View(), "\n") {
+			if w := ansi.StringWidth(line); w > m.termWidth {
+				t.Fatalf("height %d: line is %d wide, window is %d", h, w, m.termWidth)
+			}
+		}
+		out := strings.TrimRight(m.renderStatsDetail(), "\n")
+		return strings.Count(out, "\n") + 1 - 2, m.statsMaxScroll() // less baseline and labels
+	}
+	if rows, _ := chartRows(34); rows != 3 {
+		t.Errorf("a window with no rows to spare should draw one row per task: %d rows for 3 tasks", rows)
+	}
+	rows, scroll := chartRows(70)
+	if rows <= 3 || rows%3 != 0 {
+		t.Errorf("a tall window should give each of 3 tasks the same several rows, got %d rows", rows)
+	}
+	if scroll != 0 {
+		t.Errorf("growing the chart should not push the summary into scrolling, max scroll %d", scroll)
+	}
+}

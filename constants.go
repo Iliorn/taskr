@@ -55,6 +55,10 @@ const (
 	// any. Three keeps the shape readable and gives the rest back.
 	statsChartMinH = 3
 	statsChartMaxH = 12
+	// statsChartRowsPerTaskMax caps how tall one task's block grows when a
+	// quiet range has the height to spare: past four rows a block stops
+	// reading as one of a stack.
+	statsChartRowsPerTaskMax = 4
 	// statsChartMinTermH is the shortest window the Stats tab draws its
 	// Activity chart in; see statsChartShown.
 	statsChartMinTermH = 30
