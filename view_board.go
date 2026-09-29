@@ -98,8 +98,9 @@ func (m model) boardSelection(cols [][]todo.Todo) (col, cursor int) {
 }
 
 // boardColumnsForView is boardColumns with a held card drawn at the top of the
-// column it is over instead of the one it is stored in — a preview only; the
-// store changes when the card is put down.
+// column it is over, its own included — a preview only; the store changes when
+// the card is put down. The carry cursor sits on row 0, so the held card must
+// be the one there.
 func (m model) boardColumnsForView() [][]todo.Todo {
 	cols := m.boardColumns()
 	if m.mode != modeBoardCarry {
@@ -107,7 +108,7 @@ func (m model) boardColumnsForView() [][]todo.Todo {
 	}
 	from := boardCardColumn(cols, m.board.carryID)
 	to := m.board.carryCol
-	if from < 0 || to < 0 || to >= len(cols) || from == to {
+	if from < 0 || to < 0 || to >= len(cols) {
 		return cols
 	}
 	out := make([][]todo.Todo, len(cols))
@@ -122,7 +123,7 @@ func (m model) boardColumnsForView() [][]todo.Todo {
 		rest = append(rest, c)
 	}
 	out[from] = rest
-	out[to] = append([]todo.Todo{held}, cols[to]...)
+	out[to] = append([]todo.Todo{held}, out[to]...)
 	return out
 }
 

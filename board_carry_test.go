@@ -77,3 +77,29 @@ func TestBoardSelectedCardTextLightsUp(t *testing.T) {
 		t.Errorf("an unselected card's title should not be lit:\n%q", got)
 	}
 }
+
+// A card picked up below the top of its column is lifted to the top at once,
+// where the carry cursor sits, so the cursor never marks a card left behind.
+func TestBoardCarryMarksTheHeldCardInItsOwnColumn(t *testing.T) {
+	top, below := todo.New("Top card"), todo.New("Lower card")
+	m := modelWithTasks(t, top, below)
+	m = script(t, m, "5")
+	cols := m.boardColumns()
+	col, _ := m.boardSelection(cols)
+	if len(cols[col]) < 2 {
+		t.Fatalf("want two cards in the focused column, got %d", len(cols[col]))
+	}
+	held := cols[col][1].ID
+	m = script(t, m, "down", "enter")
+	if !m.carrying(held) {
+		t.Fatalf("enter should pick up the second card: mode %v carry %q", m.mode, m.board.carryID)
+	}
+	view := m.boardColumnsForView()
+	vcol, vcursor := m.boardSelection(view)
+	if got := view[vcol][vcursor].ID; got != held {
+		t.Errorf("the carry cursor marks %q, want the held card %q", m.get(got).Title, m.get(held).Title)
+	}
+	if n := len(view[vcol]); n != len(cols[col]) {
+		t.Errorf("lifting the card changed the column's count: %d, want %d", n, len(cols[col]))
+	}
+}
