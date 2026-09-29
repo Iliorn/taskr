@@ -193,3 +193,28 @@ func TestCalendarComingUp(t *testing.T) {
 		}
 	}
 }
+
+// A subtask due the same day as its parent is the parent's deadline again;
+// listing it once per step crowds the week out. A subtask with its own date
+// keeps its row.
+func TestCalendarComingUpListsAParentsDeadlineOnce(t *testing.T) {
+	today := startOfDay(time.Now())
+	parent := todo.New("Quarterly report")
+	parent.DueDate = today.AddDate(0, 0, 3)
+	same := todo.New("Draft text")
+	same.ParentID = parent.ID
+	same.DueDate = parent.DueDate
+	own := todo.New("Collect numbers")
+	own.ParentID = parent.ID
+	own.DueDate = today.AddDate(0, 0, 1)
+	m := modelWithTasks(t, parent, same, own)
+	m.switchTab(tabCalendar)
+
+	got := ansi.Strip(strings.Join(m.renderComingUpLines(30, 10), "\n"))
+	if !strings.Contains(got, "Quarterly report") || !strings.Contains(got, "Collect numbers") {
+		t.Errorf("the parent and the subtask with its own date should be listed:\n%s", got)
+	}
+	if strings.Contains(got, "Draft text") {
+		t.Errorf("a subtask due with its parent should not repeat the deadline:\n%s", got)
+	}
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/Iliorn/taskr/todo"
@@ -26,6 +27,11 @@ func renderQuickAddPreview(input string, w int) string {
 		title = tr("(no title yet)")
 	}
 	parts := []string{selectedStyle.Render(`"` + title + `"`)}
+	// Right after the title, so a narrow footer clips the chips before it
+	// clips the one thing that says a token did not take.
+	if len(p.unparsed) > 0 {
+		parts = append(parts, overdueStyle.Render(fmt.Sprintf(tr("not understood: %s"), strings.Join(p.unparsed, " "))))
+	}
 	for _, tag := range p.tags {
 		parts = append(parts, tagStyle.Render("#"+tag))
 	}

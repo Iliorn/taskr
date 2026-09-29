@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/Iliorn/taskr/todo"
 )
@@ -130,6 +131,17 @@ func TestCliHelpListsEveryRoutableCommand(t *testing.T) {
 		}
 		if !strings.Contains(out, "taskr "+spec.name) {
 			t.Errorf("`taskr %s` is routable but absent from the help output", spec.name)
+		}
+	}
+}
+
+// `taskr help` is read in a terminal, most of which open 80 columns wide; a
+// longer line wraps mid-word into the next command's column.
+func TestCliHelpFitsEightyColumns(t *testing.T) {
+	out := captureStdout(t, func() { cliHelp() })
+	for i, line := range strings.Split(out, "\n") {
+		if n := utf8.RuneCountInString(line); n > helpWidth {
+			t.Errorf("help line %d is %d columns: %q", i+1, n, line)
 		}
 	}
 }

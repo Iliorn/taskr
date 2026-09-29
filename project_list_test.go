@@ -356,3 +356,50 @@ func TestScriptProjectDrillFoldsSubtasks(t *testing.T) {
 		t.Errorf("← on a subtask should return the cursor to its parent")
 	}
 }
+
+// The timeline is an extra beside the list, not a reason to lose its columns:
+// on a window where the strip would cost the task rows Score, Due or Size, the
+// list keeps the width; on a wide one the strip is back.
+func TestProjectTimelineGivesWayToTheListsColumns(t *testing.T) {
+	td := mkTodo("t1", "Dated task", todo.Pending)
+	td.Project = "apollo"
+	td.DueDate = newTestModel().frameTime.AddDate(0, 0, 5)
+	m := modelWithTasks(t, td)
+	m.tab = tabProjects
+
+	rowOf := func(width int) string {
+		m.termWidth, m.termHeight = width, 30
+		out := m.buildProjectListContent(m.termWidth-6, m.termHeight-4)
+		for _, line := range strings.Split(out, "\n") {
+			if strings.Contains(line, "[ ] Dated task") {
+				return ansi.Strip(line)
+			}
+		}
+		t.Fatalf("width %d: no task row:\n%s", width, out)
+		return ""
+	}
+	narrow := rowOf(84)
+	if strings.Count(narrow, "│") > 2 {
+		t.Errorf("at 84 columns the strip should give way to the list: %q", narrow)
+	}
+	if !strings.Contains(narrow, "100%") || !strings.Contains(narrow, "5d") {
+		t.Errorf("at 84 columns the row should keep its Score and Due: %q", narrow)
+	}
+	if wide := rowOf(140); strings.Count(wide, "│") < 3 {
+		t.Errorf("at 140 columns the timeline should be beside the row: %q", wide)
+	}
+}
+
+// An edge of the timeline that falls on today says so once, not as a date
+// beside a "today:" label repeating it.
+func TestProjectTimelineNamesATodayEdgeOnce(t *testing.T) {
+	m := newTestModel()
+	today := m.frameTime
+	axis := ansi.Strip(m.renderGanttAxis(today, today.AddDate(0, 0, 10), today, 40, 0))
+	if strings.Count(axis, today.Format("02-01")) != 0 || !strings.Contains(axis, tr("today")) {
+		t.Errorf("the left edge is today, so it should read %q, not the date: %q", tr("today"), axis)
+	}
+	if strings.Count(axis, tr("today")) != 1 {
+		t.Errorf("today should be named once: %q", axis)
+	}
+}

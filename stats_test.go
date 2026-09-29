@@ -691,3 +691,30 @@ func TestStatsPercentagesRound(t *testing.T) {
 		t.Errorf("6 of 9 should read 67%%:\n%s", out)
 	}
 }
+
+// A window too short for the chart and the summary both gives the height to
+// the summary: the Activity panel goes, and enter, which only changes the
+// chart's range, leaves the footer.
+func TestStatsShortWindowDropsTheChart(t *testing.T) {
+	m := newTagModel(statsTodos()...)
+	m.termWidth = 80
+	m.tab = tabStats
+
+	m.termHeight = statsChartMinTermH
+	if view := ansi.Strip(m.View()); !strings.Contains(view, tr("Activity")) {
+		t.Fatalf("at %d rows the chart should still be drawn:\n%s", m.termHeight, view)
+	}
+	m.termHeight = statsChartMinTermH - 1
+	view := ansi.Strip(m.View())
+	if strings.Contains(view, tr("Activity")) {
+		t.Errorf("at %d rows the chart should give way to the summary:\n%s", m.termHeight, view)
+	}
+	if strings.Contains(view, "cycle activity range") {
+		t.Errorf("with no chart the footer should not offer its range key:\n%s", view)
+	}
+	before := m.statsRange
+	m = sendKey(t, m, "enter")
+	if m.statsRange != before {
+		t.Error("enter should not change a range that is not on screen")
+	}
+}

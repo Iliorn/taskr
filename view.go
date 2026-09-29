@@ -383,6 +383,8 @@ func (m model) buildStackedDetail(w int) (string, int) {
 		switch {
 		case m.tab == tabSettings, m.tab == tabBoard:
 			detailContent = "" // settings and board tabs have no detail pane
+		case m.tab == tabStats && !m.statsChartShown():
+			detailContent = ""
 		case m.tab == tabTags || m.tab == tabStats:
 			detailContent = m.buildDetailContent()
 		default:
@@ -888,17 +890,21 @@ func (m model) renderPalette(w int) string {
 // selected task, rather than what they do in general. A footer that says
 // "t track" over a task that is already being tracked is not a hint, it is a
 // wrong answer; the keys toggle, so the label has to as well.
+// An empty label drops the key from the line: it does nothing right now.
 func (m model) hintLabelOverrides() map[string]string {
-	t := m.currentTodo()
-	if t == nil {
-		return nil
-	}
 	var over map[string]string
 	set := func(action, label string) {
 		if over == nil {
 			over = make(map[string]string, 2)
 		}
 		over[action] = label
+	}
+	if m.tab == tabStats && !m.statsChartShown() {
+		set("statscycle", "")
+	}
+	t := m.currentTodo()
+	if t == nil {
+		return over
 	}
 	if t.IsTimerRunning() {
 		set("track", "stop")
@@ -1276,6 +1282,15 @@ func (m model) projectPaneRows(tasks []todo.Todo, start, shown, sel int) []strin
 	listW := w - stripW - projStripGap
 	lm := m
 	lm.termWidth = listW + 8 // the row renderers draw termWidth-8 cells
+	// The list is what the pane is for and the timeline an extra: when the
+	// strip would cost the list a column it shows at full width (Score, Due
+	// or Size), the list keeps the width and the strip waits for a wider
+	// window.
+	full, _ := m.groupTaskCols(tasks, false)
+	if beside, _ := lm.groupTaskCols(tasks, false); beside.showLast != full.showLast ||
+		beside.showDue != full.showDue || beside.showSize != full.showSize {
+		return m.renderGroupTaskRows(tasks, start, shown, sel, false)
+	}
 	left := lm.renderGroupTaskRows(tasks, start, shown, sel, false)
 	right := m.renderGanttStrip(tasks, stripW, start, shown, sel)
 	sep := dimStyle.Render(" │ ")
@@ -1649,6 +1664,14 @@ func (m model) statsPanelTitle() string {
 		}
 	}
 	return name // withBorderTitle truncates from here
+}
+
+// statsChartShown reports whether the window is tall enough for the Activity
+// chart under the summary. Below statsChartMinTermH the chart and the summary
+// would each get a sliver; the summary holds the numbers, so it takes the
+// height, and enter (which only changes the chart's range) goes quiet.
+func (m model) statsChartShown() bool {
+	return m.termHeight >= statsChartMinTermH
 }
 
 // statsChartHeight is the tallest the Activity chart may draw, and so the

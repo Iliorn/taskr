@@ -773,16 +773,25 @@ func (m model) renderGanttAxis(minDate, maxDate, today time.Time, chartW, todayP
 		}
 	}
 
-	leftDate := minDate.Format("02-01")
-	rightDate := maxDate.Format("02-01")
+	// An edge that falls on today says "today" in the today colour instead of
+	// its date, rather than printing the date twice ("29-09─today:29-09").
+	leftDate, leftMark := minDate.Format("02-01"), ganttCellEmpty
+	rightDate, rightMark := maxDate.Format("02-01"), ganttCellEmpty
+	todayOnEdge := false
+	if startOfDay(minDate).Equal(startOfDay(today)) {
+		leftDate, leftMark, todayOnEdge = tr("today"), ganttCellToday, true
+	} else if startOfDay(maxDate).Equal(startOfDay(today)) {
+		rightDate, rightMark, todayOnEdge = tr("today"), ganttCellToday, true
+	}
 	lo, hi := 0, chartW // the span the today label may use
-	if chartW >= len([]rune(leftDate))+len([]rune(rightDate))+4 {
-		write(0, leftDate, ganttCellEmpty)
-		write(chartW-len([]rune(rightDate)), rightDate, ganttCellEmpty)
+	edges := chartW >= len([]rune(leftDate))+len([]rune(rightDate))+4
+	if edges {
+		write(0, leftDate, leftMark)
+		write(chartW-len([]rune(rightDate)), rightDate, rightMark)
 		lo, hi = len([]rune(leftDate))+1, chartW-len([]rune(rightDate))-1
 	}
 
-	if todayPos >= 0 {
+	if todayPos >= 0 && !(edges && todayOnEdge) {
 		todayLabel := tr("today:") + today.Format("02-01")
 		labelLen := len([]rune(todayLabel))
 		switch {

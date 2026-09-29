@@ -96,6 +96,10 @@ func (m model) updateInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.flashError(fmt.Sprintf("%s: %v", tr("Dependency not linked"), depErr))
 						return m, clearErrAfter()
 					}
+					if len(parsed.unparsed) > 0 {
+						m.flashError(fmt.Sprintf(tr("Kept in the title, not understood: %s"), strings.Join(parsed.unparsed, " ")))
+						return m, clearErrAfter()
+					}
 				}
 			} else if t := m.currentTodo(); t != nil {
 				if m.detail.field == fieldComments {

@@ -55,6 +55,9 @@ const (
 	// any. Three keeps the shape readable and gives the rest back.
 	statsChartMinH = 3
 	statsChartMaxH = 12
+	// statsChartMinTermH is the shortest window the Stats tab draws its
+	// Activity chart in; see statsChartShown.
+	statsChartMinTermH = 30
 
 	minGanttBarWidth = 10
 	maxGanttBarWidth = 60

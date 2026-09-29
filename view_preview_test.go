@@ -77,3 +77,26 @@ func TestPreviewsRespectWidth(t *testing.T) {
 		}
 	}
 }
+
+// A token with a field prefix whose value did not parse is named in the
+// preview, and by the add itself, instead of disappearing into the title.
+func TestQuickAddNamesTheTokensItDidNotUnderstand(t *testing.T) {
+	applyLang(string(langEN))
+	p := parseQuickAdd("Fix tap due:blah p:hi s:xl #home")
+	if got := strings.Join(p.unparsed, " "); got != "due:blah p:hi s:xl" {
+		t.Errorf("unparsed = %q, want the three mistyped tokens", got)
+	}
+	if p := parseQuickAdd("Fix tap due:friday p:h s:l r:weekly"); len(p.unparsed) != 0 {
+		t.Errorf("valid tokens reported as not understood: %v", p.unparsed)
+	}
+	if got := ansi.Strip(renderQuickAddPreview("Fix tap due:blah", 120)); !strings.Contains(got, "not understood: due:blah") {
+		t.Errorf("the preview should name the token: %q", got)
+	}
+	m := modelWithTasks(t)
+	m = sendKey(t, m, "a")
+	m.textInput.SetValue("Fix tap due:blah")
+	m = sendKey(t, m, "enter")
+	if !strings.Contains(m.err, "due:blah") {
+		t.Errorf("adding should say the token was kept in the title, flash = %q", m.err)
+	}
+}

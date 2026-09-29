@@ -360,6 +360,20 @@ func (m model) renderMonthCalendarLines() []string {
 // deadlines: a week, the span the grid's due marks are read across.
 const comingUpDays = 7
 
+// dueWithParent reports whether t is a subtask due the same day as its open
+// parent. A subtask takes its parent's deadline unless given its own, so a
+// list of deadlines would otherwise print a parent's date once per step; the
+// parent's row stands for them, and a subtask with a date of its own still
+// gets a row.
+func dueWithParent(tasks map[string]*todo.Todo, t *todo.Todo) bool {
+	if t.ParentID == "" {
+		return false
+	}
+	p := tasks[t.ParentID]
+	return p != nil && !p.Deleted && p.Status != todo.Done && !p.DueDate.IsZero() &&
+		startOfDay(p.DueDate).Equal(startOfDay(t.DueDate))
+}
+
 // renderComingUpLines lists the open tasks due in the week from the selected
 // day, soonest first, under the month grid: the names behind its due marks,
 // moving with the cursor so the week ahead can be read from any day. At most
@@ -372,7 +386,7 @@ func (m model) renderComingUpLines(w, maxRows int) []string {
 		if t.Deleted || t.Status == todo.Done || t.DueDate.IsZero() {
 			continue
 		}
-		if !t.DueDate.Before(from) && t.DueDate.Before(until) {
+		if !t.DueDate.Before(from) && t.DueDate.Before(until) && !dueWithParent(m.tasks, t) {
 			due = append(due, t)
 		}
 	}

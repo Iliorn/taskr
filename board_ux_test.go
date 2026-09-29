@@ -525,3 +525,38 @@ func TestScriptBoardCardView(t *testing.T) {
 		t.Fatalf("enter should open the card in the Tasks detail pane: tab %v pane %v", m.tab, m.pane)
 	}
 }
+
+// A column too long for one-line boxes steps down to compact boxes — the
+// title set into the top edge, two rows a card — before it scrolls, so a
+// short window shows half as many cards again and every one keeps its border
+// and its bottom edge.
+func TestBoardLongColumnUsesCompactBoxes(t *testing.T) {
+	var cards []todo.Todo
+	for i := 0; i < 9; i++ {
+		cards = append(cards, todo.New(fmt.Sprintf("Card %d", i)))
+	}
+	if l := chooseBoardCardLayout(cards[:3], 24, 16); !l.boxed || l.lines == 0 {
+		t.Errorf("three cards fit full boxes in 16 rows, got %+v", l)
+	}
+	l := chooseBoardCardLayout(cards, 24, 16)
+	if !l.boxed || l.lines != 0 {
+		t.Fatalf("nine cards in 16 rows should be compact boxes, got %+v", l)
+	}
+	if h := boardCardHeights(cards, 24, l); h[0] != 2 {
+		t.Errorf("a compact box is %d rows, want 2", h[0])
+	}
+	m := newTestModel()
+	box := m.renderBoardBox(&cards[0], false, true, 24, 0)
+	if len(box) != 2 {
+		t.Fatalf("compact box drew %d lines, want 2: %q", len(box), box)
+	}
+	top := ansi.Strip(box[0])
+	if !strings.Contains(top, "╭─ Card 0") || !strings.HasSuffix(top, "╮") {
+		t.Errorf("the title should sit in the top edge: %q", top)
+	}
+	for i, line := range box {
+		if w := ansi.StringWidth(line); w != 24 {
+			t.Errorf("line %d is %d cells, want the column's 24: %q", i, w, ansi.Strip(line))
+		}
+	}
+}

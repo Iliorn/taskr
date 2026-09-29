@@ -258,6 +258,9 @@ func hintString(ctx keyCtx, primaryOnly bool, overrides map[string]string) strin
 			}
 		}
 		if s, ok := overrides[bd.action]; ok {
+			if s == "" {
+				continue // the key does nothing in the current state
+			}
 			label = s
 		}
 		if !first {

@@ -1943,7 +1943,9 @@ func (m model) handleListEnter() (tea.Model, tea.Cmd) {
 			m.pushFocus(stateDetailPane)
 		}
 	case tabStats:
-		m.statsRange = (m.statsRange + 1) % statsRangeCount
+		if m.statsChartShown() {
+			m.statsRange = (m.statsRange + 1) % statsRangeCount
+		}
 	case tabSettings:
 		return m.handleSettingsEnter()
 	}

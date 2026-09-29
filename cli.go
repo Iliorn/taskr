@@ -212,165 +212,203 @@ func cliUpdate(args []string) int {
 	return 0
 }
 
+// helpBlock is one section of `taskr help`: a heading and its rows, each a
+// usage line and what it does. The text is laid out by writeHelp rather than
+// by hand, so every line fits an 80-column terminal however a description is
+// edited (TestCliHelpFitsEightyColumns).
+type helpBlock struct {
+	title string
+	rows  []helpRow
+}
+
+type helpRow struct{ use, desc string }
+
+const (
+	helpWidth   = 80
+	helpDescCol = 32 // where descriptions start; a longer usage takes its own line
+)
+
+var cliHelpBlocks = []helpBlock{
+	{"Usage:", []helpRow{
+		{"taskr", "launch the TUI (no args)"},
+	}},
+	{"Tasks:", []helpRow{
+		{`taskr add "title" [flags]`, "add a new task (--like <ref> clones, --depends <ref>|^ blocks on, --start tracks)"},
+		{"taskr add -", "batch add: one task per stdin line (flags apply to all; --chain links each line as depending on the previous — a plan typed in execution order)"},
+		{"taskr list [flags]", "list pending top-level tasks (ST: [ ] ready, [>] in progress, [!] overdue, [✓] done). Review filters: --stale=30d (untouched that long), --unblocked-since=14d (every blocker now done, the last one recently), --sort=seq|due|size|age|idle|pri, --wide (AGE + IDLE columns), --search-word / --search-re"},
+		{`taskr search "term" [flags]`, "title/notes substring search (includes done by default; --word matches whole words only, --re treats the term as a regular expression)"},
+		{"taskr top [-n=N] [--json] [--wide]", "show top-N by sequence score"},
+		{"taskr show <ref> [--json]", "full detail (incl. score breakdown + subtask IDs)"},
+		{"taskr why <ref> [--json]", "why it ranks where it does: each score factor with its cause, the margins to the tasks either side, and when the ranking moves on its own (deadline steps, momentum expiring)"},
+		{"taskr edit <ref>... [flags]", "change fields on one or more tasks (incl. --note/--append-note/--clear-note, --stage to move it on the board — stage names live in settings.json; --title takes a single ref)"},
+		{`taskr done <ref>... [-m "why"]`, "mark one or more tasks done, stopping any running timer on them (--cascade also closes pending subtasks; without it a parent with open subtasks prompts on a TTY, else warns and leaves them open; -m/--comment adds a closing comment to each)"},
+		{`taskr reopen <ref>... [-m "why"]`, "move tasks back to pending (the counterpart to done; already-pending tasks are reported and skipped)"},
+		{"taskr delete <ref> [-f]", "soft-delete a task (alias: rm; substring matches confirm first)"},
+		{"taskr undo [--list]", "restore the most recent deletion (task + subtasks)"},
+		{"taskr undelete <ref> | --list", "restore a specific deleted task by ref (browse with --list)"},
+		{`taskr subtask <parent> "title"`, "create a subtask (--each for multiple titles)"},
+	}},
+	{"Shell integration:", []helpRow{
+		{"taskr completion bash|zsh|fish", "print a completion script (install paths in the man page)"},
+		{"taskr man", "print the man page in roff (e.g. > ~/.local/share/man/man1/taskr.1)"},
+	}},
+	{"Discovery:", []helpRow{
+		{"taskr tags [--json]", "pending tags with counts"},
+		{"taskr projects [--json]", "pending projects with counts"},
+		{"taskr suggest [--list]", "suggest dependency links from note refs + related titles (interactive)"},
+	}},
+	{"Tracking:", []helpRow{
+		{"taskr start <ref>", "start the time tracker, stopping any other task's timer first (no-op if already tracking ref)"},
+		{"taskr stop [<ref>]", "stop the tracker (no ref = whichever's running)"},
+		{"taskr log <ref> <45m|10:00-11:30>", "backfill a time entry (duration ends now; range is today)"},
+	}},
+	{"Reminders:", []helpRow{
+		{"taskr remind [--now]", "desktop notification of what is due today and overdue, once a day at the time set in Settings (run it every few minutes from cron or a timer); --now reminds immediately"},
+	}},
+	{"Comments:", []helpRow{
+		{`taskr comment <ref> "text"`, "append a comment"},
+		{"taskr comment <ref> -", "read comment text from stdin (for long/heredoc input)"},
+		{`taskr comment <ref> --edit=N "text"`, "edit comment N (1-based)"},
+		{"taskr comment <ref> --delete=N", "delete comment N"},
+	}},
+	{"Diagnostics:", []helpRow{
+		{"taskr doctor [--json]", "report this installation's health — version, where its files are, database integrity, schema version, settings, sync and editor (paste the output into a bug report; exits non-zero on a problem)"},
+		{"taskr update [--check] [-y]", "install the latest release, verified against the release's SHA256SUMS (--check only reports; macOS and package-managed installs are pointed at brew/scoop/the distro instead of being overwritten)"},
+	}},
+	{"Reporting / backup:", []helpRow{
+		{"taskr stats [--format=text|json|waybar]", "one-line health summary (default text). --tag/--project/--search scope the stats to matching tasks; --seq appends the sequence miss analysis: which score dimension buried the tasks you finished anyway, and a bias hint"},
+		{"taskr export [--include-done]", "JSON snapshot (versioned envelope) to stdout"},
+		{"taskr import <file>|-", "merge an export file into the local store (- = stdin)"},
+	}},
+	{"Sync (cross-device):", []helpRow{
+		{"taskr serve [--listen=ADDR] [--token=T] [--tls-cert=F --tls-key=F]", "run the sync server (self-hosted; binds 127.0.0.1:8765 by default); --tls-cert/--tls-key serve https with that PEM pair, re-read when the files are renewed"},
+		{"taskr sync [--url=U] [--token=T] [--save]", `push/pull once against a sync server (--save stores config). Auto-sync runs on its own once configured (set "auto_sync":false in sync.json to disable); conflicts log to sync.log`},
+		{"taskr sync --status", "print the last sync time/result (local only, no network)"},
+		{"taskr sync --accept-stale", `rejoin after being offline past the deletion-memory window (~6 months; both auto-sync and a manual "taskr sync" refuse until then, so tasks deleted elsewhere can't resurrect)`},
+		{"taskr sync --adopt-local", "first sync only: keep this device's tasks and push them to the fleet"},
+		{"taskr sync --adopt-remote", "first sync only: back them up, clear them here, pull the fleet's list. A device that has never synced and holds tasks of its own refuses to sync until one of these is given, so its old tasks can't land on every device by surprise; the backup is a normal export, taskr import undoes it"},
+		{"taskr sync --recover", "list dropped edits from sync.log (local only, no network)"},
+		{"taskr sync --recover=<ref>", "reapply one dropped edit by id-prefix or title substring; stamps a fresh ModifiedAt so the fix propagates on the next sync"},
+	}},
+	{"Meta:", []helpRow{
+		{"taskr --version", "print build version"},
+		{"taskr help", "this message"},
+	}},
+	{"", []helpRow{
+		{"", "Task references can be a UUID prefix (`347e`) OR a case-insensitive substring of the title (`milk`). ID-prefix wins on hex-shaped queries so scripts stay deterministic. Ambiguous refs fail with exit code 2 and list each match with its short ID."},
+	}},
+	{"Flags (add):", []helpRow{
+		{"--due=DATE", "today|tomorrow|+3d|-2d|dd-mm-yy|monday|..."},
+		{"--p=h|m|l", "priority (default m, or copied from --like)"},
+		{"--priority=h|m|l", "priority (alias for --p)"},
+		{"--size=s|m|l", "task size (default m, or copied from --like)"},
+		{"--project=NAME", "project"},
+		{"--tag=t1,t2", "comma-separated tags"},
+		{"--like=REF", "clone priority/size/project/tags from existing task (flags above override)"},
+		{"--depends=REF", "block the new task on an existing task (^ = last-added); echoed on success"},
+		{"--note=TEXT|-", "set the notes field (freeform body; '-' reads from stdin)"},
+		{"--comment=TEXT", "add an initial timestamped comment"},
+		{"--start", "start the time tracker on the new task (stops any other running timer first)"},
+		{"--json", "emit the created task as JSON (includes its id)"},
+		{"--quiet-id", "print only the new task's full id (for scripting)"},
+	}},
+	{"Flags (list / search):", []helpRow{
+		{"--json", "emit JSON"},
+		{"--all", "include completed tasks (list only; search includes by default)"},
+		{"--pending", "exclude completed (search only; inverts default)"},
+		{"--focus", "only today + overdue (list only)"},
+		{"--ready", "only actionable tasks — ST [ ] (no unfinished dependencies; list only)"},
+		{"--blocked", "only tasks waiting on an unfinished dependency (these sort last; list only)"},
+		{"--tag=NAME", "only tasks carrying this tag"},
+		{"--project=NAME", "only tasks in this project"},
+		{"--search=TERM", "only tasks whose title contains TERM (list; redundant with 'search' verb)"},
+		{"--limit=N", "cap rows"},
+	}},
+	{"Flags (top):", []helpRow{
+		{"--n=N", "rows to show (default 10)"},
+		{"--json", "emit JSON (includes tags, priority, due)"},
+		{"--wide", "table with priority, due, tags columns"},
+	}},
+	{"Flags (edit):", []helpRow{
+		{"--title=...", "new title"},
+		{"--p=h|m|l", "new priority"},
+		{"--priority=h|m|l", "new priority (alias for --p)"},
+		{"--size=s|m|l", "new size"},
+		{"--due=DATE / --clear-due", "set / drop the due date"},
+		{"--start=DATE / --clear-start", "set / drop the start date"},
+		{"--project=NAME / --clear-project", "set / drop the project"},
+		{"--add-tag=t1,t2", "append tags"},
+		{"--remove-tag=t1,t2", "remove tags"},
+		{"--add-dep=REF", "add a dependency (refused if it would loop)"},
+		{"--remove-dep=REF", "remove a dependency"},
+	}},
+	{"Notes:", []helpRow{
+		{"", "- Data lives in tasks.db, shared with the TUI ('taskr doctor' prints where taskr keeps its files). Concurrent CLI + TUI usage is safe for reads; writes serialize via SQLite's busy-timeout. A running TUI live-reloads on external writes via a filesystem watcher, so CLI changes appear without restarting it."},
+		{"", "- The sequencing weights (Deadline/Priority/Momentum) are loaded from settings.json, so 'top' and 'list' rank the same way as the TUI under the user's current bias settings."},
+	}},
+}
+
+// writeHelp lays the blocks out: a row's usage at the indent, its description
+// from helpDescCol wrapped to helpWidth, and on a line of its own below a
+// usage too long to leave room beside it. A row with no usage is a paragraph
+// at the indent.
+func writeHelp(b *strings.Builder, blocks []helpBlock) {
+	const indent = "  "
+	pad := strings.Repeat(" ", helpDescCol)
+	for i, blk := range blocks {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		if blk.title != "" {
+			b.WriteString(blk.title + "\n")
+		}
+		for _, r := range blk.rows {
+			if r.use == "" {
+				for _, line := range helpWrap(r.desc, helpWidth-len(indent)) {
+					b.WriteString(indent + line + "\n")
+				}
+				continue
+			}
+			lines := helpWrap(r.desc, helpWidth-helpDescCol)
+			use := indent + r.use
+			if n := len([]rune(use)); n <= helpDescCol-2 {
+				b.WriteString(use + strings.Repeat(" ", helpDescCol-n) + lines[0] + "\n")
+				lines = lines[1:]
+			} else {
+				b.WriteString(use + "\n")
+			}
+			for _, line := range lines {
+				b.WriteString(pad + line + "\n")
+			}
+		}
+	}
+}
+
+// helpWrap breaks s into lines of at most w runes at word boundaries. Unlike
+// wrapText it never cuts inside a word that fits a line, which in help text
+// is a flag like --sort=seq|due|size split where no one would look for it.
+func helpWrap(s string, w int) []string {
+	var lines []string
+	line := ""
+	for _, word := range strings.Fields(s) {
+		switch {
+		case line == "":
+			line = word
+		case len([]rune(line))+1+len([]rune(word)) <= w:
+			line += " " + word
+		default:
+			lines = append(lines, line)
+			line = word
+		}
+	}
+	return append(lines, line)
+}
+
 func cliHelp() int {
-	fmt.Fprintln(os.Stdout, `taskr — keyboard-driven task manager
-
-Usage:
-  taskr                                launch the TUI (no args)
-
-Tasks:
-  taskr add "title" [flags]            add a new task (--like <ref> clones, --depends <ref>|^ blocks on, --start tracks)
-  taskr add -                          batch add: one task per stdin line (flags apply to all; --chain links each
-                                       line as depending on the previous — a plan typed in execution order)
-  taskr list [flags]                   list pending top-level tasks (ST: [ ] ready, [>] in progress, [!] overdue, [✓] done)
-                                       review filters: --stale=30d (untouched that long), --unblocked-since=14d
-                                       (every blocker now done, the last one recently), --sort=seq|due|size|age|idle|pri,
-                                       --wide (AGE + IDLE columns), --search-word / --search-re
-  taskr search "term" [flags]          title/notes substring search (includes done by default; --word matches
-                                       whole words only, --re treats the term as a regular expression)
-  taskr top [-n=N] [--json] [--wide]   show top-N by sequence score
-  taskr show <ref> [--json]            full detail (incl. score breakdown + subtask IDs)
-  taskr why <ref> [--json]             why it ranks where it does: each score factor with its cause,
-                                       the margins to the tasks either side, and when the ranking
-                                       moves on its own (deadline steps, momentum expiring)
-  taskr edit <ref>... [flags]          change fields on one or more tasks (incl. --note/--append-note/--clear-note,
-                                       --stage to move it on the board — stage names live in settings.json;
-                                       --title takes a single ref)
-  taskr done <ref>... [-m "why"]       mark one or more tasks done, stopping any running timer on them
-                                       (--cascade also closes pending subtasks; without it a parent with
-                                       open subtasks prompts on a TTY, else warns and leaves them open)
-                                       (-m/--comment adds a closing comment to each)
-  taskr reopen <ref>... [-m "why"]     move tasks back to pending (the counterpart to done; already-pending
-                                       tasks are reported and skipped)
-  taskr delete <ref> [-f]              soft-delete a task (alias: rm; substring matches confirm first)
-  taskr undo [--list]                  restore the most recent deletion (task + subtasks)
-  taskr undelete <ref> | --list        restore a specific deleted task by ref (browse with --list)
-  taskr subtask <parent> "title"       create a subtask (--each for multiple titles)
-
-Shell integration:
-  taskr completion bash|zsh|fish       print a completion script (install paths in the man page)
-  taskr man                            print the man page in roff (e.g. > ~/.local/share/man/man1/taskr.1)
-
-Discovery:
-  taskr tags [--json]                  pending tags with counts
-  taskr projects [--json]              pending projects with counts
-  taskr suggest [--list]               suggest dependency links from note refs + related titles (interactive)
-
-Tracking:
-  taskr start <ref>                    start the time tracker, stopping any other task's timer first
-                                       (no-op if already tracking ref)
-  taskr stop [<ref>]                   stop the tracker (no ref = whichever's running)
-  taskr log <ref> <45m|10:00-11:30>    backfill a time entry (duration ends now; range is today)
-
-Reminders:
-  taskr remind [--now]                 desktop notification of what is due today and overdue, once a day at
-                                       the time set in Settings (run it every few minutes from cron or a
-                                       timer); --now reminds immediately
-
-Comments:
-  taskr comment <ref> "text"           append a comment
-  taskr comment <ref> -                read comment text from stdin (for long/heredoc input)
-  taskr comment <ref> --edit=N "text"  edit comment N (1-based)
-  taskr comment <ref> --delete=N       delete comment N
-
-Diagnostics:
-  taskr doctor [--json]                report this installation's health — version, data directory,
-                                       database integrity, schema version, settings, sync and editor
-                                       (paste the output into a bug report; exits non-zero on a problem)
-  taskr update [--check] [-y]          install the latest release, verified against the release's SHA256SUMS
-                                       (--check only reports; macOS and package-managed installs are pointed
-                                       at brew/scoop/the distro instead of being overwritten)
-
-Reporting / backup:
-  taskr stats [--format=text|json|waybar]   one-line health summary (default text)
-                                            (--tag/--project/--search scope the stats to matching tasks;
-                                             --seq appends the sequence miss analysis: which score dimension
-                                             buried the tasks you finished anyway, and a bias hint)
-  taskr export [--include-done]             JSON snapshot (versioned envelope) to stdout
-  taskr import <file>|-                     merge an export file into the local store (- = stdin)
-
-Sync (cross-device):
-  taskr serve [--listen=ADDR] [--token=T]   run the sync server (self-hosted; binds 127.0.0.1:8765 by default)
-    [--tls-cert=F --tls-key=F]              serve https with this PEM pair (re-read when the files are renewed)
-  taskr sync [--url=U] [--token=T] [--save]  push/pull once against a sync server (--save stores config)
-                                            auto-sync runs on its own once configured (set "auto_sync":false in
-                                            sync.json to disable); conflicts log to sync.log
-  taskr sync --status                        print the last sync time/result (local only, no network)
-  taskr sync --accept-stale                  rejoin after being offline past the deletion-memory window
-                                            (~6 months; BOTH auto-sync and a manual "taskr sync" refuse until
-                                            then, so tasks deleted elsewhere can't resurrect)
-  taskr sync --adopt-local                   first sync only: keep this device's tasks and push them to the fleet
-  taskr sync --adopt-remote                  first sync only: back them up, clear them here, pull the fleet's list
-                                            (a device that has never synced and holds tasks of its own refuses to
-                                             sync until one of these is given, so its old tasks can't land on every
-                                             device by surprise; the backup is a normal export, taskr import undoes it)
-  taskr sync --recover                       list dropped edits from sync.log (local only, no network)
-  taskr sync --recover=<ref>                 reapply one dropped edit by id-prefix or title substring;
-                                            stamps a fresh ModifiedAt so the fix propagates on the next sync
-
-Meta:
-  taskr --version                      print build version
-  taskr help                           this message
-
-Task references can be a UUID prefix (`+"`347e`"+`) OR a case-insensitive
-substring of the title (`+"`milk`"+`). ID-prefix wins on hex-shaped queries
-so scripts stay deterministic. Ambiguous refs fail with exit code 2 and
-list each match with its short ID.
-
-Flags (add):
-  --due=DATE           today|tomorrow|+3d|dd-mm-yy|monday|...
-  --p=h|m|l            priority (default m, or copied from --like)
-  --priority=h|m|l     priority (alias for --p)
-  --size=s|m|l         task size (default m, or copied from --like)
-  --project=NAME       project
-  --tag=t1,t2          comma-separated tags
-  --like=REF           clone priority/size/project/tags from existing task (flags above override)
-  --depends=REF        block the new task on an existing task (^ = last-added); echoed on success
-  --note=TEXT|-        set the notes field (freeform body; '-' reads from stdin)
-  --comment=TEXT       add an initial timestamped comment
-  --start              start the time tracker on the new task (stops any other running timer first)
-  --json               emit the created task as JSON (includes its id)
-  --quiet-id           print only the new task's full id (for scripting)
-
-Flags (list / search):
-  --json          emit JSON
-  --all           include completed tasks (list only; search includes by default)
-  --pending       exclude completed (search only; inverts default)
-  --focus         only today + overdue (list only)
-  --ready         only actionable tasks — ST [ ] (no unfinished dependencies; list only)
-  --blocked       only tasks waiting on an unfinished dependency (these sort last; list only)
-  --tag=NAME      only tasks carrying this tag
-  --project=NAME  only tasks in this project
-  --search=TERM   only tasks whose title contains TERM (list; redundant with 'search' verb)
-  --limit=N       cap rows
-
-Flags (top):
-  --n=N           rows to show (default 10)
-  --json          emit JSON (includes tags, priority, due)
-  --wide          table with priority, due, tags columns
-
-Flags (edit):
-  --title=...          new title
-  --p=h|m|l            new priority
-  --priority=h|m|l     new priority (alias for --p)
-  --size=s|m|l         new size
-  --due=DATE      set due date         --clear-due       drop due date
-  --start=DATE    set start date       --clear-start     drop start date
-  --project=NAME  set project          --clear-project   drop project
-  --add-tag=t1,t2     append tags
-  --remove-tag=t1,t2  remove tags
-  --add-dep=REF       add a dependency (refused if it would loop)
-  --remove-dep=REF    remove a dependency
-
-Notes:
-  - Data lives in tasks.db, shared with the TUI ('taskr doctor' prints where
-    taskr keeps its files). Concurrent CLI +
-    TUI usage is safe for reads; writes serialize via SQLite's busy-timeout.
-    A running TUI live-reloads on external writes via a filesystem watcher,
-    so CLI changes appear without restarting it.
-  - The sequencing weights (Deadline/Priority/Momentum) are loaded from
-    settings.json, so 'top' and 'list' rank the same way as
-    the TUI under the user's current bias settings.`)
+	var b strings.Builder
+	b.WriteString("taskr — keyboard-driven task manager\n\n")
+	writeHelp(&b, cliHelpBlocks)
+	fmt.Print(b.String())
 	return 0
 }
 

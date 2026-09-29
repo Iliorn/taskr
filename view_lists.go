@@ -179,28 +179,7 @@ func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, show
 	b := getBuilder()
 	defer putBuilder(b)
 
-	nested := m.groupNestedRows(tasks)
-	contentMax, tagsMax, projectMax := 0, 0, 0
-	hasDue := false
-	for i := range tasks {
-		// The width each row draws: a task row's whole label (badges
-		// included), a subtask row's title behind its indent.
-		if nested[i] {
-			w := runeLen(tasks[i].Title) + subtaskIndentW
-			if tasks[i].IsTimerRunning() {
-				w += 2 // the ⧗ in front of the title
-			}
-			contentMax = max(contentMax, w)
-		} else {
-			contentMax = max(contentMax, taskRowLabelWidth(m.taskRowLabel(&tasks[i])))
-		}
-		tagsMax = max(tagsMax, rowTagsWidth(tasks[i].Tags))
-		hasDue = hasDue || !tasks[i].DueDate.IsZero()
-		if showProject {
-			projectMax = max(projectMax, runeLen(tasks[i].Project))
-		}
-	}
-	cols := taskListCols(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax)
+	cols, nested := m.groupTaskCols(tasks, showProject)
 	pos := ""
 	if sel >= 0 {
 		pos = listPosLabel(sel, len(tasks))
@@ -230,6 +209,33 @@ func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, show
 		}
 	}
 	return strings.Split(strings.TrimRight(b.String(), "\n"), "\n")
+}
+
+// groupTaskCols sizes the columns of a group's task list to the tasks it holds
+// at the model's width, and reports which rows are nested subtasks.
+func (m model) groupTaskCols(tasks []todo.Todo, showProject bool) (listCols, []bool) {
+	nested := m.groupNestedRows(tasks)
+	contentMax, tagsMax, projectMax := 0, 0, 0
+	hasDue := false
+	for i := range tasks {
+		// The width each row draws: a task row's whole label (badges
+		// included), a subtask row's title behind its indent.
+		if nested[i] {
+			w := runeLen(tasks[i].Title) + subtaskIndentW
+			if tasks[i].IsTimerRunning() {
+				w += 2 // the ⧗ in front of the title
+			}
+			contentMax = max(contentMax, w)
+		} else {
+			contentMax = max(contentMax, taskRowLabelWidth(m.taskRowLabel(&tasks[i])))
+		}
+		tagsMax = max(tagsMax, rowTagsWidth(tasks[i].Tags))
+		hasDue = hasDue || !tasks[i].DueDate.IsZero()
+		if showProject {
+			projectMax = max(projectMax, runeLen(tasks[i].Project))
+		}
+	}
+	return taskListCols(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax), nested
 }
 
 // groupFoldNote is the line the done tasks of a group fold into while

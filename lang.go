@@ -762,10 +762,12 @@ var daTranslations = map[string]string{
 	"recent":    "nyeste",
 
 	// ── Quick-add preview ──
-	"(no title yet)": "(ingen titel endnu)",
-	"due ":           "forfald ",
-	"overdue":        "forfalden",
-	"title~":         "titel~",
+	"(no title yet)":                        "(ingen titel endnu)",
+	"not understood: %s":                    "ikke forstået: %s",
+	"Kept in the title, not understood: %s": "Beholdt i titlen, ikke forstået: %s",
+	"due ":                                  "forfald ",
+	"overdue":                               "forfalden",
+	"title~":                                "titel~",
 
 	// ── Calendar entries ──
 	"✓ done at ": "✓ færdig kl. ",
@@ -1409,10 +1411,12 @@ var deTranslations = map[string]string{
 	"recent":    "neueste",
 
 	// ── Quick-add preview ──
-	"(no title yet)": "(noch ohne Titel)",
-	"due ":           "fällig ",
-	"overdue":        "überfällig",
-	"title~":         "Titel~",
+	"(no title yet)":                        "(noch ohne Titel)",
+	"not understood: %s":                    "nicht erkannt: %s",
+	"Kept in the title, not understood: %s": "Im Titel belassen, nicht erkannt: %s",
+	"due ":                                  "fällig ",
+	"overdue":                               "überfällig",
+	"title~":                                "Titel~",
 
 	// ── Calendar entries ──
 	"✓ done at ": "✓ fertig am ",

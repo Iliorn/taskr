@@ -174,10 +174,10 @@ func sortGroupKeys(keys []string, mode groupSort, sums map[string]*groupSummary)
 // the tab's filter, sorted, with the finished ones left out unless shown.
 // pinned stays visible regardless — it is the group the cursor is inside, and
 // finishing its last open task must not pull the list out from under you.
-// The (untagged) row, when it is in sums, leads.
+// The (untagged) row sorts like any other group, so the list reads in the
+// order its title names; by name its key sorts ahead of every tag.
 func visibleGroups(sums map[string]*groupSummary, mode groupSort, showFinished bool, pinned string, match func(string) bool) []string {
 	keys := make([]string, 0, len(sums))
-	hasUntagged := false
 	for key, s := range sums {
 		if !showFinished && s.finished() && key != pinned {
 			continue
@@ -185,16 +185,9 @@ func visibleGroups(sums map[string]*groupSummary, mode groupSort, showFinished b
 		if !match(key) {
 			continue
 		}
-		if key == untaggedKey {
-			hasUntagged = true
-			continue
-		}
 		keys = append(keys, key)
 	}
 	sortGroupKeys(keys, mode, sums)
-	if hasUntagged {
-		keys = append([]string{untaggedKey}, keys...)
-	}
 	return keys
 }
 

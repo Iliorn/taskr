@@ -198,8 +198,9 @@ everything.
   full panels get half each. `tagStackRows`/`projectListOuter` are read by
   the render and the offset clamp alike, so the rows drawn are the rows the
   cursor is kept in. The one difference is the Projects pane's rows
-  (`projectPaneRows`): when an open task has a date (`hasDatedOpenTask`) and
-  the pane is at least `projStripMinWidth` wide, a timeline strip
+  (`projectPaneRows`): when an open task has a date (`hasDatedOpenTask`), the
+  pane is at least `projStripMinWidth` wide and the rows beside it keep every
+  column they show at full width (`groupTaskCols`), a timeline strip
   (`renderGanttStrip`) runs beside the task rows, bar for row, and it always
   reaches today (`ganttDateWindow`).
 - **`board.go` / `view_board.go` / `update_board.go` / `board_carry.go`** —
@@ -523,7 +524,8 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   not shift under a carried card. Cards are rounded boxes (`renderBoardBox`:
   border colour carries overdue/timer/done; the bottom edge carries project and
   due, `boardBoxBottom`). `chooseBoardCardLayout` steps down to one-line boxes,
-  then plain rows, all or nothing across the visible columns. Columns scroll
+  then compact boxes (the title in the top edge, two rows a card), then plain
+  rows, all or nothing across the visible columns. Columns scroll
   through a window (`boardWindow`, clamped by `clampBoardWindow` from
   `clampCursors`), and a tall column scrolls its cards (`boardCardWindow`,
   `clampBoardCardScroll`), both against the render's own `boardGeometry`.

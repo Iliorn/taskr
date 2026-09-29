@@ -247,7 +247,10 @@ func boardCardHeights(cards []todo.Todo, colW int, layout boardCardLayout) []int
 	h := make([]int, len(cards))
 	for i := range cards {
 		h[i] = 1
-		if layout.boxed {
+		switch {
+		case layout.boxed && layout.lines == 0:
+			h[i] = 2
+		case layout.boxed:
 			lines, _ := boardCardText(&cards[i], false, colW-boardBoxChrome, layout.lines)
 			h[i] = len(lines) + 2
 		}
@@ -361,12 +364,16 @@ func joinBoardColumns(widths []int, height int, columns ...[]string) string {
 
 // boardCardLayout is how a column draws its cards, chosen per column by how
 // much room it has: boxes with the title wrapped onto two lines while the whole
-// column fits that way, one-line boxes otherwise — scrolling when even those
-// run past the bottom — and plain rows only on a window too short to hold a
-// box and its scroll markers.
+// column fits that way, then one-line boxes while those fit, then compact
+// boxes — the title set into the top edge, two rows a card — scrolling when
+// even those run past the bottom; plain rows only on a window too short to
+// hold a box and its scroll markers. A compact box keeps what a box says (the
+// state in its border, project and due in its bottom edge) at two thirds of
+// the height, so a long column shows half as many cards again before it
+// scrolls.
 type boardCardLayout struct {
 	boxed bool
-	lines int // title lines per card
+	lines int // title lines per card; 0 on a boxed layout is the compact box
 }
 
 func chooseBoardCardLayout(cards []todo.Todo, colW, room int) boardCardLayout {
@@ -377,7 +384,10 @@ func chooseBoardCardLayout(cards []todo.Todo, colW, room int) boardCardLayout {
 	if boardCardsFit(cards, inner, 2, room) {
 		return boardCardLayout{boxed: true, lines: 2}
 	}
-	return boardCardLayout{boxed: true, lines: 1}
+	if boardCardsFit(cards, inner, 1, room) {
+		return boardCardLayout{boxed: true, lines: 1}
+	}
+	return boardCardLayout{boxed: true, lines: 0}
 }
 
 // boardHeading is a column's heading: its name, and the card count dimmed
@@ -499,6 +509,13 @@ var boardBoxRounded = [6]string{"╭", "╮", "╰", "╯", "─", "│"}
 // selection colour. A card that is held is bold in the carry colour.
 func (m model) renderBoardBox(t *todo.Todo, doneCol, selected bool, colW, maxLines int) []string {
 	inner := colW - boardBoxChrome
+	compact := maxLines == 0
+	if compact {
+		// The title sits in the top edge between "╭─ " and " ─╮", which
+		// costs two cells more than the side borders and padding.
+		inner -= 2
+		maxLines = 1
+	}
 	text, badge := boardCardText(t, doneCol, inner, maxLines)
 	held := m.carrying(t.ID)
 
@@ -536,6 +553,17 @@ func (m model) renderBoardBox(t *todo.Todo, doneCol, selected bool, colW, maxLin
 			return selectedStyle.Render(cursorMark)
 		}
 		return cursorGap
+	}
+	if compact {
+		body := textStyle.Render(text[0])
+		w := len([]rune(text[0]))
+		if badge != "" {
+			body += overdueStyle.Render(badge)
+			w += len([]rune(badge))
+		}
+		top := lead(0) + border.Render(glyphs[0]+glyphs[4]+" ") + body +
+			border.Render(" "+strings.Repeat(glyphs[4], max(boxW-5-w, 1))+glyphs[1])
+		return []string{top, cursorGap + m.boardBoxBottom(t, doneCol, border, glyphs, boxW)}
 	}
 	out := make([]string, 0, len(text)+2)
 	out = append(out, cursorGap+border.Render(glyphs[0]+strings.Repeat(glyphs[4], boxW-2)+glyphs[1]))

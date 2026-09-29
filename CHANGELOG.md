@@ -27,6 +27,12 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Danish and German task lists use short column headings, so Project no longer drops out first.
 - Stats summary scrolls with ↑/↓ when the window is too short to show all of it.
 - Due dates accept -2d, -1w and -1m, the form the list shows overdue dates in.
+- Quick-add and `taskr add` name the tokens they did not understand instead of hiding them.
+- Board: a long column shows compact two-row cards before it scrolls.
+- Stats: a window under 30 rows gives the summary the Activity chart's height.
+- Projects: the timeline waits for a wider window rather than squeezing the task list's columns.
+- Tags: the (untagged) row sorts with the others instead of always leading.
+- `taskr help` fits an 80-column terminal.
 
 ### Fixed
 
@@ -37,6 +43,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - `taskr doctor` finds sync.log; messages, help and man page name the real file locations.
 - Danish counts agree in the singular ("1 færdig"), English ones too ("1 day overdue").
 - Settings keeps the ⏎ on a clipped value; the calendar no longer lists tags with 0m.
+- Calendar: Coming up lists a parent's deadline once, not again for each subtask due with it.
 
 ## [1.40.0] - 2026-09-28
 

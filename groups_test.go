@@ -73,10 +73,10 @@ func TestVisibleGroupsHidesFinishedButKeepsThePinnedOne(t *testing.T) {
 	}
 	all := func(string) bool { return true }
 
-	if got, want := visibleGroups(sums, groupSortOpen, false, "", all), []string{untaggedKey, "busy", "quiet"}; !reflect.DeepEqual(got, want) {
+	if got, want := visibleGroups(sums, groupSortOpen, false, "", all), []string{"busy", "quiet", untaggedKey}; !reflect.DeepEqual(got, want) {
 		t.Errorf("by open work = %v, want %v", got, want)
 	}
-	if got, want := visibleGroups(sums, groupSortRecent, false, "", all), []string{untaggedKey, "quiet", "busy"}; !reflect.DeepEqual(got, want) {
+	if got, want := visibleGroups(sums, groupSortRecent, false, "", all), []string{"quiet", "busy", untaggedKey}; !reflect.DeepEqual(got, want) {
 		t.Errorf("by recent = %v, want %v", got, want)
 	}
 	if got, want := visibleGroups(sums, groupSortName, true, "", all), []string{untaggedKey, "busy", "finished", "quiet"}; !reflect.DeepEqual(got, want) {

@@ -717,6 +717,11 @@ type parsedTask struct {
 	// `^` last-added shorthand). Resolution needs the live task set, so it
 	// happens at the call site, not here.
 	deps []string
+	// unparsed holds the words that opened with a field prefix (due:, p:, s:,
+	// r:, dep:) but whose value the grammar did not take. They stay in the
+	// title, and the callers say so: a mistyped token otherwise vanishes into
+	// the title without a word.
+	unparsed []string
 }
 
 func parseQuickAdd(input string) parsedTask {
@@ -740,6 +745,7 @@ func parseQuickAdd(input string) parsedTask {
 				result.dueDate = d
 			} else {
 				titleWords = append(titleWords, word)
+				result.unparsed = append(result.unparsed, word)
 			}
 		case strings.HasPrefix(word, "@"):
 			if proj := strings.TrimPrefix(word, "@"); proj != "" {
@@ -755,6 +761,7 @@ func parseQuickAdd(input string) parsedTask {
 				result.priority, result.hasPriority = todo.PriorityLow, true
 			default:
 				titleWords = append(titleWords, word)
+				result.unparsed = append(result.unparsed, word)
 			}
 		case strings.HasPrefix(lower, "size:") || strings.HasPrefix(lower, "s:"):
 			spec := strings.TrimPrefix(strings.TrimPrefix(lower, "size:"), "s:")
@@ -767,6 +774,7 @@ func parseQuickAdd(input string) parsedTask {
 				result.size, result.hasSize = todo.SizeLarge, true
 			default:
 				titleWords = append(titleWords, word)
+				result.unparsed = append(result.unparsed, word)
 			}
 		case strings.HasPrefix(lower, "r:") || strings.HasPrefix(lower, "recur:"):
 			spec := strings.TrimPrefix(strings.TrimPrefix(lower, "recur:"), "r:")
@@ -777,6 +785,7 @@ func parseQuickAdd(input string) parsedTask {
 				result.recurrence = canonical
 			} else {
 				titleWords = append(titleWords, word)
+				result.unparsed = append(result.unparsed, word)
 			}
 		case strings.HasPrefix(lower, "dep:"):
 			// Whitespace-delimited, so only id-prefix refs (or ^) fit here —
@@ -787,6 +796,7 @@ func parseQuickAdd(input string) parsedTask {
 				result.deps = append(result.deps, ref)
 			} else {
 				titleWords = append(titleWords, word)
+				result.unparsed = append(result.unparsed, word)
 			}
 		default:
 			titleWords = append(titleWords, word)

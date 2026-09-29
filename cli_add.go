@@ -150,6 +150,9 @@ func cliAdd(args []string) int {
 		if len(parsedTitles[i].deps) > 0 {
 			anyTokenDeps = true
 		}
+		for _, tok := range parsedTitles[i].unparsed {
+			fmt.Fprintf(os.Stderr, "taskr add: warning: %q not understood, kept in the title\n", tok)
+		}
 	}
 
 	// --like / --depends / --start (and any dep: token) need the existing set;
