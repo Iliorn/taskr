@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -318,7 +317,7 @@ func diagnoseSync() []diagnostic {
 	} else {
 		out = append(out, diagnostic{Name: "last sync", Value: "never"})
 	}
-	if _, err := os.Stat(filepath.Join(taskrDir(), "sync.log")); err == nil {
+	if _, err := os.Stat(syncLogPath()); err == nil {
 		out = append(out, diagnostic{
 			Name: "sync.log", Value: "present", Status: statusWarn,
 			Detail: "local edits that lost a conflict were recorded — see `taskr sync --recover`",

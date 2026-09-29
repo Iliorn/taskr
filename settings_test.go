@@ -475,3 +475,34 @@ func TestSettingsTwoColumnPaneReportsTheCursorLine(t *testing.T) {
 		}
 	}
 }
+
+// A value too long for its row is clipped before the ⏎ is added, so the row
+// still says that enter edits it — the list of board columns is the one that
+// runs long.
+func TestSettingsEditMarkSurvivesAClippedValue(t *testing.T) {
+	m := modelWithTasks(t, todo.New("Ranked task"))
+	m.tab = tabSettings
+	m.termHeight = 40
+	m.boardCfg.setStages([]string{"Backlog", "Waiting on someone else", "In progress", "In review with the team", "Done"})
+	m.ensureCache()
+	for _, w := range []int{50, settingsTwoColMinWidth + 20} {
+		content, _ := m.renderSettingsSection(w)
+		found := false
+		for _, line := range strings.Split(content, "\n") {
+			plain := ansi.Strip(line)
+			if !strings.Contains(plain, tr("Board columns")) {
+				continue
+			}
+			found = true
+			if !strings.Contains(plain, "…") || !strings.Contains(plain, "⏎") {
+				t.Errorf("width %d: the clipped row should end in … and keep its ⏎: %q", w, plain)
+			}
+			if cw := ansi.StringWidth(line); cw > w {
+				t.Errorf("width %d: the row is %d cells wide", w, cw)
+			}
+		}
+		if !found {
+			t.Fatalf("width %d: no Board columns row in:\n%s", w, ansi.Strip(content))
+		}
+	}
+}

@@ -605,3 +605,89 @@ func TestStatsWeeklyHistogramNumbersEveryWeek(t *testing.T) {
 		}
 	}
 }
+
+// A weekday label is placed cell by cell. Indexing it by byte put a hole after
+// every non-ASCII letter: "Lø rdag", "Sø ndag" on a Danish install.
+func TestStatsWeekdayLabelsKeepNonASCIILettersTogether(t *testing.T) {
+	now := time.Now()
+	var todos []todo.Todo
+	for d := 0; d < 7; d++ {
+		td := todo.New("x")
+		td.Status = todo.Done
+		td.CompletedAt = now.AddDate(0, 0, -d)
+		todos = append(todos, td)
+	}
+	m := newTagModel(todos...)
+	applyLang(string(langDA))
+	defer applyLang(string(langEN))
+	m.termWidth = 110
+	m.termHeight = 40
+	m.tab = tabStats
+	m.statsRange = statsRange7Days
+	m.refreshCaches()
+	out := ansi.Strip(m.renderStatsDetail())
+	for _, day := range []string{"Lørdag", "Søndag"} {
+		if !strings.Contains(out, day) {
+			t.Errorf("the chart should spell %q whole:\n%s", day, out)
+		}
+	}
+}
+
+// The summary is taller than a small window leaves it. ↓ scrolls it, a marker
+// says how much is out of view, and the scroll stops with the last line on
+// screen rather than scrolling into blank rows.
+func TestStatsSummaryScrollsToItsLastLine(t *testing.T) {
+	m := newTagModel(statsTodos()...)
+	m.termWidth = 80
+	m.termHeight = 24
+	m.tab = tabStats
+	m.refreshCaches()
+
+	summary := trimTrailingBlank(m.buildListLines())
+	last := strings.TrimSpace(ansi.Strip(summary[len(summary)-1]))
+	if m.statsMaxScroll() == 0 {
+		t.Fatalf("a %d-line summary should not fit 80×24; the test needs a taller one", len(summary))
+	}
+	if view := ansi.Strip(m.View()); !strings.Contains(view, "↓") || strings.Contains(view, last) {
+		t.Fatalf("unscrolled, the summary should end in a ↓ marker, not its last line:\n%s", view)
+	}
+	for i := 0; i < len(summary)+5; i++ {
+		m = sendKey(t, m, "down")
+	}
+	if m.statsScroll != m.statsMaxScroll() {
+		t.Errorf("scroll = %d after holding ↓, want it to stop at %d", m.statsScroll, m.statsMaxScroll())
+	}
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, last) {
+		t.Errorf("scrolled to the end, the summary's last line %q should be on screen:\n%s", last, view)
+	}
+	if !strings.Contains(view, "↑") {
+		t.Errorf("scrolled down, a ↑ marker should count the lines above:\n%s", view)
+	}
+	m = sendKey(t, m, "up")
+	if m.statsScroll != m.statsMaxScroll()-1 {
+		t.Errorf("one ↑ from the end should move one line, scroll = %d", m.statsScroll)
+	}
+}
+
+// Each share of a breakdown is rounded: 6 of 9 is 67%, not 66%.
+func TestStatsPercentagesRound(t *testing.T) {
+	var todos []todo.Todo
+	for i, p := range []todo.Priority{todo.PriorityHigh, todo.PriorityHigh, todo.PriorityLow} {
+		td := todo.New(fmt.Sprintf("task %d", i))
+		td.Priority = p
+		todos = append(todos, td)
+	}
+	for i := 0; i < 6; i++ {
+		todos = append(todos, todo.New(fmt.Sprintf("medium %d", i)))
+	}
+	m := newTagModel(todos...)
+	m.termWidth = 140
+	m.termHeight = 60
+	m.tab = tabStats
+	m.refreshCaches()
+	out := ansi.Strip(m.renderStatsList())
+	if !strings.Contains(out, "67%") || strings.Contains(out, "66%") {
+		t.Errorf("6 of 9 should read 67%%:\n%s", out)
+	}
+}

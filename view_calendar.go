@@ -352,7 +352,7 @@ func (m model) renderMonthCalendarLines() []string {
 	lines = append(lines, m.renderDayRollupLines(innerW)...)
 
 	lines = append(lines, "")
-	lines = append(lines, dimStyle.Render(tr("month "))+timerStyle.Render(formatDuration(monthTotal)))
+	lines = append(lines, dimStyle.Render(tr("Month "))+timerStyle.Render(formatDuration(monthTotal)))
 	return lines
 }
 
@@ -386,7 +386,7 @@ func (m model) renderComingUpLines(w, maxRows int) []string {
 		return due[i].ID < due[j].ID
 	})
 
-	lines := []string{"", dimStyle.Render(tr("coming up"))}
+	lines := []string{"", dimStyle.Render(tr("Coming up"))}
 	if len(due) == 0 {
 		return append(lines, dimStyle.Render(" "+tr("nothing due")))
 	}
@@ -437,7 +437,11 @@ func (m model) renderDayRollupLines(innerW int) []string {
 	top := func(totals map[string]time.Duration, limit int) []rollup {
 		rs := make([]rollup, 0, len(totals))
 		for name, d := range totals {
-			rs = append(rs, rollup{name, d})
+			// A task that is only due or done today lends its tags and
+			// project to the day without any time; a "0m" row says nothing.
+			if d > 0 {
+				rs = append(rs, rollup{name, d})
+			}
 		}
 		sort.Slice(rs, func(i, j int) bool {
 			if rs[i].d != rs[j].d {
@@ -452,7 +456,7 @@ func (m model) renderDayRollupLines(innerW int) []string {
 	}
 
 	nameW := innerW - 8 // 1 indent + 7 for the right-aligned duration
-	lines := []string{"", dimStyle.Render(tr("day ")) + timerStyle.Render(formatDuration(dayTotal))}
+	lines := []string{"", dimStyle.Render(tr("Day ")) + timerStyle.Render(formatDuration(dayTotal))}
 	for _, r := range top(projTotals, 3) {
 		lines = append(lines, " "+projLabelStyle.Render(padRight(truncate(r.name, nameW), nameW))+
 			timerStyle.Render(fmt.Sprintf("%7s", formatDurationCompact(r.d))))
@@ -479,7 +483,7 @@ func (m model) timelineSummary() string {
 	if len(acts) == 1 {
 		return tr("1 entry · ") + formatDuration(total)
 	}
-	return fmt.Sprintf(tr("%d entries · %s"), len(acts), formatDuration(total))
+	return trCount("%d entries · %s", len(acts), len(acts), formatDuration(total))
 }
 
 // calendarTimelineTitle appends the day's summary in brackets to the agenda
@@ -751,7 +755,7 @@ func (m model) renderTimelineSub(a dayActivity, innerW int, hasNext bool) string
 		b.WriteString(" ")
 	}
 	if showTags {
-		b.WriteString(m.getRenderedTags(a.tags))
+		b.WriteString(renderTagsPart(a.tags))
 	}
 	return b.String()
 }

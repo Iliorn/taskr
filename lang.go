@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Iliorn/taskr/todo"
@@ -73,6 +74,49 @@ func tr(s string) string {
 	return s
 }
 
+// trCount is fmt.Sprintf(tr(s), args...) for a template that counts n of
+// something, in the form n agrees with: "1 day", "2 days"; "1 færdig",
+// "2 færdige". The translation tables hold the plural, which is what most
+// counts are; countOne holds a template's singular where a language's
+// differs, English included, since tr hands English its key unchanged.
+func trCount(s string, n int, args ...any) string {
+	f := tr(s)
+	if n == 1 {
+		if one, ok := countOne[activeLang][s]; ok {
+			f = one
+		}
+	}
+	return fmt.Sprintf(f, args...)
+}
+
+var countOne = map[language]map[string]string{
+	langEN: {
+		"%d days overdue":                             "%d day overdue",
+		"created %d days ago":                         "created %d day ago",
+		"due in %d days — the ramp adds points daily": "due in %d day — the ramp adds points daily",
+		"%s (%d entries)":                             "%s (%d entry)",
+		"%d entries · %s":                             "%d entry · %s",
+	},
+	langDA: {
+		"%d done":                     "%d færdig",
+		"  ✓ %d done · %s shows them": "  ✓ %d færdig · %s viser dem",
+		"%d open":                     "%d åben",
+		"%d overdue":                  "%d forfalden",
+		"%d days overdue":             "%d dag forfalden",
+		"created %d days ago":         "oprettet for %d dag siden",
+		"due in %d days — the ramp adds points daily": "forfalder om %d dag — rampen giver point hver dag",
+		"%s (%d entries)": "%s (%d post)",
+		"%d entries · %s": "%d post · %s",
+	},
+	langDE: {
+		"%d days overdue":                             "%d Tag überfällig",
+		"created %d days ago":                         "vor %d Tag erstellt",
+		"due in %d days — the ramp adds points daily": "fällig in %d Tag — die Rampe gibt täglich Punkte",
+		"%s (%d entries)":                             "%s (%d Eintrag)",
+		"%d entries · %s":                             "%d Eintrag · %s",
+	},
+}
+
 // ── Date names ────────────────────────────────────────────────────────────────
 //
 // Go's time package has no locale support, so the few date layouts the UI shows
@@ -122,6 +166,28 @@ var tabShortLabels = map[language][numTabs]string{
 	langEN: {"1 Tasks", "2 Cal", "3 Proj", "4 Tags", "5 Board", "6 Stats", "7 Setup"},
 	langDA: {"1 Opgaver", "2 Kal", "3 Proj", "4 Mærk", "5 Tavle", "6 Stat", "7 Indst"},
 	langDE: {"1 Aufg.", "2 Kal", "3 Proj", "4 Tags", "5 Board", "6 Stat.", "7 Einst."},
+}
+
+// Short task-list column headings. A column is as wide as the wider of its
+// heading and its values (hugColW), so a heading much wider than what the
+// column holds — Danish "Størrelse" over a single s/m/l — strands cells on
+// every row and pushes Project off the list first. These are the headings
+// that would, in the words each language abbreviates them with; everything
+// else goes through tr. A table rather than tr keys for the reason the tab
+// labels are one: the English heading is already short, and tr maps one
+// English string to one translation, which the detail pane's full "Size"
+// label needs.
+var listHeaderShort = map[language]map[string]string{
+	langDA: {"Size": "Str.", "Due": "Frist"},
+	langDE: {"Size": "Gr.", "Tags": "Tags"},
+}
+
+// listHeader is the active language's heading for a task-list column.
+func listHeader(english string) string {
+	if s, ok := listHeaderShort[activeLang][english]; ok {
+		return s
+	}
+	return tr(english)
 }
 
 // Monday-first two-letter column header for the month grid.
@@ -283,11 +349,11 @@ var daTranslations = map[string]string{
 	"Overview":                                          "Oversigt",
 	"History":                                           "Historik",
 	"Activity":                                          "Aktivitet",
-	"add task (quick-add: #tag due:date p:high @proj s:M)": "tilføj opgave (hurtig: #mærke due:dato p:high @proj s:M)",
+	"add task (quick-add: #tag due:date p:high @proj s:M)": "tilføj opgave (hurtig: #mærke frist:dato p:høj @proj s:M)",
 	"rename task":                 "omdøb opgave",
 	"toggle done":                 "skift færdig",
 	"start/stop time tracking":    "start/stop tidsregistrering",
-	"cycle priority low/med/high": "skift prioritet lav/mel/høj",
+	"cycle priority low/med/high": "skift prioritet lav/mellem/høj",
 	"delete":                      "slet",
 	"edit notes (opens $EDITOR)":  "rediger noter (åbner $EDITOR)",
 	"ctrl+e  edit in $EDITOR":     "ctrl+e  rediger i $EDITOR",
@@ -430,14 +496,14 @@ var daTranslations = map[string]string{
 	// Tag list / detail
 	"  No tags match your filter.":                         "  Ingen mærker matcher dit filter.",
 	"  No tags yet. Add tags to tasks in the detail view.": "  Ingen mærker endnu. Tilføj mærker til opgaver i detaljevisningen.",
-	"Age":                              "Alder",
-	"  No tag selected.":               "  Intet mærke valgt.",
-	"  (untagged)":                     "  (uden mærke)",
-	"  %d open · %d overdue · %d done": "  %d åbne · %d forfaldne · %d færdige",
-	"  %s shows the finished ones.":    "  %s viser de færdige.",
-	"  Every project is finished.":     "  Alle projekter er færdige.",
-	"  Every tag is finished.":         "  Alle mærker er færdige.",
-	"  Nothing open here.":             "  Intet åbent her.",
+	"Age":                           "Alder",
+	"  No tag selected.":            "  Intet mærke valgt.",
+	"  (untagged)":                  "  (uden mærke)",
+	"%d open":                       "%d åbne",
+	"  %s shows the finished ones.": "  %s viser de færdige.",
+	"  Every project is finished.":  "  Alle projekter er færdige.",
+	"  Every tag is finished.":      "  Alle mærker er færdige.",
+	"  Nothing open here.":          "  Intet åbent her.",
 	"  Tags group related tasks; this tab shows what is open in each.": "  Mærker samler relaterede opgaver; fanen viser, hvad der er åbent i hvert.",
 	"  ✓ %d done · %s shows them":                                      "  ✓ %d færdige · %s viser dem",
 	"Last":                                                             "Senest",
@@ -519,8 +585,8 @@ var daTranslations = map[string]string{
 	"No time entries. Press 'T' to add one.":             "Ingen tidsregistreringer. Tryk 'T' for at tilføje en.",
 
 	// Calendar
-	"month ":                     "måned ",
-	"day ":                       "dag ",
+	"Month ":                     "Måned ",
+	"Day ":                       "Dag ",
 	"%d entries · %s":            "%d poster · %s",
 	"1 entry · ":                 "1 post · ",
 	"  No activity on this day.": "  Ingen aktivitet på denne dag.",
@@ -626,7 +692,7 @@ var daTranslations = map[string]string{
 	"Last sync failed: ":              "Seneste synk. mislykkedes: ",
 	"Last sync: sent %d, received %d": "Seneste synk.: sendt %d, modtaget %d",
 	"Sync failing — devices may be diverging (see Settings)":                      "Synk. mislykkes — enhederne kan være ved at glide fra hinanden (se Indstillinger)",
-	"Sync: %d conflict(s) resolved — see ~/.taskr/sync.log":                       "Synk.: %d konflikt(er) løst — se ~/.taskr/sync.log",
+	"Sync: %d conflict(s) resolved — taskr sync --recover lists them":             "Synk.: %d konflikt(er) løst — taskr sync --recover viser dem",
 	"Sync server URL, e.g. http://100.x.y.z:8765":                                 "URL til synk.server, fx http://100.x.y.z:8765",
 	"Sync token (clear the field to remove it)":                                   "Synk.token (ryd feltet for at fjerne den)",
 	"Server token clients must present (ctrl+g generates one · blank removes it)": "Servertoken som klienter skal vise (ctrl+g genererer et · tomt felt fjerner det)",
@@ -658,7 +724,7 @@ var daTranslations = map[string]string{
 	"Export":                         "Eksport",
 	"Auto-export folder":             "Mappe til autoeksport",
 	"Import from file":               "Importér fra fil",
-	"press enter to choose a file":   "tryk enter for at vælge en fil",
+	"choose a file":                  "vælg en fil",
 	"Path to a taskr export (.json)": "Sti til en taskr-eksport (.json)",
 	"Auto-export off":                "Autoeksport slået fra",
 	"Not a folder: %s":               "Ikke en mappe: %s",
@@ -674,7 +740,7 @@ var daTranslations = map[string]string{
 	"A task needs a title": "En opgave skal have en titel",
 
 	// ── Calendar: coming up ──
-	"coming up":   "kommende",
+	"Coming up":   "Kommende",
 	"nothing due": "intet forfalder",
 
 	// ── Reminders ──
@@ -837,7 +903,7 @@ var daTranslations = map[string]string{
 	// ── Keymap descriptions the footer and help overlay render ──
 	"jump to ends / page through list":          "spring til start/slut · bladr i listen",
 	"toggle this help":                          "slå denne hjælp til/fra",
-	"add task (#tag due:date p:high @proj s:M)": "tilføj opgave (#mærke due:date p:high @projekt s:M)",
+	"add task (#tag due:date p:high @proj s:M)": "tilføj opgave (#mærke frist:dato p:høj @projekt s:M)",
 	"add manual time entry":                     "tilføj manuel tidsregistrering",
 	"start/stop subtask timer":                  "start/stop tidtagning på delopgave",
 	"back to list":                              "tilbage til listen",
@@ -845,6 +911,7 @@ var daTranslations = map[string]string{
 	"select entry":                              "vælg post",
 	"back":                                      "tilbage",
 	"cycle activity range":                      "skift aktivitetsperiode",
+	"scroll the summary":                        "rul i overblikket",
 	"change value / theme":                      "skift værdi / tema",
 	"set / clear due date":                      "sæt / ryd forfaldsdato",
 
@@ -929,7 +996,7 @@ var deTranslations = map[string]string{
 	"Overview":                                          "Überblick",
 	"History":                                           "Verlauf",
 	"Activity":                                          "Aktivität",
-	"add task (quick-add: #tag due:date p:high @proj s:M)": "Aufgabe anlegen (#tag due:datum p:high @proj s:M)",
+	"add task (quick-add: #tag due:date p:high @proj s:M)": "Aufgabe anlegen (#tag fällig:datum p:hoch @proj s:M)",
 	"rename task":                 "Aufgabe umbenennen",
 	"toggle done":                 "fertig umschalten",
 	"start/stop time tracking":    "Zeiterfassung starten/stoppen",
@@ -1018,7 +1085,7 @@ var deTranslations = map[string]string{
 	"Flow (last 30 days)":   "Fluss (30 Tage)",
 	"vs prior 30d":          "vs. vorige 30 T",
 	"  Throughput":          "  Durchsatz",
-	"  Time to done (30d)":  "  Dauer bis fertig (30 T)",
+	"  Time to done (30d)":  "  Bis fertig (30 T)",
 	"median ":               "Median ",
 	"none yet":              "noch keine",
 	"  Median active age":   "  Medianalter aktiv",
@@ -1076,14 +1143,14 @@ var deTranslations = map[string]string{
 	// Tag list / detail
 	"  No tags match your filter.":                         "  Keine Schlagwörter passen zum Filter.",
 	"  No tags yet. Add tags to tasks in the detail view.": "  Noch keine Schlagwörter. In der Detailansicht hinzufügen.",
-	"Age":                              "Alter",
-	"  No tag selected.":               "  Kein Schlagwort gewählt.",
-	"  (untagged)":                     "  (ohne Schlagwort)",
-	"  %d open · %d overdue · %d done": "  %d offen · %d überfällig · %d fertig",
-	"  %s shows the finished ones.":    "  %s zeigt die fertigen.",
-	"  Every project is finished.":     "  Alle Projekte sind fertig.",
-	"  Every tag is finished.":         "  Alle Schlagwörter sind fertig.",
-	"  Nothing open here.":             "  Hier ist nichts offen.",
+	"Age":                           "Alter",
+	"  No tag selected.":            "  Kein Schlagwort gewählt.",
+	"  (untagged)":                  "  (ohne Schlagwort)",
+	"%d open":                       "%d offen",
+	"  %s shows the finished ones.": "  %s zeigt die fertigen.",
+	"  Every project is finished.":  "  Alle Projekte sind fertig.",
+	"  Every tag is finished.":      "  Alle Schlagwörter sind fertig.",
+	"  Nothing open here.":          "  Hier ist nichts offen.",
 	"  Tags group related tasks; this tab shows what is open in each.": "  Schlagwörter bündeln Aufgaben; dieser Tab zeigt, was jeweils offen ist.",
 	"  ✓ %d done · %s shows them":                                      "  ✓ %d fertig · %s zeigt sie",
 	"Last":                                                             "Zuletzt",
@@ -1165,8 +1232,8 @@ var deTranslations = map[string]string{
 	"No time entries. Press 'T' to add one.":             "Keine Zeiteinträge. 'T' fügt einen hinzu.",
 
 	// Calendar
-	"month ":                     "Monat ",
-	"day ":                       "Tag ",
+	"Month ":                     "Monat ",
+	"Day ":                       "Tag ",
 	"%d entries · %s":            "%d Einträge · %s",
 	"1 entry · ":                 "1 Eintrag · ",
 	"  No activity on this day.": "  Keine Aktivität an diesem Tag.",
@@ -1272,7 +1339,7 @@ var deTranslations = map[string]string{
 	"Last sync failed: ":              "Letzter Sync fehlgeschlagen: ",
 	"Last sync: sent %d, received %d": "Letzter Sync: %d gesendet, %d empfangen",
 	"Sync failing — devices may be diverging (see Settings)":                      "Sync schlägt fehl — Geräte laufen evtl. auseinander (siehe Einstellungen)",
-	"Sync: %d conflict(s) resolved — see ~/.taskr/sync.log":                       "Sync: %d Konflikt(e) gelöst — siehe ~/.taskr/sync.log",
+	"Sync: %d conflict(s) resolved — taskr sync --recover lists them":             "Sync: %d Konflikt(e) gelöst — taskr sync --recover zeigt sie",
 	"Sync server URL, e.g. http://100.x.y.z:8765":                                 "Sync-Server-URL, z. B. http://100.x.y.z:8765",
 	"Sync token (clear the field to remove it)":                                   "Sync-Token (Feld leeren zum Entfernen)",
 	"Server token clients must present (ctrl+g generates one · blank removes it)": "Token, das Clients vorzeigen müssen (ctrl+g erzeugt eines · leer entfernt es)",
@@ -1304,7 +1371,7 @@ var deTranslations = map[string]string{
 	"Export":                         "Export",
 	"Auto-export folder":             "Auto-Export-Ordner",
 	"Import from file":               "Aus Datei importieren",
-	"press enter to choose a file":   "Enter drücken, um eine Datei zu wählen",
+	"choose a file":                  "Datei wählen",
 	"Path to a taskr export (.json)": "Pfad zu einem taskr-Export (.json)",
 	"Auto-export off":                "Auto-Export aus",
 	"Not a folder: %s":               "Kein Ordner: %s",
@@ -1320,7 +1387,7 @@ var deTranslations = map[string]string{
 	"A task needs a title": "Eine Aufgabe braucht einen Titel",
 
 	// ── Calendar: coming up ──
-	"coming up":   "demnächst",
+	"Coming up":   "Demnächst",
 	"nothing due": "nichts fällig",
 
 	// ── Reminders ──
@@ -1483,7 +1550,7 @@ var deTranslations = map[string]string{
 	// ── Keymap descriptions the footer and help overlay render ──
 	"jump to ends / page through list":          "an den Rand / seitenweise blättern",
 	"toggle this help":                          "diese Hilfe umschalten",
-	"add task (#tag due:date p:high @proj s:M)": "Aufgabe anlegen (#tag due:datum p:high @proj s:M)",
+	"add task (#tag due:date p:high @proj s:M)": "Aufgabe anlegen (#tag fällig:datum p:hoch @proj s:M)",
 	"add manual time entry":                     "Zeiteintrag von Hand",
 	"start/stop subtask timer":                  "Uhr der Teilaufgabe starten/stoppen",
 	"back to list":                              "zurück zur Liste",
@@ -1491,6 +1558,7 @@ var deTranslations = map[string]string{
 	"select entry":                              "Eintrag wählen",
 	"back":                                      "zurück",
 	"cycle activity range":                      "Zeitraum wechseln",
+	"scroll the summary":                        "Übersicht blättern",
 	"change value / theme":                      "Wert / Farbschema ändern",
 	"set / clear due date":                      "Fälligkeit setzen / löschen",
 

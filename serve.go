@@ -66,7 +66,7 @@ func startSyncServer(listen, token string) (*http.Server, func(), error) {
 // serve.go implements `taskr serve`: a small self-hosted HTTP endpoint that
 // merges task sets pushed by `taskr sync` clients. It is taskr in another mode —
 // it reuses the exact storage and merge code of the app and persists to its own
-// ~/.taskr/tasks.db. One endpoint, POST /v1/sync, does push+pull in a single
+// tasks.db. One endpoint, POST /v1/sync, does push+pull in a single
 // round trip: the client sends its full task set (tombstones included), the
 // server merges it into the authoritative set, persists the result, and returns
 // the merged set for the client to apply.

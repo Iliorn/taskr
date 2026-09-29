@@ -89,7 +89,7 @@ func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 		m.syncStatus += " — " + msg.summary.versionGap
 	}
 	if msg.summary.conflicts > 0 {
-		m.flashInfo(fmt.Sprintf(tr("Sync: %d conflict(s) resolved — see ~/.taskr/sync.log"), msg.summary.conflicts))
+		m.flashInfo(fmt.Sprintf(tr("Sync: %d conflict(s) resolved — taskr sync --recover lists them"), msg.summary.conflicts))
 		return m, clearErrAfter()
 	}
 	return m, nil

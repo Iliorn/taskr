@@ -194,7 +194,7 @@ func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, show
 		} else {
 			contentMax = max(contentMax, taskRowLabelWidth(m.taskRowLabel(&tasks[i])))
 		}
-		tagsMax = max(tagsMax, tagsRenderWidth(tasks[i].Tags))
+		tagsMax = max(tagsMax, rowTagsWidth(tasks[i].Tags))
 		hasDue = hasDue || !tasks[i].DueDate.IsZero()
 		if showProject {
 			projectMax = max(projectMax, runeLen(tasks[i].Project))
@@ -238,7 +238,7 @@ func (m model) groupFoldNote(s *groupSummary) string {
 	if m.showFinishedGroups || s == nil || s.done == 0 {
 		return ""
 	}
-	return dimStyle.Render(fmt.Sprintf(tr("  ✓ %d done · %s shows them"), s.done, effectiveKey("history", "h")))
+	return dimStyle.Render(trCount("  ✓ %d done · %s shows them", s.done, s.done, effectiveKey("history", "h")))
 }
 
 // groupPaneHead is the top of the pane under a Tags or Projects list: the
@@ -247,7 +247,7 @@ func (m model) groupPaneHead(s *groupSummary, availW int) []string {
 	if s == nil {
 		return nil
 	}
-	lines := []string{normalStyle.Render(truncate(fmt.Sprintf(tr("  %d open · %d overdue · %d done"), s.open, s.overdue, s.done), availW))}
+	lines := []string{normalStyle.Render(truncate("  "+trCount("%d open", s.open, s.open)+" · "+trCount("%d overdue", s.overdue, s.overdue)+" · "+trCount("%d done", s.done, s.done), availW))}
 	if total := s.open + s.done; total > 0 {
 		pct := float64(s.done) / float64(total)
 		lines = append(lines, "  "+renderProgressBar(pct, groupBarWidth)+normalStyle.Render(fmt.Sprintf(" %3d%%", int(pct*100))))
@@ -321,6 +321,13 @@ func (m model) statsScopedTodos() []*todo.Todo {
 		}
 	}
 	return scoped
+}
+
+// statsLabelCell is a Stats label padded to the label column, clipped so at
+// least one space is left before the value: a translated label longer than
+// the column would otherwise run straight into its number.
+func statsLabelCell(label string) string {
+	return padRight(truncate(label, statsLabelWidth-1), statsLabelWidth)
 }
 
 func (m model) renderStatsList() string {
@@ -457,7 +464,7 @@ func (m model) renderStatsList() string {
 
 	// stat writes one row sized to colW into sb (bar only if it fits).
 	stat := func(sb *strings.Builder, label string, value, total int, showBar bool) {
-		labelStr := padRight("  "+label, statsLabelWidth)
+		labelStr := statsLabelCell("  " + label)
 		valStr := fmt.Sprintf("%d", value)
 		barW := colW - statsLabelWidth - valW - 6
 		if barW > statsBarWidth {
@@ -491,8 +498,10 @@ func (m model) renderStatsList() string {
 		if empty := barW - filled; empty > 0 {
 			bar.WriteString(barTrackStyle.Render(strings.Repeat(barTrack, empty)))
 		}
+		// Rounded, not truncated: 6 of 9 is 67%, and truncating each share of
+		// a breakdown makes its rows add up to less than 100.
 		sb.WriteString(detailLabelStyle.Render(labelStr) + normalStyle.Render(padRight(valStr, valW)) +
-			bar.String() + dimStyle.Render(fmt.Sprintf(" %3d%%", int(pct*100))) + "\n")
+			bar.String() + dimStyle.Render(fmt.Sprintf(" %3.0f%%", pct*100)) + "\n")
 	}
 
 	section := func(build func(*strings.Builder)) func() string {
@@ -506,7 +515,7 @@ func (m model) renderStatsList() string {
 	workload := section(func(sb *strings.Builder) {
 		sb.WriteString(statsHeaderStyle.Render(tr("  Workload")) + "\n")
 		if overdueTasks > 0 {
-			sb.WriteString(detailLabelStyle.Render(padRight("  "+tr("Overdue"), statsLabelWidth)) +
+			sb.WriteString(detailLabelStyle.Render(statsLabelCell("  "+tr("Overdue"))) +
 				overdueCountStyle.Render(fmt.Sprintf("%d", overdueTasks)) + "\n")
 		} else {
 			stat(sb, tr("Overdue"), 0, 0, false)
@@ -530,7 +539,7 @@ func (m model) renderStatsList() string {
 			stat(sb, tr("Created"), created, 0, false)
 			stat(sb, tr("Completed"), completed, 0, false)
 			net := created - completed
-			netLabel := detailLabelStyle.Render(padRight(tr("  Net backlog"), statsLabelWidth))
+			netLabel := detailLabelStyle.Render(statsLabelCell(tr("  Net backlog")))
 			switch {
 			case net > 0:
 				sb.WriteString(netLabel + overdueCountStyle.Render(fmt.Sprintf(tr("+%d ▲ growing"), net)) + "\n")
@@ -545,7 +554,7 @@ func (m model) renderStatsList() string {
 			} else if completed < prevCompleted {
 				trendArrow = "↓"
 			}
-			sb.WriteString(detailLabelStyle.Render(padRight("  "+vsLabel, statsLabelWidth)) +
+			sb.WriteString(detailLabelStyle.Render(statsLabelCell("  "+vsLabel)) +
 				normalStyle.Render(fmt.Sprintf(tr("%d done vs %d  %s"), completed, prevCompleted, trendArrow)) + "\n")
 		})
 	}
@@ -555,14 +564,14 @@ func (m model) renderStatsList() string {
 
 	throughput := section(func(sb *strings.Builder) {
 		sb.WriteString(statsHeaderStyle.Render(tr("  Throughput")) + "\n")
-		ttdLabel := detailLabelStyle.Render(padRight(tr("  Time to done (30d)"), statsLabelWidth))
+		ttdLabel := detailLabelStyle.Render(statsLabelCell(tr("  Time to done (30d)")))
 		if len(timeToDone) > 0 {
 			sb.WriteString(ttdLabel + normalStyle.Render(tr("median ")+formatDaysCompact(medianDuration(timeToDone))) + "\n")
 		} else {
 			sb.WriteString(ttdLabel + dimStyle.Render(tr("none yet")) + "\n")
 		}
 		if len(activeAges) > 0 {
-			sb.WriteString(detailLabelStyle.Render(padRight(tr("  Median active age"), statsLabelWidth)) +
+			sb.WriteString(detailLabelStyle.Render(statsLabelCell(tr("  Median active age"))) +
 				normalStyle.Render(formatDaysCompact(medianDuration(activeAges))) + "\n")
 			// The title takes what the column has left after its age. In a
 			// multi-column layout it asks for at least statsOldestMinW, which
@@ -573,7 +582,7 @@ func (m model) renderStatsList() string {
 			if want := min(len([]rune(oldestTitle)), statsOldestMinW); cols > 1 && oldestW < want {
 				oldestW = want
 			}
-			sb.WriteString(detailLabelStyle.Render(padRight(tr("  Oldest active"), statsLabelWidth)) +
+			sb.WriteString(detailLabelStyle.Render(statsLabelCell(tr("  Oldest active"))) +
 				normalStyle.Render(truncate(oldestTitle, oldestW)) +
 				dimStyle.Render(age) + "\n")
 		}
@@ -595,7 +604,7 @@ func (m model) renderStatsList() string {
 		stat(sb, tr("This week"), doneThisWeek, 0, false)
 		stat(sb, tr("This month"), doneThisMonth, 0, false)
 		if doneThisWeek > 0 {
-			sb.WriteString(detailLabelStyle.Render(padRight(tr("  Avg (7d)"), statsLabelWidth)) +
+			sb.WriteString(detailLabelStyle.Render(statsLabelCell(tr("  Avg (7d)"))) +
 				normalStyle.Render(fmt.Sprintf(tr("%.1f tasks/day"), float64(doneThisWeek)/7.0)) + "\n")
 		}
 	})
@@ -616,7 +625,7 @@ func (m model) renderStatsList() string {
 	cycleTime := section(func(sb *strings.Builder) {
 		sb.WriteString(statsHeaderStyle.Render(tr("  Cycle time by size")) + "\n")
 		for _, s := range sizeRows {
-			label := detailLabelStyle.Render(padRight("  "+s.label, statsLabelWidth))
+			label := detailLabelStyle.Render(statsLabelCell("  " + s.label))
 			if haveMed[s.idx] {
 				sb.WriteString(label + normalStyle.Render(formatDaysCompact(medBySize[s.idx])) +
 					dimStyle.Render(fmt.Sprintf(" (n=%d)", len(cycleBySize[s.idx]))) + "\n")
@@ -638,7 +647,7 @@ func (m model) renderStatsList() string {
 			if n == 0 {
 				continue
 			}
-			label := detailLabelStyle.Render(padRight("  "+s.label, statsLabelWidth))
+			label := detailLabelStyle.Render(statsLabelCell("  " + s.label))
 			if !haveMed[s.idx] {
 				sb.WriteString(label + dimStyle.Render(fmt.Sprintf(tr("%d pending, no pace"), n)) + "\n")
 				continue
@@ -649,7 +658,7 @@ func (m model) renderStatsList() string {
 			sb.WriteString(label + normalStyle.Render(fmt.Sprintf("%d×%s=%s",
 				n, formatDaysCompact(medBySize[s.idx]), formatDaysCompact(sub))) + "\n")
 		}
-		totalLabel := detailLabelStyle.Render(padRight(tr("  Projected clear"), statsLabelWidth))
+		totalLabel := detailLabelStyle.Render(statsLabelCell(tr("  Projected clear")))
 		if haveTotal {
 			sb.WriteString(totalLabel + normalStyle.Render("~"+formatDaysCompact(total)) + "\n")
 		} else {
@@ -920,7 +929,7 @@ func (m model) renderHistoryList() string {
 		if w := len([]rune(completed[i].Title)); w > contentMax {
 			contentMax = w
 		}
-		if tw := tagsRenderWidth(completed[i].Tags); tw > tagsMax {
+		if tw := rowTagsWidth(completed[i].Tags); tw > tagsMax {
 			tagsMax = tw
 		}
 		if !completed[i].DueDate.IsZero() {
@@ -1606,7 +1615,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingReminder:          "‹ " + reminderVal + " ›",
 		settingReminderTime:      "‹ " + formatReminder(m.reminderAt) + " ›",
 		settingExportFolder:      exportFolderDisplay(m.exportFolder),
-		settingImportFile:        tr("press enter to choose a file"),
+		settingImportFile:        tr("choose a file"),
 		settingSubtaskTags:       "‹ " + subtaskTagsVal + " ›",
 	}
 
@@ -1622,16 +1631,22 @@ func (m model) renderSettingsSection(w int) (string, int) {
 	}
 	labelW += 2
 
-	renderRow := func(id int) string {
+	// renderRow draws a row within maxW cells. The value is clipped before the
+	// edit mark is added, so a long value ("Board columns" on a narrow pane)
+	// loses its tail and keeps the ⏎ that says enter edits it.
+	renderRow := func(id, maxW int) string {
 		cursor := cursorGap
 		labelStyle := normalStyle
 		if id == m.settingsCursor {
 			cursor = selectedStyle.Render(cursorMark)
 			labelStyle = selectedStyle
 		}
+		valueW := maxW - len([]rune(cursorGap)) - labelW
 		value := values[id]
 		if settingsEditsText(id) {
-			value += settingsEditMark
+			value = truncate(value, valueW-len([]rune(settingsEditMark))) + settingsEditMark
+		} else {
+			value = truncate(value, valueW)
 		}
 		return cursor + labelStyle.Render(padRight(labels[id], labelW)) + helpStyle.Render(value)
 	}
@@ -1639,10 +1654,11 @@ func (m model) renderSettingsSection(w int) (string, int) {
 	// renderColumn draws one column's worth of groups and reports the line the
 	// cursor row landed on (-1 when the cursor is not in this column). colW is
 	// the column's own width, so the bias preview sizes its titles to the
-	// column it sits in rather than to the whole pane.
-	renderColumn := func(groups []settingsGroup, colW int) ([]string, int) {
-		var lines []string
-		selected := -1
+	// column it sits in rather than to the whole pane. wide holds the same
+	// lines with the rows clipped to wideW instead, for a row with nothing
+	// beside it (joinSettingsColumns).
+	renderColumn := func(groups []settingsGroup, colW, wideW int) (lines, wide []string, selected int) {
+		selected = -1
 		for _, g := range groups {
 			rows := m.visibleGroupRows(g)
 			if len(rows) == 0 {
@@ -1650,35 +1666,40 @@ func (m model) renderSettingsSection(w int) (string, int) {
 			}
 			if len(lines) > 0 {
 				lines = append(lines, "")
+				wide = append(wide, "")
 			}
 			lines = append(lines, cursorGap+headerStyle.Render(tr(g.title)))
+			wide = append(wide, lines[len(lines)-1])
 			for _, id := range rows {
 				if id == m.settingsCursor {
 					selected = len(lines)
 				}
-				lines = append(lines, renderRow(id))
+				lines = append(lines, renderRow(id, colW))
+				wide = append(wide, renderRow(id, wideW))
 			}
 			// Live preview: the top-N tasks ranked with the current knob values is
 			// the whole account the pane gives of a bias change — a prose tagline
 			// for the mix said less than the five rows that actually move.
 			if g.preview {
 				if preview := m.renderSettingsTopPreview(m.rank.Biases, m.rank.Heat, m.frameTime, colW); preview != "" {
-					lines = append(lines, strings.Split(strings.TrimRight(preview, "\n"), "\n")...)
+					previewLines := strings.Split(strings.TrimRight(preview, "\n"), "\n")
+					lines = append(lines, previewLines...)
+					wide = append(wide, previewLines...)
 				}
 			}
 		}
-		return lines, selected
+		return lines, wide, selected
 	}
 
 	var lines []string
 	var selected int
 	if w >= settingsTwoColMinWidth {
 		colW := (w - settingsColGap) / 2
-		left, leftSel := renderColumn(settingsGroups[:settingsColumnSplit], colW)
-		right, rightSel := renderColumn(settingsGroups[settingsColumnSplit:], colW)
-		lines, selected = joinSettingsColumns(left, leftSel, right, rightSel, colW)
+		left, leftWide, leftSel := renderColumn(settingsGroups[:settingsColumnSplit], colW, w)
+		right, _, rightSel := renderColumn(settingsGroups[settingsColumnSplit:], colW, colW)
+		lines, selected = joinSettingsColumns(left, leftWide, leftSel, right, rightSel, colW)
 	} else {
-		lines, selected = renderColumn(settingsGroups, w)
+		lines, _, selected = renderColumn(settingsGroups, w, w)
 	}
 
 	if m.updateStatus != "" {
@@ -1705,7 +1726,10 @@ func (m model) renderSettingsSection(w int) (string, int) {
 // in step. Lines are padded to the column width with ansi.StringWidth, not
 // len(): every row carries styling, and byte length would indent the right
 // column by the width of the escape sequences.
-func joinSettingsColumns(left []string, leftSel int, right []string, rightSel, colW int) ([]string, int) {
+//
+// leftWide is left with its rows clipped to the whole pane rather than to
+// colW; it is used where the right column has nothing.
+func joinSettingsColumns(left, leftWide []string, leftSel int, right []string, rightSel, colW int) ([]string, int) {
 	n := len(left)
 	if len(right) > n {
 		n = len(right)
@@ -1723,6 +1747,9 @@ func joinSettingsColumns(left []string, leftSel int, right []string, rightSel, c
 			// Nothing to the right of this line, so a value wider than its
 			// column share may run on into the empty lane — which is how
 			// "Board columns" keeps showing its whole list of columns.
+			if i < len(leftWide) {
+				l = leftWide[i]
+			}
 			out = append(out, l)
 			continue
 		}

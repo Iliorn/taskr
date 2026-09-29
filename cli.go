@@ -294,7 +294,7 @@ Sync (cross-device):
     [--tls-cert=F --tls-key=F]              serve https with this PEM pair (re-read when the files are renewed)
   taskr sync [--url=U] [--token=T] [--save]  push/pull once against a sync server (--save stores config)
                                             auto-sync runs on its own once configured (set "auto_sync":false in
-                                            ~/.taskr/sync.json to disable); conflicts log to ~/.taskr/sync.log
+                                            sync.json to disable); conflicts log to sync.log
   taskr sync --status                        print the last sync time/result (local only, no network)
   taskr sync --accept-stale                  rejoin after being offline past the deletion-memory window
                                             (~6 months; BOTH auto-sync and a manual "taskr sync" refuse until
@@ -304,7 +304,7 @@ Sync (cross-device):
                                             (a device that has never synced and holds tasks of its own refuses to
                                              sync until one of these is given, so its old tasks can't land on every
                                              device by surprise; the backup is a normal export, taskr import undoes it)
-  taskr sync --recover                       list dropped edits from ~/.taskr/sync.log (local only, no network)
+  taskr sync --recover                       list dropped edits from sync.log (local only, no network)
   taskr sync --recover=<ref>                 reapply one dropped edit by id-prefix or title substring;
                                             stamps a fresh ModifiedAt so the fix propagates on the next sync
 
@@ -363,12 +363,13 @@ Flags (edit):
   --remove-dep=REF    remove a dependency
 
 Notes:
-  - Data lives at ~/.taskr/tasks.db (shared with the TUI). Concurrent CLI +
+  - Data lives in tasks.db, shared with the TUI ('taskr doctor' prints where
+    taskr keeps its files). Concurrent CLI +
     TUI usage is safe for reads; writes serialize via SQLite's busy-timeout.
     A running TUI live-reloads on external writes via a filesystem watcher,
     so CLI changes appear without restarting it.
-  - The sequencing engine's rank.Biases (Deadline/Priority/Momentum) are loaded
-    from ~/.taskr/settings.json, so 'top' and 'list' rank the same way as
+  - The sequencing weights (Deadline/Priority/Momentum) are loaded from
+    settings.json, so 'top' and 'list' rank the same way as
     the TUI under the user's current bias settings.`)
 	return 0
 }

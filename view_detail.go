@@ -142,7 +142,7 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	subTime := m.descendantTimeSpent(t.ID)
 	if len(t.TimeEntries) > 0 || subTime > 0 {
 		own := t.TotalTimeSpent()
-		timeVal := fmt.Sprintf(tr("%s (%d entries)"), formatDuration(own), len(t.TimeEntries))
+		timeVal := trCount("%s (%d entries)", len(t.TimeEntries), formatDuration(own), len(t.TimeEntries))
 		if subTime > 0 {
 			// Show the rolled-up total separately so the user can see what
 			// their own logged time was vs. what subtasks added.

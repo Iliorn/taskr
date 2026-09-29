@@ -195,30 +195,43 @@ func renderTagsPart(tags []string) string {
 	return sb.String()
 }
 
-// renderTaskTagCells draws a row's Tags cell: a leading gap, the chips that
-// fit, and an optional "+N" count for the ones that did not. On a selected row
-// the whole cell keeps the tag foreground while the selection background runs
-// through the gap, the chips and the spaces between them, so the highlight does
-// not break where the tags start.
-func renderTaskTagCells(tags []string, marker string, selected bool) string {
-	if len(tags) == 0 && marker == "" {
+// rowTagWords spells a row's tags the way the Tags column shows them: "#tag",
+// with no chip brackets. A list row is the dense view, where the two bracket
+// cells per tag are better spent on another tag; the detail pane and the
+// calendar, which give each tag room of its own, keep the ⟨#tag⟩ chips.
+func rowTagWords(tags []string) []string {
+	words := make([]string, len(tags), len(tags)+1)
+	for i, tag := range tags {
+		words[i] = "#" + tag
+	}
+	return words
+}
+
+// rowTagsWidth is the width of a row's tags as rowTagWords spells them, one
+// space apart, without the Tags cell's leading gap.
+func rowTagsWidth(tags []string) int {
+	if len(tags) == 0 {
+		return 0
+	}
+	w := len(tags) - 1
+	for _, tag := range tags {
+		w += 1 + len([]rune(tag))
+	}
+	return w
+}
+
+// renderTaskTagCells draws a row's Tags cell: a leading gap, then words — tags,
+// a clipped tag, a "+N" count — one space apart in the tag colour. On a
+// selected row the selection background runs through the gap and the spaces
+// too, so the highlight does not break where the tags start.
+func renderTaskTagCells(words []string, selected bool) string {
+	if len(words) == 0 {
 		return ""
 	}
 	if selected {
-		var sb strings.Builder
-		sb.Grow(len(tags)*12 + len(marker) + 1)
-		sb.WriteByte(' ')
-		for _, tag := range tags {
-			sb.WriteString("⟨#" + tag + "⟩ ")
-		}
-		sb.WriteString(marker)
-		return taskTagSelectedRowStyle.Render(sb.String())
+		return taskTagSelectedRowStyle.Render(" " + strings.Join(words, " "))
 	}
-	out := " " + renderTagsPart(tags)
-	if marker != "" {
-		out += tagStyle.Render(marker)
-	}
-	return out
+	return " " + tagStyle.Render(strings.Join(words, " "))
 }
 
 // selectedRowTail fills the rest of a selected row with the selection
@@ -236,36 +249,52 @@ func selectedRowTail(st fastStyle, drawn, contentW int) string {
 	return st.render(strings.Repeat(" ", pad))
 }
 
-// renderTaskTagsClipped draws as many of a row's tag chips as fit in avail
-// display cells and closes with a "+N" count for the rest. It returns the
-// styled cell and the width it drew. Callers reach it through
-// model.renderRowTags, which serves the whole-set case from the render cache
-// and only falls through to here when chips actually have to be dropped.
-// Chips are dropped from the end because the tag list is already sorted on the
-// task, so the order is stable frame to frame.
+// renderTaskTagsClipped draws as many of a row's tags as fit in avail display
+// cells and closes with a "+N" count for the rest. It returns the styled cell
+// and the width it drew. Callers reach it through model.renderRowTags, which
+// serves the whole-set case from the render cache and only falls through to
+// here when tags actually have to be dropped. Tags are dropped from the end
+// because the tag list is already sorted on the task, so the order is stable
+// frame to frame. The first tag that does not fit whole is clipped into the
+// room left rather than dropped, as long as a couple of its letters show:
+// "#bug #rele… +1" still names the tag, where "#bug +2" says only that there
+// are more.
 func renderTaskTagsClipped(tags []string, avail int, selected bool) (string, int) {
-	// tagsRenderWidth already counts the trailing space each chip draws, so the
-	// marker needs no separator of its own. k starts at the full set so the
-	// function is total: given room for every chip it draws every chip, and a
-	// caller that has not pre-checked the fit still gets the right answer.
-	for k := len(tags); k >= 1; k-- {
+	// k counts down from the full set so the function is total: given room
+	// for every tag it draws every tag, and a caller that has not pre-checked
+	// the fit still gets the right answer.
+	for k := len(tags); k >= 0; k-- {
+		words := rowTagWords(tags[:k])
 		if k == len(tags) {
-			if w := 1 + tagsRenderWidth(tags); w <= avail {
-				return renderTaskTagCells(tags, "", selected), w
+			if k > 0 && tagCellWidth(words) <= avail {
+				return renderTaskTagCells(words, selected), tagCellWidth(words)
 			}
 			continue
 		}
-		marker := "+" + strconv.Itoa(len(tags)-k)
-		w := 1 + tagsRenderWidth(tags[:k]) + len([]rune(marker))
-		if w <= avail {
-			return renderTaskTagCells(tags[:k], marker, selected), w
+		var after []string
+		if rest := len(tags) - k - 1; rest > 0 {
+			after = []string{"+" + strconv.Itoa(rest)}
+		}
+		if room := avail - tagCellWidth(append(append(words[:k:k], ""), after...)); room >= tagClipMinW {
+			words = append(append(words, truncate("#"+tags[k], room)), after...)
+			return renderTaskTagCells(words, selected), tagCellWidth(words)
+		}
+		words = append(words, "+"+strconv.Itoa(len(tags)-k))
+		if w := tagCellWidth(words); w <= avail {
+			return renderTaskTagCells(words, selected), w
 		}
 	}
-	marker := "+" + strconv.Itoa(len(tags))
-	if w := 1 + len([]rune(marker)); w <= avail {
-		return renderTaskTagCells(nil, marker, selected), w
-	}
 	return "", 0
+}
+
+// tagCellWidth is the width renderTaskTagCells draws words at: the leading gap
+// and the words one space apart.
+func tagCellWidth(words []string) int {
+	w := len(words)
+	for _, s := range words {
+		w += len([]rune(s))
+	}
+	return w
 }
 
 // listCols decides which columns of the task/history list fit at the current
@@ -323,17 +352,6 @@ func dueColMax(tasks []todo.Todo, now time.Time) int {
 	return max
 }
 
-// tagsRenderWidth is the on-screen width of a task's trailing tag list as the
-// list rows render it (each tag as " #tag" plus styling padding). Used both to
-// size rows and to reserve tag room when growing the title column.
-func tagsRenderWidth(tags []string) int {
-	w := 0
-	for _, tag := range tags {
-		w += 4 + len([]rune(tag))
-	}
-	return w
-}
-
 // taskListCols decides which columns of the task/history list fit at the
 // current terminal width. hasDue must be true when at least one visible row
 // carries a non-zero due date; when it is false the Due column is omitted
@@ -354,7 +372,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 			// Start at the compact baseline for ordinary layouts. After the fixed
 			// columns and title have claimed what they need, genuine spare width is
 			// offered back to Project below so wide terminals reveal longer names.
-			projectWant = hugColW(widestProject, tr("Project"))
+			projectWant = hugColW(widestProject, listHeader("Project"))
 			c.projectW = projectWant
 			if c.projectW > projectColCompactW {
 				c.projectW = projectColCompactW
@@ -379,15 +397,15 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 
 	// Score holds a percentage, so its widest value is "100%"; the header is
 	// wider than that, which is what actually sizes the column.
-	lastW := hugColW(scoreValW, tr("Score"))
-	sizeW := hugColW(1, tr("Size"))
+	lastW := hugColW(scoreValW, listHeader("Score"))
+	sizeW := hugColW(1, listHeader("Size"))
 	// The active list shows short relative due values ("2d", "today"), so hug the
 	// Due column to its widest entry: a list with nothing but "3d" values does
 	// not strand a full-date-wide empty column. Capped at dueValMaxW, the
 	// full-date worst case, so one far-off task cannot widen it further. History
 	// always shows absolute dates, so it keeps the fixed 12-wide column that also
 	// matches its Completed column.
-	dueW := hugColW(min(dueMax, dueValMaxW), tr("Due"))
+	dueW := hugColW(min(dueMax, dueValMaxW), listHeader("Due"))
 	if isHistory {
 		lastW = 12
 		dueW = 12
@@ -424,7 +442,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	// A row that has tags keeps enough room to say so. Three cells buy " +N",
 	// which is the difference between "this task has two more tags" and "this
 	// task has no tags" — a distinction the row cannot make in fewer. It is
-	// only a floor: the chips themselves still take whatever is left over.
+	// only a floor: the tags themselves still take whatever is left over.
 	tagsMin := 0
 	if c.showTags {
 		tagsMin = tagsOverflowMinW
@@ -448,9 +466,9 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	// Reserve room for the tags before growing the title into spare width — but
 	// only a share of it. Reserving the widest tag row's full width meant one
 	// tag-heavy task clipped every title in the list, and the reserved cells
-	// then went unused anyway, because the chips still did not fit and
+	// then went unused anyway, because the tags still did not fit and
 	// collapsed to a marker. Capping the reserve and letting the cell degrade
-	// to "⟨#bug⟩ +2" spends the width on whichever column can use it.
+	// to "#bug +2" spends the width on whichever column can use it.
 	tagsReserve := 0
 	if tagsMax > 0 {
 		tagsReserve = 1 + tagsMax
@@ -471,7 +489,7 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 		}
 	}
 
-	// Once task titles and tag chips have enough room, let a visible Project
+	// Once task titles and tags have enough room, let a visible Project
 	// column consume the remaining slack up to its actual content need. This is
 	// deliberately after title growth: it removes otherwise-empty space without
 	// making task titles truncate sooner merely to widen a secondary column.
@@ -519,20 +537,20 @@ func renderListHeader(b *strings.Builder, termWidth int, isHistory bool, c listC
 // drill-in holds both).
 func renderListHeaderTitled(b *strings.Builder, termWidth int, isHistory bool, c listCols, posLabel, title string) {
 	dueW := c.dueW
-	sizeLabel := padRight(tr("Size"), c.sizeW)
+	sizeLabel := padRight(listHeader("Size"), c.sizeW)
 	// Score and Due are right-aligned value fields on the active list (see
 	// listColGap), so their labels sit over the field rather than at the
 	// column's left edge — otherwise the header names a column whose values
 	// end five cells further right.
-	dueLabel := padRight(padLeft(tr("Due"), dueW-listColGap), dueW)
-	lastLabel := padRight(padLeft(tr("Score"), c.lastW-listColGap), c.lastW)
+	dueLabel := padRight(padLeft(listHeader("Due"), dueW-listColGap), dueW)
+	lastLabel := padRight(padLeft(listHeader("Score"), c.lastW-listColGap), c.lastW)
 	// The active-sort cue lives in the panel border title, so column headers
 	// stay plain — no >..< decoration to reflow.
 	if isHistory {
 		// History's dates are all the same width, so its columns stay
 		// left-aligned and its labels with them.
-		sizeLabel = padCenter(tr("Size"), c.sizeW)
-		dueLabel = padRight(tr("Due"), dueW)
+		sizeLabel = padCenter(listHeader("Size"), c.sizeW)
+		dueLabel = padRight(listHeader("Due"), dueW)
 		lastLabel = padRight(tr("Completed"), 12)
 	}
 
@@ -554,13 +572,13 @@ func renderListHeaderTitled(b *strings.Builder, termWidth int, isHistory bool, c
 		headerLeft += lastLabel
 	}
 	if c.showProject {
-		headerLeft += padRight(tr("Project"), c.projectW)
+		headerLeft += padRight(listHeader("Project"), c.projectW)
 	}
 	// Row tags are rendered with a leading space (see renderTaskLineWithSet), so
 	// the header label needs the same lead-in to line up with the tag content.
 	// Only show the "Tags" label when at least one visible row actually has tags
 	// (c.showTags), so the header never reserves space for an always-blank column.
-	tagsLabel := " " + tr("Tags")
+	tagsLabel := " " + listHeader("Tags")
 	// Reserve the right end for the position indicator (a leading space + the
 	// label) before the tags label claims the slack, so a full list can't push
 	// the indicator off the edge.
@@ -574,7 +592,7 @@ func renderListHeaderTitled(b *strings.Builder, termWidth int, isHistory bool, c
 	padW := termWidth - 8 - len([]rune(headerLeft)) - posW
 	if c.showTags {
 		// When only the minimal "+N" cell fits there is no room for the word,
-		// but the sigil the chips themselves are built from says the same
+		// but the sigil every tag starts with says the same
 		// thing in two cells — and a lone "+2" under no heading at all reads
 		// as belonging to whichever column happens to precede it.
 		if padW < len([]rune(tagsLabel)) {
@@ -1454,10 +1472,15 @@ func parseDueDateAt(s string, now time.Time) (time.Time, error) {
 		return nextWeekday(today, weekday), nil
 	}
 
-	if strings.HasPrefix(lower, "+") && len(lower) > 2 {
+	// "+3d" counts forward and "-2d" back: the list shows an overdue date as
+	// "-2d", so what it prints can be typed back in.
+	if (strings.HasPrefix(lower, "+") || strings.HasPrefix(lower, "-")) && len(lower) > 2 {
 		unit := lower[len(lower)-1]
 		numStr := lower[1 : len(lower)-1]
 		if n, ok := parsePositiveInt(numStr); ok && n > 0 {
+			if lower[0] == '-' {
+				n = -n
+			}
 			switch unit {
 			case 'd':
 				return today.AddDate(0, 0, n), nil
@@ -1475,7 +1498,7 @@ func parseDueDateAt(s string, now time.Time) (time.Time, error) {
 	if t, err := time.ParseInLocation("02-01-2006", s, now.Location()); err == nil {
 		return t, nil
 	}
-	return time.Time{}, fmt.Errorf("invalid date: use dd-mm-yy, %q, %q, %q, %q, or '+Nd/+Nw/+Nm'",
+	return time.Time{}, fmt.Errorf("invalid date: use dd-mm-yy, %q, %q, %q, %q, or '+Nd/+Nw/+Nm' (- counts back)",
 		inputWord("today"), inputWord("tomorrow"), inputWord("next week"), strings.ToLower(localizedWeekday(time.Monday)))
 }
 

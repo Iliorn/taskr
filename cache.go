@@ -2,7 +2,6 @@ package main
 
 import (
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/Iliorn/taskr/rank"
@@ -42,7 +41,6 @@ type cacheState struct {
 	subProgress   map[string]subProgress // parentID → subtask done/total; see refreshSubtaskProgress
 	rankScore     map[string]float64     // taskID → the lift the sequence ranking sorts (and shows) it by; see rank.Lifts
 	projLastUsed  map[string]time.Time   // project → latest ModifiedAt of a task in it
-	tagRender     map[string]string
 	taskTagRender map[string]string
 	boardCols     [][]todo.Todo // Board-tab columns derived from active/done; see buildBoardColumns
 	// closedToday is the tasks completed since midnight, newest first, for the
@@ -191,7 +189,7 @@ func (m *model) refreshTaskColMetrics() {
 		if w := taskRowLabelWidth(m.taskRowLabel(&active[i])); w > contentMax {
 			contentMax = w
 		}
-		if tw := tagsRenderWidth(active[i].Tags); tw > tagsMax {
+		if tw := rowTagsWidth(active[i].Tags); tw > tagsMax {
 			tagsMax = tw
 		}
 		if !active[i].DueDate.IsZero() {
@@ -255,14 +253,11 @@ func sortedGroupNames(sums map[string]*groupSummary) []string {
 }
 
 func (m *model) refreshTagRenderCache() {
-	for k := range m.cache.tagRender {
-		delete(m.cache.tagRender, k)
-	}
 	for k := range m.cache.taskTagRender {
 		delete(m.cache.taskTagRender, k)
 	}
-	// Both fill on demand in getRenderedTagsForTask: only the rows on screen
-	// need their chips, and rendering every task's up front made each tab
+	// It fills on demand in getRenderedTagsForTask: only the rows on screen
+	// need their tags, and rendering every task's up front made each tab
 	// switch (which refreshes the filtered lists) pay for thousands.
 }
 
@@ -309,30 +304,28 @@ func (m model) completedTodos() []todo.Todo {
 }
 
 // renderRowTags draws a task's Tags cell for a list row, taking the whole-set
-// render from the by-ID cache whenever the chips fit — which is the common case
-// and the one worth caching, since that string is identical frame to frame.
-// Only a row that has to drop chips pays to build its own.
+// render from the by-ID cache whenever every tag fits — which is the common
+// case and the one worth caching, since that string is identical frame to
+// frame. Only a row that has to drop tags pays to build its own.
 func (m *model) renderRowTags(t *todo.Todo, avail int, selected bool) (string, int) {
 	if len(t.Tags) == 0 || avail <= 0 {
 		return "", 0
 	}
-	full := 1 + tagsRenderWidth(t.Tags)
+	full := 1 + rowTagsWidth(t.Tags)
 	if full > avail {
 		return renderTaskTagsClipped(t.Tags, avail, selected)
 	}
-	// The selected row's chips carry the selection background, which the cache
-	// does not hold — it is one row per frame, so it renders its own.
+	// The selected row's cell carries the selection background, which the
+	// cache does not hold — it is one row per frame, so it renders its own.
 	if selected {
-		return renderTaskTagCells(t.Tags, "", true), full
+		return renderTaskTagCells(rowTagWords(t.Tags), true), full
 	}
-	return " " + m.getRenderedTagsForTask(t), full
+	return m.getRenderedTagsForTask(t), full
 }
 
-// getRenderedTagsForTask returns a task's rendered tags via the by-ID cache,
-// so a row drawn again costs a map lookup rather than the strings.Join that
-// getRenderedTags pays to build its key. A miss renders through tagRender,
-// which dedups by tag set, and remembers the result under the task's ID until
-// refreshTagRenderCache clears both.
+// getRenderedTagsForTask returns a task's whole Tags cell via the by-ID cache,
+// so a row drawn again costs a map lookup. It fills on demand, for the rows on
+// screen, until refreshTagRenderCache clears it.
 func (m *model) getRenderedTagsForTask(t *todo.Todo) string {
 	if len(t.Tags) == 0 {
 		return ""
@@ -340,23 +333,7 @@ func (m *model) getRenderedTagsForTask(t *todo.Todo) string {
 	if r, ok := m.cache.taskTagRender[t.ID]; ok {
 		return r
 	}
-	key := strings.Join(t.Tags, ",")
-	rendered, ok := m.cache.tagRender[key]
-	if !ok {
-		rendered = renderTagsPart(t.Tags)
-		m.cache.tagRender[key] = rendered
-	}
+	rendered := renderTaskTagCells(rowTagWords(t.Tags), false)
 	m.cache.taskTagRender[t.ID] = rendered
 	return rendered
-}
-
-func (m model) getRenderedTags(tags []string) string {
-	if len(tags) == 0 {
-		return ""
-	}
-	key := strings.Join(tags, ",")
-	if cached, ok := m.cache.tagRender[key]; ok {
-		return cached
-	}
-	return renderTagsPart(tags)
 }

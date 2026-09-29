@@ -33,7 +33,7 @@ import (
 // noticed the fallback, and the Sequencer pane was English inside an otherwise
 // Danish screen because its words never went through tr() at all.
 
-var trLiteral = regexp.MustCompile(`\btr\(\s*"((?:[^"\\]|\\.)*)"`)
+var trLiteral = regexp.MustCompile(`\btr(?:Count)?\(\s*"((?:[^"\\]|\\.)*)"`)
 
 // uiStrings collects every string literal passed to tr() outside the tests.
 func uiStrings(t *testing.T) []string {
@@ -170,6 +170,47 @@ func TestTranslationsKeepTheirFormatVerbs(t *testing.T) {
 			got := verbs.FindAllString(dst, -1)
 			if strings.Join(want, " ") != strings.Join(got, " ") {
 				t.Errorf("%s: %q → %q changes the format verbs (%v → %v)", lang, src, dst, want, got)
+			}
+		}
+	}
+	for lang, table := range countOne {
+		for src, dst := range table {
+			want := verbs.FindAllString(src, -1)
+			got := verbs.FindAllString(dst, -1)
+			if strings.Join(want, " ") != strings.Join(got, " ") {
+				t.Errorf("%s singular: %q → %q changes the format verbs (%v → %v)", lang, src, dst, want, got)
+			}
+		}
+	}
+}
+
+// A count agrees with its noun: "1 day" and "1 færdig", not "1 days" and
+// "1 færdige", while every other count keeps the table's plural.
+func TestCountsAgreeInTheSingular(t *testing.T) {
+	defer applyLang(string(langEN))
+	cases := []struct {
+		lang      language
+		s         string
+		one, many string
+	}{
+		{langEN, "%d days overdue", "1 day overdue", "2 days overdue"},
+		{langDA, "%d done", "1 færdig", "2 færdige"},
+		{langDA, "%d open", "1 åben", "2 åbne"},
+		{langDE, "created %d days ago", "vor 1 Tag erstellt", "vor 2 Tagen erstellt"},
+	}
+	for _, c := range cases {
+		applyLang(string(c.lang))
+		if got := trCount(c.s, 1, 1); got != c.one {
+			t.Errorf("%s %q with 1 = %q, want %q", c.lang, c.s, got, c.one)
+		}
+		if got := trCount(c.s, 2, 2); got != c.many {
+			t.Errorf("%s %q with 2 = %q, want %q", c.lang, c.s, got, c.many)
+		}
+	}
+	for lang, table := range countOne {
+		for src := range table {
+			if _, ok := translations[lang][src]; lang != langEN && !ok {
+				t.Errorf("%s has a singular for %q but no plural translation", lang, src)
 			}
 		}
 	}

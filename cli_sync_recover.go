@@ -13,7 +13,7 @@ import (
 )
 
 // cli_sync_recover.go implements `taskr sync --recover` and `taskr sync
-// --recover=<ref>`. The sync log (~/.taskr/sync.log) is an append-only file
+// --recover=<ref>`. The sync log (sync.log, state directory) is an append-only file
 // of JSON lines written by logDroppedEdits. This file parses those lines,
 // presents them human-readably, and reapplies one entry through the normal
 // save path so the recovered edit propagates on the next regular sync.

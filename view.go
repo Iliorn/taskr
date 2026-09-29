@@ -314,6 +314,54 @@ func (m model) View() string {
 	}
 
 	// ── DETAIL (with caching) ────────────────────────────────────────────
+	detailContent, detailLineCount := m.buildStackedDetail(w)
+
+	// ── LIST ─────────────────────────────────────────────────────────────
+	target := m.termHeight
+	availableForList := m.listPanelOuterH(detailLineCount, footerLines)
+	listContent := m.buildListContent(w, availableForList)
+	listSplit := strings.Split(listContent, "\n")
+	for len(listSplit) > 0 && strings.TrimSpace(listSplit[len(listSplit)-1]) == "" {
+		listSplit = listSplit[:len(listSplit)-1]
+	}
+
+	// ── ASSEMBLE ─────────────────────────────────────────────────────────
+	// Remove from second-to-last so the bottom border is always preserved.
+	for len(listSplit) > availableForList {
+		n := len(listSplit)
+		listSplit = append(listSplit[:n-2], listSplit[n-1:]...)
+	}
+	for len(listSplit) < availableForList {
+		listSplit = append(listSplit, "")
+	}
+	for _, line := range listSplit {
+		out.WriteString(line + "\n")
+	}
+	if detailContent != "" {
+		out.WriteString(detailContent + "\n")
+	}
+	if footerContent != "" {
+		out.WriteString(footerContent)
+	}
+	result := out.String()
+	resultLines := strings.Split(result, "\n")
+	for len(resultLines) < target {
+		resultLines = append(resultLines, "")
+	}
+	if len(resultLines) > target {
+		resultLines = resultLines[:target]
+	}
+
+	for i, line := range resultLines {
+		resultLines[i] = " " + line
+	}
+	return strings.Join(resultLines, "\n")
+
+}
+
+// buildStackedDetail renders the detail panel View stacks under the list, and
+// the rows it takes; ("", 0) when the tab and mode show none.
+func (m model) buildStackedDetail(w int) (string, int) {
 	var detailContent string
 	detailLineCount := 0
 	showDetail := m.mode == modeNormal
@@ -375,60 +423,21 @@ func (m model) View() string {
 			detailLineCount = len(detailSplit)
 		}
 	}
+	return detailContent, detailLineCount
+}
 
-	// ── LAYOUT ───────────────────────────────────────────────────────────
+// listPanelOuterH is the height View gives the list panel, border included,
+// once the header, the stacked detail (detailLines rows) and the footer
+// (footerLines rows) have theirs.
+func (m model) listPanelOuterH(detailLines, footerLines int) int {
 	li := computeLayout(layoutInput{
 		termW:       m.termWidth,
 		termH:       m.termHeight,
 		mode:        m.mode,
 		tab:         m.tab,
-		detailLines: detailLineCount,
+		detailLines: detailLines,
 	})
-
-	// ── LIST ─────────────────────────────────────────────────────────────
-	target := m.termHeight
-	availableForList := target - li.headerH - detailLineCount - footerLines
-	if availableForList < minListHeight {
-		availableForList = minListHeight
-	}
-	listContent := m.buildListContent(w, availableForList)
-	listSplit := strings.Split(listContent, "\n")
-	for len(listSplit) > 0 && strings.TrimSpace(listSplit[len(listSplit)-1]) == "" {
-		listSplit = listSplit[:len(listSplit)-1]
-	}
-
-	// ── ASSEMBLE ─────────────────────────────────────────────────────────
-	// Remove from second-to-last so the bottom border is always preserved.
-	for len(listSplit) > availableForList {
-		n := len(listSplit)
-		listSplit = append(listSplit[:n-2], listSplit[n-1:]...)
-	}
-	for len(listSplit) < availableForList {
-		listSplit = append(listSplit, "")
-	}
-	for _, line := range listSplit {
-		out.WriteString(line + "\n")
-	}
-	if detailContent != "" {
-		out.WriteString(detailContent + "\n")
-	}
-	if footerContent != "" {
-		out.WriteString(footerContent)
-	}
-	result := out.String()
-	resultLines := strings.Split(result, "\n")
-	for len(resultLines) < target {
-		resultLines = append(resultLines, "")
-	}
-	if len(resultLines) > target {
-		resultLines = resultLines[:target]
-	}
-
-	for i, line := range resultLines {
-		resultLines[i] = " " + line
-	}
-	return strings.Join(resultLines, "\n")
-
+	return max(m.termHeight-li.headerH-detailLines-footerLines, minListHeight)
 }
 
 // ── Status line ────────────────────────────────────────────────────────────────
@@ -1022,6 +1031,9 @@ func (m model) buildListContent(w, outerH int) string {
 
 	innerH := panelContentHeight(outerH)
 	rawList := m.buildListLines()
+	if m.tab == tabStats {
+		rawList = scrollWindowLines(trimTrailingBlank(rawList), min(m.statsScroll, m.statsMaxScroll()), innerH)
+	}
 	for len(rawList) < innerH {
 		rawList = append(rawList, "")
 	}
@@ -1031,6 +1043,50 @@ func (m model) buildListContent(w, outerH int) string {
 	truncateLines(rawList, w-2)
 	panel := listPanelStyle.Width(w).Render(strings.Join(rawList, "\n"))
 	return withBorderTitle(panel, m.listPanelTitle(), w, false)
+}
+
+// scrollWindowLines is the h lines of lines from offset on, with the first
+// and last replaced by a count of what is hidden above and below — the detail
+// pane's markers, for a pane scrolled without a cursor.
+func scrollWindowLines(lines []string, offset, h int) []string {
+	if h <= 0 || len(lines) <= h {
+		return lines
+	}
+	offset = max(0, min(offset, len(lines)-h))
+	visible := make([]string, h)
+	copy(visible, lines[offset:offset+h])
+	if offset > 0 {
+		visible[0] = dimStyle.Render(fmt.Sprintf(tr("  ↑ %d more"), offset+1))
+	}
+	if end := offset + h; end < len(lines) {
+		visible[h-1] = dimStyle.Render(fmt.Sprintf(tr("  ↓ %d more"), len(lines)-end+1))
+	}
+	return visible
+}
+
+func trimTrailingBlank(lines []string) []string {
+	for len(lines) > 0 && strings.TrimSpace(ansi.Strip(lines[len(lines)-1])) == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+// statsSummaryRows is how many lines of the Stats summary the list panel
+// shows: what View leaves it under the Activity chart and above the footer.
+func (m model) statsSummaryRows() int {
+	w := m.termWidth - 6
+	_, detailLines := m.buildStackedDetail(w)
+	footerLines := 0
+	if f := m.buildFooterContent(w); f != "" {
+		footerLines = strings.Count(f, "\n") + 1
+	}
+	return panelContentHeight(m.listPanelOuterH(detailLines, footerLines))
+}
+
+// statsMaxScroll is the furthest ↓ scrolls the Stats summary: its last line
+// at the bottom of the panel.
+func (m model) statsMaxScroll() int {
+	return max(0, len(trimTrailingBlank(m.buildListLines()))-m.statsSummaryRows())
 }
 
 // buildSideBySide renders the Tasks tab side by side as
@@ -1578,7 +1634,7 @@ func (m model) statsActivity() (label string, buckets []statsBucket, weekly bool
 func (m model) statsPanelTitle() string {
 	name := tr("Activity")
 	label, _, _, total := m.statsActivity()
-	scope := "[" + label + " · " + fmt.Sprintf(tr("%d done"), total) + "]"
+	scope := "[" + label + " · " + trCount("%d done", total, total) + "]"
 	legend := "[" + tr("1 block = 1 completed task") + "]"
 	budget := m.termWidth - 10 // withBorderTitle's own max: (termWidth-6) - 4
 	for _, form := range []string{
@@ -1836,11 +1892,14 @@ func (m model) renderStatsDetail() string {
 			default:
 				lbl = string(localizedWeekdayInitial(wd))
 			}
-			start := barStart(k) + (bw-len(lbl))/2
+			// Cells, not bytes: "Lørdag" is six cells in seven bytes, and a
+			// byte index would leave a hole after the ø.
+			runes := []rune(lbl)
+			start := barStart(k) + (bw-len(runes))/2
 			if start < barStart(k) {
 				start = barStart(k)
 			}
-			for j, ch := range lbl {
+			for j, ch := range runes {
 				if c := start + j; c >= 0 && c < chartW {
 					label[c] = statsCell{ch, -2, -1}
 				}

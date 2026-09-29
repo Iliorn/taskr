@@ -1317,41 +1317,35 @@ func TestTitleColumnReservesExactlyWhatTheRowDraws(t *testing.T) {
 
 // ── Tag cell ─────────────────────────────────────────────────────────────────
 
-func TestTagCellDropsChipsOneAtATime(t *testing.T) {
+func TestTagCellClipsThenCounts(t *testing.T) {
 	tags := []string{"bug", "ci", "release"}
-	full := 1 + tagsRenderWidth(tags)
+	full := 1 + rowTagsWidth(tags)
 
-	// Everything fits: no marker.
-	if got, w := renderTaskTagsClipped(tags, full+10, false); w != 0 && strings.Contains(ansi.Strip(got), "+") {
-		t.Errorf("a cell with room for every chip should carry no count: %q", ansi.Strip(got))
+	check := func(avail int, want string) {
+		t.Helper()
+		got, w := renderTaskTagsClipped(tags, avail, false)
+		if plain := ansi.Strip(got); plain != want {
+			t.Errorf("avail %d: cell = %q, want %q", avail, plain, want)
+		}
+		if w > avail {
+			t.Errorf("avail %d: cell drew %d cells", avail, w)
+		}
+		if aw := ansi.StringWidth(got); aw != w {
+			t.Errorf("avail %d: reported width %d disagrees with the rendered %d", avail, w, aw)
+		}
 	}
-	// One cell short of the full set: the last chip goes, the count arrives.
-	got, w := renderTaskTagsClipped(tags, full-1, false)
-	plain := ansi.Strip(got)
-	if !strings.Contains(plain, "⟨#bug⟩") {
-		t.Errorf("the first chip should survive: %q", plain)
-	}
-	if !strings.Contains(plain, "+1") {
-		t.Errorf("the dropped chip should be counted: %q", plain)
-	}
-	if w > full-1 {
-		t.Errorf("cell drew %d cells, was given %d", w, full-1)
-	}
-	if aw := ansi.StringWidth(got); aw != w {
-		t.Errorf("reported width %d disagrees with the rendered %d", w, aw)
-	}
+	// Everything fits: every tag, no count.
+	check(full+10, " #bug #ci #release")
+	// One cell short: the last tag is clipped, not dropped.
+	check(full-1, " #bug #ci #relea…")
+	// Too little room to clip it to a couple of letters: it is counted.
+	check(1+len("#bug #ci +1"), " #bug #ci +1")
+	// Room for the first tag and a count, but not a clip of the second.
+	check(1+len("#bug +2"), " #bug +2")
 	// Room for nothing but the count.
-	got, w = renderTaskTagsClipped(tags, tagsOverflowMinW, false)
-	if plain := ansi.Strip(got); !strings.Contains(plain, "+3") {
-		t.Errorf("a minimal cell should still say all three are hidden: %q", plain)
-	}
-	if w > tagsOverflowMinW {
-		t.Errorf("minimal cell drew %d cells, was given %d", w, tagsOverflowMinW)
-	}
+	check(tagsOverflowMinW, " +3")
 	// No room at all: draw nothing rather than overflow the row.
-	if got, w := renderTaskTagsClipped(tags, 1, false); got != "" || w != 0 {
-		t.Errorf("a cell with no room should draw nothing, got %q (%d)", ansi.Strip(got), w)
-	}
+	check(1, "")
 }
 
 // A list whose longest title is shorter than its own column header sized the
@@ -1362,5 +1356,38 @@ func TestShortTitlesStillLeaveAGapAfterTheHeader(t *testing.T) {
 	if c.titleW < len([]rune(tr("Active tasks")))+listColGap {
 		t.Errorf("titleW = %d, want at least the header plus its gap (%d)",
 			c.titleW, len([]rune(tr("Active tasks")))+listColGap)
+	}
+}
+
+// The list prints an overdue date as "-2d", so "-2d" types it back in.
+func TestParseDueDateCountsBack(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.Local)
+	for in, want := range map[string]string{
+		"-2d": "27-09-26", "+2d": "01-10-26", "-1w": "22-09-26", "-1m": "29-08-26",
+	} {
+		got, err := parseDueDateAt(in, now)
+		if err != nil || got.Format("02-01-06") != want {
+			t.Errorf("parseDueDateAt(%q) = %v, %v; want %s", in, got.Format("02-01-06"), err, want)
+		}
+	}
+	if _, err := parseDueDateAt("-0d", now); err == nil {
+		t.Error("-0d should be refused, as +0d is")
+	}
+	if p := parseQuickAdd("Fix the tap due:-2d"); p.title != "Fix the tap" || p.dueDate.IsZero() {
+		t.Errorf("quick-add should take due:-2d as a date, got title %q", p.title)
+	}
+}
+
+// A column heading much wider than its values strands cells on every row. In
+// Danish "Størrelse" over a single s/m/l pushed Project off the list at a
+// width where English still shows it.
+func TestTranslatedListHeadingsKeepTheProjectColumn(t *testing.T) {
+	defer applyLang(string(langEN))
+	for _, lang := range availableLanguages {
+		applyLang(string(lang))
+		c := taskListCols(75, false, 30, 12, true, 5, 8)
+		if !c.showProject {
+			t.Errorf("%s: the Project column dropped at a width English keeps it (%+v)", lang, c)
+		}
 	}
 }

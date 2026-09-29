@@ -79,9 +79,10 @@ const (
 var keymap = []binding{
 	// ── Navigation (global) ──────────────────────────────────────────────
 	// Registered contexts are the contexts where the key actually does
-	// something: the Stats tab has no list cursor, and the jump/page keys only
-	// drive the linear list tabs (listNavTarget), so neither is claimed
-	// everywhere. A binding the help shows must be a binding dispatch honours.
+	// something: the Stats tab scrolls rather than moves a cursor, so it
+	// registers ↑/↓ under its own description; the jump/page keys only drive
+	// the linear list tabs (listNavTarget). A binding the help shows must be a
+	// binding dispatch honours.
 	{ctxAll &^ ctxStats, "↑/↓ · j/k", "navigate", "navigate list", secNavigation, false, false},
 	{ctxTasksList | ctxProjects | ctxTags | ctxDrill, "home/end · pgup/pgdn", "listpage", "jump to ends / page through list", secNavigation, false, false},
 	// enter has no global meaning — each context defines its own (open details,
@@ -169,6 +170,7 @@ var keymap = []binding{
 	{ctxBoard, "w", "why", "why this rank", secBoard, false, false},
 	{ctxBoard, "/", "search", "filter cards (#tag, @project, text)", secBoard, true, true},
 
+	{ctxStats, "↑/↓ · j/k", "navigate", "scroll the summary", secStats, true, false},
 	{ctxStats, "enter", "statscycle", "cycle activity range", secStats, true, false},
 
 	// ── Settings ─────────────────────────────────────────────────────────

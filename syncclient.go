@@ -86,7 +86,7 @@ func syncConfigPath() string {
 	return paths.For(paths.Config, "sync.json")
 }
 
-// loadSyncConfigFile reads ~/.taskr/sync.json alone, no env overlay. This is
+// loadSyncConfigFile reads sync.json alone, no env overlay. This is
 // what `sync --save` must start from: persisting the runtime view would bake a
 // one-off TASKR_SYNC_URL/TOKEN into the file, silently outliving the env var.
 func loadSyncConfigFile() syncConfig {
@@ -255,7 +255,7 @@ func cliSync(args []string) int {
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 	url := fs.String("url", "", "sync server URL, e.g. http://100.x.y.z:8765 (or set TASKR_SYNC_URL)")
 	token := fs.String("token", "", "shared bearer token (or set TASKR_SYNC_TOKEN)")
-	save := fs.Bool("save", false, "persist --url/--token to ~/.taskr/sync.json for future syncs")
+	save := fs.Bool("save", false, "persist --url/--token to sync.json for future syncs (taskr doctor shows where)")
 	quiet := fs.Bool("quiet", false, "print nothing on success")
 	status := fs.Bool("status", false, "print the last sync time/result and exit (local only, no network)")
 	acceptStale := fs.Bool("accept-stale", false, "sync even though this device has been offline longer than the deletion-memory window (tasks deleted elsewhere may resurrect)")
@@ -275,7 +275,7 @@ func cliSync(args []string) int {
 		cfg.Token = *token
 	}
 	// --recover is a local operation: list or reapply dropped edits from
-	// ~/.taskr/sync.log. No network, no sync-server config required.
+	// sync.log. No network, no sync-server config required.
 	if *recoverRef != recoverAbsent {
 		if *recoverRef == "" {
 			return printDroppedEdits(syncLogPath())
@@ -317,8 +317,8 @@ func cliSync(args []string) int {
 		fmt.Fprintf(os.Stderr, `taskr sync: refusing: %s.
 Options:
   taskr sync --accept-stale     merge anyway (long-deleted tasks may return; back up first with taskr export)
-  or reset this device to re-pull clean: back up, then rm ~/.taskr/tasks.db and sync again
-`, staleSyncNotice(gap))
+  or reset this device to re-pull clean: back up, then rm %s and sync again
+`, staleSyncNotice(gap), dbPath())
 		return 2
 	}
 	if rc := resolveFirstSync(cfg, *adoptLocal, *adoptRemoteFlag); rc != 0 {
@@ -342,7 +342,7 @@ Options:
 	if !*quiet {
 		hint := ""
 		if sum.conflicts > 0 {
-			hint = " (dropped versions logged to ~/.taskr/sync.log)"
+			hint = " (dropped versions logged to " + syncLogPath() + ")"
 		}
 		fmt.Printf("synced: sent %d, received %d, %d conflict(s) resolved%s\n",
 			sum.sent, sum.received, sum.conflicts, hint)
@@ -441,14 +441,14 @@ func syncLogPath() string {
 	return paths.For(paths.State, "sync.log")
 }
 
-// syncLogMaxBytes caps ~/.taskr/sync.log growth: past this size the file is
+// syncLogMaxBytes caps sync.log growth: past this size the file is
 // rotated to sync.log.1 (replacing any previous .1) before the next append.
 // The log is a recovery net for conflict-overwritten edits, so one full
 // generation of history is plenty; unbounded append-forever is not.
 const syncLogMaxBytes = 1 << 20 // 1 MiB
 
 // logDroppedEdits appends one JSON line per dropped local edit to
-// ~/.taskr/sync.log so a wrongly-overwritten edit can be recovered.
+// sync.log so a wrongly-overwritten edit can be recovered.
 func logDroppedEdits(dropped []todo.Todo) error {
 	if len(dropped) == 0 {
 		return nil

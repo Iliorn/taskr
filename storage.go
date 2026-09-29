@@ -196,7 +196,7 @@ func settingsPath() string {
 	return paths.For(paths.Config, "settings.json")
 }
 
-// loadSettings reads ~/.taskr/settings.json and applies any schema migration.
+// loadSettings reads settings.json and applies any schema migration.
 // Missing file is *not* an error — a brand-new install legitimately has no
 // settings yet and gets all-zero defaults. Any other failure (corrupt JSON,
 // permissions, partial write) is returned so the caller can surface it

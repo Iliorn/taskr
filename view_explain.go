@@ -30,13 +30,13 @@ func trSeqReason(f rank.Factor) string {
 		if f.N == 1 {
 			return tr("1 day overdue")
 		}
-		return fmt.Sprintf(tr("%d days overdue"), f.N)
+		return trCount("%d days overdue", f.N, f.N)
 	case rank.ReasonDueToday:
 		return tr("due today")
 	case rank.ReasonDueTomorrow:
 		return tr("due tomorrow")
 	case rank.ReasonDueInDays:
-		return fmt.Sprintf(tr("due in %d days — the ramp adds points daily"), f.N)
+		return trCount("due in %d days — the ramp adds points daily", f.N, f.N)
 	case rank.ReasonDueBeyondRamp:
 		return fmt.Sprintf(tr("due in %d days — further out than the 7-day ramp"), f.N)
 	case rank.ReasonPriority:
@@ -55,7 +55,7 @@ func trSeqReason(f rank.Factor) string {
 		if f.N == 1 {
 			return tr("created 1 day ago")
 		}
-		return fmt.Sprintf(tr("created %d days ago"), f.N)
+		return trCount("created %d days ago", f.N, f.N)
 	case rank.ReasonAgeToday:
 		return tr("created today")
 	case rank.ReasonAgeOff:

@@ -532,7 +532,7 @@ func TestSelectedTaskRowHighlightIncludesTags(t *testing.T) {
 	if row == "" {
 		t.Fatal("tagged task row should render")
 	}
-	tagPos := strings.Index(row, "⟨#urgent⟩")
+	tagPos := strings.Index(row, "#urgent")
 	if tagPos < 0 {
 		t.Fatalf("selected row should render its tags: %q", row)
 	}
@@ -658,11 +658,9 @@ func TestDetailValuesTruncateWithoutBreakingEscapes(t *testing.T) {
 	}
 }
 
-// A tag cell that cannot show its chips still has to say the tags exist — and
-// say how many. The old marker was a bare "(…)", which spent three cells on
-// "there is something here"; "+1" spends two on the same statement plus the
-// count.
-func TestTaskTagOverflowShowsHiddenCount(t *testing.T) {
+// A tag too long for its cell is clipped, not replaced by a count: "#a-tag…"
+// still names the tag, where "+1" would say only that there is one.
+func TestTaskTagOverflowClipsTheTag(t *testing.T) {
 	before := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	applyTheme(themes[0])
@@ -695,23 +693,23 @@ func TestTaskTagOverflowShowsHiddenCount(t *testing.T) {
 	if row == "" {
 		t.Fatal("task row should render")
 	}
-	if !strings.Contains(row, "+1") {
-		t.Errorf("hidden tags should leave a count of what was hidden: %q", row)
+	if !strings.Contains(row, "#a-tag-name") || !strings.Contains(row, "…") {
+		t.Errorf("a tag too long for the cell should be clipped, not dropped: %q", row)
 	}
-	if strings.Contains(row, "a-tag-name-far-too-long") {
-		t.Errorf("overflowing tag should not leak past the marker: %q", row)
+	if strings.Contains(row, "list-column") {
+		t.Errorf("overflowing tag should not leak past its clip: %q", row)
 	}
-	markerPos := strings.Index(rawRow, "+1")
+	tagPos := strings.Index(rawRow, "#a-tag-name")
 	wantTagPrefix := newFastStyle(tagStyle).prefix
-	if markerPos < 0 || !strings.Contains(rawRow[:markerPos], wantTagPrefix) {
-		t.Errorf("overflow marker should be rendered as a Tags-column value in tag colour (%q): %q",
+	if tagPos < 0 || !strings.Contains(rawRow[:tagPos], wantTagPrefix) {
+		t.Errorf("the clipped tag should be rendered as a Tags-column value in tag colour (%q): %q",
 			wantTagPrefix, rawRow)
 	}
 }
 
-// The degraded cell is a fallback, not the rule: when the chips do fit
-// alongside a wider one, the ones that fit are drawn and only the remainder is
-// counted, so the most useful tag is still on screen.
+// The degraded cell is a fallback, not the rule: when a tag fits alongside a
+// wider one, it is drawn whole and only the wider one is clipped, so the most
+// useful tag is still on screen.
 func TestTaskTagOverflowKeepsTheChipsThatFit(t *testing.T) {
 	task := todo.New("Short title")
 	task.Tags = []string{"bug", "a-tag-name-far-too-long-for-the-task-list-column"}
@@ -729,11 +727,11 @@ func TestTaskTagOverflowKeepsTheChipsThatFit(t *testing.T) {
 	if row == "" {
 		t.Fatal("task row should render")
 	}
-	if !strings.Contains(row, "⟨#bug⟩") {
-		t.Errorf("the tag that fits should still be drawn: %q", row)
+	if !strings.Contains(row, "#bug #a-tag") {
+		t.Errorf("the tag that fits should still be drawn, the next clipped beside it: %q", row)
 	}
-	if !strings.Contains(row, "+1") {
-		t.Errorf("the tag that does not fit should be counted: %q", row)
+	if !strings.Contains(row, "…") || strings.Contains(row, "list-column") {
+		t.Errorf("the tag that does not fit should be clipped: %q", row)
 	}
 }
 

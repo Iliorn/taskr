@@ -396,6 +396,7 @@ type model struct {
 	taskSort      taskSortMode
 	historySort   historySortMode
 	statsRange    statsRangeMode
+	statsScroll   int // first Stats summary line shown; see scrollWindowLines
 	themeName     string
 	// detailPos is which side of the list the detail pane takes (right, left,
 	// or stacked at the bottom). Read by sideBySide, so it decides the layout
@@ -576,7 +577,6 @@ func initialModel(repo Repository) model {
 			overdueSet:    make(map[string]bool),
 			blockedSet:    make(map[string]bool),
 			blockerSet:    make(map[string]bool),
-			tagRender:     make(map[string]string, 32),
 			taskTagRender: make(map[string]string, 64),
 			tagLastUsed:   make(map[string]time.Time),
 			projLastUsed:  make(map[string]time.Time),
@@ -708,7 +708,7 @@ func watcherDisabled() bool {
 }
 
 // startModelWatcher spins up the filesystem watcher so CLI writes (and any
-// other process touching ~/.taskr/tasks.db) refresh the TUI without a restart.
+// other process touching tasks.db) refresh the TUI without a restart.
 // If it fails to start (weird filesystem, permissions, OS limits), the TUI keeps
 // working — live reload just isn't available.
 //

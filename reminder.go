@@ -162,7 +162,7 @@ func reminderMessage(overdue, today []*todo.Todo) (title, body string) {
 		counts = append(counts, fmt.Sprintf(tr("%d due today"), n))
 	}
 	if n := len(overdue); n > 0 {
-		counts = append(counts, fmt.Sprintf(tr("%d overdue"), n))
+		counts = append(counts, trCount("%d overdue", n, n))
 	}
 	title = "taskr: " + strings.Join(counts, ", ")
 

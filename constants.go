@@ -135,6 +135,11 @@ const (
 	// list cannot make it in fewer cells.
 	tagsOverflowMinW = 3
 
+	// tagClipMinW is the narrowest a clipped tag is drawn: "#ab…", the sigil,
+	// two letters and the ellipsis. Anything shorter names no tag, so the cell
+	// falls back to the bare count.
+	tagClipMinW = 4
+
 	// groupBarWidth is the progress bar under a tag or project's name in the
 	// pane below its list: small, since the counts beside it carry the numbers.
 	groupBarWidth = 20
@@ -167,7 +172,7 @@ const (
 	minListHeight     = 1
 
 	statsBarWidth   = 30
-	statsLabelWidth = 22
+	statsLabelWidth = 23
 	// unsetMark stands in for an empty detail-pane field or section.
 	unsetMark = "—"
 	// statsOldestMinW is the fewest title runes the Stats "Oldest active" row

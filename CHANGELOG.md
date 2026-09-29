@@ -23,11 +23,20 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Projects works like Tags: enter walks the tasks under the project list, timeline beside them.
 - Settings has a Daily reminder switch, with the reminder's time on its own row.
 - Sequence ranks a task with a start date in the future below today's work until that day.
+- Task lists show tags as #tag and clip a long one instead of replacing the whole cell with +N.
+- Danish and German task lists use short column headings, so Project no longer drops out first.
+- Stats summary scrolls with ↑/↓ when the window is too short to show all of it.
+- Due dates accept -2d, -1w and -1m, the form the list shows overdue dates in.
 
 ### Fixed
 
 - A desktop pop-up that can't be shown no longer hides the reminder; its reason is one line.
 - Windows: reminder pop-ups skip PowerShell, so a locked-down work PC still shows them.
+- Stats: Danish weekday names no longer split around æ/ø/å ("Lø rdag").
+- Stats: breakdown percentages are rounded, so 6 of 9 reads 67%.
+- `taskr doctor` finds sync.log; messages, help and man page name the real file locations.
+- Danish counts agree in the singular ("1 færdig"), English ones too ("1 day overdue").
+- Settings keeps the ⏎ on a clipped value; the calendar no longer lists tags with 0m.
 
 ## [1.40.0] - 2026-09-28
 

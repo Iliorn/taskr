@@ -207,7 +207,7 @@ everything.
 - **`input.go`** and **`console.go`** (each with `_windows`/`_other`
   variants) — see *Terminals*.
 - **`trace.go`** — opt-in latency tracing (`TASKR_TRACE=1` →
-  `~/.taskr/trace.log`): per frame, the wall clock, gap since the previous
+  `trace.log` in the state dir): per frame, the wall clock, gap since the previous
   frame, `Update` and `View` durations, GC count and message. It writes on its
   own goroutine and drops rather than blocks. Measured: a keystroke costs
   ~0.1ms in `Update` and ~1ms in `View` at 2000 tasks, and an idle app produces

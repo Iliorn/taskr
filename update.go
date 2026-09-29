@@ -1754,6 +1754,8 @@ func (m *model) moveCursorUp() {
 		if n := m.currentTaskListLen(); n > 0 {
 			m.cursor = (m.cursor - 1 + n) % n
 		}
+	case tabStats:
+		m.statsScroll = max(0, min(m.statsScroll, m.statsMaxScroll())-1)
 	}
 }
 
@@ -1793,6 +1795,8 @@ func (m *model) moveCursorDown() {
 		if n := m.currentTaskListLen(); n > 0 {
 			m.cursor = (m.cursor + 1) % n
 		}
+	case tabStats:
+		m.statsScroll = min(m.statsScroll+1, m.statsMaxScroll())
 	}
 }
 

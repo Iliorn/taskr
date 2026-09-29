@@ -20,7 +20,7 @@ rather not be.
 ## What is in scope
 
 taskr is a local terminal application, so most of it has no attacker to defend
-against: whoever can run `taskr` can already read `~/.taskr`. The parts where
+against: whoever can run `taskr` can already read its files. The parts where
 that is not true:
 
 - **The sync server** (`taskr serve`, or the in-process server enabled in
@@ -33,7 +33,7 @@ that is not true:
 - **The self-update path** on Linux and Windows, which downloads and replaces
   the running binary.
 - **Token and file handling** — anything that writes a sync token somewhere
-  it should not be, or that widens the permissions of a file under `~/.taskr`.
+  it should not be, or that widens the permissions of a file taskr keeps.
 - **Parsing of files taskr reads**: the SQLite database, `settings.json`,
   `sync.json`, an imported export file, and the legacy `tasks.json`.
 
@@ -49,8 +49,8 @@ that is not true:
 - **A single shared token with full access.** The sync server is single-owner
   by design: one token, no multi-tenancy, no per-device revocation. Anyone
   holding the token can read and write every task.
-- **Local access.** Another process running as your user can read `~/.taskr`
-  directly; taskr does not try to prevent that.
+- **Local access.** Another process running as your user can read taskr's
+  files directly; taskr does not try to prevent that.
 - **Denial of service against your own server** by a client holding a valid
   token.
 
@@ -112,7 +112,7 @@ If that trade is not one you want to make, do not use the in-app updater:
 ## Choosing a sync token
 
 The sync server authenticates with a single shared bearer token, compared in
-constant time and stored in `~/.taskr/sync.json` with mode `0600`. Every one of
+constant time and stored in `sync.json` (config directory) with mode `0600`. Every one of
 those precautions is downstream of a secret you chose: a guessable token is the
 likeliest realistic compromise of a sync setup, and no amount of care further
 down compensates for it.
@@ -146,8 +146,8 @@ warning exists.
 
 ## Handling of secrets
 
-The only secret taskr stores is the sync bearer token, in `~/.taskr/sync.json`
-with mode `0600`. It is never written to `sync.log`, never included in
+The only secret taskr stores is the sync bearer token, in `sync.json` in the
+config directory, with mode `0600`. It is never written to `sync.log`, never included in
 `taskr doctor` output, and never logged. If you believe you have found a path
 where it is exposed, that is in scope and worth reporting.
 

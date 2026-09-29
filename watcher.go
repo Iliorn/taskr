@@ -14,7 +14,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// watcher.go bridges fs events on ~/.taskr/ into Bubble Tea messages so the
+// watcher.go bridges fs events in the data directory into Bubble Tea messages so the
 // TUI reloads when the CLI (or another process) mutates the database. The
 // design choices are constrained by SQLite WAL semantics and Bubble Tea's
 // goroutine model:

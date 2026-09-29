@@ -12,7 +12,7 @@ import (
 
 // syncsettings.go is the Settings-tab surface for cross-device sync: the
 // auto-sync toggle and the inline editors for the server URL and token. Config
-// is the same ~/.taskr/sync.json that the CLI and auto-sync use (loadSyncConfig
+// is the same sync.json that the CLI and auto-sync use (loadSyncConfig
 // / saveSyncConfig), so a change here takes effect everywhere.
 
 // saveSyncCfg persists the current sync config and refreshes the live auto-sync

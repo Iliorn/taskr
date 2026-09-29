@@ -15,8 +15,9 @@ import (
 )
 
 // trace.go is the opt-in answer to "the app felt slow just then". Set
-// TASKR_TRACE=1 to write ~/.taskr/trace.log, or TASKR_TRACE=/some/path to
-// choose the file; unset, every function here is a branch on a nil channel.
+// TASKR_TRACE=1 to write trace.log in the state directory, or
+// TASKR_TRACE=/some/path to choose the file; unset, every function here is a
+// branch on a nil channel.
 //
 // It times the two things the app controls — Update and View — and stamps each
 // frame with the wall clock and the GC cycle count. That is enough to tell the
