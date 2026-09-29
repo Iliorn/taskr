@@ -133,6 +133,7 @@ var keymap = []binding{
 	{ctxProjects | ctxTags, "r", "edit", "rename globally", secTagsProjects, false, false},
 	{ctxTags, "m", "merge", "merge tags (Tags tab)", secTagsProjects, false, false},
 	{ctxProjects | ctxTags, "x", "delete", "delete globally", secTagsProjects, false, false},
+	{ctxProjects, "S", "share", "share through a folder / stop sharing", secTagsProjects, false, false},
 	{ctxProjects | ctxTags, "/", "search", "filter", secTagsProjects, true, true},
 
 	// ── Inside a tag / project (the drilled-in task list) ────────────────

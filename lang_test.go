@@ -222,3 +222,15 @@ func TestCountsAgreeInTheSingular(t *testing.T) {
 		}
 	}
 }
+
+// A confirm prompt names the keys that answer it, and updateConfirm answers
+// to y, so no translation may ask for another letter.
+func TestConfirmPromptsNameTheYesKey(t *testing.T) {
+	for lang, table := range translations {
+		for en, tr := range table {
+			if strings.HasSuffix(en, "(y/n)") && !strings.HasSuffix(tr, "(y/n)") {
+				t.Errorf("%s: %q asks %q; the prompt answers to y", lang, tr, en)
+			}
+		}
+	}
+}

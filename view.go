@@ -673,7 +673,7 @@ func (m model) footerContentFor(w int) string {
 	case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeEditDue,
 		modeAddSubtask, modeEditSubtask,
 		modeEditProjectInline, modeEditTimeEntry, modeAddTimeEntry,
-		modeEditSyncURL, modeEditSyncToken, modeEditName,
+		modeEditSyncURL, modeEditSyncToken, modeEditName, modeShareFolder, modeShareJoin,
 		modeEditServerListen, modeEditServerToken, modeEditStages,
 		modeEditExportFolder, modeImportFile:
 		field := inputStyle.Width(w).Render(m.textInput.View())
@@ -694,7 +694,7 @@ func (m model) footerContentFor(w int) string {
 			}
 			return field + "\n" + renderQuickAddPreview(m.textInput.Value(), w)
 		}
-		if m.mode == modeEditExportFolder || m.mode == modeImportFile {
+		if m.mode == modeEditExportFolder || m.mode == modeImportFile || m.mode == modeShareFolder || m.mode == modeShareJoin {
 			return field + "\n" + helpStyle.Render("    "+truncate(tr("tab completes the name · enter confirms · esc cancels"), w))
 		}
 		if m.mode == modeEditStages {

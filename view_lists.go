@@ -1283,7 +1283,12 @@ func (m model) renderProjectListContent(projects []string) string {
 		cursor:     m.projectCursor,
 		start:      m.listOffset,
 		count:      m.projectListVisibleRows(),
-		label:      func(key string) string { return key },
+		label: func(key string) string {
+			if _, ok := m.shared.find(key); ok {
+				return key + sharedMark
+			}
+			return key
+		},
 		editing: func(key, lead, _ string) (string, bool) {
 			if m.mode != modeEditProjectInline || key != m.editingProjectName {
 				return "", false
@@ -1363,6 +1368,9 @@ var settingsGroups = []settingsGroup{
 		settingSyncToken,
 		settingSyncNow,
 	}},
+	{title: "Shared projects", rows: []int{
+		settingShareJoin,
+	}},
 	{title: "Server", rows: []int{
 		settingServerOn,
 		settingServerListen,
@@ -1421,7 +1429,7 @@ func (m model) settingsRowVisible(id int) bool {
 func settingsEditsText(id int) bool {
 	switch id {
 	case settingStages, settingSyncServer, settingSyncToken, settingServerListen, settingServerToken,
-		settingExportFolder, settingImportFile, settingName:
+		settingExportFolder, settingImportFile, settingName, settingShareJoin:
 		return true
 	}
 	return false
@@ -1529,6 +1537,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingImportFile:        tr("Import from file"),
 		settingSubtaskTags:       tr("Subtasks copy tags"),
 		settingName:              tr("Your name"),
+		settingShareJoin:         tr("Join a project"),
 	}
 	agingVal := tr("Off")
 	if m.rank.Biases.Aging {
@@ -1621,6 +1630,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingImportFile:        tr("choose a file"),
 		settingSubtaskTags:       "‹ " + subtaskTagsVal + " ›",
 		settingName:              authorName(appSettings{Name: m.userName}),
+		settingShareJoin:         m.sharedJoinDisplay(),
 	}
 
 	// One label column across every group, so the values line up down the

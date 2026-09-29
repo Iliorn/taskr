@@ -63,6 +63,7 @@ const (
 	settingExportFolder
 	settingImportFile
 	settingName
+	settingShareJoin
 	numSettingsRows
 )
 
@@ -137,6 +138,8 @@ const (
 	modeAddTimeEntry
 	modeEditSyncURL
 	modeEditName
+	modeShareFolder
+	modeShareJoin
 	modeEditSyncToken
 	modeEditServerListen
 	modeEditServerToken
@@ -485,6 +488,16 @@ type model struct {
 	// userName is the Settings name this device signs its history events
 	// with; empty means the account's (authorName).
 	userName string
+
+	// shared is this device's shared.json: the projects it shares through a
+	// folder (sharedui.go). The pass over them runs off the loop; these
+	// record whether one is scheduled or running, and how the last went.
+	shared             sharedConfig
+	sharedScheduled    bool
+	sharedRunning      bool
+	sharedFailed       bool
+	sharedStatus       string
+	pendingShareFolder string
 }
 
 func initialModel(repo Repository) model {
@@ -609,6 +622,11 @@ func initialModel(repo Repository) model {
 	}
 	m.userName = settings.Name
 	m.repo.SetAuthor(authorName(settings))
+	if shared, err := loadSharedConfig(); err != nil {
+		m.flashError(fmt.Sprintf(tr("Shared project: %v"), err))
+	} else {
+		m.shared = shared
+	}
 	m.applyLangPlaceholders()
 	m.refreshCaches()
 	// Absorb Age drift since the last open: every task's score creeps daily,
@@ -668,7 +686,10 @@ func (m model) Init() tea.Cmd {
 	// Keep a periodic sync tick running for the whole session so enabling sync
 	// from Settings mid-session takes effect; only sync immediately on launch
 	// when it's already configured.
-	cmds = append(cmds, syncTick(), reminderTick())
+	cmds = append(cmds, syncTick(), reminderTick(), sharedPoll())
+	if len(m.shared.Projects) > 0 {
+		cmds = append(cmds, func() tea.Msg { return sharedSoonMsg{} })
+	}
 	if m.exportDirty {
 		cmds = append(cmds, tea.Tick(exportDebounce, func(time.Time) tea.Msg { return exportTickMsg{} }))
 	}
@@ -779,6 +800,7 @@ func (m *model) closeWatcher() {
 // in the TUI anymore, so we surface it on stderr.
 func (m *model) flushPendingWrites() {
 	m.flushExport()
+	defer m.flushShared() // after the save below, so the folder gets it
 	dirty, tombstones := m.Store.drainDirty()
 	if len(dirty) == 0 && len(tombstones) == 0 {
 		return

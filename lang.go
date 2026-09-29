@@ -614,6 +614,20 @@ var daTranslations = map[string]string{
 	"Your name":             "Dit navn",
 	"Your name, as a task's history shows it": "Dit navn, som det står i en opgaves historik",
 
+	// Shared projects (sharedui.go)
+	"Shared projects":                                "Delte projekter",
+	"Join a project":                                 "Forbind til projekt",
+	"choose a folder":                                "vælg en mappe",
+	"share through a folder / stop sharing":          "del gennem en mappe / stop deling",
+	"Folder someone shared a project in":             "Mappe hvor nogen har delt et projekt",
+	"Folder to share '%s' in, e.g. in your OneDrive": "Mappe at dele '%s' i, fx i din OneDrive",
+	"Joined '%s'":                                    "Forbundet til '%s'",
+	"Shared project: %v":                             "Delt projekt: %v",
+	"Sharing '%s' in %s":                             "Deler '%s' i %s",
+	"Stop sharing '%s'? Its tasks stay here, and the others keep theirs. (y/n)": "Stop deling af '%s'? Opgaverne bliver her, og de andre beholder deres. (y/n)",
+	"Stopped sharing '%s'": "Deler ikke længere '%s'",
+	"You have %d task(s) in '%s'. Share them with everyone in the folder? (y/n)": "Du har %d opgave(r) i '%s'. Del dem med alle i mappen? (y/n)",
+
 	// Calendar
 	"Month ":                     "Måned ",
 	"Day ":                       "Dag ",
@@ -656,7 +670,7 @@ var daTranslations = map[string]string{
 	"Editor failed; falling back to notepad":                "Editor fejlede; falder tilbage til notepad",
 	"Invalid date - use dd-mm-yy, %q, %q, %q, %q, or '+3d'": "Ugyldig dato - brug dd-mm-yy, %q, %q, %q, %q eller '+3d'",
 	"Dependency not linked":                                 "Afhængighed ikke koblet",
-	"Remove project '%s' from ALL its tasks? (y/n)":         "Fjern projektet '%s' fra ALLE dets opgaver? (j/n)",
+	"Remove project '%s' from ALL its tasks? (y/n)":         "Fjern projektet '%s' fra ALLE dets opgaver? (y/n)",
 
 	// Confirm prompts
 	"Delete '%s'? (y/n)":                        "Slet '%s'? (y/n)",
@@ -1301,6 +1315,20 @@ var deTranslations = map[string]string{
 	"dependencies":          "Abhängigkeiten",
 	"Your name":             "Dein Name",
 	"Your name, as a task's history shows it": "Dein Name, wie ihn der Verlauf einer Aufgabe zeigt",
+
+	// Shared projects (sharedui.go)
+	"Shared projects":                                "Geteilte Projekte",
+	"Join a project":                                 "Projekt beitreten",
+	"choose a folder":                                "Ordner wählen",
+	"share through a folder / stop sharing":          "über einen Ordner teilen / Teilen beenden",
+	"Folder someone shared a project in":             "Ordner, in dem jemand ein Projekt teilt",
+	"Folder to share '%s' in, e.g. in your OneDrive": "Ordner, in dem '%s' geteilt wird, z. B. in deinem OneDrive",
+	"Joined '%s'":                                    "'%s' beigetreten",
+	"Shared project: %v":                             "Geteiltes Projekt: %v",
+	"Sharing '%s' in %s":                             "'%s' wird in %s geteilt",
+	"Stop sharing '%s'? Its tasks stay here, and the others keep theirs. (y/n)": "'%s' nicht mehr teilen? Die Aufgaben bleiben hier, die anderen behalten ihre. (y/n)",
+	"Stopped sharing '%s'": "'%s' wird nicht mehr geteilt",
+	"You have %d task(s) in '%s'. Share them with everyone in the folder? (y/n)": "Du hast %d Aufgabe(n) in '%s'. Mit allen im Ordner teilen? (y/n)",
 
 	// Calendar
 	"Month ":                     "Monat ",

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/Iliorn/tjek/rank"
 	"github.com/Iliorn/tjek/todo"
 )
@@ -246,5 +248,77 @@ func TestCLIJoinAsksBeforeMergingALocalProject(t *testing.T) {
 	captureStdout(t, func() { code = cliShare([]string{"leave", "Trip"}) })
 	if c, _ := loadSharedConfig(); code != 0 || len(c.Projects) != 0 {
 		t.Errorf("leave: exit %d, still shared: %+v", code, c.Projects)
+	}
+}
+
+// S on a Projects row shares it through a folder; S on a shared one asks,
+// and y stops sharing it. The row carries the shared mark in between.
+func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
+	folder := t.TempDir()
+	task := todo.New("Book the ferry")
+	task.Project = "Trip"
+	m := modelWithTasks(t, task)
+	m.tab = tabProjects
+	m.refreshCaches()
+
+	m = sendKey(t, m, "S")
+	if m.mode != modeShareFolder {
+		t.Fatalf("S: mode = %v, want modeShareFolder", m.mode)
+	}
+	m = script(t, m, folder, "enter")
+	if m.mode != modeNormal {
+		t.Fatalf("after enter: mode = %v (%s)", m.mode, m.err)
+	}
+	if _, ok := m.shared.find("Trip"); !ok {
+		t.Fatal("the project is not shared after enter")
+	}
+	if c, _ := loadSharedConfig(); len(c.Projects) != 1 {
+		t.Fatal("shared.json does not record the project")
+	}
+	if _, err := os.Stat(filepath.Join(folder, sharedManifestName)); err != nil {
+		t.Fatalf("no manifest in the folder: %v", err)
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "Trip"+sharedMark) {
+		t.Error("the Projects row does not show the shared mark")
+	}
+
+	m = sendKey(t, m, "S")
+	if m.mode != modeConfirm {
+		t.Fatalf("S on a shared project: mode = %v, want the leave prompt", m.mode)
+	}
+	m = sendKey(t, m, "y")
+	if _, ok := m.shared.find("Trip"); ok {
+		t.Fatal("still shared after y")
+	}
+	if len(m.allTodos()) != 1 {
+		t.Error("leaving took the task away")
+	}
+}
+
+// Settings → Join a project asks before sharing tasks already filed under
+// the project's name, and joins on y.
+func TestScriptJoinFromSettingsAsksFirst(t *testing.T) {
+	folder := t.TempDir()
+	manifest := `{"format": 1, "id": "trip-id", "name": "Trip", "created": "2026-09-29T12:00:00Z"}`
+	if err := os.WriteFile(filepath.Join(folder, sharedManifestName), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mine := todo.New("Mine already")
+	mine.Project = "Trip"
+	m := settingsModel(t)
+	m.Store.add(mine)
+	m.refreshCaches()
+
+	m = openSetting(t, m, settingShareJoin)
+	if m.mode != modeShareJoin {
+		t.Fatalf("mode = %v, want modeShareJoin", m.mode)
+	}
+	m = script(t, m, folder, "enter")
+	if m.mode != modeConfirm {
+		t.Fatalf("join over a local project: mode = %v, want the question", m.mode)
+	}
+	m = sendKey(t, m, "y")
+	if _, ok := m.shared.find("Trip"); !ok {
+		t.Fatal("not joined after y")
 	}
 }

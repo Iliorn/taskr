@@ -138,6 +138,10 @@ func (m model) updateForMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateEditSyncURL(msg)
 	case modeEditName:
 		return m.updateEditName(msg)
+	case modeShareFolder:
+		return m.updateShareFolder(msg)
+	case modeShareJoin:
+		return m.updateShareJoin(msg)
 	case modeEditSyncToken:
 		return m.updateEditSyncToken(msg)
 	case modeEditServerListen:
@@ -700,6 +704,12 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			return m.handleListRename()
 
+		case "S":
+			if m.tab == tabProjects && !m.projectTaskMode {
+				if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
+					return m.startShareOrLeave(projects[m.projectCursor])
+				}
+			}
 		case "m":
 			// Merge tag — Tags tab only. Opens the same editor as rename but
 			// with an empty input and a "Merge into…" placeholder, so the
@@ -1790,6 +1800,8 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		m.textInput.Placeholder = tr("Board columns, comma-separated")
 		m.textInput.Focus()
 		return m, textinput.Blink
+	case settingShareJoin:
+		return m.openShareJoin()
 	case settingName:
 		m.mode = modeEditName
 		m.textInput.SetValue(m.userName)

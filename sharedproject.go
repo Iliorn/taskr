@@ -109,6 +109,13 @@ func saveSharedConfig(c sharedConfig) error {
 	return writeFileAtomic(sharedConfigPath(), append(data, '\n'), 0o600)
 }
 
+// clone is a copy the share, join and leave edits can change without
+// touching c, so a failed save leaves the loaded list as it was.
+func (c sharedConfig) clone() sharedConfig {
+	c.Projects = slices.Clone(c.Projects)
+	return c
+}
+
 // find is the shared project named name, if this device shares one.
 func (c sharedConfig) find(name string) (sharedProject, bool) {
 	for _, p := range c.Projects {

@@ -634,7 +634,7 @@ func (m model) extraOverheadLines() int {
 	case modeInput, modeEditComment, modeEditTag, modeEditTitle, modeEditDue,
 		modeSearch, modeAddSubtask,
 		modeEditSubtask, modeEditProjectInline, modeEditTimeEntry,
-		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken, modeEditName,
+		modeAddTimeEntry, modeEditSyncURL, modeEditSyncToken, modeEditName, modeShareFolder, modeShareJoin,
 		modeEditServerListen, modeEditServerToken, modeEditStages,
 		modeEditExportFolder, modeImportFile:
 		return 3
