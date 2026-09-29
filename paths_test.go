@@ -174,8 +174,18 @@ func TestTheFourKindsAreDistinct(t *testing.T) {
 func TestAdoptFormerDirsMovesTaskrData(t *testing.T) {
 	home := t.TempDir()
 	setTestHome(t, home)
+	// The platform's own directories, resolved the way tjek resolves them,
+	// before ~/.tjek exists to pin the single-directory layout.
+	configDir, err := paths.Dir(paths.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheDir, err := paths.Dir(paths.Cache)
+	if err != nil {
+		t.Fatal(err)
+	}
 	oldLegacy := filepath.Join(home, ".taskr")
-	oldConfig := filepath.Join(home, ".config", "taskr")
+	oldConfig := filepath.Join(filepath.Dir(configDir), "taskr")
 	for _, dir := range []string{oldLegacy, oldConfig} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
@@ -184,10 +194,9 @@ func TestAdoptFormerDirsMovesTaskrData(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// A tjek state directory already holds data: its taskr twin stays put.
-	oldState := filepath.Join(home, ".local", "state", "taskr")
-	newState := filepath.Join(home, ".local", "state", "tjek")
-	for _, dir := range []string{oldState, newState} {
+	// A tjek cache directory already exists: its taskr twin stays put.
+	oldCache := filepath.Join(filepath.Dir(cacheDir), "taskr")
+	for _, dir := range []string{oldCache, cacheDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -198,20 +207,24 @@ func TestAdoptFormerDirsMovesTaskrData(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(moved) != 2 {
-		t.Fatalf("moved %v, want ~/.taskr and ~/.config/taskr", moved)
+		t.Fatalf("moved %v, want ~/.taskr and the config directory's taskr", moved)
 	}
-	for _, f := range []string{filepath.Join(home, ".tjek", "tasks.db"), filepath.Join(home, ".config", "tjek", "tasks.db")} {
+	for _, f := range []string{filepath.Join(home, ".tjek", "tasks.db"), filepath.Join(configDir, "tasks.db")} {
 		if _, err := os.Stat(f); err != nil {
 			t.Errorf("%s should exist after the move: %v", f, err)
 		}
 	}
-	if _, err := os.Stat(oldState); err != nil {
+	if _, err := os.Stat(oldCache); err != nil {
 		t.Error("a taskr directory whose tjek name is taken must be left where it is")
 	}
 	if again, _ := paths.AdoptFormerDirs(); len(again) != 0 {
 		t.Errorf("a second run should move nothing, moved %v", again)
 	}
-	if !paths.FormerExecutable(filepath.Join(home, "bin", "taskr"+map[bool]string{true: ".exe"}[runtime.GOOS == "windows"])) {
+	exe := "taskr"
+	if runtime.GOOS == "windows" {
+		exe += ".exe"
+	}
+	if !paths.FormerExecutable(filepath.Join(home, "bin", exe)) {
 		t.Error("a binary named taskr is the former executable")
 	}
 }
