@@ -463,9 +463,10 @@ func (m model) boardColumnHoldsCarry(cards []todo.Todo) bool {
 	return false
 }
 
-// boardCardBadge is the high-priority "!" the task list uses, on pending cards.
+// boardCardBadge is the overdue "!" the task list's status box uses, so a
+// passed due date reads on a card without relying on its border colour.
 func boardCardBadge(t *todo.Todo, doneCol bool) string {
-	if !doneCol && t.Priority == todo.PriorityHigh {
+	if !doneCol && t.IsOverdue() {
 		return " !"
 	}
 	return ""

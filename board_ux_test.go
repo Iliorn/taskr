@@ -560,3 +560,21 @@ func TestBoardLongColumnUsesCompactBoxes(t *testing.T) {
 		}
 	}
 }
+
+// A card's "!" means what the task list's [!] means: the due date has passed.
+// High priority is the Score's to state, on the board as on the list.
+func TestBoardCardBangMeansOverdue(t *testing.T) {
+	late := todo.New("late")
+	late.DueDate = time.Now().Add(-48 * time.Hour)
+	high := todo.New("high")
+	high.Priority = todo.PriorityHigh
+	if boardCardBadge(&late, false) != " !" {
+		t.Error("an overdue card should carry !")
+	}
+	if boardCardBadge(&late, true) != "" {
+		t.Error("a card in Done carries no !")
+	}
+	if boardCardBadge(&high, false) != "" {
+		t.Error("high priority alone should not carry !")
+	}
+}
