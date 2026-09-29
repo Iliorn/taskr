@@ -108,7 +108,7 @@ var keymap = []binding{
 	{ctxTasksList, "s", "sort", "cycle sort order", secTasks, true, true},
 	{ctxTasksList, "h", "history", "toggle history", secTasks, true, false},
 	{ctxTasksList | ctxDrill, "←/→", "foldsub", "expand/collapse subtasks", secTasks, true, false},
-	{ctxTasksList, "/", "search", "search", secTasks, true, true},
+	{ctxTasksList, "/", "search", "filter", secTasks, true, true},
 
 	// ── Tasks detail pane ────────────────────────────────────────────────
 	{ctxTasksDetail, "←/→", "detailsection", "jump section", secDetail, true, false},
@@ -228,7 +228,7 @@ var shortLabel = map[string]string{
 	"track":  "track",
 	"delete": "del",
 	"sort":   "sort",
-	"search": "search",
+	"search": "filter",
 }
 
 // hintString renders the footer hint for a context from the registry. With

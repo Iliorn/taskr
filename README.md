@@ -55,7 +55,7 @@ Run `tjek`.
 | `enter` | Details: comments, subtasks, dependencies, notes |
 | `t` | Start/stop the timer |
 | `D` | Set the due date |
-| `/` | Search |
+| `/` | Filter |
 | `f` | Focus on today and overdue |
 | `u` | Undo |
 | `tab` / `1–7` | Switch tab |
@@ -63,7 +63,7 @@ Run `tjek`.
 | `ctrl+k` | Find any action by name |
 
 `#tag`, `@project`, `due:friday`, `p:high` and `s:l` fill in a new task, and
-the same words search: `/` then `@work overdue` shows your overdue work tasks.
+the same words filter: `/` then `@work overdue` shows your overdue work tasks.
 Dates can be `today`, `tomorrow`, `monday`, `+3d`, `-2d`, `15-06-25` and more.
 
 ## Learn more

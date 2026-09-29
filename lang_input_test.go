@@ -213,7 +213,7 @@ func TestHintsOnlyAdvertiseTokensThatParse(t *testing.T) {
 				t.Errorf("%s: the quick-add hint advertises a dep token that does not parse: %q", l, quickAddHint())
 			}
 
-			// The search placeholder's tokens live inside "Search... (…)", so
+			// The filter placeholder's tokens live inside "Filter... (…)", so
 			// pull them out by their sigil before feeding them back.
 			for _, tok := range strings.Fields(strings.Trim(searchHint(), "()")) {
 				if !strings.Contains(tok, ":") {

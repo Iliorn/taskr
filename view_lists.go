@@ -814,7 +814,7 @@ func (m model) renderTaskList() string {
 	active := m.activeTodos()
 	if len(active) == 0 {
 		if m.searchQuery != "" {
-			return normalStyle.Render(tr("  No tasks match your search."))
+			return normalStyle.Render(tr("  No tasks match the filter."))
 		}
 		if m.focusFilter {
 			return normalStyle.Render(tr("  No tasks due today or overdue. Nice!"))
@@ -920,7 +920,7 @@ func (m model) renderHistoryList() string {
 	completed := m.completedTodos()
 	if len(completed) == 0 {
 		if m.searchQuery != "" {
-			return normalStyle.Render(tr("  No completed tasks match your search."))
+			return normalStyle.Render(tr("  No completed tasks match the filter."))
 		}
 		return normalStyle.Render(tr("  No completed tasks yet."))
 	}
@@ -1265,7 +1265,7 @@ func (m model) renderProjectListContent(projects []string) string {
 	if len(projects) == 0 {
 		switch {
 		case m.searchQuery != "":
-			return normalStyle.Render(tr("  No projects match your search."))
+			return normalStyle.Render(tr("  No projects match the filter."))
 		case len(m.cache.projectGroups) > 0:
 			return m.nothingOpenNote(tr("  Every project is finished."))
 		}

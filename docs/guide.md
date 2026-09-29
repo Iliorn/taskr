@@ -53,7 +53,7 @@ tags".
 | `h` | Toggle history |
 | `s` | Cycle sort: Sequence → Due → Size |
 | `w` | Why this rank: the points behind the percentage and what moves it next |
-| `/` | Search / filter |
+| `/` | Filter |
 | `enter` | Open detail view |
 | `u` | Undo |
 | `↑`/`↓` or `j`/`k` | Move the cursor |
@@ -93,7 +93,7 @@ picker. Tags are lowercase, and spaces become `-` (`Deep Work` becomes
 Dates: `today` · `tomorrow` · `next week` · `monday` · `15-06-25` · `+3d` ·
 `+2w` · `+1m` · `-2d` (counting back)
 
-## Searching
+## Filtering
 
 `/` filters the list. Words are combined, and use the same vocabulary as
 adding:

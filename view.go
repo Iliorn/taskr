@@ -1398,7 +1398,7 @@ func (m model) helpBodyLines() []string {
 			inputWord("monthly"), inputWord("yearly"))},
 		{inputWord("dep:") + "^", fmt.Sprintf(tr("block on the last added task (or %s<id prefix>)"), inputWord("dep:"))},
 	}})
-	sections = append(sections, helpSec{tr("Search filters"), [][2]string{
+	sections = append(sections, helpSec{tr("Filters"), [][2]string{
 		{"#tag", tr("only tasks carrying the tag")},
 		{"@project", tr("only tasks in the project")},
 		{"p:" + inputWord("high"), tr("only that priority")},
@@ -1432,7 +1432,7 @@ func (m model) helpBodyLines() []string {
 	sections = append(sections, helpSec{tr("Status line"), [][2]string{
 		{"✕ sync", tr("background sync is failing: Settings has the error")},
 		{tr("FOCUS"), tr("the focus filter is on: today + overdue only")},
-		{"/…", tr("a search filter is narrowing the list")},
+		{"/…", tr("a filter is narrowing the list")},
 	}})
 
 	// Reference section: date-input grammar. Not key bindings, so it lives

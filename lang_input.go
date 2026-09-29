@@ -188,9 +188,9 @@ func quickAddHint() string {
 		inputWord("dep:"))
 }
 
-// searchHint is the search field's placeholder.
+// searchHint is the filter field's placeholder.
 func searchHint() string {
-	return fmt.Sprintf(tr("Search... (#tag @project p:%s %s<%s)"),
+	return fmt.Sprintf(tr("Filter... (#tag @project p:%s %s<%s)"),
 		inputWord("high"),
 		inputWord("due:"),
 		strings.ToLower(localizedWeekdayShort(time.Friday)))

@@ -175,7 +175,7 @@ func TestHelpFilterKeyFlow(t *testing.T) {
 func TestHelpDocumentsEveryToken(t *testing.T) {
 	m := modelWithTasks(t)
 	body := strings.Join(m.helpBodyLines(), "\n")
-	for _, section := range []string{"Quick-add syntax", "Search filters"} {
+	for _, section := range []string{"Quick-add syntax", "Filters"} {
 		if !strings.Contains(body, section) {
 			t.Fatalf("help is missing the %q section", section)
 		}

@@ -323,7 +323,7 @@ var daTranslations = map[string]string{
 	"/ filter  ·  esc clear  ·  ? to close":       "/ filtrér  ·  esc ryd  ·  ? for at lukke",
 	"No shortcut matches that.":                   "Ingen genvej matcher det.",
 	"Quick-add syntax":                            "Hurtig-tilføj syntaks",
-	"Search filters":                              "Søgefiltre",
+	"Filters":                              "Filtre",
 	"Navigation":                                  "Navigation",
 	"navigate list":                               "navigér liste",
 	"open details":                                "åbn detaljer",
@@ -525,7 +525,7 @@ var daTranslations = map[string]string{
 	"none":           "ingen",
 
 	// Task list empty states
-	"  No tasks match your search.":          "  Ingen opgaver matcher din søgning.",
+	"  No tasks match the filter.":          "  Ingen opgaver matcher filteret.",
 	"  No tasks due today or overdue. Nice!": "  Ingen opgaver forfalder i dag eller er forfaldne. Flot!",
 	"  No tasks yet. Press 'a' to add one.":  "  Ingen opgaver endnu. Tryk 'a' for at tilføje en.",
 	"  Try:  ":                               "  Prøv:  ",
@@ -533,11 +533,11 @@ var daTranslations = map[string]string{
 	// due:/friday/p:high stay English because the parser only accepts English.
 	"Buy milk #shopping due:friday p:high @home": "Køb mælk #indkøb due:friday p:high @hjem",
 	"  Press ? for all keyboard shortcuts.":      "  Tryk ? for alle tastaturgenveje.",
-	"  No completed tasks match your search.":    "  Ingen afsluttede opgaver matcher din søgning.",
+	"  No completed tasks match the filter.":    "  Ingen afsluttede opgaver matcher filteret.",
 	"  No completed tasks yet.":                  "  Ingen afsluttede opgaver endnu.",
 
 	// Projects
-	"  No projects match your search.":                          "  Ingen projekter matcher din søgning.",
+	"  No projects match the filter.":                          "  Ingen projekter matcher filteret.",
 	"  No projects yet. Add a project to a task first.":         "  Ingen projekter endnu. Tilføj et projekt til en opgave først.",
 	"  A project groups its tasks into a timeline on this tab.": "  Et projekt samler dets opgaver i en tidslinje på denne fane.",
 	"Project":                     "Projekt",
@@ -639,7 +639,7 @@ var daTranslations = map[string]string{
 	"Delete %s entry for '%s'? (y/n)":           "Slet %s-post for '%s'? (y/n)",
 
 	// Input placeholders
-	"Search... (#tag @project p:%s %s<%s)":    "Søg... (#mærke @projekt p:%s %s<%s)",
+	"Filter... (#tag @project p:%s %s<%s)":    "Filtrér... (#mærke @projekt p:%s %s<%s)",
 	"Search for task to add as dependency...": "Søg efter opgave at tilføje som afhængighed...",
 	"Search or create tag...":                 "Søg eller opret mærke...",
 	"Search or create project...":             "Søg eller opret projekt...",
@@ -842,7 +842,7 @@ var daTranslations = map[string]string{
 	"Status line": "Statuslinje",
 	"background sync is failing: Settings has the error": "baggrundssynkronisering fejler: fejlen står under Indstillinger",
 	"the focus filter is on: today + overdue only":       "fokusfilteret er slået til: kun i dag + overskredne",
-	"a search filter is narrowing the list":              "et søgefilter indsnævrer listen",
+	"a filter is narrowing the list":              "et filter indsnævrer listen",
 	"↑ scroll up":                                        "↑ rul op",
 	"↓ scroll down":                                      "↓ rul ned",
 	"↑/↓ scroll":                                         "↑/↓ rul",
@@ -976,7 +976,7 @@ var deTranslations = map[string]string{
 	"/ filter  ·  esc clear  ·  ? to close":       "/ Filter  ·  esc löscht  ·  ? schließt",
 	"No shortcut matches that.":                   "Kein Kürzel passt dazu.",
 	"Quick-add syntax":                            "Schnellerfassung",
-	"Search filters":                              "Suchfilter",
+	"Filters":                              "Filter",
 	"Navigation":                                  "Navigation",
 	"navigate list":                               "Liste navigieren",
 	"open details":                                "Details öffnen",
@@ -1178,7 +1178,7 @@ var deTranslations = map[string]string{
 	"none":           "keine",
 
 	// Task list empty states
-	"  No tasks match your search.":          "  Keine Aufgaben passen zur Suche.",
+	"  No tasks match the filter.":          "  Keine Aufgaben passen zum Filter.",
 	"  No tasks due today or overdue. Nice!": "  Nichts heute fällig oder überfällig. Stark!",
 	"  No tasks yet. Press 'a' to add one.":  "  Noch keine Aufgaben. 'a' legt eine an.",
 	"  Try:  ":                               "  Beispiel:  ",
@@ -1186,11 +1186,11 @@ var deTranslations = map[string]string{
 	// due:/friday/p:high stay English because the parser only accepts English.
 	"Buy milk #shopping due:friday p:high @home": "Milch kaufen #einkauf due:friday p:high @zuhause",
 	"  Press ? for all keyboard shortcuts.":      "  ? zeigt alle Tastenkürzel.",
-	"  No completed tasks match your search.":    "  Keine erledigten Aufgaben passen zur Suche.",
+	"  No completed tasks match the filter.":    "  Keine erledigten Aufgaben passen zum Filter.",
 	"  No completed tasks yet.":                  "  Noch keine erledigten Aufgaben.",
 
 	// Projects
-	"  No projects match your search.":                          "  Keine Projekte passen zur Suche.",
+	"  No projects match the filter.":                          "  Keine Projekte passen zum Filter.",
 	"  No projects yet. Add a project to a task first.":         "  Noch keine Projekte. Erst einer Aufgabe eines zuweisen.",
 	"  A project groups its tasks into a timeline on this tab.": "  Ein Projekt bündelt seine Aufgaben hier zu einer Zeitleiste.",
 	"Project":                     "Projekt",
@@ -1292,7 +1292,7 @@ var deTranslations = map[string]string{
 	"Delete %s entry for '%s'? (y/n)":           "Eintrag %s für '%s' löschen? (y/n)",
 
 	// Input placeholders
-	"Search... (#tag @project p:%s %s<%s)":    "Suchen… (#Schlagwort @Projekt p:%s %s<%s)",
+	"Filter... (#tag @project p:%s %s<%s)":    "Filtern… (#Schlagwort @Projekt p:%s %s<%s)",
 	"Search for task to add as dependency...": "Aufgabe als Abhängigkeit suchen…",
 	"Search or create tag...":                 "Schlagwort suchen oder anlegen…",
 	"Search or create project...":             "Projekt suchen oder anlegen…",
@@ -1495,7 +1495,7 @@ var deTranslations = map[string]string{
 	"Status line": "Statuszeile",
 	"background sync is failing: Settings has the error": "Hintergrund-Sync schlägt fehl: der Fehler steht in den Einstellungen",
 	"the focus filter is on: today + overdue only":       "der Fokusfilter ist an: nur heute + überfällig",
-	"a search filter is narrowing the list":              "ein Suchfilter schränkt die Liste ein",
+	"a filter is narrowing the list":              "ein Filter schränkt die Liste ein",
 	"↑ scroll up":                                        "↑ nach oben",
 	"↓ scroll down":                                      "↓ nach unten",
 	"↑/↓ scroll":                                         "↑/↓ scrollen",
