@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -128,11 +129,15 @@ func sameIcons(a, b map[string]string) bool {
 	return true
 }
 
+// errDoneIconTaken is parseStagesInput's answer to ✓ on a working column.
+var errDoneIconTaken = errors.New("✓ is the last column's")
+
 // validStageIcon reports whether s fits a status box: one character, one cell
 // wide. A letter, a digit or a symbol does; an emoji, which terminals draw two
-// cells wide, would push every column after it out of line.
+// cells wide, would push every column after it out of line. ✓ is not a
+// working column's to take: it means done, and only the Done column has it.
 func validStageIcon(s string) bool {
-	return utf8.RuneCountInString(s) == 1 && ansi.StringWidth(s) == 1
+	return utf8.RuneCountInString(s) == 1 && ansi.StringWidth(s) == 1 && s != doneColumnIcon
 }
 
 // doneColumnIcon is the Done column's mark, always: the box a done task
@@ -301,11 +306,14 @@ func canonicalStageIn(stages []string, input string) (string, bool) {
 // stagesDisplay is the Settings-row rendering (and the pre-fill of its editor)
 // of the active stage list: the same comma-separated form the editor parses.
 // The Done column is in it — that is how renaming it is discoverable.
+//
+// The Done column's ✓ is left out: it is not a setting, and text in an
+// editor reads as something to change.
 func (c boardConfig) stagesDisplay() string {
 	parts := make([]string, len(c.stages))
 	for i, name := range c.stages {
 		parts[i] = name
-		if icon := c.columnIcon(i); icon != "" {
+		if icon := c.icons[strings.ToLower(name)]; icon != "" && i != c.doneColumn() {
 			parts[i] = "[" + icon + "] " + name
 		}
 	}
@@ -317,9 +325,10 @@ func (c boardConfig) stagesDisplay() string {
 // hand-edited settings.json goes through, so both entry points accept exactly
 // the same input and degrade the same way (all-blank falls back to the
 // defaults). A column's icon is written in brackets before its name, the way
-// the status box will show it: "[◐] In progress". An icon that is not one
-// cell wide is an error naming it; the Done column always shows ✓, so any
-// other icon on it is dropped and reported in doneIcon.
+// the status box will show it: "[◐] In progress". The Done column's ✓ is
+// fixed, so an icon on the last column is dropped and reported in doneIcon
+// (a ✓ there, pasted back from an older pre-fill, is dropped silently). Any
+// other icon that is not validStageIcon is an error naming it.
 func parseStagesInput(line string) (stages []string, icons map[string]string, doneIcon string, err error) {
 	parts := strings.Split(line, ",")
 	names := make([]string, 0, len(parts))
@@ -331,9 +340,6 @@ func parseStagesInput(line string) (stages []string, icons map[string]string, do
 				icon := strings.TrimSpace(name[1:end])
 				name = strings.TrimSpace(name[end+1:])
 				if icon != "" && name != "" {
-					if !validStageIcon(icon) {
-						return nil, nil, "", fmt.Errorf("%q", icon)
-					}
 					byName[strings.ToLower(name)] = icon
 				}
 			}
@@ -341,10 +347,18 @@ func parseStagesInput(line string) (stages []string, icons map[string]string, do
 		names = append(names, name)
 	}
 	stages = stagesFromSettings(appSettings{Stages: names})
-	// The ✓ stagesDisplay puts on the Done column comes back unchanged
-	// whenever the line is saved as shown; only a different mark is news.
-	if icon := byName[strings.ToLower(stages[len(stages)-1])]; icon != doneColumnIcon {
+	last := strings.ToLower(stages[len(stages)-1])
+	if icon := byName[last]; icon != doneColumnIcon {
 		doneIcon = icon
+	}
+	delete(byName, last)
+	for _, name := range pendingOf(stages) {
+		switch icon := byName[strings.ToLower(name)]; {
+		case icon == doneColumnIcon:
+			return nil, nil, "", errDoneIconTaken
+		case icon != "" && !validStageIcon(icon):
+			return nil, nil, "", fmt.Errorf("%q", icon)
+		}
 	}
 	return stages, byName, doneIcon, nil
 }

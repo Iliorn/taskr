@@ -515,6 +515,8 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   any column has one, `statusBox` (the TUI rows and `taskr list` alike)
   shows the task's column mark instead of ready/started/overdue; done is
   always ✓, and the Done column's heading always carries it (`columnIcon`).
+  That ✓ is fixed: the editor neither shows nor takes it, and no working
+  column may use it (`errDoneIconTaken`).
 - **Columns are a projection** of the same filtered, cached lists the Tasks tab
   shows, so `/` on the Board is the shared search and there is no board-only
   filter state.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -838,8 +839,12 @@ func (m model) updateEditStages(msg tea.Msg) (tea.Model, tea.Cmd) {
 			stages, icons, doneIcon, err := parseStagesInput(m.textInput.Value())
 			if err != nil {
 				// Keep the field open with the text as typed, so the one
-				// wide icon is fixed rather than the whole line retyped.
-				m.flashError(fmt.Sprintf(tr("An icon is one character wide; %s is not"), err))
+				// icon is fixed rather than the whole line retyped.
+				msg := fmt.Sprintf(tr("An icon is one character wide; %s is not"), err)
+				if errors.Is(err, errDoneIconTaken) {
+					msg = tr("✓ is kept for the last column; pick another icon")
+				}
+				m.flashError(msg)
 				return m, clearErrAfter()
 			}
 			m.applyStageEdit(stages, icons)

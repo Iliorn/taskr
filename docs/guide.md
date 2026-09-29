@@ -140,7 +140,8 @@ Give a column an icon by writing it in brackets before the name:
 The icon leads the column's heading, and every task list shows it in the task's
 status box, so `[R]` beside a task says it is in Review, on any tab. A column
 without an icon leaves the box blank. The icon is one character: a letter, a
-digit or a symbol. Emojis are two cells wide in a terminal and are refused. Once
+digit or a symbol. Emojis are two cells wide in a terminal and are refused, and
+✓ is fixed on the last column, so no other column can have it. Once
 any column has an icon, the box shows columns only; an overdue task still shows
 red. Icons sync with the columns.
 

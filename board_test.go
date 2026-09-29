@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -286,8 +287,11 @@ func TestParseStagesInputReadsIcons(t *testing.T) {
 
 	var c boardConfig
 	c.setColumns(stages, icons)
-	if got := c.stagesDisplay(); got != "[B] Backlog, [>] In progress, Review, [✓] Shipped" {
-		t.Errorf("the editor pre-fill should read back as typed: %q", got)
+	if got := c.stagesDisplay(); got != "[B] Backlog, [>] In progress, Review, Shipped" {
+		t.Errorf("the editor pre-fill should read back as typed, the fixed ✓ left out: %q", got)
+	}
+	if _, _, _, err := parseStagesInput("[✓] Ready, Done"); !errors.Is(err, errDoneIconTaken) {
+		t.Errorf("✓ belongs to the last column; on a working one it should be refused, got %v", err)
 	}
 }
 

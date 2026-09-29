@@ -986,8 +986,8 @@ func TestScriptEditBoardColumnsFromSettings(t *testing.T) {
 	if m.mode != modeEditStages {
 		t.Fatalf("enter on the Board columns row: mode = %v, want modeEditStages", m.mode)
 	}
-	if got := m.textInput.Value(); got != "Backlog, In progress, Review, [✓] Done" {
-		t.Fatalf("editor pre-fill = %q, want the current list, Done marked ✓", got)
+	if got := m.textInput.Value(); got != "Backlog, In progress, Review, Done" {
+		t.Fatalf("editor pre-fill = %q, want the current list", got)
 	}
 
 	m.textInput.SetValue("Backlog, In progress, QA, Done")
