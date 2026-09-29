@@ -29,7 +29,31 @@ No account, no cloud service.
   palette** (`ctrl+k`) and a **command line** for scripting.
 - **Speaks English, Danish and German**, with themes and rebindable keys.
 
+## Every tab
+
+**Calendar**: tracked time day by day, with a month beside it.
+
+![The Calendar tab: a day's time entries beside the month](docs/img/calendar.png)
+
+**Tags**: every tag with its open, overdue and next task, and the tasks under the selected one.
+
+![The Tags tab: tags with counts above the selected tag's tasks](docs/img/tags.png)
+
+**Projects**: the same for projects, with a timeline of their dated tasks.
+
+![The Projects tab: projects with counts above the selected project's tasks and timeline](docs/img/projects.png)
+
+**Board**: tasks as cards, carried between columns.
+
 ![The Board tab: tasks as cards in Backlog, In progress, Review and Done](docs/img/board.png)
+
+**Stats**: workload, flow and a chart of what you finished.
+
+![The Stats tab: summary numbers above a chart of completed tasks](docs/img/stats.png)
+
+**Settings**: theme, language, sync, reminders and export.
+
+![The Settings tab: grouped preferences](docs/img/settings.png)
 
 ## Install
 
