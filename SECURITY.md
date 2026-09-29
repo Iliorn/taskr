@@ -104,7 +104,7 @@ If that trade is not one you want to make, do not use the in-app updater:
   `sum.golang.org`, an append-only transparency log. A recorded hash cannot be
   changed afterwards, including by the maintainer. This is the strongest
   guarantee taskr offers.
-- Homebrew, the AUR package and Scoop each add their own distribution checks,
+- Homebrew and Scoop each add their own distribution checks,
   and taskr refuses to overwrite a Homebrew-managed install.
 - Release builds are reproducible (`-trimpath`, `CGO_ENABLED=0`, the Go version
   pinned in `go.mod`), so you can rebuild a tag and compare hashes yourself.

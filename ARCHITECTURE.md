@@ -65,7 +65,10 @@ git push origin v1.10.0       # ← triggers the build + release
   x64), plus `SHA256SUMS`. `selfUpdateAsset(goos, goarch)` is the one map
   from platform to asset; a new build target needs a case there.
 - **macOS ships from source** through the `Iliorn/homebrew-tap` repository
-  (`brew install iliorn/tap/taskr`). Do not attach macOS binaries or `.app`
+  (`brew install iliorn/tap/taskr`). The release workflow's `homebrew` job
+  bumps the formula's tarball and checksum, pushing with a deploy key scoped
+  to the tap (secret `HOMEBREW_TAP_DEPLOY_KEY`), so a release needs no step
+  after the tag. There is no AUR package: Arch uses the Linux binary. Do not attach macOS binaries or `.app`
   bundles to releases; Homebrew installs are pointed at Homebrew rather than
   having their managed files replaced.
 - **Self-update** (Settings → "Update to latest release") reads

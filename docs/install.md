@@ -24,14 +24,6 @@ That address always points at the newest release. Upgrade with
 
 Notes open in `EDITOR` if it is set (`setx EDITOR hx`), otherwise Notepad.
 
-## Arch Linux (AUR)
-
-```sh
-yay -S taskr-bin        # or: paru -S taskr-bin
-```
-
-This installs the published binary with shell completions and the man page.
-
 ## A downloaded binary (Linux / Windows)
 
 From the [Releases](https://github.com/iliorn/taskr/releases) page:
@@ -43,7 +35,6 @@ From the [Releases](https://github.com/iliorn/taskr/releases) page:
 | `taskr.exe` | Windows x64 |
 | `SHA256SUMS` | checksums for the three binaries |
 | `taskr.json` | Scoop manifest (Windows) |
-| `PKGBUILD` | Arch Linux package recipe |
 
 Put it somewhere on your `PATH` (for example `~/.local/bin`). Later updates
 are one step: Settings → "Update to latest release", or `taskr update`. The

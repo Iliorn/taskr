@@ -37,7 +37,6 @@ No account, no cloud service.
 |---|---|
 | macOS | `brew install iliorn/tap/taskr` |
 | Windows | `scoop install https://github.com/Iliorn/taskr/releases/latest/download/taskr.json` |
-| Arch Linux | `yay -S taskr-bin` |
 | Linux / Windows binary | [Releases](https://github.com/iliorn/taskr/releases) |
 | Anywhere Go runs | `go install github.com/Iliorn/taskr@latest` |
 
