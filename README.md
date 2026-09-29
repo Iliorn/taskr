@@ -7,7 +7,7 @@ A keyboard-driven task manager for the terminal that tells you what to do next.
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey?style=flat)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat)
 
-![The Tasks tab: a ranked list beside the selected task's details](docs/img/tasks.webp)
+![The Tasks tab: a ranked list beside the selected task's details](docs/img/tasks.png)
 
 taskr runs on Linux, macOS and Windows and keeps everything in a local file.
 It can sync between your machines through a small server you run yourself.
@@ -29,7 +29,7 @@ No account, no cloud service.
   palette** (`ctrl+k`) and a **command line** for scripting.
 - **Speaks English, Danish and German**, with themes and rebindable keys.
 
-![The Board tab: tasks as cards in Backlog, In progress, Review and Done](docs/img/board.webp)
+![The Board tab: tasks as cards in Backlog, In progress, Review and Done](docs/img/board.png)
 
 ## Install
 
