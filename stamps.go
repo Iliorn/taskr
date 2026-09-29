@@ -191,9 +191,14 @@ func loadStampBases(tx *sql.Tx, ids []string) (map[string]todo.Todo, error) {
 		if err := rows.Err(); err != nil {
 			return nil, err
 		}
-		for _, set := range []struct{ query string }{
-			{`SELECT task_id, tag FROM task_tags WHERE task_id IN ` + in},
-			{`SELECT task_id, depends_on_id FROM task_dependencies WHERE task_id IN ` + in},
+		for _, set := range []struct {
+			query string
+			add   func(t *todo.Todo, member string)
+		}{
+			{`SELECT task_id, tag FROM task_tags WHERE task_id IN ` + in,
+				func(t *todo.Todo, m string) { t.Tags = append(t.Tags, m) }},
+			{`SELECT task_id, depends_on_id FROM task_dependencies WHERE task_id IN ` + in,
+				func(t *todo.Todo, m string) { t.Dependencies = append(t.Dependencies, m) }},
 		} {
 			rows, err := tx.Query(set.query, args...)
 			if err != nil {
@@ -205,16 +210,10 @@ func loadStampBases(tx *sql.Tx, ids []string) (map[string]todo.Todo, error) {
 					rows.Close()
 					return nil, err
 				}
-				t, ok := out[id]
-				if !ok {
-					continue
+				if t, ok := out[id]; ok {
+					set.add(&t, member)
+					out[id] = t
 				}
-				if strings.Contains(set.query, "task_tags") {
-					t.Tags = append(t.Tags, member)
-				} else {
-					t.Dependencies = append(t.Dependencies, member)
-				}
-				out[id] = t
 			}
 			rows.Close()
 			if err := rows.Err(); err != nil {
@@ -249,7 +248,7 @@ func saveClock(tx *sql.Tx, c *hlc.Clock) error {
 	return err
 }
 
-// encodeStamps is the stamps column: JSON, or ” for none.
+// encodeStamps is the stamps column: JSON, or the empty string for none.
 func encodeStamps(s map[string]hlc.Stamp) string {
 	if len(s) == 0 {
 		return ""
