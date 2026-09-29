@@ -1072,6 +1072,8 @@ func TestStatusLineSpeaksOnlyWhenSyncFails(t *testing.T) {
 		{"sync not configured", func(m *model) {}, ""},
 		{"sync healthy", configured, ""},
 		{"sync failing", func(m *model) { configured(m); m.lastSyncFailed = true }, tr("✕ sync")},
+		{"server on another version", func(m *model) { configured(m); m.syncVersionGap = true }, tr("! sync")},
+		{"failing outranks a version gap", func(m *model) { configured(m); m.lastSyncFailed = true; m.syncVersionGap = true }, tr("✕ sync")},
 	} {
 		m := modelWithTasks(t, todo.New("alpha"))
 		m.termWidth, m.termHeight = 90, 20
@@ -1094,7 +1096,7 @@ func TestStatusLineSpeaksOnlyWhenSyncFails(t *testing.T) {
 	// The body rather than the rendered overlay: the sections below the fold
 	// are still what the overlay scrolls through.
 	help := ansi.Strip(strings.Join(m.helpBodyLines(), "\n"))
-	for _, mark := range []string{tr("✕ sync"), tr("FOCUS")} {
+	for _, mark := range []string{tr("✕ sync"), tr("! sync"), tr("FOCUS")} {
 		if !strings.Contains(help, mark) {
 			t.Errorf("the help overlay does not explain %q", mark)
 		}

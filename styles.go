@@ -189,6 +189,7 @@ var (
 	focusChipStyle  lipgloss.Style
 	searchChipStyle lipgloss.Style
 	syncFailStyle   lipgloss.Style
+	syncWarnStyle   lipgloss.Style
 
 	listPanelStyle   lipgloss.Style
 	detailPanelStyle lipgloss.Style
@@ -281,6 +282,7 @@ func applyTheme(t theme) {
 	focusChipStyle = lipgloss.NewStyle().Bold(true).Foreground(t.bg).Background(t.orange).Padding(0, 1)
 	searchChipStyle = lipgloss.NewStyle().Foreground(t.green).Bold(true)
 	syncFailStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
+	syncWarnStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
 
 	// Leave one quiet row below the border title before the pane's first
 	// heading or field. Padding only at the top keeps related rows compact and

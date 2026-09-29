@@ -85,8 +85,14 @@ func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	// saying. Two builds against one store agree until a migration lands, and
 	// then the older end starts dropping whatever it has no column for, with
 	// every sync still reporting success.
-	if msg.summary.versionGap != "" {
+	newGap := msg.summary.versionGap != "" && !m.syncVersionGap
+	m.syncVersionGap = msg.summary.versionGap != ""
+	if m.syncVersionGap {
 		m.syncStatus += ". " + msg.summary.versionGap
+	}
+	if newGap {
+		m.flashInfo(tr("Sync server runs another tjek version (see Settings)"))
+		return m, clearErrAfter()
 	}
 	if msg.summary.conflicts > 0 {
 		m.flashInfo(fmt.Sprintf(tr("Sync: %d conflict(s) resolved; tjek sync --recover lists them"), msg.summary.conflicts))

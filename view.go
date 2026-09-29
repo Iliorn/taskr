@@ -550,16 +550,24 @@ func groupListTitle(order groupSort, hidden int) string {
 }
 
 // syncGlyph reports background-sync health for the status line: a red mark
-// after a failure, and nothing otherwise.
+// after a failure, an orange one while the server runs another tjek version,
+// and nothing otherwise.
 //
 // Healthy sync says nothing on purpose: the steady state is shown in words in
 // Settings. A failure means this device is drifting from the others, the one
-// sync fact a user must not have to go looking for.
+// sync fact a user must not have to go looking for. A version gap is the same
+// fact arriving quietly: every sync succeeds while the older end drops what it
+// has no column for.
 func (m model) syncGlyph() string {
-	if !m.autoSync || !m.lastSyncFailed {
+	switch {
+	case !m.autoSync:
 		return ""
+	case m.lastSyncFailed:
+		return syncFailStyle.Render(tr("✕ sync"))
+	case m.syncVersionGap:
+		return syncWarnStyle.Render(tr("! sync"))
 	}
-	return syncFailStyle.Render(tr("✕ sync"))
+	return ""
 }
 
 // ── Detail scroll ────────────────────────────────────────────────────────────
@@ -1449,7 +1457,8 @@ func (m model) helpBodyLines() []string {
 	// to say — so each entry answers "why is that there?", which is the
 	// question a symbol in the corner of the screen actually provokes.
 	sections = append(sections, helpSec{tr("Status line"), [][2]string{
-		{"✕ sync", tr("background sync is failing: Settings has the error")},
+		{tr("✕ sync"), tr("background sync is failing: Settings has the error")},
+		{tr("! sync"), tr("server runs another version: update the older end")},
 		{tr("FOCUS"), tr("the focus filter is on: today + overdue only")},
 		{"/…", tr("a filter is narrowing the list")},
 	}})

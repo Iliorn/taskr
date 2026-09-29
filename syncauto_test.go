@@ -80,4 +80,24 @@ func TestSyncSuccessReportsAVersionGap(t *testing.T) {
 	if m.lastSyncFailed {
 		t.Error("a version gap must not mark the sync as failed")
 	}
+	if !m.syncVersionGap {
+		t.Error("a version gap must light the status line's sync mark")
+	}
+	if m.err == "" {
+		t.Error("the first sync to find a version gap should say so")
+	}
+
+	// Said once: the mark carries it from there, until a sync finds the
+	// versions level again.
+	m.err = ""
+	next, _ = m.handleSyncDone(syncDoneMsg{summary: syncSummary{versionGap: gap}})
+	m = next.(model)
+	if m.err != "" {
+		t.Error("a repeated version gap should stay quiet on the toast line")
+	}
+	next, _ = m.handleSyncDone(syncDoneMsg{})
+	m = next.(model)
+	if m.syncVersionGap {
+		t.Error("a sync with no version gap should clear the mark")
+	}
 }
