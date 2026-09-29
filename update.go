@@ -87,332 +87,88 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	switch msg := msg.(type) {
-	case clearErrMsg:
-		m.err = ""
-		m.errKind = toastError
-		return m, nil
-	case timerTickMsg:
-		if m.anyTimerRunning() {
-			// Heartbeat the running timer's last_seen at most once a minute so
-			// the stale-timer recoverer never mistakes this live timer for an
-			// abandoned one. recordSelfSave keeps the fs watcher from reloading
-			// on our own write. The write itself runs as a tea.Cmd — off the
-			// Update goroutine — so a busy DB (concurrent sync/CLI write inside
-			// busy_timeout) can't freeze the UI for up to 5s.
-			if time.Since(m.lastTimerHeartbeat) >= time.Minute {
-				m.lastTimerHeartbeat = time.Now()
-				// Keep the in-memory entries in step with the DB heartbeat —
-				// see stampRunningTimersSeen for why saves depend on this.
-				m.stampRunningTimersSeen(m.lastTimerHeartbeat)
-				if m.watcher != nil {
-					m.watcher.recordSelfSave()
-				}
-				return m, tea.Batch(timerTick(), func() tea.Msg {
-					_ = heartbeatRunningTimers(db, time.Now())
-					return nil
-				})
-			}
-			return m, timerTick()
-		}
-		m.timerTickOn = false
-		return m, nil
-	case updateDoneMsg:
-		if msg.err != nil {
-			m.flashError(fmt.Sprintf("Update failed: %v", msg.err))
-			m.updateStatus = tr("Update failed")
-		} else {
-			m.flashSuccess(tr("Updated! Restart tjek to apply."))
-			m.updateStatus = tr("Updated; restart to apply")
-		}
-		return m, clearErrAfter()
-	case updateCheckMsg:
-		if msg.err != nil {
-			m.flashError(fmt.Sprintf("Update check failed: %v", msg.err))
-			m.updateStatus = tr("Check failed")
-			return m, clearErrAfter()
-		}
-		// planUpdate (version.go) owns the verdict, shared with `tjek update`
-		// so the two surfaces cannot disagree about the same binary; the
-		// sentences stay here because they are translated and the CLI's aren't.
-		switch action, hint := planUpdate(appVersion, msg.latest); action {
-		case updateUpToDate:
-			m.updateStatus = tr("Up to date (") + appVersion + ")"
-			return m, nil
-		case updateLocalBuild:
-			m.updateStatus = tr("Latest release: ") + msg.latest + tr("; this is a local build (") + appVersion + ")"
-			m.flashInfo(m.updateStatus)
-			return m, clearErrAfter()
-		case updateManaged:
-			m.updateStatus = fmt.Sprintf(tr("Update available: %s. Run `%s`"), msg.latest, hint)
-			m.flashInfo(m.updateStatus)
-			return m, clearErrAfter()
-		}
-		// Newer release available — ask before pulling it.
-		m.updateStatus = tr("Update available: ") + msg.latest
-		m.mode = modeConfirmUpdate
-		m.confirmMsg = msg.latest + tr(" is available. Update now? (y/n)")
-		return m, nil
-	case saveDoneMsg:
-		return m, nil
-	case syncTickMsg:
-		cmds := []tea.Cmd{syncTick()}
-		if m.autoSync {
-			cmds = append(cmds, m.backgroundSync())
-			// Mid-session enable: start the real-time listener if sync was just
-			// turned on (it isn't running yet) and arm its reader once.
-			if m.liveSync == nil {
-				if ls := startLiveSync(m.syncCfg); ls != nil {
-					m.liveSync = ls
-					cmds = append(cmds, waitForSyncEvent(ls.C))
-				}
-			}
-		}
-		if p := m.probeServer(); p != nil {
-			cmds = append(cmds, p)
-		}
-		return m, tea.Batch(cmds...)
-	case syncEventMsg:
-		// Server signalled a change. Re-arm the listener and pull now.
-		var cmds []tea.Cmd
-		if m.liveSync != nil {
-			cmds = append(cmds, waitForSyncEvent(m.liveSync.C))
-		}
-		if m.autoSync {
-			cmds = append(cmds, m.backgroundSync())
-		}
-		if len(cmds) == 0 {
-			return m, nil
-		}
-		return m, tea.Batch(cmds...)
-	case syncDoneMsg:
-		return m.handleSyncDone(msg)
-	case reminderTickMsg:
-		cmds := []tea.Cmd{reminderTick()}
-		if !startOfDay(m.cache.builtAt).Equal(startOfDay(msg.at)) {
-			m.markCacheDirty()
-		}
-		send, flashed := m.checkReminder(msg.at)
-		if send != nil {
-			cmds = append(cmds, send)
-		}
-		if flashed {
-			cmds = append(cmds, clearErrAfter())
-		}
-		return m, tea.Batch(cmds...)
-	case exportTickMsg:
-		return m, m.exportTick()
-	case exportDoneMsg:
-		if msg.err != nil {
-			m.exportDirty = true // retried with the next change
-			m.flashError(fmt.Sprintf(tr("Auto-export failed: %v"), msg.err))
-			return m, clearErrAfter()
-		}
-		return m, nil
-	case importDoneMsg:
-		return m.handleImportDone(msg)
-	case reminderSentMsg:
-		if msg.err != nil {
-			// The reminder is the news, not the pop-up: keep it on screen and
-			// say only that the desktop could not show it. The reason is
-			// `tjek remind --now`'s to print, where there is room for it.
-			m.flashInfo(msg.title + " · " + tr("desktop pop-up unavailable"))
-			return m, clearErrAfter()
-		}
-		return m, nil
-	case serverProbeMsg:
-		// Only flag "external" when we aren't the one serving in-process.
-		m.serverExternal = msg.reachable && m.inprocServer == nil
-		return m, nil
-	case saveErrMsg:
-		m.flashError(fmt.Sprintf("Error saving tasks: %v", msg.err))
-		return m, clearErrAfter()
-	case editorFinishedMsg:
-		return m.handleEditorFinished(msg)
-	case saveTickMsg:
-		m.saveScheduled = false
-		if m.savePending {
-			m.savePending = false
-			// Drain only the dirty IDs and tombstones from the Store. The
-			// per-task deep copies drainDirty makes are what keep this save
-			// goroutine safe from the mutations the Update goroutine keeps
-			// making while it runs.
-			dirty, tombstones := m.Store.drainDirty()
-			if len(dirty) == 0 && len(tombstones) == 0 {
-				return m, nil
-			}
-			repo := m.repo
-			if m.watcher != nil {
-				// Record the timestamp BEFORE the save so a fast fs event
-				// firing during the write is still inside the suppression
-				// window. The save goroutine doesn't need to update this.
-				m.watcher.recordSelfSave()
-			}
-			return m, tea.Batch(func() tea.Msg {
-				if err := repo.Save(dirty, tombstones); err != nil {
-					return saveErrMsg{err}
-				}
-				return saveDoneMsg{}
-			}, m.exportSoon())
-		}
-		return m, nil
-	case dbChangedMsg:
-		// External writer (CLI, another process) touched the DB. Decide
-		// whether to reload now or defer until the user exits a modal mode.
-		// Always re-arm the watcher channel listener.
-		var cmds []tea.Cmd
-		if m.watcher != nil {
-			cmds = append(cmds, waitForDBChange(m.watcher.ch))
-			if m.watcher.shouldReloadNow(time.Now(), m.mode) {
-				repo := m.repo
-				cmds = append(cmds, func() tea.Msg {
-					todos, err := repo.Load()
-					return reloadedMsg{todos: todos, err: err}
-				})
-			}
-		}
-		if len(cmds) == 0 {
-			return m, nil
-		}
-		return m, tea.Batch(cmds...)
-	case reloadedMsg:
-		if msg.err != nil {
-			m.flashError(fmt.Sprintf("External reload failed: %v", msg.err))
-			return m, clearErrAfter()
-		}
-		// Atomic swap: rebuild the Store from the freshly-loaded task set,
-		// invalidate caches, and follow the same task ID across the new
-		// ordering so the cursor stays anchored where the user expected.
-		//
-		// The swap must not wipe what only exists in memory: the undo stack,
-		// and any mutation still inside the save debounce (dirty tasks and
-		// pending tombstones the snapshot predates). Those local changes are
-		// newer than anything on disk — overlay them on the loaded set and
-		// carry the change set across so the scheduled save still flushes it.
-		// A reload the user cannot see is the common case, not the exception:
-		// the watcher fires on our own WAL writes, on a sync that merged
-		// nothing, on a checkpoint. Rebuilding the whole Store for those costs
-		// ~15ms at a couple of thousand tasks — on the Update goroutine, so it
-		// lands as a stutter on whatever key is pressed next. Compare a cheap
-		// fingerprint first and skip the swap when the snapshot says what we
-		// already have. Pending local changes make the snapshot stale by
-		// definition, so the guard only applies when there are none.
-		if len(m.dirtyIDs) == 0 && len(m.tombstones) == 0 && m.sameAsLoaded(msg.todos) {
-			return m, nil
-		}
-
-		taskID := m.currentTaskID()
-		undo := m.undoStack
-		dirtyIDs := m.dirtyIDs
-		tombstones := m.tombstones
-		dirtyTasks := make(map[string]todo.Todo, len(dirtyIDs))
-		for id := range dirtyIDs {
-			if t := m.get(id); t != nil {
-				dirtyTasks[id] = copyTodo(*t)
-			}
-		}
-		m.Store = Store{}
-		m.Store.ensureTasks()
-		m.undoStack = undo
-		m.dirtyIDs = dirtyIDs
-		m.tombstones = tombstones
-		for i := range msg.todos {
-			t := msg.todos[i]
-			if _, dead := tombstones[t.ID]; dead {
-				continue // deleted locally, deletion not yet flushed — stays dead
-			}
-			if d, ok := dirtyTasks[t.ID]; ok {
-				t = d // unsaved local edit is newer than the DB snapshot
-			}
-			m.Store.add(t)
-		}
-		// Dirty tasks the snapshot doesn't know yet (created locally, unflushed).
-		for id, d := range dirtyTasks {
-			if m.get(id) == nil {
-				m.Store.add(d)
-			}
-		}
-		m.markCacheDirty()
-		m.refreshCaches()
-		m.followTask(taskID)
-		return m, m.exportSoon() // another process changed the store
+	if next, cmd, ok := m.handleBackgroundMsg(msg); ok {
+		return next, cmd
 	}
+	return scheduleSaveIfDirty(m.updateForMode(msg))
+}
 
-	// All handler paths feed through the common tail below so the dirty
-	// flag set by a modal mutation (add task, confirm delete, edit title,
-	// etc.) schedules the 300ms save immediately — not on the next
-	// keystroke, or quitting right after the modal Enter would lose it.
-	var newModel tea.Model
-	var cmd tea.Cmd
+// updateForMode hands a key or other input to the handler of the current
+// mode, or to the focused pane in normal mode.
+func (m model) updateForMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case modeHelp:
-		newModel, cmd = m.updateHelp(msg)
+		return m.updateHelp(msg)
 	case modeExplain:
-		newModel, cmd = m.updateExplain(msg)
+		return m.updateExplain(msg)
 	case modeBoardCarry:
-		newModel, cmd = m.updateBoardCarry(msg)
+		return m.updateBoardCarry(msg)
 	case modeBoardCard:
-		newModel, cmd = m.updateBoardCard(msg)
+		return m.updateBoardCard(msg)
 	case modeConfirm:
-		newModel, cmd = m.updateConfirm(msg)
+		return m.updateConfirm(msg)
 	case modeConfirmUpdate:
-		newModel, cmd = m.updateConfirmUpdate(msg)
+		return m.updateConfirmUpdate(msg)
 	case modeEditTimeEntry:
-		newModel, cmd = m.updateEditTimeEntry(msg)
+		return m.updateEditTimeEntry(msg)
 	case modeIdlePrompt:
-		newModel, cmd = m.updateIdlePrompt(msg)
+		return m.updateIdlePrompt(msg)
 	case modeInput:
-		newModel, cmd = m.updateInput(msg)
+		return m.updateInput(msg)
 	case modeEditComment:
-		newModel, cmd = m.updateEditComment(msg)
+		return m.updateEditComment(msg)
 	case modeEditTag:
-		newModel, cmd = m.updateEditTag(msg)
+		return m.updateEditTag(msg)
 	case modeEditTitle:
-		newModel, cmd = m.updateEditTitle(msg)
+		return m.updateEditTitle(msg)
 	case modeEditDue:
-		newModel, cmd = m.updateEditDue(msg)
+		return m.updateEditDue(msg)
 	case modeEditProjectInline:
-		newModel, cmd = m.updateEditProjectInline(msg)
+		return m.updateEditProjectInline(msg)
 	case modePalette:
-		newModel, cmd = m.updatePalette(msg)
+		return m.updatePalette(msg)
 	case modeEditStages:
-		newModel, cmd = m.updateEditStages(msg)
+		return m.updateEditStages(msg)
 	case modeEditExportFolder:
-		newModel, cmd = m.updateEditExportFolder(msg)
+		return m.updateEditExportFolder(msg)
 	case modeImportFile:
-		newModel, cmd = m.updateImportFile(msg)
+		return m.updateImportFile(msg)
 	case modeEditSyncURL:
-		newModel, cmd = m.updateEditSyncURL(msg)
+		return m.updateEditSyncURL(msg)
 	case modeEditSyncToken:
-		newModel, cmd = m.updateEditSyncToken(msg)
+		return m.updateEditSyncToken(msg)
 	case modeEditServerListen:
-		newModel, cmd = m.updateEditServerListen(msg)
+		return m.updateEditServerListen(msg)
 	case modeEditServerToken:
-		newModel, cmd = m.updateEditServerToken(msg)
+		return m.updateEditServerToken(msg)
 	case modeAddSubtask:
-		newModel, cmd = m.updateAddSubtask(msg)
+		return m.updateAddSubtask(msg)
 	case modeEditSubtask:
-		newModel, cmd = m.updateEditSubtask(msg)
+		return m.updateEditSubtask(msg)
 	case modeAddTimeEntry:
-		newModel, cmd = m.updateAddTimeEntry(msg)
+		return m.updateAddTimeEntry(msg)
 	case modeSearch:
-		newModel, cmd = m.updateSearch(msg)
+		return m.updateSearch(msg)
 	case modeSearchDep:
-		newModel, cmd = m.updateSearchDep(msg)
+		return m.updateSearchDep(msg)
 	case modeSearchTag:
-		newModel, cmd = m.updateSearchTag(msg)
+		return m.updateSearchTag(msg)
 	case modeSearchProject:
-		newModel, cmd = m.updateSearchProject(msg)
+		return m.updateSearchProject(msg)
 	case modeSearchTagTab:
-		newModel, cmd = m.updateSearchTagTab(msg)
-	default:
-		if m.pane == paneList {
-			newModel, cmd = m.updateList(msg)
-		} else {
-			newModel, cmd = m.updateDetail(msg)
-		}
+		return m.updateSearchTagTab(msg)
 	}
+	if m.pane == paneList {
+		return m.updateList(msg)
+	}
+	return m.updateDetail(msg)
+}
 
+// scheduleSaveIfDirty is the common tail of every input handler: it clamps
+// the cursors, and when the handler left the model dirty (a modal's Enter
+// included) it schedules the 300ms save now rather than on the next
+// keystroke, or quitting right after the modal Enter would lose it.
+func scheduleSaveIfDirty(newModel tea.Model, cmd tea.Cmd) (tea.Model, tea.Cmd) {
 	if nm, ok := newModel.(model); ok {
 		nm.clampCursors()
 		if nm.dirty {
@@ -775,9 +531,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// task here, and put the cursor back on it below unless the key was a
 	// navigation key that moved the cursor on purpose.
 	anchorID, anchorCursor := "", m.cursor
-	// Set by a key that raises a toast but must not skip the anchor/clamp
-	// bookkeeping below; returned with the model at the end.
-	var flashCmd tea.Cmd
+	// Set by a key whose command must not skip the anchor/clamp bookkeeping
+	// below; returned with the model at the end.
+	var cmd tea.Cmd
 	if _, drilled := m.drillTaskList(); drilled {
 		if t := m.currentTodo(); t != nil {
 			anchorID = t.ID
@@ -817,14 +573,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.regroup(func() { m.showFinishedGroups = !m.showFinishedGroups })
 			}
 			if m.tab == tabTasks {
-				m.showHistory = !m.showHistory
-				if m.showHistory {
-					m.pushFocus(stateHistory)
-				} else {
-					m.dropFocus(stateHistory)
-				}
-				m.cursor = 0
-				m.listOffset = 0
+				m.toggleHistory()
 			}
 
 		case "f":
@@ -837,15 +586,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.tab == tabTasks && !m.showHistory {
-				m.focusFilter = !m.focusFilter
-				if m.focusFilter {
-					m.pushFocus(stateFocusFilter)
-				} else {
-					m.dropFocus(stateFocusFilter)
-				}
-				m.cursor = 0
-				m.listOffset = 0
-				m.markFilterDirty()
+				m.toggleFocusFilter()
 			}
 
 		case "right":
@@ -856,9 +597,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.tab == tabSettings {
 				return m, m.settingsAdjust(+1)
 			} else if m.foldsSubtasks() {
-				if t := m.currentTodo(); t != nil && m.subtaskCount(t.ID) > 0 {
-					m.setExpanded(t.ID, true)
-				}
+				m.unfoldCurrent()
 			}
 		case "left":
 			if m.tab == tabBoard {
@@ -868,17 +607,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.tab == tabSettings {
 				return m, m.settingsAdjust(-1)
 			} else if m.foldsSubtasks() {
-				if t := m.currentTodo(); t != nil {
-					// On a subtask: collapse the containing parent and
-					// return the cursor to it, so ← always "moves out"
-					// of the unfolded region.
-					parentID := t.ID
-					if t.ParentID != "" {
-						parentID = t.ParentID
-					}
-					m.setExpanded(parentID, false)
-					m.followTask(parentID)
-				}
+				m.foldCurrent()
 			}
 
 		case " ":
@@ -902,48 +631,14 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if key.String() == "[" {
 					months = -1
 				}
-				m.calendar.selected = startOfDay(m.calendar.selected.AddDate(0, months, 0))
-				m.calendar.entryCursor = 0
-				m.calendar.focusTimeline = false
+				m.selectCalendarDay(m.calendar.selected.AddDate(0, months, 0))
 			}
 
 		case "t":
 			if m.tab == tabCalendar {
-				m.calendar.selected = startOfDay(time.Now())
-				m.calendar.entryCursor = 0
-				m.calendar.focusTimeline = false
+				m.selectCalendarDay(time.Now())
 			} else if m.tab == tabTasks || m.drilledIntoTasks() {
-				if t := m.currentTodo(); t != nil {
-					// History view: only allow stopping a running
-					// timer — a done task shouldn't accrue new tracked
-					// time. Recovery path for tasks marked done while
-					// the timer was still running.
-					if m.showHistory && !t.IsTimerRunning() {
-						return m, nil
-					}
-					if e := t.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
-						m.openIdlePrompt(t)
-						return m, nil
-					}
-					// Capture t plus any currently-running other task
-					// (toggleTimer stops it when starting a new one) so undo
-					// can restore both sides.
-					undoIDs := []string{t.ID}
-					if !t.IsTimerRunning() {
-						for otherID := range m.runningTimers {
-							if otherID != t.ID {
-								undoIDs = append(undoIDs, otherID)
-							}
-						}
-					}
-					m.pushUndo("toggle timer", undoIDs...)
-					m.toggleTimer(t)
-					m.markModified(t.ID)
-					if !m.timerTickOn && m.anyTimerRunning() {
-						m.timerTickOn = true
-						return m, timerTick()
-					}
-				}
+				cmd = m.toggleRowTimer()
 			}
 
 		case "D":
@@ -960,12 +655,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// before marking a task done.
 			if (m.tab == tabTasks && !m.showHistory) || m.drilledIntoTasks() {
 				if t := m.currentTodo(); t != nil {
-					m.pendingEntryTaskID = t.ID
-					m.mode = modeAddTimeEntry
-					m.textInput.SetValue("")
-					m.textInput.Placeholder = tr("Time spent (45m, 1h30m) or HH:MM-HH:MM…")
-					m.textInput.Focus()
-					return m, textinput.Blink
+					return m, m.startAddTimeEntry(t.ID)
 				}
 			}
 
@@ -1016,12 +706,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// tag disappears.
 			if m.tab == tabTags {
 				if tags := m.getFilteredTagsForTab(); m.tagTabCursor < len(tags) && tags[m.tagTabCursor] != untaggedKey {
-					m.editingTagName = tags[m.tagTabCursor]
-					m.mode = modeEditTag
-					m.textInput.SetValue("")
-					m.textInput.Placeholder = fmt.Sprintf(tr("Merge #%s into…"), tags[m.tagTabCursor])
-					m.textInput.Focus()
-					return m, textinput.Blink
+					return m, m.startMergeTag(tags[m.tagTabCursor])
 				}
 			}
 
@@ -1034,60 +719,21 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// you are looking at, so capturing into it costs one key instead
 			// of a tab switch and a remembered spelling.
 			if seed, ok := m.quickAddSeed(); ok {
-				if m.tab == tabBoard {
-					m.board.addCol, _ = m.boardSelection(m.boardColumns())
-				}
-				m.mode = modeInput
-				m.textInput.SetValue(seed)
-				m.textInput.SetCursor(len([]rune(seed)))
-				// Syntax lives in the persistent hint line under the input
-				// (buildFooterContent) — a placeholder vanishes on the first
-				// keystroke, exactly when the syntax reference is needed.
-				m.textInput.Placeholder = tr("New task...")
-				m.textInput.Focus()
-				return m, textinput.Blink
+				return m, m.startQuickAdd(seed)
 			}
 
 		case "d":
 			if m.tab == tabTasks || m.drilledIntoTasks() {
-				if t := m.currentTodo(); t != nil {
-					// Un-marking a done task is a state change the user
-					// rarely means (usually a stray 'd' on a completed row)
-					// and it voids the completion rank — so confirm it.
-					// Marking done stays immediate.
-					if t.Status != todo.Pending {
-						m.stageReopenConfirm(t)
-						return m, nil
-					}
-					if !m.closePendingTask(t) {
-						return m, nil // confirm staged (open subtasks)
-					}
-					// Subtasks stay visible after toggling (dimmed with a
-					// check), so the cursor stays on the same row. Parents
-					// disappear from active and the cursor would land on
-					// the next row — decrement so it lands on the previous
-					// one instead.
-					if m.tab == tabTasks && t.ParentID == "" && m.cursor > 0 {
-						m.cursor--
-					}
-				}
+				m.toggleRowDone()
 			} else if m.tab == tabBoard {
-				if t := m.boardSelectedTask(); t != nil {
-					if t.Status != todo.Pending {
-						m.stageReopenConfirm(t)
-						return m, nil
-					}
-					if m.closePendingTask(t) {
-						m.boardFollow(m.boardCfg.doneColumn(), t.ID)
-					}
-				}
+				m.toggleBoardCardDone()
 			}
 
 		case "p":
 			if (m.tab == tabTasks && !m.showHistory) || m.drilledIntoTasks() {
 				if t := m.currentTodo(); t != nil && m.cyclePriority(t) {
 					m.flashInfo(tr("A subtask can't outrank its parent"))
-					flashCmd = clearErrAfter()
+					cmd = clearErrAfter()
 				}
 			}
 		}
@@ -1097,10 +743,183 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.followTask(anchorID)
 	}
 
-	return m, flashCmd
+	return m, cmd
 }
 
 // ── List helper methods ───────────────────────────────────────────────────────
+
+// toggleHistory is h on the Tasks tab: the list swaps between open and done
+// tasks, from the top.
+func (m *model) toggleHistory() {
+	m.showHistory = !m.showHistory
+	if m.showHistory {
+		m.pushFocus(stateHistory)
+	} else {
+		m.dropFocus(stateHistory)
+	}
+	m.cursor = 0
+	m.listOffset = 0
+}
+
+// toggleFocusFilter is f on the Tasks tab.
+func (m *model) toggleFocusFilter() {
+	m.focusFilter = !m.focusFilter
+	if m.focusFilter {
+		m.pushFocus(stateFocusFilter)
+	} else {
+		m.dropFocus(stateFocusFilter)
+	}
+	m.cursor = 0
+	m.listOffset = 0
+	m.markFilterDirty()
+}
+
+// unfoldCurrent is → on a task list: the task under the cursor shows its
+// subtasks.
+func (m *model) unfoldCurrent() {
+	if t := m.currentTodo(); t != nil && m.subtaskCount(t.ID) > 0 {
+		m.setExpanded(t.ID, true)
+	}
+}
+
+// foldCurrent is ← on a task list. On a subtask it collapses the containing
+// parent and returns the cursor to it, so ← always "moves out" of the
+// unfolded region.
+func (m *model) foldCurrent() {
+	t := m.currentTodo()
+	if t == nil {
+		return
+	}
+	parentID := t.ID
+	if t.ParentID != "" {
+		parentID = t.ParentID
+	}
+	m.setExpanded(parentID, false)
+	m.followTask(parentID)
+}
+
+// selectCalendarDay moves the calendar to day, with the cursor on the day
+// view rather than inside its timeline.
+func (m *model) selectCalendarDay(day time.Time) {
+	m.calendar.selected = startOfDay(day)
+	m.calendar.entryCursor = 0
+	m.calendar.focusTimeline = false
+}
+
+// toggleRowTimer is t on a task row. It returns the timer tick when this
+// start is the first running timer.
+func (m *model) toggleRowTimer() tea.Cmd {
+	t := m.currentTodo()
+	if t == nil {
+		return nil
+	}
+	// History view: only allow stopping a running timer — a done task
+	// shouldn't accrue new tracked time. Recovery path for tasks marked done
+	// while the timer was still running.
+	if m.showHistory && !t.IsTimerRunning() {
+		return nil
+	}
+	if e := t.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
+		m.openIdlePrompt(t)
+		return nil
+	}
+	// Capture t plus any currently-running other task (toggleTimer stops it
+	// when starting a new one) so undo can restore both sides.
+	undoIDs := []string{t.ID}
+	if !t.IsTimerRunning() {
+		for otherID := range m.runningTimers {
+			if otherID != t.ID {
+				undoIDs = append(undoIDs, otherID)
+			}
+		}
+	}
+	m.pushUndo("toggle timer", undoIDs...)
+	m.toggleTimer(t)
+	m.markModified(t.ID)
+	if !m.timerTickOn && m.anyTimerRunning() {
+		m.timerTickOn = true
+		return timerTick()
+	}
+	return nil
+}
+
+// toggleRowDone is d on a task row.
+func (m *model) toggleRowDone() {
+	t := m.currentTodo()
+	if t == nil {
+		return
+	}
+	// Un-marking a done task is a state change the user rarely means (usually
+	// a stray 'd' on a completed row) and it voids the completion rank — so
+	// confirm it. Marking done stays immediate.
+	if t.Status != todo.Pending {
+		m.stageReopenConfirm(t)
+		return
+	}
+	if !m.closePendingTask(t) {
+		return // confirm staged (open subtasks)
+	}
+	// Subtasks stay visible after toggling (dimmed with a check), so the
+	// cursor stays on the same row. Parents disappear from active and the
+	// cursor would land on the next row — decrement so it lands on the
+	// previous one instead.
+	if m.tab == tabTasks && t.ParentID == "" && m.cursor > 0 {
+		m.cursor--
+	}
+}
+
+// toggleBoardCardDone is d on the board; a closed card is followed into the
+// Done column.
+func (m *model) toggleBoardCardDone() {
+	t := m.boardSelectedTask()
+	if t == nil {
+		return
+	}
+	if t.Status != todo.Pending {
+		m.stageReopenConfirm(t)
+		return
+	}
+	if m.closePendingTask(t) {
+		m.boardFollow(m.boardCfg.doneColumn(), t.ID)
+	}
+}
+
+// startAddTimeEntry opens the manual time-entry prompt for taskID.
+func (m *model) startAddTimeEntry(taskID string) tea.Cmd {
+	m.pendingEntryTaskID = taskID
+	m.mode = modeAddTimeEntry
+	m.textInput.SetValue("")
+	m.textInput.Placeholder = tr("Time spent (45m, 1h30m) or HH:MM-HH:MM…")
+	m.textInput.Focus()
+	return textinput.Blink
+}
+
+// startMergeTag opens the tag editor to merge tag into another.
+func (m *model) startMergeTag(tag string) tea.Cmd {
+	m.editingTagName = tag
+	m.mode = modeEditTag
+	m.textInput.SetValue("")
+	m.textInput.Placeholder = fmt.Sprintf(tr("Merge #%s into…"), tag)
+	m.textInput.Focus()
+	return textinput.Blink
+}
+
+// startQuickAdd opens the quick-add field holding seed. On the board the new
+// card is filed into the focused column.
+func (m *model) startQuickAdd(seed string) tea.Cmd {
+	if m.tab == tabBoard {
+		m.board.addCol, _ = m.boardSelection(m.boardColumns())
+	}
+	m.mode = modeInput
+	m.textInput.SetValue(seed)
+	m.textInput.SetCursor(len([]rune(seed)))
+	// Syntax lives in the persistent hint line under the input
+	// (buildFooterContent) — a placeholder vanishes on the first keystroke,
+	// exactly when the syntax reference is needed.
+	m.textInput.Placeholder = tr("New task...")
+	m.textInput.Focus()
+	return textinput.Blink
+}
 
 // quickAddSeed reports whether 'a' opens the quick-add field here, and with
 // what text already in it. The Tags and Projects tabs seed the token for the

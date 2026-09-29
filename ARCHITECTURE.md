@@ -127,6 +127,10 @@ everything.
 - **`update.go`**: top-level `Update`, list keys, tab switching, editor
   launching, self-update. Row-level task keys (`d`/`t`/`p`/`T`/`r`/`x`) gate on
   `drilledIntoTasks()`, so the Tasks tab and both drill-in lists behave as one.
+- **`update_msgs.go`**: the messages that arrive from ticks, commands and
+  watchers rather than keys (`handleBackgroundMsg`): timers, saves, sync,
+  reminders, exports, external reloads. `dispatch` answers these in any mode,
+  and routes everything else by mode (`updateForMode`).
 - **`update_detail.go`**: the detail pane's input side (`updateDetail`,
   `detailAdd`/`detailDelete`, `startEditing`); mirrors `view_detail.go`.
   ←/→ step through `detailSections` in document order and open the section
