@@ -293,8 +293,8 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 		// `data` is the legacy blob column, still NOT NULL but never read.
 		// Write an empty string.
 		upsertTask, err := tx.Prepare(`INSERT INTO todos
-			(id,title,status,priority,size,project,parent_id,created_at,modified_at,due_date,start_date,notes,completed_at,sequence,recurrence,seq_rank_done,stage,data,deleted,deleted_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,?)
+			(id,title,status,priority,size,project,parent_id,created_at,modified_at,due_date,start_date,notes,completed_at,sequence,recurrence,seq_rank_done,stage,data,deleted,deleted_at,stamps)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,?,?)
 			ON CONFLICT(id) DO UPDATE SET
 				title=excluded.title, status=excluded.status, priority=excluded.priority,
 				size=excluded.size, project=excluded.project, parent_id=excluded.parent_id,
@@ -303,7 +303,7 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 				notes=excluded.notes, completed_at=excluded.completed_at,
 				sequence=excluded.sequence, recurrence=excluded.recurrence,
 				seq_rank_done=excluded.seq_rank_done, stage=excluded.stage,
-				deleted=excluded.deleted, deleted_at=excluded.deleted_at`)
+				deleted=excluded.deleted, deleted_at=excluded.deleted_at, stamps=excluded.stamps`)
 		if err != nil {
 			return err
 		}
@@ -396,7 +396,8 @@ func saveNormalizedIn(tx *sql.Tx, dirty []*todo.Todo, tombstones map[string]time
 			if _, err := upsertTask.Exec(t.ID, t.Title, int(t.Status), int(t.Priority), int(t.Size),
 				t.Project, t.ParentID, fmtTime(t.CreatedAt), fmtTime(t.ModifiedAt),
 				fmtTime(t.DueDate), fmtTime(t.StartDate), t.Notes, fmtTime(t.CompletedAt),
-				score(t), t.Recurrence, t.SeqRankAtDone, t.Stage, boolToInt(t.Deleted), fmtTime(t.DeletedAt)); err != nil {
+				score(t), t.Recurrence, t.SeqRankAtDone, t.Stage, boolToInt(t.Deleted), fmtTime(t.DeletedAt),
+				encodeStamps(t.Stamps)); err != nil {
 				return err
 			}
 			// Tags and dependencies are value-sets (no per-row identity), so
@@ -568,7 +569,7 @@ func loadTodosCore(h querier, includeDeleted bool) ([]todo.Todo, error) {
 	}
 	rows, err := h.Query(`SELECT id, title, status, priority, size, project, parent_id,
 		created_at, modified_at, due_date, start_date, completed_at, notes, recurrence,
-		seq_rank_done, stage, deleted, deleted_at
+		seq_rank_done, stage, deleted, deleted_at, stamps
 		FROM todos ` + taskWhere)
 	if err != nil {
 		return nil, err
@@ -580,11 +581,17 @@ func loadTodosCore(h querier, includeDeleted bool) ([]todo.Todo, error) {
 	for rows.Next() {
 		var t todo.Todo
 		var status, priority, size, deleted int
-		var createdAt, modifiedAt, dueDate, startDate, completedAt, deletedAt string
+		var createdAt, modifiedAt, dueDate, startDate, completedAt, deletedAt, stamps string
 		if err := rows.Scan(&t.ID, &t.Title, &status, &priority, &size, &t.Project,
 			&t.ParentID, &createdAt, &modifiedAt, &dueDate, &startDate,
-			&completedAt, &t.Notes, &t.Recurrence, &t.SeqRankAtDone, &t.Stage, &deleted, &deletedAt); err != nil {
+			&completedAt, &t.Notes, &t.Recurrence, &t.SeqRankAtDone, &t.Stage, &deleted, &deletedAt, &stamps); err != nil {
 			return nil, err
+		}
+		// Only a merge reads stamps (saveStamped reads its own from the store),
+		// so the live path leaves them out, and the CLI's JSON and the export
+		// show a task as its user knows it.
+		if includeDeleted {
+			t.Stamps = decodeStamps(stamps)
 		}
 		t.Status = safeStatus(status, t.ID)
 		t.Priority = safePriority(priority, t.ID)
@@ -848,5 +855,5 @@ func (r *sqliteRepo) Save(dirty []*todo.Todo, tombstones map[string]time.Time) e
 	if err := openStore(); err != nil {
 		return err
 	}
-	return saveNormalized(db, dirty, tombstones, r.ranker().ScoreNow())
+	return saveStamped(db, dirty, tombstones, r.ranker().ScoreNow(), time.Now())
 }
