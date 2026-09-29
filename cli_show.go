@@ -416,15 +416,15 @@ const seqMissDisplayCap = 5
 // is already on the stats summary line above it, so it isn't repeated here.
 func renderSeqAnalysisText(a rank.Analysis, b rank.Biases) string {
 	if a.Rated == 0 {
-		return "no rank-stamped completions yet — the analysis needs a few finished tasks\n"
+		return "no rank-stamped completions yet; the analysis needs a few finished tasks\n"
 	}
 	misses := a.Rated - a.Hits
 	if misses == 0 {
-		return fmt.Sprintf("no misses in the last %d rated completions — every one closed as a top-%d pick\n", a.Rated, a.TopN)
+		return fmt.Sprintf("no misses in the last %d rated completions: every one closed as a top-%d pick\n", a.Rated, a.TopN)
 	}
 	var sb strings.Builder
 	if a.Hits == 0 {
-		fmt.Fprintf(&sb, "all %d rated completions closed outside the top-%d — no hits to compare against\n\n", a.Rated, a.TopN)
+		fmt.Fprintf(&sb, "all %d rated completions closed outside the top-%d, so there are no hits to compare against\n\n", a.Rated, a.TopN)
 	}
 	largest, largestAbs := -1, 0.0
 	for d := range a.Gap {

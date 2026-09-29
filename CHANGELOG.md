@@ -33,6 +33,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Projects: the timeline waits for a wider window rather than squeezing the task list's columns.
 - Tags: the (untagged) row sorts with the others instead of always leading.
 - `taskr help` fits an 80-column terminal.
+- Messages, help and hints use plain punctuation instead of em dashes; an empty field shows "-".
 
 ### Fixed
 

@@ -116,7 +116,7 @@ const refCompletionNote = "# Task refs are completed from the live store via `ta
 
 func bashCompletion() string {
 	var b strings.Builder
-	b.WriteString("# bash completion for taskr — install with:\n")
+	b.WriteString("# bash completion for taskr. Install with:\n")
 	b.WriteString("#   taskr completion bash > /etc/bash_completion.d/taskr\n")
 	b.WriteString("#   (or source it from ~/.bashrc)\n")
 	b.WriteString(refCompletionNote + "\n\n")
@@ -157,7 +157,7 @@ func bashCompletion() string {
 func zshCompletion() string {
 	var b strings.Builder
 	b.WriteString("#compdef taskr\n")
-	b.WriteString("# zsh completion for taskr — install with:\n")
+	b.WriteString("# zsh completion for taskr. Install with:\n")
 	b.WriteString("#   taskr completion zsh > \"${fpath[1]}/_taskr\"\n")
 	b.WriteString(refCompletionNote + "\n\n")
 	b.WriteString("_taskr() {\n")
@@ -204,7 +204,7 @@ func zshCompletion() string {
 
 func fishCompletion() string {
 	var b strings.Builder
-	b.WriteString("# fish completion for taskr — install with:\n")
+	b.WriteString("# fish completion for taskr. Install with:\n")
 	b.WriteString("#   taskr completion fish > ~/.config/fish/completions/taskr.fish\n")
 	b.WriteString(refCompletionNote + "\n\n")
 	b.WriteString("complete -c taskr -f\n")

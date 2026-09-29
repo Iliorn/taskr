@@ -115,7 +115,7 @@ func dispatchCLI(args []string) int {
 	case "sync":
 		return cliSync(rest)
 	case "learnings":
-		fmt.Fprintln(os.Stderr, "taskr learnings: removed — learnings were folded into each task's notes.")
+		fmt.Fprintln(os.Stderr, "taskr learnings: removed; learnings were folded into each task's notes.")
 		fmt.Fprintln(os.Stderr, "Search them with: taskr search \"Learnings\"  (notes are searched too), or open the task and press n.")
 		return 2
 	case "completion":
@@ -177,7 +177,7 @@ func cliUpdate(args []string) int {
 		fmt.Printf("%s is the latest release\n", appVersion)
 		return 0
 	case updateLocalBuild:
-		fmt.Printf("latest release %s (running %s — a local build, left alone)\n", latest, appVersion)
+		fmt.Printf("latest release %s (running %s, a local build, left alone)\n", latest, appVersion)
 		return 0
 	case updateManaged:
 		fmt.Printf("update available: %s (running %s)\n", latest, appVersion)
@@ -194,7 +194,7 @@ func cliUpdate(args []string) int {
 	// than reading EOF as "no".
 	if !*yes {
 		if !stdinIsTTY() {
-			fmt.Fprintln(os.Stderr, "taskr update: not a terminal — rerun with -y to install without confirming")
+			fmt.Fprintln(os.Stderr, "taskr update: not a terminal; rerun with -y to install without confirming")
 			return 1
 		}
 		if !confirmStdin(fmt.Sprintf("install %s over the running binary?", latest)) {
@@ -208,7 +208,7 @@ func cliUpdate(args []string) int {
 	}
 	// The running process keeps executing the old image either way (the file is
 	// renamed out from under it on Unix, moved aside on Windows), so say so.
-	fmt.Printf("installed %s — restart taskr to run it\n", latest)
+	fmt.Printf("installed %s; restart taskr to run it\n", latest)
 	return 0
 }
 
@@ -234,13 +234,13 @@ var cliHelpBlocks = []helpBlock{
 	}},
 	{"Tasks:", []helpRow{
 		{`taskr add "title" [flags]`, "add a new task (--like <ref> clones, --depends <ref>|^ blocks on, --start tracks)"},
-		{"taskr add -", "batch add: one task per stdin line (flags apply to all; --chain links each line as depending on the previous — a plan typed in execution order)"},
+		{"taskr add -", "batch add: one task per stdin line (flags apply to all; --chain links each line as depending on the previous, a plan typed in execution order)"},
 		{"taskr list [flags]", "list pending top-level tasks (ST: [ ] ready, [>] in progress, [!] overdue, [✓] done). Review filters: --stale=30d (untouched that long), --unblocked-since=14d (every blocker now done, the last one recently), --sort=seq|due|size|age|idle|pri, --wide (AGE + IDLE columns), --search-word / --search-re"},
 		{`taskr search "term" [flags]`, "title/notes substring search (includes done by default; --word matches whole words only, --re treats the term as a regular expression)"},
 		{"taskr top [-n=N] [--json] [--wide]", "show top-N by sequence score"},
 		{"taskr show <ref> [--json]", "full detail (incl. score breakdown + subtask IDs)"},
 		{"taskr why <ref> [--json]", "why it ranks where it does: each score factor with its cause, the margins to the tasks either side, and when the ranking moves on its own (deadline steps, momentum expiring)"},
-		{"taskr edit <ref>... [flags]", "change fields on one or more tasks (incl. --note/--append-note/--clear-note, --stage to move it on the board — stage names live in settings.json; --title takes a single ref)"},
+		{"taskr edit <ref>... [flags]", "change fields on one or more tasks (incl. --note/--append-note/--clear-note, --stage to move it on the board, with stage names from settings.json; --title takes a single ref)"},
 		{`taskr done <ref>... [-m "why"]`, "mark one or more tasks done, stopping any running timer on them (--cascade also closes pending subtasks; without it a parent with open subtasks prompts on a TTY, else warns and leaves them open; -m/--comment adds a closing comment to each)"},
 		{`taskr reopen <ref>... [-m "why"]`, "move tasks back to pending (the counterpart to done; already-pending tasks are reported and skipped)"},
 		{"taskr delete <ref> [-f]", "soft-delete a task (alias: rm; substring matches confirm first)"},
@@ -272,7 +272,7 @@ var cliHelpBlocks = []helpBlock{
 		{"taskr comment <ref> --delete=N", "delete comment N"},
 	}},
 	{"Diagnostics:", []helpRow{
-		{"taskr doctor [--json]", "report this installation's health — version, where its files are, database integrity, schema version, settings, sync and editor (paste the output into a bug report; exits non-zero on a problem)"},
+		{"taskr doctor [--json]", "report this installation's health: version, where its files are, database integrity, schema version, settings, sync and editor (paste the output into a bug report; exits non-zero on a problem)"},
 		{"taskr update [--check] [-y]", "install the latest release, verified against the release's SHA256SUMS (--check only reports; macOS and package-managed installs are pointed at brew/scoop/the distro instead of being overwritten)"},
 	}},
 	{"Reporting / backup:", []helpRow{
@@ -317,7 +317,7 @@ var cliHelpBlocks = []helpBlock{
 		{"--all", "include completed tasks (list only; search includes by default)"},
 		{"--pending", "exclude completed (search only; inverts default)"},
 		{"--focus", "only today + overdue (list only)"},
-		{"--ready", "only actionable tasks — ST [ ] (no unfinished dependencies; list only)"},
+		{"--ready", "only actionable tasks, ST [ ] (no unfinished dependencies; list only)"},
 		{"--blocked", "only tasks waiting on an unfinished dependency (these sort last; list only)"},
 		{"--tag=NAME", "only tasks carrying this tag"},
 		{"--project=NAME", "only tasks in this project"},
@@ -406,7 +406,7 @@ func helpWrap(s string, w int) []string {
 
 func cliHelp() int {
 	var b strings.Builder
-	b.WriteString("taskr — keyboard-driven task manager\n\n")
+	b.WriteString("taskr: keyboard-driven task manager\n\n")
 	writeHelp(&b, cliHelpBlocks)
 	fmt.Print(b.String())
 	return 0

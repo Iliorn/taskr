@@ -1048,7 +1048,7 @@ func (m *model) openIdlePrompt(t *todo.Todo) {
 	m.pendingEntryTaskID = t.ID
 	m.pendingEntryID = e.ID
 	m.mode = modeIdlePrompt
-	m.confirmMsg = fmt.Sprintf("◉ '%s' tracking for %s — [k]eep · [s]top · [e]dit · [d]iscard",
+	m.confirmMsg = fmt.Sprintf("◉ '%s' tracking for %s · [k]eep · [s]top · [e]dit · [d]iscard",
 		truncate(t.Title, 30), formatDuration(time.Since(e.StartedAt)))
 }
 

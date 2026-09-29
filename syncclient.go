@@ -204,7 +204,7 @@ func staleSyncGap(now time.Time) (time.Duration, bool) {
 // staleSyncNotice is the shared explanation, phrased for a human who has just
 // plugged in a long-dormant machine.
 func staleSyncNotice(gap time.Duration) string {
-	return fmt.Sprintf("this device hasn't synced in %s — longer than the %s deletion-memory window, so tasks deleted elsewhere in the meantime could come back everywhere if it syncs blind",
+	return fmt.Sprintf("this device hasn't synced in %s, longer than the %s deletion-memory window, so tasks deleted elsewhere in the meantime could come back everywhere if it syncs blind",
 		shortDur(gap), shortDur(staleSyncThreshold))
 }
 
@@ -220,10 +220,10 @@ func printSyncStatus(cfg syncConfig) int {
 			listen = defaultServerListen
 		}
 		if st, ok := readServeState(); ok {
-			fmt.Printf("serving: this machine is a sync server (%s) — last client sync %s ago\n",
+			fmt.Printf("serving: this machine is a sync server (%s); last client sync %s ago\n",
 				listen, shortDur(time.Since(st.LastClientSync)))
 		} else {
-			fmt.Printf("serving: this machine is a sync server (%s) — no client sync recorded yet\n", listen)
+			fmt.Printf("serving: this machine is a sync server (%s); no client sync recorded yet\n", listen)
 		}
 	}
 	if cfg.URL != "" {
@@ -240,7 +240,7 @@ func printSyncStatus(cfg syncConfig) int {
 		fmt.Println("last sync: never")
 		return 0
 	}
-	fmt.Printf("last sync: %s (%s ago) — sent %d, received %d, %d conflict(s)\n",
+	fmt.Printf("last sync: %s (%s ago), sent %d, received %d, %d conflict(s)\n",
 		st.LastSync.Local().Format("2006-01-02 15:04"), shortDur(time.Since(st.LastSync)),
 		st.Sent, st.Received, st.Conflicts)
 	return 0
@@ -306,7 +306,7 @@ func cliSync(args []string) int {
 		}
 	}
 	if !cfg.ready() {
-		fmt.Fprintln(os.Stderr, "taskr sync: missing url/token — pass --url/--token (optionally --save), or set TASKR_SYNC_URL/TASKR_SYNC_TOKEN")
+		fmt.Fprintln(os.Stderr, "taskr sync: missing url/token; pass --url/--token (optionally --save), or set TASKR_SYNC_URL/TASKR_SYNC_TOKEN")
 		return 2
 	}
 	if err := openStore(); err != nil {

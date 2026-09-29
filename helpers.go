@@ -1036,12 +1036,12 @@ func selfUpdateAsset(goos, goarch string) (string, error) {
 		case "arm64":
 			return "taskr-linux-arm64", nil
 		}
-		return "", fmt.Errorf("no release build for linux/%s — install from source with `go install github.com/Iliorn/taskr@latest`", goarch)
+		return "", fmt.Errorf("no release build for linux/%s ; install from source with `go install github.com/Iliorn/taskr@latest`", goarch)
 	case "windows":
 		if goarch == "amd64" {
 			return "taskr.exe", nil
 		}
-		return "", fmt.Errorf("no release build for windows/%s — install from source with `go install github.com/Iliorn/taskr@latest`", goarch)
+		return "", fmt.Errorf("no release build for windows/%s ; install from source with `go install github.com/Iliorn/taskr@latest`", goarch)
 	case "darwin":
 		return "", fmt.Errorf("macOS updates are distributed via Homebrew; run `brew install iliorn/tap/taskr`")
 	default:
@@ -1195,7 +1195,7 @@ func fetchLatestRelease() (releaseInfo, error) {
 func releaseHTTPError(resp *http.Response) error {
 	switch {
 	case resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
-		return fmt.Errorf("GitHub rate limit reached — try again later")
+		return fmt.Errorf("GitHub rate limit reached; try again later")
 	case resp.StatusCode == http.StatusNotFound:
 		return fmt.Errorf("no releases found for %s", releaseRepo)
 	default:
@@ -1310,7 +1310,7 @@ func checkAssetURL(raw string) error {
 		return nil
 	}
 	if u.Scheme != "https" {
-		return fmt.Errorf("refusing to download a release asset over %q — https only", u.Scheme)
+		return fmt.Errorf("refusing to download a release asset over %q: https only", u.Scheme)
 	}
 	host := strings.ToLower(u.Hostname())
 	for _, domain := range []string{"github.com", "githubusercontent.com"} {
@@ -1318,7 +1318,7 @@ func checkAssetURL(raw string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("refusing to download a release asset from %q — only github.com and githubusercontent.com are trusted", u.Host)
+	return fmt.Errorf("refusing to download a release asset from %q: only github.com and githubusercontent.com are trusted", u.Host)
 }
 
 // ── Update integrity ─────────────────────────────────────────────────────────
@@ -1366,7 +1366,7 @@ func checksumFor(sums []byte, assetName string) (string, error) {
 func downloadVerifiedAsset(info releaseInfo, assetName, dst string) error {
 	sumsAsset, err := findReleaseAsset(info, sha256SumsAsset)
 	if err != nil {
-		return fmt.Errorf("release %s publishes no %s, so the download cannot be verified — "+
+		return fmt.Errorf("release %s publishes no %s, so the download cannot be verified; "+
 			"install it manually from https://github.com/%s/releases", info.TagName, sha256SumsAsset, releaseRepo)
 	}
 	sumsPath := dst + "." + sha256SumsAsset
@@ -1394,7 +1394,7 @@ func downloadVerifiedAsset(info releaseInfo, assetName, dst string) error {
 		// Remove the staged file rather than leave a binary that failed its
 		// check sitting on disk for something else to pick up.
 		_ = os.Remove(dst)
-		return fmt.Errorf("checksum mismatch for %s: the release lists %s but the download hashed to %s — refusing to install",
+		return fmt.Errorf("checksum mismatch for %s: the release lists %s but the download hashed to %s; refusing to install",
 			assetName, want[:16]+"…", got[:16]+"…")
 	}
 	return nil

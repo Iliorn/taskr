@@ -114,7 +114,7 @@ func reconcileStaleTimersCLI(cmd string) {
 	}
 	for _, r := range recovered {
 		fmt.Fprintf(os.Stderr,
-			"taskr: auto-stopped a timer left running on %q since %s (idle over %s); logged %s — fix it in the task's detail view if that's wrong.\n",
+			"taskr: auto-stopped a timer left running on %q since %s (idle over %s); logged %s. Fix it in the task's detail view if that's wrong.\n",
 			r.Title, r.Started.Local().Format("Jan 2 15:04"), shortDur(idleThreshold), shortDur(r.Logged))
 	}
 }

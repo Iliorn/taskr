@@ -36,9 +36,9 @@ func trSeqReason(f rank.Factor) string {
 	case rank.ReasonDueTomorrow:
 		return tr("due tomorrow")
 	case rank.ReasonDueInDays:
-		return trCount("due in %d days — the ramp adds points daily", f.N, f.N)
+		return trCount("due in %d days; the ramp adds points daily", f.N, f.N)
 	case rank.ReasonDueBeyondRamp:
-		return fmt.Sprintf(tr("due in %d days — further out than the 7-day ramp"), f.N)
+		return fmt.Sprintf(tr("due in %d days, further out than the 7-day ramp"), f.N)
 	case rank.ReasonPriority:
 		return fmt.Sprintf(tr("priority is %s"), tr(f.Word))
 	case rank.ReasonMomentumTask:
@@ -124,7 +124,7 @@ func seqShiftRank(e rank.Explanation, s rank.Shift) string {
 // the lists show for it.
 func seqHeadline(e rank.Explanation) string {
 	if e.Done {
-		return tr("done — done tasks score 0 and leave the ranking")
+		return tr("done: done tasks score 0 and leave the ranking")
 	}
 	if e.Pos == 0 {
 		return fmt.Sprintf(tr("%s · not in the ranking (subtasks rank with their parent)"),
@@ -139,7 +139,7 @@ func seqStartsLine(e rank.Explanation) string {
 	if e.StartsOn.IsZero() {
 		return ""
 	}
-	return fmt.Sprintf(tr("starts %s — ranked below the work you can start today"), e.StartsOn.Format("02-01-06"))
+	return fmt.Sprintf(tr("starts %s, so it ranks below the work you can start today"), e.StartsOn.Format("02-01-06"))
 }
 
 // seqScaleLine says what 100% currently costs. Normalizing against the live
@@ -221,13 +221,13 @@ func (m model) explainBodyRows(e rank.Explanation, width int) []string {
 	}
 	if e.Boosted {
 		add("  " + helpStyle.Render(truncate(fmt.Sprintf(
-			tr("ranked on %.1f — lifted by a subtask or by work waiting on it"), e.Ranked), width-2)))
+			tr("ranked on %.1f, lifted by a subtask or by work waiting on it"), e.Ranked), width-2)))
 	}
 	if s := seqStartsLine(e); s != "" {
 		add("  " + helpStyle.Render(truncate(s, width-2)))
 	}
 	if m.taskSort != taskSortSequence {
-		add("  " + dimStyle.Render(truncate(tr("the list is on another sort right now — this is the Sequence ranking"), width-2)))
+		add("  " + dimStyle.Render(truncate(tr("the list is on another sort right now; this is the Sequence ranking"), width-2)))
 	}
 	if e.Done {
 		return lines
@@ -273,7 +273,7 @@ func (m model) explainBodyRows(e rank.Explanation, width int) []string {
 	add("")
 	if len(e.Shifts) == 0 {
 		add("  " + detailLabelStyle.Render(tr("Moves on its own:")))
-		add("  " + helpStyle.Render(truncate(tr("nothing in the next three days — this position is stable"), width-2)))
+		add("  " + helpStyle.Render(truncate(tr("nothing in the next three days; this position is stable"), width-2)))
 		return lines
 	}
 	heading := tr("Moves on its own, with no edit from you:")
@@ -357,7 +357,7 @@ func explainPlainLines(e rank.Explanation) []string {
 		lines = append(lines, "  "+seqScaleLine(e))
 	}
 	if e.Boosted {
-		lines = append(lines, "  "+fmt.Sprintf(tr("ranked on %.1f — lifted by a subtask or by work waiting on it"), e.Ranked))
+		lines = append(lines, "  "+fmt.Sprintf(tr("ranked on %.1f, lifted by a subtask or by work waiting on it"), e.Ranked))
 	}
 	if s := seqStartsLine(e); s != "" {
 		lines = append(lines, "  "+s)
@@ -393,7 +393,7 @@ func explainPlainLines(e rank.Explanation) []string {
 	lines = append(lines, "")
 	if len(e.Shifts) == 0 {
 		lines = append(lines, "  "+tr("Moves on its own:"),
-			"  "+tr("nothing in the next three days — this position is stable"))
+			"  "+tr("nothing in the next three days; this position is stable"))
 		return lines
 	}
 	lines = append(lines, "  "+tr("Moves on its own, with no edit from you:"))

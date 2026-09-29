@@ -123,7 +123,7 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateStatus = tr("Update failed")
 		} else {
 			m.flashSuccess(tr("Updated! Restart taskr to apply."))
-			m.updateStatus = tr("Updated — restart to apply")
+			m.updateStatus = tr("Updated; restart to apply")
 		}
 		return m, clearErrAfter()
 	case updateCheckMsg:
@@ -140,18 +140,18 @@ func (m model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateStatus = tr("Up to date (") + appVersion + ")"
 			return m, nil
 		case updateLocalBuild:
-			m.updateStatus = tr("Latest release: ") + msg.latest + tr(" — this is a local build (") + appVersion + ")"
+			m.updateStatus = tr("Latest release: ") + msg.latest + tr("; this is a local build (") + appVersion + ")"
 			m.flashInfo(m.updateStatus)
 			return m, clearErrAfter()
 		case updateManaged:
-			m.updateStatus = fmt.Sprintf(tr("Update available: %s — run `%s`"), msg.latest, hint)
+			m.updateStatus = fmt.Sprintf(tr("Update available: %s. Run `%s`"), msg.latest, hint)
 			m.flashInfo(m.updateStatus)
 			return m, clearErrAfter()
 		}
 		// Newer release available — ask before pulling it.
 		m.updateStatus = tr("Update available: ") + msg.latest
 		m.mode = modeConfirmUpdate
-		m.confirmMsg = msg.latest + tr(" is available — update now? (y/n)")
+		m.confirmMsg = msg.latest + tr(" is available. Update now? (y/n)")
 		return m, nil
 	case saveDoneMsg:
 		return m, nil
@@ -450,9 +450,9 @@ func (m *model) openEditorForNotes() tea.Cmd {
 	editorCmd := resolveEditorCmd()
 	if editorCmd == "" {
 		if runtime.GOOS == "windows" {
-			m.flashError(tr("No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"))
+			m.flashError(tr("No editor found. Set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"))
 		} else {
-			m.flashError(tr("No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"))
+			m.flashError(tr("No editor found. Set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"))
 		}
 		return clearErrAfter()
 	}
@@ -476,9 +476,9 @@ func (m *model) openEditorForInput() tea.Cmd {
 	editorCmd := resolveEditorCmd()
 	if editorCmd == "" {
 		if runtime.GOOS == "windows" {
-			m.flashError(tr("No editor found — set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"))
+			m.flashError(tr("No editor found. Set EDITOR permanently, e.g: setx EDITOR notepad (then restart taskr)"))
 		} else {
-			m.flashError(tr("No editor found — set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"))
+			m.flashError(tr("No editor found. Set $EDITOR permanently, e.g: echo 'set -Ux EDITOR /usr/lib/helix/hx' >> ~/.config/fish/config.fish"))
 		}
 		return clearErrAfter()
 	}
@@ -503,7 +503,7 @@ func (m model) handleEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) 
 		// On Windows, fall back to notepad once if the configured editor failed.
 		if runtime.GOOS == "windows" && !msg.fallback {
 			if notepad, lookErr := exec.LookPath("notepad"); lookErr == nil {
-				m.flashError(tr("Editor failed — falling back to notepad"))
+				m.flashError(tr("Editor failed; falling back to notepad"))
 				return m, tea.Batch(clearErrAfter(), execEditor(notepad, msg.taskID, true))
 			}
 		}

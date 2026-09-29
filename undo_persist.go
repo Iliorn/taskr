@@ -87,7 +87,7 @@ func loadPersistedUndoEntries() ([]undoEntry, error) {
 func recordDeleteUndo(entry undoEntry) bool {
 	entries, err := loadPersistedUndoEntries()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: undo history unreadable (%v) — starting a fresh one\n", err)
+		fmt.Fprintf(os.Stderr, "warning: undo history unreadable (%v); starting a fresh one\n", err)
 		entries = nil
 	}
 	if err := savePersistedUndoEntries(append(entries, entry)); err != nil {

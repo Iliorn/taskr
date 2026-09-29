@@ -122,7 +122,7 @@ func postSyncBody(client *http.Client, endpoint, token string, body []byte, comp
 func serverError(resp *http.Response, clientVersion, body string) error {
 	body = strings.TrimSpace(body)
 	if peer := resp.Header.Get(VersionHeader); peer != "" && clientVersion != "" && peer != clientVersion {
-		return fmt.Errorf("sync server runs taskr %s, this device runs %s — restart the sync server (it answered %s: %s)",
+		return fmt.Errorf("sync server runs taskr %s, this device runs %s; restart the sync server (it answered %s: %s)",
 			peer, clientVersion, resp.Status, body)
 	}
 	return fmt.Errorf("%s (server returned %s)", body, resp.Status)
@@ -138,7 +138,7 @@ func VersionGapWarning(serverVersion, clientVersion string) string {
 	if serverVersion == "" || clientVersion == "" || serverVersion == clientVersion {
 		return ""
 	}
-	return fmt.Sprintf("sync server runs taskr %s, this device runs %s — restart the sync server after upgrading it, or the two can drift apart",
+	return fmt.Sprintf("sync server runs taskr %s, this device runs %s; restart the sync server after upgrading it, or the two can drift apart",
 		serverVersion, clientVersion)
 }
 
@@ -160,7 +160,7 @@ func ClockSkewWarning(serverTime, now time.Time) string {
 	if skew <= maxClientClockSkew {
 		return ""
 	}
-	return fmt.Sprintf("warning: this device's clock is about %s off from the sync server's — edits made here can silently lose (or wrongly win) against other devices until the clock is fixed",
+	return fmt.Sprintf("warning: this device's clock is about %s off from the sync server's, so edits made here can silently lose (or wrongly win) against other devices until the clock is fixed",
 		skew.Round(time.Minute))
 }
 
@@ -188,7 +188,7 @@ func InsecureURLWarning(rawURL string) string {
 			return ""
 		}
 	}
-	return fmt.Sprintf("warning: %s is plain http to a public host — the sync token and your tasks travel unencrypted; prefer a Tailscale IP, or https (taskr serve --tls-cert)", rawURL)
+	return fmt.Sprintf("warning: %s is plain http to a public host: the sync token and your tasks travel unencrypted; prefer a Tailscale IP, or https (taskr serve --tls-cert)", rawURL)
 }
 
 // DroppedLocalEdits returns the local versions of tasks whose scalar fields

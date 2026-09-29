@@ -113,7 +113,7 @@ func cliStop(args []string) int {
 		case 1:
 			target = running[0]
 		default:
-			fmt.Fprintln(os.Stderr, "multiple tasks tracking — pass a <ref> to disambiguate")
+			fmt.Fprintln(os.Stderr, "multiple tasks tracking; pass a <ref> to disambiguate")
 			return 2
 		}
 	}

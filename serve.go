@@ -197,7 +197,7 @@ func cliNewServerToken() int {
 	fmt.Println(token)
 	fmt.Fprintf(os.Stderr, "taskr serve: stored as this machine's server token in %s\n", syncConfigPath())
 	if had {
-		fmt.Fprintln(os.Stderr, "taskr serve: this replaced the previous token — every client needs the new one before it can sync again")
+		fmt.Fprintln(os.Stderr, "taskr serve: this replaced the previous token; every client needs the new one before it can sync again")
 	}
 	fmt.Fprintln(os.Stderr, "taskr serve: for the headless server, pass it as --token or TASKR_SYNC_TOKEN")
 	return 0

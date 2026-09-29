@@ -64,7 +64,7 @@ func useUTF8Console() (restore func()) {
 	case oldOut == 0:
 		consoleNote = "" // not a console — redirected output, nothing to say
 	default:
-		consoleNote = "code page " + strconv.Itoa(int(oldOut)) + " — could not switch to UTF-8; non-ASCII characters will be garbled"
+		consoleNote = "code page " + strconv.Itoa(int(oldOut)) + ": could not switch to UTF-8, so non-ASCII characters will be garbled"
 	}
 
 	var done bool

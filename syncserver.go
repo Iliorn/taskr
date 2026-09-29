@@ -116,7 +116,7 @@ func (m model) updateEditServerToken(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// uses, and refusing it there would make a server with a short
 			// token unreachable rather than making it any safer.
 			if weakSyncToken(value) != "" {
-				m.flashError(tr("Too weak for a server token — press ctrl+g to generate a strong one"))
+				m.flashError(tr("Too weak for a server token; press ctrl+g to generate a strong one"))
 				return m, clearErrAfter()
 			}
 			m.syncCfg.ServerToken = value

@@ -98,7 +98,7 @@ func cliDone(args []string) int {
 			} else {
 				// Non-interactive: don't break scripts, but surface it loudly
 				// so the subtasks aren't silently orphaned.
-				fmt.Fprintf(os.Stderr, "warning: closing %s %q leaves %d pending subtask(s) hidden under it — rerun with --cascade to close them, or 'taskr done <subtask>'\n",
+				fmt.Fprintf(os.Stderr, "warning: closing %s %q leaves %d pending subtask(s) hidden under it; rerun with --cascade to close them, or 'taskr done <subtask>'\n",
 					t.ID[:8], t.Title, len(pending))
 			}
 		}
@@ -248,7 +248,7 @@ func cliReopen(args []string) int {
 		// `export` — the same trap `done` warns about from the other side.
 		if t.ParentID != "" {
 			if p := get(t.ParentID); p != nil && p.Status == todo.Done {
-				fmt.Fprintf(os.Stderr, "note: parent %s %q is still done — reopen it too, or this subtask stays hidden\n",
+				fmt.Fprintf(os.Stderr, "note: parent %s %q is still done; reopen it too, or this subtask stays hidden\n",
 					p.ID[:8], p.Title)
 			}
 		}
@@ -294,7 +294,7 @@ func cliDelete(args []string) int {
 			what += fmt.Sprintf(" (+%d subtask(s))", extra)
 		}
 		if !stdinIsTTY() {
-			fmt.Fprintf(os.Stderr, "taskr delete: %q matched by title substring and confirmation needs a terminal — use the id prefix %s, or -f\n",
+			fmt.Fprintf(os.Stderr, "taskr delete: %q matched by title substring and confirmation needs a terminal; use the id prefix %s, or -f\n",
 				positionals[0], t.ID[:8])
 			return 2
 		}
@@ -470,7 +470,7 @@ func cliUndo(args []string) int {
 		return 1
 	}
 	if len(entries) == 0 {
-		fmt.Fprintln(os.Stderr, "taskr undo: nothing to restore — only deletions are undoable from the CLI (last 5 kept)")
+		fmt.Fprintln(os.Stderr, "taskr undo: nothing to restore (only deletions are undoable from the CLI, last 5 kept)")
 		return 1
 	}
 	if *list {
@@ -505,7 +505,7 @@ func cliUndo(args []string) int {
 		if live[t.ID] {
 			// Already back (restored in the TUI, or re-created): overwriting
 			// the live row with the old snapshot would destroy newer edits.
-			fmt.Fprintf(os.Stderr, "skipping %s  %s — already exists\n", t.ID[:8], t.Title)
+			fmt.Fprintf(os.Stderr, "skipping %s  %s: already exists\n", t.ID[:8], t.Title)
 			continue
 		}
 		// Stamp the restore as the latest write. The tombstone in the store
@@ -525,7 +525,7 @@ func cliUndo(args []string) int {
 		restore = append(restore, t)
 	}
 	if len(restore) == 0 {
-		fmt.Fprintln(os.Stderr, "taskr undo: every task in the newest entry already exists — nothing to do")
+		fmt.Fprintln(os.Stderr, "taskr undo: every task in the newest entry already exists; nothing to do")
 		if perr := savePersistedUndoEntries(entries[:len(entries)-1]); perr != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not update undo history: %v\n", perr)
 		}

@@ -66,7 +66,7 @@ func cliList(args []string) int {
 		withDone := opts
 		withDone.includeDone = true
 		if hidden := len(filterTopLevel(todos, withDone)); hidden > 0 {
-			fmt.Printf("(no pending tasks — %d done match; use --all to see them)\n", hidden)
+			fmt.Printf("(no pending tasks; %d done match, use --all to see them)\n", hidden)
 			return 0
 		}
 	}
@@ -87,7 +87,7 @@ func listOptsFromFlags(all, focus bool, tag, project, search, searchWord, search
 		searchWord:  searchWord,
 	}
 	if search != "" && searchWord != "" {
-		fmt.Fprintln(os.Stderr, "taskr: --search and --search-word both narrow the same fields — pass one")
+		fmt.Fprintln(os.Stderr, "taskr: --search and --search-word both narrow the same fields; pass one")
 		return opts, 2
 	}
 	if searchRe != "" {
@@ -141,7 +141,7 @@ func cliSearch(args []string) int {
 		return 2
 	}
 	if *word && *asRegexp {
-		fmt.Fprintln(os.Stderr, "taskr search: --word and --re are two ways to read the same term — pass one")
+		fmt.Fprintln(os.Stderr, "taskr search: --word and --re are two ways to read the same term; pass one")
 		return 2
 	}
 	term := strings.Join(positionals, " ")
@@ -418,7 +418,7 @@ func cliRemind(args []string) int {
 	fmt.Println(title)
 	fmt.Println(body)
 	if err := sendDesktopNotification(title, body); err != nil {
-		fmt.Fprintf(os.Stderr, "taskr: desktop notification unavailable — %v\n", err)
+		fmt.Fprintf(os.Stderr, "taskr: desktop notification unavailable: %v\n", err)
 		return 1
 	}
 	return 0

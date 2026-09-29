@@ -72,7 +72,7 @@ func notifyInstallHint(goos string) string {
 	if goos == "darwin" {
 		return ""
 	}
-	return " — install libnotify (Debian/Ubuntu: apt install libnotify-bin)"
+	return "; install libnotify (Debian/Ubuntu: apt install libnotify-bin)"
 }
 
 // toastXML is the toast's content: the heading and the body as the two text

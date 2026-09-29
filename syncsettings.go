@@ -80,7 +80,7 @@ func (m model) updateEditSyncURL(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// it describes teaches the user to ignore it. Only this message
 			// is cleared; a sync status from somewhere else is not ours to
 			// erase.
-			warning := tr("Plain http to a public host — token travels unencrypted")
+			warning := tr("Plain http to a public host: token travels unencrypted")
 			switch {
 			case tasksync.InsecureURLWarning(m.syncCfg.URL) != "":
 				m.syncStatus = warning

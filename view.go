@@ -1412,12 +1412,12 @@ func (m model) helpBodyLines() []string {
 	// sync with renderTaskLineWithSet.
 	sections = append(sections, helpSec{tr("Row symbols"), [][2]string{
 		{"[ ]", tr("ready to start (ST column)")},
-		{"[>]", tr("in progress — time has been logged against it (ST column)")},
+		{"[>]", tr("in progress: time has been logged against it (ST column)")},
 		{"[!]", tr("overdue (ST column)")},
 		{"[✓]", tr("done (ST column)")},
 		{"⧗", tr("timer running")},
-		{"↧", tr("blocked — waiting on an unfinished dependency; sorts last")},
-		{"↥", tr("others depend on this — finishing it unblocks them")},
+		{"↧", tr("blocked: waiting on an unfinished dependency; sorts last")},
+		{"↥", tr("others depend on this: finishing it unblocks them")},
 		{"↻", tr("recurring task")},
 		{"(2/5)", tr("subtasks done / total")},
 		{"+ / -", tr("subtasks collapsed / expanded")},
@@ -1429,7 +1429,7 @@ func (m model) helpBodyLines() []string {
 	// to say — so each entry answers "why is that there?", which is the
 	// question a symbol in the corner of the screen actually provokes.
 	sections = append(sections, helpSec{tr("Status line"), [][2]string{
-		{"✕ sync", tr("background sync is failing — Settings has the error")},
+		{"✕ sync", tr("background sync is failing: Settings has the error")},
 		{tr("FOCUS"), tr("the focus filter is on: today + overdue only")},
 		{"/…", tr("a search filter is narrowing the list")},
 	}})

@@ -90,7 +90,7 @@ var keymap = []binding{
 	{ctxAll, "esc", "back", "go back", secNavigation, false, false},
 	{ctxAll, "tab / shift+tab / 1-7", "tabs", "switch tabs (forward / back / direct)", secNavigation, false, false},
 	{ctxAll, "?", "help", "toggle this help", secNavigation, false, false},
-	{ctxAll, "ctrl+k", "palette", "command palette — find any action by name", secNavigation, false, false},
+	{ctxAll, "ctrl+k", "palette", "command palette: find any action by name", secNavigation, false, false},
 
 	// ── Tasks list ───────────────────────────────────────────────────────
 	{ctxTasksList, "enter", "detail", "open details", secTasks, true, false},
@@ -104,7 +104,7 @@ var keymap = []binding{
 	{ctxTasksList, "x", "delete", "delete", secTasks, true, true},
 	{ctxTasksList, "n", "notes", "edit notes (opens $EDITOR)", secTasks, true, false},
 	{ctxTasksList, "f", "focus", "focus: today + overdue only", secTasks, true, false},
-	{ctxTasksList, "w", "why", "why this rank — the score, its causes, what moves it", secTasks, true, false},
+	{ctxTasksList, "w", "why", "why this rank: the score, its causes, what moves it", secTasks, true, false},
 	{ctxTasksList, "s", "sort", "cycle sort order", secTasks, true, true},
 	{ctxTasksList, "h", "history", "toggle history", secTasks, true, false},
 	{ctxTasksList | ctxDrill, "←/→", "foldsub", "expand/collapse subtasks", secTasks, true, false},

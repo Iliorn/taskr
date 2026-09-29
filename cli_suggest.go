@@ -68,7 +68,7 @@ func cliSuggest(args []string) int {
 	}
 	suggestions := collectDepSuggestions(todos)
 	if len(suggestions) == 0 {
-		fmt.Println("no dependency suggestions — notes and titles carry no unlinked structure")
+		fmt.Println("no dependency suggestions: notes and titles carry no unlinked structure")
 		return 0
 	}
 	if *listOnly || !stdinIsTTY() {
@@ -76,7 +76,7 @@ func cliSuggest(args []string) int {
 			fmt.Printf("%s %q  ⇄  %s %q\n    %s\n", s.a.ID[:8], s.a.Title, s.b.ID[:8], s.b.Title, s.evidence)
 		}
 		if !*listOnly {
-			fmt.Fprintln(os.Stderr, "stdin is not a terminal — printed without prompting (run interactively to link)")
+			fmt.Fprintln(os.Stderr, "stdin is not a terminal, so these are printed without prompting (run interactively to link)")
 		}
 		return 0
 	}
@@ -113,7 +113,7 @@ prompts:
 			continue
 		}
 		if loopingDepCandidates(byID, dependent.ID)[blocker.ID] {
-			fmt.Printf("    refused: %.8s already depends on %.8s (directly or transitively) — the link would loop\n",
+			fmt.Printf("    refused: %.8s already depends on %.8s (directly or transitively), so the link would loop\n",
 				blocker.ID, dependent.ID)
 			continue
 		}

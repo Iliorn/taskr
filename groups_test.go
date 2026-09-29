@@ -17,7 +17,7 @@ func TestFormatSince(t *testing.T) {
 		at   time.Time
 		want string
 	}{
-		{time.Time{}, "—"},
+		{time.Time{}, "-"},
 		{now.Add(-time.Hour), "today"},
 		{now.AddDate(0, 0, -1), "1d"},
 		{now.AddDate(0, 0, -13), "13d"},

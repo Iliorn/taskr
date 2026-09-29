@@ -83,7 +83,7 @@ func collectDiagnostics() []diagnostic {
 	add(diagnostic{Name: "taskr version", Value: appVersion})
 	if !isReleaseVersion(appVersion) {
 		out[len(out)-1].Status = statusWarn
-		out[len(out)-1].Detail = "not a released build — self-update is disabled for it"
+		out[len(out)-1].Detail = "not a released build, so self-update is disabled for it"
 	}
 	add(diagnostic{Name: "platform", Value: runtime.GOOS + "/" + runtime.GOARCH})
 	add(diagnostic{Name: "go runtime", Value: runtime.Version()})
@@ -134,7 +134,7 @@ func diagnoseStorage() []diagnostic {
 	if info, err := os.Stat(dir); err != nil {
 		out = append(out, diagnostic{
 			Name: "data directory state", Value: "missing", Status: statusWarn,
-			Detail: "it is created on first run — nothing is wrong if you have not used taskr yet",
+			Detail: "it is created on first run; nothing is wrong if you have not used taskr yet",
 		})
 		return out
 	} else if !info.IsDir() {
@@ -151,7 +151,7 @@ func diagnoseStorage() []diagnostic {
 	case os.IsNotExist(err):
 		out = append(out, diagnostic{
 			Name: "database", Value: path, Status: statusWarn,
-			Detail: "does not exist yet — it is created on first run",
+			Detail: "does not exist yet; it is created on first run",
 		})
 		return out
 	case err != nil:
@@ -213,7 +213,7 @@ func integrityCheck(db *sql.DB) diagnostic {
 	}
 	return diagnostic{
 		Name: "integrity check", Value: "failed", Status: statusFail,
-		Detail: result + " — restore from a -pre-migration backup in " + taskrDir(),
+		Detail: result + "; restore from a -pre-migration backup in " + taskrDir(),
 	}
 }
 
@@ -245,7 +245,7 @@ func diagnoseSettings() []diagnostic {
 	if err != nil {
 		return []diagnostic{{
 			Name: "settings", Value: path, Status: statusFail,
-			Detail: err.Error() + " — taskr falls back to defaults, and saving will overwrite the file",
+			Detail: err.Error() + "; taskr falls back to defaults, and saving will overwrite the file",
 		}}
 	}
 	out := []diagnostic{{
@@ -287,7 +287,7 @@ func diagnoseSync() []diagnostic {
 			status, detail = statusWarn, "no token set, so syncs will be refused"
 		} else if strings.HasPrefix(strings.ToLower(cfg.URL), "http://") && !isLoopbackURL(cfg.URL) {
 			status = statusWarn
-			detail = "plain http to a non-loopback host — the token travels unencrypted"
+			detail = "plain http to a non-loopback host: the token travels unencrypted"
 		} else if why := weakSyncToken(cfg.Token); why != "" {
 			// A property of the token, never the token: this output is meant
 			// to be pasteable into a bug report.
@@ -302,7 +302,7 @@ func diagnoseSync() []diagnostic {
 	if cfg.ServerListen != "" {
 		status, detail := statusOK, "token set"
 		if cfg.ServerToken == "" {
-			status, detail = statusWarn, "no server token set — the endpoint will refuse to start"
+			status, detail = statusWarn, "no server token set, so the endpoint will refuse to start"
 		} else if why := weakSyncToken(cfg.ServerToken); why != "" {
 			status, detail = statusWarn, "weak token: "+why
 		}
@@ -320,7 +320,7 @@ func diagnoseSync() []diagnostic {
 	if _, err := os.Stat(syncLogPath()); err == nil {
 		out = append(out, diagnostic{
 			Name: "sync.log", Value: "present", Status: statusWarn,
-			Detail: "local edits that lost a conflict were recorded — see `taskr sync --recover`",
+			Detail: "local edits that lost a conflict were recorded; see `taskr sync --recover`",
 		})
 	}
 	return out

@@ -177,7 +177,7 @@ const (
 	statsBarWidth   = 30
 	statsLabelWidth = 23
 	// unsetMark stands in for an empty detail-pane field or section.
-	unsetMark = "—"
+	unsetMark = "-"
 	// statsOldestMinW is the fewest title runes the Stats "Oldest active" row
 	// accepts before the page drops to fewer columns to show more of it.
 	statsOldestMinW = 12

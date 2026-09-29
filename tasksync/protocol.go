@@ -59,10 +59,10 @@ func negotiate(peer int) error {
 		peer = legacyProtocolVersion
 	}
 	if peer > ProtocolVersion {
-		return fmt.Errorf("sync protocol mismatch: the other side speaks v%d but this taskr only understands up to v%d — upgrade this end", peer, ProtocolVersion)
+		return fmt.Errorf("sync protocol mismatch: the other side speaks v%d but this taskr only understands up to v%d; upgrade this end", peer, ProtocolVersion)
 	}
 	if peer < MinProtocolVersion {
-		return fmt.Errorf("sync protocol mismatch: the other side speaks v%d but this taskr no longer supports anything below v%d — upgrade that end", peer, MinProtocolVersion)
+		return fmt.Errorf("sync protocol mismatch: the other side speaks v%d but this taskr no longer supports anything below v%d; upgrade that end", peer, MinProtocolVersion)
 	}
 	return nil
 }

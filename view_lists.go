@@ -1593,7 +1593,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		// itself lives in `taskr doctor`; here there is only room to say that
 		// it is worth replacing and which key does that.
 		if weakSyncToken(m.syncCfg.ServerToken) != "" {
-			serverTokenVal = "•••• " + tr("weak token — ctrl+g on this row generates a strong one")
+			serverTokenVal = "•••• " + tr("weak token; ctrl+g on this row generates a strong one")
 		}
 	}
 	values := map[int]string{

@@ -305,7 +305,7 @@ func hasDatedOpenTask(tasks []todo.Todo) bool {
 // that still read at a glance.
 func formatSince(at, now time.Time) string {
 	if at.IsZero() {
-		return "—"
+		return "-"
 	}
 	days := int(startOfDay(now).Sub(startOfDay(at)).Hours() / 24)
 	switch {

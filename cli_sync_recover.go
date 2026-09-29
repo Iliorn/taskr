@@ -223,7 +223,7 @@ func reapplyDroppedEdit(logPath, ref string) int {
 	live, findErr := findTaskByRef(todoPtrs(liveTodos), loggedTask.ID)
 	if findErr != nil {
 		// The task is gone from the live store (deleted elsewhere). Don't resurrect it.
-		fmt.Fprintf(os.Stderr, "taskr sync --recover: task %s no longer exists locally (it may have been deleted) — cannot reapply\n",
+		fmt.Fprintf(os.Stderr, "taskr sync --recover: task %s no longer exists locally (it may have been deleted), so it cannot be reapplied\n",
 			loggedTask.ID[:8])
 		return 1
 	}

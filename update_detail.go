@@ -459,7 +459,7 @@ func (m model) detailDelete() (tea.Model, tea.Cmd) {
 	case fieldDependencies:
 		if m.detail.depCursor >= len(t.Dependencies) {
 			// ↥ row: the edge lives on the other task.
-			m.flashInfo(tr("Inbound dependency — remove it from the other task"))
+			m.flashInfo(tr("Inbound dependency: remove it from the other task"))
 		} else if len(t.Dependencies) > 0 {
 			m.mode = modeConfirm
 			m.confirmOnYes = (*model).confirmDeleteDep

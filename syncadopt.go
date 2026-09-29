@@ -115,7 +115,7 @@ func readFirstSyncSummary(h *sql.DB) (firstSyncSummary, error) {
 // refuse. Deliberately English and unlocalized like the rest of the sync
 // layer's errors; the TUI wraps it in a translated frame.
 func firstSyncNotice(n int) string {
-	return fmt.Sprintf("this device has never synced and holds %d task(s) of its own — syncing blind would add every one of them to every device", n)
+	return fmt.Sprintf("this device has never synced and holds %d task(s) of its own; syncing blind would add every one of them to every device", n)
 }
 
 // printFirstSyncChoice writes the refusal a person reads in a shell: what is
@@ -156,7 +156,7 @@ func resolveFirstSync(cfg syncConfig, adoptLocalFlag, adoptRemoteFlag bool) int 
 		// is the whole of it — in particular, a stray --adopt-remote must never
 		// clear a store that is already part of a fleet.
 		if adoptLocalFlag || adoptRemoteFlag {
-			fmt.Fprintln(os.Stderr, "taskr sync: nothing to adopt (this device has synced before, or has no tasks of its own) — syncing normally")
+			fmt.Fprintln(os.Stderr, "taskr sync: nothing to adopt (this device has synced before, or has no tasks of its own); syncing normally")
 		}
 		return 0
 	}

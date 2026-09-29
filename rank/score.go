@@ -810,17 +810,17 @@ func Suggestion(a Analysis, b Biases) string {
 		}
 	}
 	if best < 0 || math.Abs(bestGap) < seqSuggestionMinGap {
-		return "No dominant pattern in the misses — the Biases look calibrated."
+		return "No dominant pattern in the misses; the Biases look calibrated."
 	}
 	name := DimNames[best]
 	if bestGap < 0 {
 		if knobs[best] == Relaxed {
 			return fmt.Sprintf("Misses were weakest on %s; your %s: relaxed setting already leans that way.", name, name)
 		}
-		return fmt.Sprintf("Misses were weakest on %s — you finish tasks the engine buried for scoring low there. Consider %s: relaxed (Settings).", name, name)
+		return fmt.Sprintf("Misses were weakest on %s: you finish tasks the engine buried for scoring low there. Consider %s: relaxed (Settings).", name, name)
 	}
 	if knobs[best] == Intense {
 		return fmt.Sprintf("Misses scored higher on %s than hits; your %s: intense setting already leans that way.", name, name)
 	}
-	return fmt.Sprintf("Misses scored higher on %s than hits — you follow it more than the engine weights it. Consider %s: intense (Settings).", name, name)
+	return fmt.Sprintf("Misses scored higher on %s than hits: you follow it more than the engine weights it. Consider %s: intense (Settings).", name, name)
 }

@@ -37,14 +37,14 @@ func (m model) backgroundSync() tea.Cmd {
 		// Stale-device guard — same rule as the CLI path; the Settings footer
 		// carries the pointer to the manual override.
 		if gap, stale := staleSyncGap(time.Now()); stale {
-			return syncDoneMsg{err: fmt.Errorf("paused: no sync in %s — run `taskr sync --accept-stale` in a shell to rejoin", shortDur(gap))}
+			return syncDoneMsg{err: fmt.Errorf("paused: no sync in %s; run `taskr sync --accept-stale` in a shell to rejoin", shortDur(gap))}
 		}
 		// First-sync guard — same shape, and for the same reason the stale one
 		// has it: the TUI syncs on launch and on its timer, so this is the path
 		// that uploads a device's pre-fleet tasks before anyone has been asked.
 		if firstSyncNeedsChoice(cfg, db) {
 			n, _ := countLiveTasks(db)
-			return syncDoneMsg{err: fmt.Errorf("paused: %s — run `taskr sync` in a shell to choose", firstSyncNotice(n))}
+			return syncDoneMsg{err: fmt.Errorf("paused: %s; run `taskr sync` in a shell to choose", firstSyncNotice(n))}
 		}
 		sum, err := runClientSync(db, cfg, 20*time.Second, b, board)
 		return syncDoneMsg{summary: sum, err: err}
@@ -68,7 +68,7 @@ func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 		firstFailure := !m.lastSyncFailed
 		m.lastSyncFailed = true
 		if firstFailure {
-			m.flashError(tr("Sync failing — devices may be diverging (see Settings)"))
+			m.flashError(tr("Sync failing: devices may be diverging (see Settings)"))
 			return m, clearErrAfter()
 		}
 		return m, nil
@@ -86,10 +86,10 @@ func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
 	// then the older end starts dropping whatever it has no column for, with
 	// every sync still reporting success.
 	if msg.summary.versionGap != "" {
-		m.syncStatus += " — " + msg.summary.versionGap
+		m.syncStatus += ". " + msg.summary.versionGap
 	}
 	if msg.summary.conflicts > 0 {
-		m.flashInfo(fmt.Sprintf(tr("Sync: %d conflict(s) resolved — taskr sync --recover lists them"), msg.summary.conflicts))
+		m.flashInfo(fmt.Sprintf(tr("Sync: %d conflict(s) resolved; taskr sync --recover lists them"), msg.summary.conflicts))
 		return m, clearErrAfter()
 	}
 	return m, nil

@@ -147,7 +147,7 @@ func noteCrashToUser() {
 	if lastCrashSaved {
 		fmt.Fprintf(os.Stderr, "Unsaved edits were written to the database before exiting.\n")
 	} else {
-		fmt.Fprintf(os.Stderr, "The last few seconds of edits could not be saved — the crash happened mid-write.\n")
+		fmt.Fprintf(os.Stderr, "The last few seconds of edits could not be saved: the crash happened mid-write.\n")
 	}
 	fmt.Fprintf(os.Stderr, "A report with the stack trace is at:\n  %s\n"+
 		"Please attach it to an issue at https://github.com/Iliorn/taskr/issues\n", lastCrashReport)

@@ -252,7 +252,7 @@ func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propaga
 			byID[todos[i].ID] = &todos[i]
 		}
 		if loopingDepCandidates(byID, t.ID)[dep.ID] {
-			fmt.Fprintf(os.Stderr, "taskr edit: %q can't depend on %q — it would create a dependency loop\n", t.Title, dep.Title)
+			fmt.Fprintf(os.Stderr, "taskr edit: %q can't depend on %q: it would create a dependency loop\n", t.Title, dep.Title)
 			return false, 2
 		}
 		t.AddDependency(dep.ID)

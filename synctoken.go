@@ -57,7 +57,7 @@ func weakSyncToken(token string) string {
 		if n == 1 {
 			unit = "character"
 		}
-		return fmt.Sprintf("only %d %s — anyone who can reach the endpoint can guess it; `taskr serve --new-token` mints a strong one", n, unit)
+		return fmt.Sprintf("only %d %s, so anyone who can reach the endpoint can guess it; `taskr serve --new-token` mints a strong one", n, unit)
 	}
 	if isSingleClass(token) {
 		return "one character class throughout, so it is likely a word or a phrase rather than random; `taskr serve --new-token` mints a strong one"
