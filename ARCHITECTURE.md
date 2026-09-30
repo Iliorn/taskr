@@ -94,8 +94,12 @@ git push origin v1.10.0       # ← triggers the build + release
 
 ## Packages
 
-The app is package `main`, split into files by concern. Four packages sit
-beside it, each with a boundary the compiler enforces:
+The app is package `app` in `internal/app/`, split into files by concern;
+`main.go` at the root only hands it the build's version (`main.appVersion`,
+the `-X` target) and calls `Main`, so `go install github.com/Iliorn/tjek@latest`
+and the release build are unchanged, and the root holds the documents rather
+than two hundred source files. Four packages sit beside it, each with a
+boundary the compiler enforces:
 
 - **`todo/`**: the domain: `todo.Todo` and its methods (`Toggle`, `AddTag`,
   `StartTimer`, `IsOverdue`, subtask/comment/time-entry mutations). No Bubble
@@ -105,7 +109,7 @@ beside it, each with a boundary the compiler enforces:
 - **`paths/`**: where files live. See *Paths*.
 - **`tasksync/`**: the sync engine. See *Sync*.
 
-## The app (package main)
+## The app (`internal/app`)
 
 Standard Bubble Tea MVU with one large `model` struct threaded through
 everything.
@@ -437,8 +441,8 @@ Rules:
   encoding, and the first-run import of legacy `tasks.json`.
 - **Adding a field to `todo.Todo` requires a migration** and a unit in
   `todo.Fields`. The schema is fully normalized (child records in `task_tags`/`task_comments`/
-  `task_time_entries`/`task_dependencies`). A new field needs a
-  `migrations/NNN_*.sql`, plus wiring into the `sqliteRepo.Save` upsert and the
+  `task_time_entries`/`task_dependencies`). A new field needs an
+  `internal/app/migrations/NNN_*.sql`, plus wiring into the `sqliteRepo.Save` upsert and the
   `loadTodosCore` scan. A field with only a struct tag silently drops on the
   first round trip.
 - **Deletes are tombstones.** `Save` upserts the dirty set and marks the IDs it

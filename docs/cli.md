@@ -79,7 +79,7 @@ treated as an interface:
 - **A removal or rename waits for a major version** and is called out in the
   [changelog](../CHANGELOG.md).
 - Every one of those shapes is pinned by golden files
-  (`testdata/json_contract/`) that CI compares on every run.
+  (`internal/app/testdata/json_contract/`) that CI compares on every run.
 
 Two things worth knowing: timestamps are always present (an unset date is
 `0001-01-01T00:00:00Z`, not a missing key), and `size` is absent for

@@ -35,7 +35,7 @@ loudly if that ever stops working on a platform.
   cache invalidation rules, the keymap registry, the rendering width contracts.
   Read the section for the area you are touching; most review comments would
   otherwise just be quotes from it.
-- **Adding a field to `todo.Todo` needs a migration** (`migrations/NNN_*.sql`)
+- **Adding a field to `todo.Todo` needs a migration** (`internal/app/migrations/NNN_*.sql`)
   plus the `Save` upsert and the load scan. A field with only a struct tag is
   silently dropped on the first save/load round trip.
 - **New keys go in the keymap registry** (`keymap.go`), which generates the

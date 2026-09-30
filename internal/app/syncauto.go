@@ -1,0 +1,104 @@
+package app
+
+import (
+	"fmt"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// syncauto.go wires cross-device auto-sync into the Bubble Tea loop. The merge
+// and transport live in syncclient.go; here we only schedule periodic syncs and
+// surface a brief status when a conflict was auto-resolved. The DB write a sync
+// performs is picked up by the existing filesystem watcher, which reloads the
+// task list — so this code never touches m.todos directly.
+
+const syncTickInterval = 180 * time.Second
+
+type syncTickMsg struct{}
+
+type syncDoneMsg struct {
+	summary syncSummary
+	err     error
+}
+
+func syncTick() tea.Cmd {
+	return tea.Tick(syncTickInterval, func(time.Time) tea.Msg { return syncTickMsg{} })
+}
+
+// backgroundSync runs one fail-soft sync against the configured server, using
+// the package-level store handle directly (independent of model state). If the
+// merge changed anything on disk, the watcher reloads the UI.
+func (m model) backgroundSync() tea.Cmd {
+	cfg := m.syncCfg
+	b := m.rank.Biases
+	board := m.boardCfg.wire()
+	return func() tea.Msg {
+		// Stale-device guard — same rule as the CLI path; the Settings footer
+		// carries the pointer to the manual override.
+		if gap, stale := staleSyncGap(time.Now()); stale {
+			return syncDoneMsg{err: fmt.Errorf("paused: no sync in %s; run `tjek sync --accept-stale` in a shell to rejoin", shortDur(gap))}
+		}
+		// First-sync guard — same shape, and for the same reason the stale one
+		// has it: the TUI syncs on launch and on its timer, so this is the path
+		// that uploads a device's pre-fleet tasks before anyone has been asked.
+		if firstSyncNeedsChoice(cfg, db) {
+			n, _ := countLiveTasks(db)
+			return syncDoneMsg{err: fmt.Errorf("paused: %s; run `tjek sync` in a shell to choose", firstSyncNotice(n))}
+		}
+		sum, err := runClientSync(db, cfg, 20*time.Second, b, board)
+		return syncDoneMsg{summary: sum, err: err}
+	}
+}
+
+// handleSyncDone records the outcome in the Settings footer (m.syncStatus) and
+// flashes a transient toast on the error line in two cases: when a conflict was
+// auto-resolved (a local edit was superseded and logged), and on the first
+// failure after a run of healthy syncs. Repeated failures stay quiet on the
+// toast line (a network blip shouldn't nag) — the header sync glyph and the
+// Settings footer carry the ongoing outage.
+func (m model) handleSyncDone(msg syncDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		// The whole message, not a 60-column prefix of it: the footer wraps
+		// (renderSettingsSection), and what a failed sync has to say — which
+		// end is on an old build, which table the merge could not find — is
+		// all in the tail. Truncating here made Settings say "server returned
+		// 500 Internal Server Error" and nothing else.
+		m.syncStatus = tr("Last sync failed: ") + msg.err.Error()
+		firstFailure := !m.lastSyncFailed
+		m.lastSyncFailed = true
+		if firstFailure {
+			m.flashError(tr("Sync failing: devices may be diverging (see Settings)"))
+			return m, clearErrAfter()
+		}
+		return m, nil
+	}
+	m.lastSyncFailed = false
+	m.syncStatus = fmt.Sprintf(tr("Last sync: sent %d, received %d"), msg.summary.sent, msg.summary.received)
+	// A board that arrived on the sync goroutine is installed here, on the
+	// loop that owns m.boardCfg.
+	if m.boardCfg.adoptFromSync(msg.summary.board) {
+		m.markCacheDirty()
+		m.invalidateDetailCache()
+	}
+	// A version gap does not fail the sync — that is exactly why it needs
+	// saying. Two builds against one store agree until a migration lands, and
+	// then the older end starts dropping whatever it has no column for, with
+	// every sync still reporting success.
+	gap := msg.summary.versionGap != ""
+	newGap := gap && m.syncGapServer == ""
+	m.syncGapServer = ""
+	if gap {
+		m.syncGapServer = msg.summary.serverVersion
+		m.syncStatus += ". " + msg.summary.versionGap
+	}
+	if newGap {
+		m.flashInfo(tr("Sync server runs another tjek version (see Settings)"))
+		return m, clearErrAfter()
+	}
+	if msg.summary.conflicts > 0 {
+		m.flashInfo(fmt.Sprintf(tr("Sync: %d conflict(s) resolved; tjek sync --recover lists them"), msg.summary.conflicts))
+		return m, clearErrAfter()
+	}
+	return m, nil
+}
