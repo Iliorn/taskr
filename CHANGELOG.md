@@ -13,6 +13,10 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+### Added
+
+- Waits on and Blocks columns for every task list, switched on in Settings → Columns.
+
 ### Removed
 
 - The Next up column on the Projects and Tags lists; a group's task list shows what comes first.

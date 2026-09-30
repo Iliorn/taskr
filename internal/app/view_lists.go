@@ -204,7 +204,7 @@ func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, show
 func (m model) groupTaskCols(tasks []todo.Todo, showProject bool, sel int) (listCols, []bool) {
 	nested := m.groupNestedRows(tasks)
 	deps := m.groupDepsFor(tasks, nested, sel)
-	contentMax, tagsMax, projectMax, waitsMax := 0, 0, 0, 0
+	contentMax, tagsMax, projectMax := 0, 0, 0
 	hasDue := false
 	for i := range tasks {
 		// The width each row draws: a task row's whole label (badges
@@ -217,9 +217,6 @@ func (m model) groupTaskCols(tasks []todo.Todo, showProject bool, sel int) (list
 			contentMax = max(contentMax, w)
 		} else {
 			contentMax = max(contentMax, taskRowLabelWidth(m.taskRowLabelIn(&tasks[i], deps)))
-			if deps != nil {
-				waitsMax = max(waitsMax, runeLen(deps.waits[tasks[i].ID]))
-			}
 		}
 		tagsMax = max(tagsMax, rowTagsWidth(tasks[i].Tags))
 		hasDue = hasDue || !tasks[i].DueDate.IsZero()
@@ -227,7 +224,7 @@ func (m model) groupTaskCols(tasks []todo.Todo, showProject bool, sel int) (list
 			projectMax = max(projectMax, runeLen(tasks[i].Project))
 		}
 	}
-	cols := taskListColsWaits(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax, waitsMax, m.columns)
+	cols := taskListColsShown(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax, m.columns)
 	cols.deps = deps
 	return cols, nested
 }
@@ -833,7 +830,7 @@ func (m model) renderTaskList() string {
 	// Column widths (widest row content + widest tag cell) are derived from the
 	// active set and cached by refreshTaskColMetrics, so the frame doesn't
 	// rescan every task — see cache.go.
-	cols := taskListColsWaits(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax, m.cache.activeColHasDue, dueColMax(m.cache.active, m.frameTime), m.cache.activeColProjectMax, 0, m.columns)
+	cols := taskListColsShown(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax, m.cache.activeColHasDue, dueColMax(m.cache.active, m.frameTime), m.cache.activeColProjectMax, m.columns)
 	total := m.visibleActiveLen()
 	// Cursor/total and sort status are shown in the Overview border title.
 	renderListHeader(b, m.termWidth, false, cols, "")
@@ -937,7 +934,7 @@ func (m model) renderHistoryList() string {
 		}
 	}
 	// dueMax (0) is ignored for history — it forces its fixed 12-wide date column.
-	cols := taskListColsWaits(m.termWidth, true, contentMax, tagsMax, hasDue, 0, 0, 0, m.columns)
+	cols := taskListColsShown(m.termWidth, true, contentMax, tagsMax, hasDue, 0, 0, m.columns)
 	// Cursor/total and sort status are shown in the History border title.
 	renderListHeader(b, m.termWidth, true, cols, "")
 
@@ -1277,9 +1274,6 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		// gap before the tags, clipped name or not.
 		r.add(pal.meta, padRight(truncate(t.Project, cols.projectW-listColGap), cols.projectW))
 	}
-	if cols.showWaits {
-		r.add(pal.meta, padRight(truncate(cols.deps.waits[t.ID], cols.waitsW-listColGap), cols.waitsW))
-	}
 	for _, x := range cols.extras {
 		if x.show {
 			r.add(pal.meta, padRight(truncate(x.col.value(m, t), x.w-listColGap), x.w))
@@ -1432,7 +1426,7 @@ func settingColumnRows() []int {
 // listColumnLabels names each column on the Columns page, in English.
 var listColumnLabels = map[string]string{
 	"score": "Score", "due": "Due", "size": "Size", "project": "Project",
-	"tags": "Tags", "waits": "Waits on", "start": "Start", "created": "Created",
+	"tags": "Tags", "waits": "Waits on", "blocks": "Blocks", "start": "Start", "created": "Created",
 	"changed": "Changed", "time": "Time", "priority": "Priority", "comment": "Last comment",
 }
 

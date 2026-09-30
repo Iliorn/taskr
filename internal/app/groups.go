@@ -290,21 +290,19 @@ func groupSteps(tasks []*todo.Todo, get func(string) *todo.Todo) map[string]int 
 }
 
 // groupDeps is a group pane's dependency view: each top-level row's step, the
-// first row of each step (the one that shows its number), what each row waits
-// on, and the rows tied to the selected one.
+// first row of each step (the one that shows its number), and the rows tied
+// to the selected one.
 type groupDeps struct {
 	step  map[string]int
 	first map[string]bool
 	stepW int // the step column, its gap included
-	waits map[string]string
 	// selWaitsOn is what the selected task waits on; waitsOnSel is what waits
 	// on it.
 	selWaitsOn, waitsOnSel map[string]bool
 }
 
 // groupDepsFor builds the dependency view of a group's rows, or nil when no
-// row waits on anything: every task is then step 1, and the view would only
-// add an empty column. sel is the drill cursor, -1 for a preview.
+// row waits on anything: every task is then step 1. sel is the drill cursor, -1 for a preview.
 func (m model) groupDepsFor(tasks []todo.Todo, nested []bool, sel int) *groupDeps {
 	var roots []*todo.Todo
 	for i := range tasks {
@@ -324,7 +322,6 @@ func (m model) groupDepsFor(tasks []todo.Todo, nested []bool, sel int) *groupDep
 		step:       steps,
 		first:      make(map[string]bool),
 		stepW:      runeLen(strconv.Itoa(top)) + 1,
-		waits:      make(map[string]string),
 		selWaitsOn: make(map[string]bool),
 		waitsOnSel: make(map[string]bool),
 	}
@@ -334,13 +331,6 @@ func (m model) groupDepsFor(tasks []todo.Todo, nested []bool, sel int) *groupDep
 			d.first[t.ID] = true
 			last = s
 		}
-		var names []string
-		for _, id := range t.Dependencies {
-			if dep := m.get(id); dep != nil && dep.Status != todo.Done {
-				names = append(names, dep.Title)
-			}
-		}
-		d.waits[t.ID] = strings.Join(names, ", ")
 	}
 	if sel >= 0 && sel < len(tasks) {
 		cur := &tasks[sel]

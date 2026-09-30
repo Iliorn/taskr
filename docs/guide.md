@@ -147,9 +147,10 @@ the list, `↥` marks a blocker and `↧` a task still waiting on one.
 
 On the Projects and Tags tabs, a group whose tasks wait on each other is
 listed in steps: step 1 is what can start now, and each later step waits on
-something before it. A **Waits on** column names what each task is waiting
-for, and on the task under the cursor, what it waits on lights up in blue and
-what waits on it in yellow.
+something before it. On the task under the cursor, what it waits on lights
+up in blue and what waits on it in yellow. Settings → Columns adds a **Waits
+on** column (what each task is waiting for) and a **Blocks** column (what is
+waiting for it) to every task list.
 
 ## Adding tasks quickly
 

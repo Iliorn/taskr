@@ -2,6 +2,7 @@ package app
 
 import (
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -215,7 +216,7 @@ func TestGroupPaneShowsTheDependencies(t *testing.T) {
 	}
 	plain := ansi.Strip(m.View())
 	// Fit cabinets waits on two tasks; the column clips the second.
-	for _, want := range []string{tr("Waits on"), "4 Fit cabinets", "Order cabinets, Tear out", "Choose cabinets"} {
+	for _, want := range []string{tr("Waits on"), "4 Fit cabinets", "Order cabinets, Tear", "Choose cabinets"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("the pane should show %q:\n%s", want, plain)
 		}
@@ -255,5 +256,34 @@ func TestGroupPaneWithoutDependenciesStaysPlain(t *testing.T) {
 	m = script(t, m, "4", "enter")
 	if plain := ansi.Strip(m.View()); strings.Contains(plain, tr("Waits on")) || strings.Contains(plain, "1 Paint") {
 		t.Errorf("a group with no dependencies should draw the plain list:\n%s", plain)
+	}
+}
+
+// Waits on and Blocks are the two sides of one dependency, on any list: the
+// task that waits names what it waits on, and the task it waits on names it.
+func TestWaitsOnAndBlocksColumns(t *testing.T) {
+	first, second := todo.New("Measure the room"), todo.New("Order the cabinets")
+	second.Dependencies = []string{first.ID}
+	m := modelWithTasks(t, first, second)
+	m.columns["waits"], m.columns["blocks"] = true, true
+	m.termWidth, m.termHeight = 160, 20
+	row := func(title string) string {
+		for _, line := range strings.Split(ansi.Strip(m.View()), "\n") {
+			// The title column, right after the status box and its arrow.
+			if regexp.MustCompile(`\] (↥ |↧ )?` + regexp.QuoteMeta(title)).MatchString(line) {
+				return line
+			}
+		}
+		t.Fatalf("no row for %q", title)
+		return ""
+	}
+	if plain := ansi.Strip(m.View()); !strings.Contains(plain, tr("Waits on")) || !strings.Contains(plain, tr("Blocks")) {
+		t.Fatalf("both headers should show:\n%s", plain)
+	}
+	if r := row("Measure the room"); strings.Count(r, "Order the cabinets") != 1 {
+		t.Errorf("the task waited on should name what it blocks: %q", r)
+	}
+	if r := row("Order the cabinets"); strings.Count(r, "Measure the room") != 1 {
+		t.Errorf("the waiting task should name what it waits on: %q", r)
 	}
 }

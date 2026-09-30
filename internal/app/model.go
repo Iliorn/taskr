@@ -65,7 +65,7 @@ const (
 	// settingColFirst is the first of the Columns page's rows, one per
 	// listColumnKeys entry (settingColumnKey); they run to numSettingsRows.
 	settingColFirst
-	numSettingsRows = settingColFirst + 12
+	numSettingsRows = settingColFirst + 13
 )
 
 type pane int

@@ -19,8 +19,10 @@ type cacheState struct {
 	overdueSet  map[string]bool
 	blockedSet  map[string]bool // tasks waiting on an unfinished dependency
 	blockerSet  map[string]bool // tasks an unfinished task depends on
-	active      []todo.Todo
-	done        []todo.Todo
+	// dependents lists, per task, the unfinished tasks that wait on it.
+	dependents map[string][]string
+	active     []todo.Todo
+	done       []todo.Todo
 	// tagGroups and projectGroups summarize every tag and project for their
 	// tabs (see groups.go); tagNames and projectNames are the same keys,
 	// alphabetical, for the pickers and completions.
@@ -120,6 +122,15 @@ func (m *model) refreshCaches() {
 // and the rendered row agree on what "blocked" means.
 func (m *model) rebuildDependencySets(all []*todo.Todo) {
 	m.cache.blockedSet, m.cache.blockerSet = rank.DependencySets(all)
+	m.cache.dependents = make(map[string][]string, len(m.cache.blockerSet))
+	for _, t := range all {
+		if t.Status == todo.Done {
+			continue
+		}
+		for _, id := range t.Dependencies {
+			m.cache.dependents[id] = append(m.cache.dependents[id], t.ID)
+		}
+	}
 }
 
 // refreshUsageRecency records, per tag and per project, the latest ModifiedAt of

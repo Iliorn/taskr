@@ -212,8 +212,9 @@ everything.
   step (`groupSteps`: step 1 waits on nothing, a task comes one step after
   the latest thing it waits on) and within a step in the sequence order. When
   any task waits, the rows draw the dependency view (`groupDepsFor`, carried
-  on `listCols.deps`): the step number in place of the ↥/↧ arrow, a Waits on
-  column, and the rows tied to the selected one lit. Summaries are built in
+  on `listCols.deps`): the step number in place of the ↥/↧ arrow, and the
+  rows tied to the selected one lit. What a task waits on and what it blocks
+  are columns every list can show (Waits on, Blocks; `cache.dependents`). Summaries are built in
   `refreshCaches` (`refreshGroups`). Both lists
   draw through `renderGroupRows` and their panes through `groupPane`: the
   group's summary over its task list, which enter walks in place, and the group
@@ -705,11 +706,11 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   only the text. `refreshTaskColMetrics` sizes the column from the same
   function, so a new badge is one edit.
 - **Columns are a setting.** `listColumns` (settings `columns`, the Settings
-  page Columns) switches the optional columns, and `taskListColsWaits` leaves
+  page Columns) switches the optional columns, and `taskListColsShown` leaves
   out the ones switched off, so every list that sizes through it follows.
   A column the file does not name keeps its default
   (`listColumnsFromSettings`), so one added later arrives as its default. The
-  columns read off the task alone are `extraColumns`: a key, a header, a
+  columns read off the task (and the caches) are `extraColumns`: a key, a header, a
   width and a value, drawn after the fixed ones and dropped first when the
   pane is narrow. A new one is an entry there and in `listColumnKeys`.
   The Tasks tab's `s` steps through Sequence and the sort of each column
