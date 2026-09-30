@@ -419,13 +419,13 @@ var extraColumns = []extraColumn{
 	{"changed", "Changed", 5, func(m *model, t *todo.Todo) string {
 		return formatSince(t.ModifiedAt, m.frameTime)
 	}},
-	{"time", "Time", 6, func(_ *model, t *todo.Todo) string {
+	{"time", "Time", 7, func(_ *model, t *todo.Todo) string {
 		if d := t.TotalTimeSpent(); d > 0 {
 			return formatDurationCompact(d)
 		}
 		return ""
 	}},
-	{"priority", "Priority", 6, func(_ *model, t *todo.Todo) string {
+	{"priority", "Priority", 7, func(_ *model, t *todo.Todo) string {
 		return trPriority(t.Priority)
 	}},
 	{"comment", "Last comment", 24, func(_ *model, t *todo.Todo) string {

@@ -551,3 +551,35 @@ func TestColumnsSwitchOnAndOff(t *testing.T) {
 		}
 	}
 }
+
+// An extra column's width holds every value it can show in every language: a
+// priority word, an age, a total of time, so none of them is clipped.
+func TestExtraColumnsFitTheirValues(t *testing.T) {
+	width := func(key string) int {
+		for _, x := range extraColumns {
+			if x.key == key {
+				return x.w
+			}
+		}
+		t.Fatalf("no extra column %q", key)
+		return 0
+	}
+	now := time.Now()
+	defer applyLang(string(activeLang))
+	for _, lang := range availableLanguages {
+		applyLang(string(lang))
+		for _, p := range []todo.Priority{todo.PriorityLow, todo.PriorityMedium, todo.PriorityHigh} {
+			if w := runeLen(trPriority(p)); w > width("priority") {
+				t.Errorf("%s: priority %q is %d wide, over the column's %d", lang, trPriority(p), w, width("priority"))
+			}
+		}
+		for _, ago := range []time.Duration{0, 5 * 24 * time.Hour, 60 * 24 * time.Hour, 900 * 24 * time.Hour} {
+			if s := formatSince(now.Add(-ago), now); runeLen(s) > width("created") || runeLen(s) > width("changed") {
+				t.Errorf("%s: age %q does not fit the Created/Changed columns", lang, s)
+			}
+		}
+	}
+	if s := formatDurationCompact(987*time.Hour + 59*time.Minute); runeLen(s) > width("time") {
+		t.Errorf("time %q does not fit the Time column's %d", s, width("time"))
+	}
+}
