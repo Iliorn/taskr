@@ -21,6 +21,8 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 - Logged time is never in the future: a range today has not reached yet is yesterday's.
 - `tjek export file.json` writes the file; it printed the export and ignored the path.
+- `tjek edit --priority` and `--size` refuse a word they don't know instead of setting medium.
+- `tjek comment --edit=0` is an error; it added its text as a new comment.
 - `tjek list`, `tags`, `stats` and the other verbs without words say so when given one.
 - Low priority in German fits the Priority column instead of reading "niedr…".
 

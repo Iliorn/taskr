@@ -519,26 +519,47 @@ func splitFlagsAndPositionals(fs *flag.FlagSet, args []string) (flags, positiona
 	return
 }
 
+// parsePriorityFlag is --p on add: a word it does not know is Medium, the
+// default a new task would have had anyway.
 func parsePriorityFlag(s string) todo.Priority {
-	switch strings.ToLower(s) {
-	case "h", "high":
-		return todo.PriorityHigh
-	case "l", "low":
-		return todo.PriorityLow
-	default:
-		return todo.PriorityMedium
+	if p, ok := priorityFlagValue(s); ok {
+		return p
 	}
+	return todo.PriorityMedium
 }
 
-func parseSizeFlag(s string) todo.Size {
-	switch strings.ToLower(s) {
-	case "s", "small":
-		return todo.SizeSmall
-	case "l", "large":
-		return todo.SizeLarge
-	default:
-		return todo.SizeMedium
+// priorityFlagValue reads a --p value, reporting whether it knew the word.
+func priorityFlagValue(s string) (todo.Priority, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "h", "high":
+		return todo.PriorityHigh, true
+	case "m", "med", "medium":
+		return todo.PriorityMedium, true
+	case "l", "low":
+		return todo.PriorityLow, true
 	}
+	return todo.PriorityMedium, false
+}
+
+// parseSizeFlag is --size on add, lenient as parsePriorityFlag is.
+func parseSizeFlag(s string) todo.Size {
+	if z, ok := sizeFlagValue(s); ok {
+		return z
+	}
+	return todo.SizeMedium
+}
+
+// sizeFlagValue reads a --size value, reporting whether it knew the word.
+func sizeFlagValue(s string) (todo.Size, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "s", "small":
+		return todo.SizeSmall, true
+	case "m", "med", "medium":
+		return todo.SizeMedium, true
+	case "l", "large":
+		return todo.SizeLarge, true
+	}
+	return todo.SizeMedium, false
 }
 
 // noPositionals refuses the words a verb that takes none was given, with hint

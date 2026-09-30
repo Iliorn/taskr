@@ -449,3 +449,47 @@ func TestCLIRefusesBadOutputRequests(t *testing.T) {
 		}
 	}
 }
+
+// --edit=0 and --delete=0 name a comment that does not exist; they were read
+// as absent, and the text went on as a new comment.
+func TestCLICommentIndexZeroIsAnError(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	id := addQuietID(t, "Plan offsite")
+	captureStdout(t, func() { cliComment([]string{id, "Booked the room"}) })
+
+	captureStderr(t, func() {
+		if code := cliComment([]string{id, "--edit=0", "Changed"}); code != 2 {
+			t.Errorf("--edit=0: exit %d, want 2", code)
+		}
+		if code := cliComment([]string{id, "--delete=0"}); code != 2 {
+			t.Errorf("--delete=0: exit %d, want 2", code)
+		}
+		if code := cliComment([]string{id, "--edit=1", "--delete=1", "x"}); code != 2 {
+			t.Errorf("--edit with --delete: exit %d, want 2", code)
+		}
+	})
+	if got := cliTaskByID(t, id).Comments; len(got) != 1 || got[0].Text != "Booked the room" {
+		t.Errorf("comments = %+v, want the one comment untouched", got)
+	}
+}
+
+// An edit refuses a priority or size it does not know rather than setting
+// the default over the task's own value: --priority urgent took a high
+// priority task down to medium.
+func TestCLIEditRefusesAnUnknownPriorityOrSize(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	id := addQuietID(t, "Fix the boiler")
+	captureStdout(t, func() { cliEdit([]string{id, "--priority", "high", "--size", "large"}) })
+
+	captureStderr(t, func() {
+		if code := cliEdit([]string{id, "--priority", "urgent"}); code != 2 {
+			t.Errorf("--priority urgent: exit %d, want 2", code)
+		}
+		if code := cliEdit([]string{id, "--size", "xl"}); code != 2 {
+			t.Errorf("--size xl: exit %d, want 2", code)
+		}
+	})
+	if got := cliTaskByID(t, id); got.Priority != todo.PriorityHigh || got.Size != todo.SizeLarge {
+		t.Errorf("priority %v size %v, want high and large kept", got.Priority, got.Size)
+	}
+}

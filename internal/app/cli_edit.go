@@ -169,13 +169,25 @@ func editOneTask(t *todo.Todo, todos []todo.Todo, f editFields, saveSet, propaga
 		t.ModifiedAt = todo.StampModified(t.ModifiedAt)
 		changed = true
 	}
+	// Unlike add, where a word it does not know lands on the default, an
+	// edit refuses one: it would overwrite the value the task has.
 	if *priority != "" {
-		t.SetPriority(parsePriorityFlag(*priority))
+		p, ok := priorityFlagValue(*priority)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "tjek edit: unknown priority %q (use h, m or l)\n", *priority)
+			return false, 2
+		}
+		t.SetPriority(p)
 		changed = true
 		priorityEdited = true
 	}
 	if *size != "" {
-		t.SetSize(parseSizeFlag(*size))
+		s, ok := sizeFlagValue(*size)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "tjek edit: unknown size %q (use s, m or l)\n", *size)
+			return false, 2
+		}
+		t.SetSize(s)
 		changed = true
 	}
 	if *stage != "" {
@@ -352,8 +364,16 @@ func cliComment(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
+	// Whether --edit or --delete was given, not whether it is above zero:
+	// --edit=0 read as absent and appended its text as a new comment.
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	if given["edit"] && given["delete"] {
+		fmt.Fprintln(os.Stderr, "tjek comment: --edit and --delete go one at a time")
+		return 2
+	}
 	switch {
-	case *delIdx > 0:
+	case given["delete"]:
 		// Delete: index is 1-based for humans, 0-based internally.
 		i := *delIdx - 1
 		if i < 0 || i >= len(t.Comments) {
@@ -367,7 +387,7 @@ func cliComment(args []string) int {
 		}
 		fmt.Printf("deleted comment %d on %s\n", *delIdx, t.ID[:8])
 		return 0
-	case *editIdx > 0:
+	case given["edit"]:
 		i := *editIdx - 1
 		if i < 0 || i >= len(t.Comments) {
 			fmt.Fprintf(os.Stderr, "comment index %d out of range (task has %d comments)\n", *editIdx, len(t.Comments))
