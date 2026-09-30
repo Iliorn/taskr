@@ -269,9 +269,9 @@ func (m model) buildCalendarContent(w, outerH int) string {
 }
 
 // calPanelWidthFor is the month panel's width in a calendar w cells wide: a
-// third of it, between calPanelWidth and calPanelMaxWidth. The grid is a
-// fixed 20 cells, so what the panel gains goes to the task names in its
-// Coming up list, which clip after a word or two at the narrowest width.
+// third of it, between calPanelWidth and calPanelMaxWidth. What the panel
+// gains spreads the grid and goes to the task names in its Coming up list,
+// which clip after a word or two at the narrowest width.
 func calPanelWidthFor(w int) int {
 	return min(max(w/3, calPanelWidth), calPanelMaxWidth)
 }
@@ -316,8 +316,15 @@ func (m model) renderMonthCalendarLines(innerW int) []string {
 
 	today := startOfDay(m.frameTime)
 
+	// The grid spreads across the panel: the gap between its seven columns
+	// grows with the width (up to calGridMaxGap, past which the days stop
+	// reading as one week), and what is left over centres it.
+	gap := min(max((innerW-14)/6, 1), calGridMaxGap)
+	indent := strings.Repeat(" ", max((innerW-14-6*gap)/2, 0))
+	sep := strings.Repeat(" ", gap)
+
 	var lines []string
-	lines = append(lines, dimStyle.Render(localizedWeekdayHeader()))
+	lines = append(lines, indent+dimStyle.Render(strings.Join(strings.Fields(localizedWeekdayHeader()), sep)))
 
 	// Monday-first offset of the 1st, matching the stats heatmap convention.
 	day := monthStart.AddDate(0, 0, -((int(monthStart.Weekday()) + 6) % 7))
@@ -354,7 +361,7 @@ func (m model) renderMonthCalendarLines(innerW int) []string {
 			}
 			day = day.AddDate(0, 0, 1)
 		}
-		lines = append(lines, strings.Join(cells, " "))
+		lines = append(lines, indent+strings.Join(cells, sep))
 	}
 
 	lines = append(lines, m.renderDayRollupLines(innerW)...)

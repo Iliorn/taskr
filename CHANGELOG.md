@@ -11,6 +11,12 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Changed
+
+- The Calendar's month grid spreads across its panel instead of huddling in the corner.
+
 ## [1.49.0] - 2026-09-30
 
 ### Added
