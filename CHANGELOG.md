@@ -11,7 +11,7 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
-## [Unreleased]
+## [1.49.0] - 2026-09-30
 
 ### Added
 
@@ -25,6 +25,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - `tjek comment --edit=0` is an error; it added its text as a new comment.
 - `tjek list`, `tags`, `stats` and the other verbs without words say so when given one.
 - Low priority in German fits the Priority column instead of reading "niedr…".
+- Back on a filtered Tasks list after closing a card elsewhere, the cursor is still on a row.
 
 ### Removed
 
