@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -206,8 +207,9 @@ func hiddenFinishedGroups(sums map[string]*groupSummary, showFinished bool, matc
 }
 
 // groupTaskList is the task list behind a group's row, in the order the
-// drilled-in list walks it: open tasks first, highest ranked first; then, only
-// when finished work is shown, the done tasks newest first. Subtasks fold the
+// drilled-in list walks it: open tasks first, by step (groupSteps) and within
+// a step in the Tasks tab's sequence order, so what can start today leads;
+// then, only when finished work is shown, the done tasks newest first. Subtasks fold the
 // way they do on the Tasks tab, sharing its expandedTasks: an unfolded
 // parent is followed by all of its subtasks, whichever group those carry, and
 // a folded one hides them. A subtask whose parent is not open in the group
@@ -232,17 +234,9 @@ func (m model) groupTaskList(match func(*todo.Todo) bool) []todo.Todo {
 			roots = append(roots, t)
 		}
 	}
-	score := m.rank.ScoreNow()
-	ranked := make(map[string]float64, len(roots))
-	for _, t := range roots {
-		ranked[t.ID] = rank.ScoreOf(t, m.cache.rankScore, score)
-	}
-	sort.Slice(roots, func(i, j int) bool {
-		if ri, rj := ranked[roots[i].ID], ranked[roots[j].ID]; ri != rj {
-			return ri > rj
-		}
-		return roots[i].ID < roots[j].ID
-	})
+	rank.SortPtrs(roots, m.cache.rankScore, rank.Sunk(m.cache.blockedSet, roots, m.frameTime), m.rank.ScoreNow())
+	steps := groupSteps(roots, m.get)
+	sort.SliceStable(roots, func(i, j int) bool { return steps[roots[i].ID] < steps[roots[j].ID] })
 
 	out := make([]todo.Todo, 0, len(open)+len(done))
 	listed := make(map[string]bool)
@@ -272,6 +266,107 @@ func (m model) groupTaskList(match func(*todo.Todo) bool) []todo.Todo {
 		}
 	}
 	return out
+}
+
+// groupSteps numbers a group's open top-level tasks by when they can be
+// done: step 1 is what nothing holds up, and a task waiting on others comes
+// one step after the latest of them. Work it waits on outside these tasks (in
+// another group, or a subtask) is not in the list to number, so it puts the
+// task at step 2 at least. A dependency cycle is cut where the walk meets it.
+func groupSteps(tasks []*todo.Todo, get func(string) *todo.Todo) map[string]int {
+	in := make(map[string]*todo.Todo, len(tasks))
+	for _, t := range tasks {
+		in[t.ID] = t
+	}
+	steps := make(map[string]int, len(tasks))
+	var visit func(t *todo.Todo) int
+	visit = func(t *todo.Todo) int {
+		if s, ok := steps[t.ID]; ok {
+			return max(s, 1) // 0: still being walked, so a cycle
+		}
+		steps[t.ID] = 0
+		s := 1
+		for _, id := range t.Dependencies {
+			if d := in[id]; d != nil {
+				s = max(s, visit(d)+1)
+			} else if d := get(id); d != nil && d.Status != todo.Done {
+				s = max(s, 2)
+			}
+		}
+		steps[t.ID] = s
+		return s
+	}
+	for _, t := range tasks {
+		visit(t)
+	}
+	return steps
+}
+
+// groupDeps is a group pane's dependency view: each top-level row's step, the
+// first row of each step (the one that shows its number), what each row waits
+// on, and the rows tied to the selected one.
+type groupDeps struct {
+	step  map[string]int
+	first map[string]bool
+	stepW int // the step column, its gap included
+	waits map[string]string
+	// selWaitsOn is what the selected task waits on; waitsOnSel is what waits
+	// on it.
+	selWaitsOn, waitsOnSel map[string]bool
+}
+
+// groupDepsFor builds the dependency view of a group's rows, or nil when no
+// row waits on anything: every task is then step 1, and the view would only
+// add an empty column. sel is the drill cursor, -1 for a preview.
+func (m model) groupDepsFor(tasks []todo.Todo, nested []bool, sel int) *groupDeps {
+	var roots []*todo.Todo
+	for i := range tasks {
+		if !nested[i] && tasks[i].Status != todo.Done {
+			roots = append(roots, &tasks[i])
+		}
+	}
+	steps := groupSteps(roots, m.get)
+	top := 1
+	for _, s := range steps {
+		top = max(top, s)
+	}
+	if top == 1 {
+		return nil
+	}
+	d := &groupDeps{
+		step:       steps,
+		first:      make(map[string]bool),
+		stepW:      runeLen(strconv.Itoa(top)) + 1,
+		waits:      make(map[string]string),
+		selWaitsOn: make(map[string]bool),
+		waitsOnSel: make(map[string]bool),
+	}
+	last := 0
+	for _, t := range roots {
+		if s := steps[t.ID]; s != last {
+			d.first[t.ID] = true
+			last = s
+		}
+		var names []string
+		for _, id := range t.Dependencies {
+			if dep := m.get(id); dep != nil && dep.Status != todo.Done {
+				names = append(names, dep.Title)
+			}
+		}
+		d.waits[t.ID] = strings.Join(names, ", ")
+	}
+	if sel >= 0 && sel < len(tasks) {
+		cur := &tasks[sel]
+		for _, id := range cur.Dependencies {
+			d.selWaitsOn[id] = true
+		}
+		for i := range tasks {
+			if slices.Contains(tasks[i].Dependencies, cur.ID) {
+				d.waitsOnSel[tasks[i].ID] = true
+			}
+		}
+	}
+	return d
 }
 
 // groupNestedRows reports, per row of a groupTaskList, whether it is drawn

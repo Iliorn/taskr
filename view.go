@@ -1314,12 +1314,12 @@ func (m model) projectPaneRows(tasks []todo.Todo, start, shown, sel int) []strin
 	lm := m
 	lm.termWidth = listW + 8 // the row renderers draw termWidth-8 cells
 	// The list is what the pane is for and the timeline an extra: when the
-	// strip would cost the list a column it shows at full width (Score, Due
-	// or Size), the list keeps the width and the strip waits for a wider
-	// window.
-	full, _ := m.groupTaskCols(tasks, false)
-	if beside, _ := lm.groupTaskCols(tasks, false); beside.showLast != full.showLast ||
-		beside.showDue != full.showDue || beside.showSize != full.showSize {
+	// strip would cost the list a column it shows at full width (Score, Due,
+	// Size or Waits on), the list keeps the width and the strip waits for a
+	// wider window.
+	full, _ := m.groupTaskCols(tasks, false, sel)
+	if beside, _ := lm.groupTaskCols(tasks, false, sel); beside.showLast != full.showLast ||
+		beside.showDue != full.showDue || beside.showSize != full.showSize || beside.showWaits != full.showWaits {
 		return m.renderGroupTaskRows(tasks, start, shown, sel, false)
 	}
 	left := lm.renderGroupTaskRows(tasks, start, shown, sel, false)
@@ -1450,6 +1450,7 @@ func (m model) helpBodyLines() []string {
 		{"⧗", tr("timer running")},
 		{"↧", tr("blocked: waiting on an unfinished dependency; sorts last")},
 		{"↥", tr("others depend on this: finishing it unblocks them")},
+		{"1 2 3", tr("step in a project or tag: what can start now, then what waits on it")},
 		{"↻", tr("recurring task")},
 		{"(2/5)", tr("subtasks done / total")},
 		{"+ / -", tr("subtasks collapsed / expanded")},

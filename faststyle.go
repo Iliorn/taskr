@@ -61,6 +61,8 @@ var (
 	fastDim        fastStyle
 	fastTimer      fastStyle
 	fastCheckDone  fastStyle
+	fastDepBlocker fastStyle
+	fastDepWaiting fastStyle
 
 	fastSelectedRow        fastStyle
 	fastSelectedDim        fastStyle
@@ -77,6 +79,8 @@ func rebuildFastStyles() {
 	fastDim = newFastStyle(dimStyle)
 	fastTimer = newFastStyle(timerStyle)
 	fastCheckDone = newFastStyle(checkDoneStyle)
+	fastDepBlocker = newFastStyle(depBlockerStyle)
+	fastDepWaiting = newFastStyle(depWaitingStyle)
 
 	fastSelectedRow = newFastStyle(selectedRowStyle)
 	fastSelectedDim = newFastStyle(selectedDimRowStyle)

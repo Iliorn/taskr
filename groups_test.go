@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -125,5 +126,137 @@ func TestGroupPaneShowsAProgressBar(t *testing.T) {
 	}
 	if head := newTagModel().groupPaneHead(&groupSummary{}, 80); len(head) != 1 {
 		t.Errorf("an empty group has no bar to draw, got %q", head)
+	}
+}
+
+// kitchenProject is a project whose tasks wait on each other: two chains that
+// meet, a task waiting on work in another project, and one that waits on
+// nothing.
+func kitchenProject(t *testing.T) model {
+	t.Helper()
+	mk := func(id, title, project string, deps ...string) todo.Todo {
+		x := todo.New(title)
+		x.ID = id
+		x.Project = project
+		x.Dependencies = deps
+		return x
+	}
+	return modelWithTasks(t,
+		mk("measure", "Measure the kitchen", "Kitchen"),
+		mk("choose", "Choose cabinets", "Kitchen", "measure"),
+		mk("order", "Order cabinets", "Kitchen", "choose"),
+		mk("demolish", "Tear out the old kitchen", "Kitchen"),
+		mk("fit", "Fit cabinets", "Kitchen", "order", "demolish"),
+		mk("lamps", "Buy lamps", "Kitchen"),
+		mk("wire", "Rewire the room", "House"),
+		mk("lights", "Hang the lights", "Kitchen", "lamps", "wire"),
+	)
+}
+
+// A task comes one step after the latest thing it waits on, and work it
+// waits on outside the list puts it at step 2 at least.
+func TestGroupStepsFollowTheDependencies(t *testing.T) {
+	m := kitchenProject(t)
+	var roots []*todo.Todo
+	for _, task := range m.allTodos() {
+		if task.Project == "Kitchen" {
+			roots = append(roots, m.get(task.ID))
+		}
+	}
+	steps := groupSteps(roots, m.get)
+	for id, want := range map[string]int{
+		"measure": 1, "demolish": 1, "lamps": 1,
+		"choose": 2, "order": 3, "fit": 4,
+		"lights": 2, // lamps is step 1, and the wiring is in another project
+	} {
+		if steps[id] != want {
+			t.Errorf("step of %s = %d, want %d", id, steps[id], want)
+		}
+	}
+
+	// A cycle is cut rather than walked forever.
+	a, b := todo.New("a"), todo.New("b")
+	a.Dependencies, b.Dependencies = []string{b.ID}, []string{a.ID}
+	cyc := groupSteps([]*todo.Todo{&a, &b}, func(string) *todo.Todo { return nil })
+	if cyc[a.ID] < 1 || cyc[b.ID] < 1 {
+		t.Errorf("a cycle left a task unnumbered: %v", cyc)
+	}
+}
+
+// A project's list is walked step by step, so nothing is listed above work it
+// waits on, whatever its score.
+func TestGroupTaskListPutsWaitingWorkAfterWhatItWaitsOn(t *testing.T) {
+	m := kitchenProject(t)
+	// The highest priority in the project is on a task that has to wait.
+	m.get("fit").SetPriority(todo.PriorityHigh)
+	m.markCacheDirty()
+	m.ensureCache()
+	list := m.groupTaskList(func(x *todo.Todo) bool { return inProjectGroup(x, "Kitchen") })
+	pos := make(map[string]int)
+	for i, x := range list {
+		pos[x.ID] = i
+	}
+	for _, x := range list {
+		for _, dep := range x.Dependencies {
+			if p, ok := pos[dep]; ok && p > pos[x.ID] {
+				t.Errorf("%q is listed above %q, which it waits on", x.Title, m.get(dep).Title)
+			}
+		}
+	}
+}
+
+// The pane numbers the steps, names what each task waits on, and lights the
+// rows tied to the selected one: what it waits on, and what waits on it.
+func TestGroupPaneShowsTheDependencies(t *testing.T) {
+	m := kitchenProject(t)
+	m.termWidth, m.termHeight = 140, 40
+	m = script(t, m, "4")
+	m.projectCursor = slices.Index(m.allProjectsForList(), "Kitchen")
+	m = script(t, m, "enter")
+	for m.currentTodo() == nil || m.currentTodo().ID != "order" {
+		m = script(t, m, "down")
+	}
+	plain := ansi.Strip(m.View())
+	// Fit cabinets waits on two tasks; the column clips the second.
+	for _, want := range []string{tr("Waits on"), "4 Fit cabinets", "Order cabinets, Tear out", "Choose cabinets"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("the pane should show %q:\n%s", want, plain)
+		}
+	}
+	// The lit rows. Tests render without colour, so ask the view the row
+	// styles are chosen from rather than the escape codes.
+	list := m.groupTaskList(func(x *todo.Todo) bool { return inProjectGroup(x, "Kitchen") })
+	sel := slices.IndexFunc(list, func(x todo.Todo) bool { return x.ID == "order" })
+	cols, _ := m.groupTaskCols(list, false, sel)
+	d := cols.deps
+	if d == nil {
+		t.Fatal("no dependency view for a project whose tasks wait on each other")
+	}
+	if !d.selWaitsOn["choose"] || len(d.selWaitsOn) != 1 {
+		t.Errorf("selected task waits on %v, want only choose", d.selWaitsOn)
+	}
+	if !d.waitsOnSel["fit"] || len(d.waitsOnSel) != 1 {
+		t.Errorf("waiting on the selected task: %v, want only fit", d.waitsOnSel)
+	}
+
+	// Nothing runs past the pane at any width.
+	for _, w := range []int{140, 100, 80, 60, 40} {
+		m.termWidth = w
+		for _, line := range strings.Split(m.View(), "\n") {
+			if ansi.StringWidth(line) > w {
+				t.Errorf("width %d: a line is %d wide: %q", w, ansi.StringWidth(line), ansi.Strip(line))
+			}
+		}
+	}
+}
+
+// A group where nothing waits on anything keeps the plain list: no step
+// numbers and no empty Waits on column.
+func TestGroupPaneWithoutDependenciesStaysPlain(t *testing.T) {
+	m := modelWithTasks(t, func() todo.Todo { x := todo.New("Paint"); x.Project = "Hall"; return x }())
+	m.termWidth, m.termHeight = 140, 40
+	m = script(t, m, "4", "enter")
+	if plain := ansi.Strip(m.View()); strings.Contains(plain, tr("Waits on")) || strings.Contains(plain, "1 Paint") {
+		t.Errorf("a group with no dependencies should draw the plain list:\n%s", plain)
 	}
 }

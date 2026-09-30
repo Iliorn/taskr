@@ -145,6 +145,12 @@ Dependencies feed the ranking: a task that blocks others inherits their
 urgency, so the prerequisite for an urgent task surfaces right above it. In
 the list, `↥` marks a blocker and `↧` a task still waiting on one.
 
+On the Projects and Tags tabs, a group whose tasks wait on each other is
+listed in steps: step 1 is what can start now, and each later step waits on
+something before it. A **Waits on** column names what each task is waiting
+for, and on the task under the cursor, what it waits on lights up in blue and
+what waits on it in yellow.
+
 ## Adding tasks quickly
 
 ```

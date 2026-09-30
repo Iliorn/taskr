@@ -180,7 +180,7 @@ func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, show
 	b := getBuilder()
 	defer putBuilder(b)
 
-	cols, nested := m.groupTaskCols(tasks, showProject)
+	cols, nested := m.groupTaskCols(tasks, showProject, sel)
 	pos := ""
 	if sel >= 0 {
 		pos = listPosLabel(sel, len(tasks))
@@ -213,10 +213,13 @@ func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, show
 }
 
 // groupTaskCols sizes the columns of a group's task list to the tasks it holds
-// at the model's width, and reports which rows are nested subtasks.
-func (m model) groupTaskCols(tasks []todo.Todo, showProject bool) (listCols, []bool) {
+// at the model's width, and reports which rows are nested subtasks. sel is the
+// drill cursor (-1 for a preview), whose row the dependency view lights the
+// neighbours of.
+func (m model) groupTaskCols(tasks []todo.Todo, showProject bool, sel int) (listCols, []bool) {
 	nested := m.groupNestedRows(tasks)
-	contentMax, tagsMax, projectMax := 0, 0, 0
+	deps := m.groupDepsFor(tasks, nested, sel)
+	contentMax, tagsMax, projectMax, waitsMax := 0, 0, 0, 0
 	hasDue := false
 	for i := range tasks {
 		// The width each row draws: a task row's whole label (badges
@@ -228,7 +231,10 @@ func (m model) groupTaskCols(tasks []todo.Todo, showProject bool) (listCols, []b
 			}
 			contentMax = max(contentMax, w)
 		} else {
-			contentMax = max(contentMax, taskRowLabelWidth(m.taskRowLabel(&tasks[i])))
+			contentMax = max(contentMax, taskRowLabelWidth(m.taskRowLabelIn(&tasks[i], deps)))
+			if deps != nil {
+				waitsMax = max(waitsMax, runeLen(deps.waits[tasks[i].ID]))
+			}
 		}
 		tagsMax = max(tagsMax, rowTagsWidth(tasks[i].Tags))
 		hasDue = hasDue || !tasks[i].DueDate.IsZero()
@@ -236,7 +242,9 @@ func (m model) groupTaskCols(tasks []todo.Todo, showProject bool) (listCols, []b
 			projectMax = max(projectMax, runeLen(tasks[i].Project))
 		}
 	}
-	return taskListCols(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax), nested
+	cols := taskListColsWaits(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax, waitsMax)
+	cols.deps = deps
+	return cols, nested
 }
 
 // groupFoldNote is the line the done tasks of a group fold into while
@@ -1055,13 +1063,28 @@ func (m *model) renderSubtaskLine(sub *todo.Todo, subIndex, subTotal int, cols l
 // width it reserves and the width the row draws cannot drift. Priority has no
 // glyph: it is already the largest term in the Score column.
 func (m *model) taskRowLabel(t *todo.Todo) (prefix, text, badges string) {
+	return m.taskRowLabelIn(t, nil)
+}
+
+// taskRowLabelIn is taskRowLabel in a group pane's dependency view d, where
+// the step column takes the arrow's place: the first row of each step
+// carries its number, and the step says what the arrow did.
+func (m *model) taskRowLabelIn(t *todo.Todo, d *groupDeps) (prefix, text, badges string) {
 	var p strings.Builder
+	if d != nil {
+		num := ""
+		if d.first[t.ID] {
+			num = strconv.Itoa(d.step[t.ID])
+		}
+		p.WriteString(padRight(num, d.stepW))
+	}
 	if t.IsTimerRunning() {
 		p.WriteString("⧗ ")
 	}
 	// One arrow, not two: a task in the middle of a chain is both, and the
 	// half that decides whether you can start it is the one worth a cell.
 	switch {
+	case d != nil:
 	case m.cache.blockedSet[t.ID]:
 		p.WriteString("↧ ") // waiting on an unfinished dependency — sorts last
 	case m.cache.blockerSet[t.ID]:
@@ -1219,14 +1242,26 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		dueStyle = pal.status
 	}
 
-	prefix, text, badges := m.taskRowLabel(t)
+	prefix, text, badges := m.taskRowLabelIn(t, cols.deps)
 	// Reserve one trailing space inside the column so a clipped title never
 	// butts up against the Score column that follows.
 	label := fitTaskRowLabel(prefix, text, badges, titleW-listColGap)
 
+	// In a dependency view the rows tied to the selected one are lit: what it
+	// waits on in one colour, what waits on it in another.
+	labelStyle := pal.status
+	if d := cols.deps; d != nil && !selected {
+		switch {
+		case d.selWaitsOn[t.ID]:
+			labelStyle = fastDepBlocker
+		case d.waitsOnSel[t.ID]:
+			labelStyle = fastDepWaiting
+		}
+	}
+
 	var r rowBuf
 	r.add(pal.status, foldIcon+" "+checkbox+" ")
-	r.add(pal.status, padRight(label, titleW))
+	r.add(labelStyle, padRight(label, titleW))
 	if cols.showLast {
 		// Score reads as a percent of the current field (rank/score.go): "82%"
 		// says how close to the top this is, where a bare "24.4" only said "a
@@ -1253,6 +1288,9 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 		// Truncate at projectW-listColGap so the column always leaves its full
 		// gap before the tags, clipped name or not.
 		r.add(pal.meta, padRight(truncate(t.Project, cols.projectW-listColGap), cols.projectW))
+	}
+	if cols.showWaits {
+		r.add(pal.meta, padRight(truncate(cols.deps.waits[t.ID], cols.waitsW-listColGap), cols.waitsW))
 	}
 
 	contentW := m.termWidth - 8

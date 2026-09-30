@@ -19,6 +19,11 @@ belongs in the commit message, where it is kept next to the code it explains.
 - In the detail pane ←/→ always change section; enter / backspace step priority, size and stage.
 - New installs open with the detail pane at the bottom.
 - A board column's icon is set off from its name with a dot (`R · Review`).
+- Projects and Tags list a group's tasks in steps, with a Waits on column and the linked rows lit.
+
+### Fixed
+
+- A project's list no longer puts a task above the work it waits on.
 
 ### Removed
 

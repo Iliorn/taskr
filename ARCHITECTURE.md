@@ -204,7 +204,12 @@ everything.
   opens. Inside a group, subtasks fold as on the Tasks tab, through the same
   `expandedTasks` and the same ←/→ (`foldsSubtasks`): an unfolded parent is
   followed by all of its subtasks, in the group or not, and
-  `groupNestedRows` indents exactly that run. Summaries are built in
+  `groupNestedRows` indents exactly that run. The open tasks are ordered by
+  step (`groupSteps`: step 1 waits on nothing, a task comes one step after
+  the latest thing it waits on) and within a step in the sequence order. When
+  any task waits, the rows draw the dependency view (`groupDepsFor`, carried
+  on `listCols.deps`): the step number in place of the ↥/↧ arrow, a Waits on
+  column, and the rows tied to the selected one lit. Summaries are built in
   `refreshCaches` (`refreshGroups`). Both lists
   draw through `renderGroupRows` and their panes through `groupPane`: the
   group's summary over its task list, which enter walks in place, and the group

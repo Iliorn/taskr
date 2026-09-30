@@ -154,6 +154,11 @@ var (
 	depOverdueStyle lipgloss.Style
 	helpStyle       lipgloss.Style
 
+	// A group pane's dependency view lights the rows tied to the selected
+	// one: what it waits on, and what waits on it.
+	depBlockerStyle lipgloss.Style
+	depWaitingStyle lipgloss.Style
+
 	// Row-selected variants: base foreground plus the theme's sel background,
 	// so the cursor row stays visible even when a status colour
 	// (overdue/dep-overdue/timer) owns the foreground.
@@ -262,6 +267,8 @@ func applyTheme(t theme) {
 	overdueStyle = lipgloss.NewStyle().Foreground(t.red).Bold(true)
 	depOverdueStyle = lipgloss.NewStyle().Foreground(t.orange).Bold(true)
 	helpStyle = lipgloss.NewStyle().Foreground(t.help)
+	depBlockerStyle = lipgloss.NewStyle().Foreground(t.blue).Bold(true)
+	depWaitingStyle = lipgloss.NewStyle().Foreground(t.yellowLt)
 
 	selectedRowStyle = selectedStyle.Background(t.sel)
 	selectedOverdueRowStyle = overdueStyle.Background(t.sel)

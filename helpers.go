@@ -325,6 +325,11 @@ type listCols struct {
 	showLast    bool // Score (active) or Completed (history)
 	showProject bool
 	showTags    bool // true when at least one visible row has tags
+	waitsW      int  // Waits on column (group panes only; 0 when hidden)
+	showWaits   bool
+	// deps is the dependency view of a group pane (step numbers, what each
+	// row waits on, the rows tied to the selected one); nil elsewhere.
+	deps *groupDeps
 }
 
 // hugColW sizes one list column: the wider of its header label and its widest
@@ -369,9 +374,19 @@ func dueColMax(tasks []todo.Todo, now time.Time) int {
 // visible project name; when it is 0 the Project column collapses entirely (no
 // header label, no reserved space).
 func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool, dueMax, widestProject int) listCols {
+	return taskListColsWaits(termWidth, isHistory, contentMax, tagsMax, hasDue, dueMax, widestProject, 0)
+}
+
+// taskListColsWaits is taskListCols with a Waits on column as wide as
+// widestWaits (capped at waitsColMaxW), for a group pane's dependency view.
+func taskListColsWaits(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool, dueMax, widestProject, widestWaits int) listCols {
 	inner := termWidth - 8 // panel content width (margin + border + padding)
 	const fixed = 6        // cursor + checkbox + fold icon
 	c := listCols{showDue: hasDue, showLast: true, showTags: tagsMax > 0}
+	if widestWaits > 0 && !isHistory {
+		c.showWaits = true
+		c.waitsW = hugColW(min(widestWaits, waitsColMaxW), listHeader("Waits on"))
+	}
 	projectWant := 0
 	if !isHistory {
 		c.showSize = true
@@ -435,15 +450,18 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 		if c.showProject {
 			w += c.projectW
 		}
+		if c.showWaits {
+			w += c.waitsW
+		}
 		return w
 	}
 
 	// Drop order on narrow terminals:
-	//   active:  Project → Size → Score → Due  (Project drops first since it
-	//            shows on most rows as a single short word; keep Due longest
-	//            — it's the hard fact)
+	//   active:  Project → Waits on → Size → Score → Due  (Project drops
+	//            first since it shows on most rows as a single short word;
+	//            keep Due longest — it's the hard fact)
 	//   history: Due  → Completed     (Size and Project never shown)
-	drop := []*bool{&c.showProject, &c.showSize, &c.showLast, &c.showDue}
+	drop := []*bool{&c.showProject, &c.showWaits, &c.showSize, &c.showLast, &c.showDue}
 	if isHistory {
 		drop = []*bool{&c.showDue, &c.showLast}
 	}
@@ -455,6 +473,13 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	if c.showTags {
 		tagsMin = tagsOverflowMinW
 	}
+	// Waits on holds names, which clip; it gives up width before it gives up
+	// its place, down to what still shows the start of a title.
+	if c.showWaits {
+		if over := fixed + c.titleW + colsW() + tagsMin - inner; over > 0 {
+			c.waitsW = max(c.waitsW-over, hugColW(waitsColMinW, listHeader("Waits on")))
+		}
+	}
 	for _, d := range drop {
 		if inner-fixed-c.titleW-colsW()-tagsMin >= 0 {
 			break
@@ -463,6 +488,9 @@ func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue
 	}
 	if !c.showProject {
 		c.projectW = 0
+	}
+	if !c.showWaits {
+		c.waitsW = 0
 	}
 
 	// The flat name-column cap (nameColWidth) keeps the title sane on the other
@@ -581,6 +609,9 @@ func renderListHeaderTitled(b *strings.Builder, termWidth int, isHistory bool, c
 	}
 	if c.showProject {
 		headerLeft += padRight(listHeader("Project"), c.projectW)
+	}
+	if c.showWaits {
+		headerLeft += padRight(listHeader("Waits on"), c.waitsW)
 	}
 	// Row tags are rendered with a leading space (see renderTaskLineWithSet), so
 	// the header label needs the same lead-in to line up with the tag content.

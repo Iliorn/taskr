@@ -134,6 +134,10 @@ const (
 	// list. At wider widths the column can grow past this to reveal the full
 	// project name; narrow layouts retain the familiar compact footprint.
 	projectColCompactW = 14
+	// waitsColMaxW caps the Waits on column in a group pane: room for a
+	// title or two, the rest clipped behind an ellipsis.
+	waitsColMaxW = 32
+	waitsColMinW = 10
 
 	// tagsOverflowMinW is the smallest Tags cell worth keeping: a leading gap
 	// plus the "+N" count that stands in for the chips that did not fit. A row
