@@ -1,13 +1,6 @@
 module github.com/Iliorn/tjek
 
-go 1.25.0
-
-// The language/compatibility minimum above is a claim about what source this
-// module needs. This is a claim about what builds it: every Go before 1.25.13
-// carries stdlib advisories in net/http, crypto/tls and net/url, all of which
-// the sync client and server reach. Releases are built from go.mod, so without
-// this the signed binaries would ship the vulnerable standard library.
-toolchain go1.25.13
+go 1.26.0
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
@@ -41,7 +34,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
 	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
