@@ -120,7 +120,7 @@ before history existed start with none.
 | `n` | Edit the description in `$EDITOR` |
 | `f` | Focus mode (today + overdue) |
 | `h` | Toggle history |
-| `s` | Cycle sort: Sequence → Due → Size |
+| `s` | Cycle sort: Sequence, then each column shown (Settings → Columns) |
 | `w` | Why this rank: the points behind the percentage and what moves it next |
 | `/` | Filter |
 | `enter` | Open detail view |

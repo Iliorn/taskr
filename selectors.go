@@ -249,14 +249,13 @@ func selectActiveDoneRanked(todos []*todo.Todo, rollup map[string]float64, now t
 	// everything that can be started today (see rank.SortPtrs). The blocked set
 	// is derived from the whole slice, not from activeP: the task holding one
 	// up may be a subtask, or filtered out of view.
-	switch sortMode {
-	case taskSortSequence:
+	_, less, _ := taskSortColumn(sortMode)
+	switch {
+	case sortMode == taskSortSequence:
 		blocked, _ := rank.DependencySets(todos)
 		rank.SortPtrs(activeP, rollup, rank.Sunk(blocked, activeP, now), score)
-	case taskSortDueDate:
-		sortTodoPtrs(activeP, lessByDueDate)
-	case taskSortSize:
-		sortTodoPtrs(activeP, lessBySize)
+	case less != nil:
+		sortTodoPtrs(activeP, less)
 	default:
 		blocked, _ := rank.DependencySets(todos)
 		rank.SortPtrs(activeP, nil, rank.Sunk(blocked, activeP, now), score)

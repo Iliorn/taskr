@@ -21,6 +21,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - A board column's icon is set off from its name with a dot (`R · Review`).
 - Projects and Tags list a group's tasks in steps, with a Waits on column and the linked rows lit.
 - Settings → Columns picks the task lists' columns, among them Start, Created and Last comment.
+- `s` on the Tasks tab sorts by each column shown, from Start and Created to Priority.
 
 ### Fixed
 

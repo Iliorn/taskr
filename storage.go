@@ -365,6 +365,101 @@ func lessBySize(a, b *todo.Todo) bool {
 	return a.ID < b.ID
 }
 
+// taskSorts are the Tasks tab's sort modes in the order s steps through
+// them, each with the column it sorts by (a listColumnKeys name) and its
+// comparator; Sequence has none, since it is the engine's sort.
+var taskSorts = []struct {
+	mode taskSortMode
+	col  string
+	less func(a, b *todo.Todo) bool
+}{
+	{taskSortSequence, "score", nil},
+	{taskSortDueDate, "due", lessByDueDate},
+	// Small first, then Medium, then Large: "show me the quick wins".
+	{taskSortSize, "size", lessBySize},
+	{taskSortProject, "project", lessByProject},
+	{taskSortStart, "start", lessByStart},
+	{taskSortCreated, "created", lessByCreated},
+	{taskSortChanged, "changed", lessByChanged},
+	{taskSortTime, "time", lessByTime},
+	{taskSortPriority, "priority", lessByPriority},
+}
+
+// taskSortColumn is the column mode sorts by, and its comparator; ok is false
+// for a mode this build does not know.
+func taskSortColumn(mode taskSortMode) (col string, less func(a, b *todo.Todo) bool, ok bool) {
+	for _, s := range taskSorts {
+		if s.mode == mode {
+			return s.col, s.less, true
+		}
+	}
+	return "", nil, false
+}
+
+// lessByCreatedAt breaks the ties of the column sorts: older first, then ID,
+// so each is a total order.
+func lessByCreatedAt(a, b *todo.Todo) bool {
+	if !a.CreatedAt.Equal(b.CreatedAt) {
+		return a.CreatedAt.Before(b.CreatedAt)
+	}
+	return a.ID < b.ID
+}
+
+// lessByProject is A→Z by project, case-insensitive, tasks in none last.
+func lessByProject(a, b *todo.Todo) bool {
+	pa, pb := strings.ToLower(a.Project), strings.ToLower(b.Project)
+	if pa != pb {
+		if pa == "" || pb == "" {
+			return pb == ""
+		}
+		return pa < pb
+	}
+	return lessByCreatedAt(a, b)
+}
+
+// lessByStart is the earliest start first, tasks with none last.
+func lessByStart(a, b *todo.Todo) bool {
+	if !a.StartDate.Equal(b.StartDate) {
+		if a.StartDate.IsZero() || b.StartDate.IsZero() {
+			return b.StartDate.IsZero()
+		}
+		return a.StartDate.Before(b.StartDate)
+	}
+	return lessByCreatedAt(a, b)
+}
+
+// lessByCreated is the newest task first.
+func lessByCreated(a, b *todo.Todo) bool {
+	if !a.CreatedAt.Equal(b.CreatedAt) {
+		return a.CreatedAt.After(b.CreatedAt)
+	}
+	return a.ID < b.ID
+}
+
+// lessByChanged is the most recently changed first.
+func lessByChanged(a, b *todo.Todo) bool {
+	if !a.ModifiedAt.Equal(b.ModifiedAt) {
+		return a.ModifiedAt.After(b.ModifiedAt)
+	}
+	return lessByCreatedAt(a, b)
+}
+
+// lessByTime is the most time logged first.
+func lessByTime(a, b *todo.Todo) bool {
+	if ta, tb := a.TotalTimeSpent(), b.TotalTimeSpent(); ta != tb {
+		return ta > tb
+	}
+	return lessByCreatedAt(a, b)
+}
+
+// lessByPriority is High first, and within a priority the earliest due.
+func lessByPriority(a, b *todo.Todo) bool {
+	if a.Priority != b.Priority {
+		return a.Priority > b.Priority
+	}
+	return lessByDueDate(a, b)
+}
+
 func lessByTitle(a, b *todo.Todo) bool {
 	ta, tb := strings.ToLower(a.Title), strings.ToLower(b.Title)
 	if ta != tb {
@@ -388,22 +483,17 @@ func sortTodoPtrs(todos []*todo.Todo, less func(a, b *todo.Todo) bool) {
 	sort.Slice(todos, func(i, j int) bool { return less(todos[i], todos[j]) })
 }
 
-// sortTodosByMode sorts todos by the given mode. After the sequencing engine
-// only two modes exist; any other value falls through to Sequence.
+// sortTodosByMode sorts todos by the given mode; Sequence, and a mode this
+// build does not know, sort by the engine.
 func sortTodosByMode(todos []todo.Todo, mode taskSortMode, score func(*todo.Todo) float64) {
 	if len(todos) <= 1 {
 		return
 	}
-	switch mode {
-	case taskSortDueDate:
-		sortTodoValues(todos, lessByDueDate)
-	case taskSortSize:
-		// Small first, then Medium, then Large — "sort by Size" is the same
-		// intent as "show me the quick wins".
-		sortTodoValues(todos, lessBySize)
-	default: // taskSortSequence
-		rank.SortValues(todos, nil, nil, score)
+	if _, less, _ := taskSortColumn(mode); less != nil {
+		sortTodoValues(todos, less)
+		return
 	}
+	rank.SortValues(todos, nil, nil, score)
 }
 
 // sortTodoValues is the value-slice form of sortTodoPtrs, for the callers that

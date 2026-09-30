@@ -531,14 +531,11 @@ func (m model) sortLabel() string {
 		}
 		return tr("completed")
 	}
-	switch m.taskSort {
-	case taskSortDueDate:
-		return tr("due")
-	case taskSortSize:
-		return tr("size")
-	default:
-		return tr("score")
+	// The sort is named by its column, so the title and the header agree.
+	if col, _, ok := taskSortColumn(m.taskSort); ok {
+		return strings.ToLower(tr(listColumnLabels[col]))
 	}
+	return strings.ToLower(tr(listColumnLabels["score"]))
 }
 
 // groupListTitle names a Tags or Projects list box: its order, and how many

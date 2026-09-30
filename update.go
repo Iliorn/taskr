@@ -1382,21 +1382,38 @@ func (m *model) cycleSortMode() {
 				m.historySort = historySortCompleted
 			}
 		} else {
-			// Three-state cycle: Sequence → DueDate → Size → Sequence.
-			switch m.taskSort {
-			case taskSortSequence:
-				m.taskSort = taskSortDueDate
-			case taskSortDueDate:
-				m.taskSort = taskSortSize
-			default:
-				m.taskSort = taskSortSequence
-			}
+			// Sequence, then a sort per column shown (taskSorts), and round.
+			modes := m.taskSortsShown()
+			m.taskSort = modes[(slices.Index(modes, m.taskSort)+1)%len(modes)]
 		}
 		m.cursor = 0
 		m.listOffset = 0
 		m.markCacheDirty()
 	}
 	m.persistSettings()
+}
+
+// taskSortsShown are the sort modes s steps through: Sequence, which is the
+// list's own order whatever is shown, and the sort of each column shown.
+func (m model) taskSortsShown() []taskSortMode {
+	modes := []taskSortMode{taskSortSequence}
+	for _, s := range taskSorts[1:] {
+		if m.columns[s.col] {
+			modes = append(modes, s.mode)
+		}
+	}
+	return modes
+}
+
+// settleTaskSort puts the list back on Sequence when its sort's column is not
+// shown, so the sort named in the title is always one the rows can be read
+// by. Reports whether it changed the sort.
+func (m *model) settleTaskSort() bool {
+	if slices.Contains(m.taskSortsShown(), m.taskSort) {
+		return false
+	}
+	m.taskSort = taskSortSequence
+	return true
 }
 
 // regroup applies a change to how the Tags and Projects lists are drawn — a new
@@ -1878,6 +1895,9 @@ func (m *model) settingsAdjust(dir int) tea.Cmd {
 	}
 	if key, ok := settingColumnKey(m.settingsCursor); ok {
 		m.columns[key] = !m.columns[key]
+		if m.settleTaskSort() {
+			m.markCacheDirty()
+		}
 		m.persistSettings()
 		return nil
 	}

@@ -177,14 +177,20 @@ const (
 
 type taskSortMode int
 
-// Three sort modes survive the sequencing engine: Sequence (the score-based
-// default), DueDate (strict deadline view), and Size (Small → Medium → Large
-// for "show me the quick wins"). Each mode lines up with a visible column so
-// the >..< header marker is always meaningful.
+// The Tasks tab's sort modes: Sequence (the score-based default) and one per
+// sortable column (taskSorts). Each lines up with a column, and s offers only
+// those whose column is shown. Stored in settings.json by number, so a new
+// mode is appended.
 const (
 	taskSortSequence taskSortMode = iota
 	taskSortDueDate
 	taskSortSize
+	taskSortProject
+	taskSortStart
+	taskSortCreated
+	taskSortChanged
+	taskSortTime
+	taskSortPriority
 )
 
 type historySortMode int
@@ -653,6 +659,7 @@ func initialModel(repo Repository) model {
 		}
 	}
 	m.calendar.selected = startOfDay(time.Now())
+	m.settleTaskSort()
 	// A launch refreshes the export: the store may have changed since the last
 	// session wrote it (a sync, a CLI edit). Init schedules the write.
 	m.exportFolder = settings.ExportFolder

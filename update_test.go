@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -68,23 +69,61 @@ func sendKey(t *testing.T, m model, k string) model {
 
 // ── Sort cycle ────────────────────────────────────────────────────────────────
 
-func TestSortCycleVisitsAllThreeModes(t *testing.T) {
+// s steps through Sequence and a sort for each column shown, in taskSorts
+// order, and wraps; a column switched on joins the round, and switching off
+// the column the list is sorted by puts it back on Sequence.
+func TestSortCycleFollowsTheColumnsShown(t *testing.T) {
 	m := modelWithTasks(t)
-
 	if m.taskSort != taskSortSequence {
 		t.Fatalf("initial sort = %v, want Sequence", m.taskSort)
 	}
-	m = sendKey(t, m, "s")
-	if m.taskSort != taskSortDueDate {
-		t.Errorf("after 1×s: sort = %v, want DueDate", m.taskSort)
+	for _, want := range []taskSortMode{taskSortDueDate, taskSortSize, taskSortProject, taskSortSequence} {
+		if m = sendKey(t, m, "s"); m.taskSort != want {
+			t.Fatalf("s gave sort %v, want %v", m.taskSort, want)
+		}
 	}
-	m = sendKey(t, m, "s")
-	if m.taskSort != taskSortSize {
-		t.Errorf("after 2×s: sort = %v, want Size", m.taskSort)
+
+	m.columns["created"] = true
+	m.columns["size"] = false
+	for _, want := range []taskSortMode{taskSortDueDate, taskSortProject, taskSortCreated, taskSortSequence} {
+		if m = sendKey(t, m, "s"); m.taskSort != want {
+			t.Fatalf("with Created on and Size off: s gave sort %v, want %v", m.taskSort, want)
+		}
 	}
-	m = sendKey(t, m, "s")
-	if m.taskSort != taskSortSequence {
-		t.Errorf("after 3×s: sort = %v, want Sequence (wrap)", m.taskSort)
+
+	m = script(t, m, "s", "s", "s") // Created
+	m.tab = tabSettings
+	m.settingsCursor = settingColFirst + slices.Index(listColumnKeys, "created")
+	if m = sendKey(t, m, "enter"); m.taskSort != taskSortSequence {
+		t.Errorf("switching off the sorted column left the sort on %v", m.taskSort)
+	}
+}
+
+// Each column sort puts the task its column favours first.
+func TestColumnSortsOrderByTheirColumn(t *testing.T) {
+	now := time.Now()
+	older, newer := todo.New("Older"), todo.New("Newer")
+	newer.SetPriority(todo.PriorityHigh)
+	older.CreatedAt, newer.CreatedAt = now.Add(-48*time.Hour), now
+	older.ModifiedAt, newer.ModifiedAt = now, now.Add(-time.Hour)
+	older.Project = "Alpha"
+	newer.StartDate = now.AddDate(0, 0, 1)
+	older.TimeEntries = []todo.TimeEntry{{ID: "e", StartedAt: now.Add(-time.Hour), StoppedAt: now}}
+	for mode, first := range map[taskSortMode]string{
+		taskSortProject:  "Older",
+		taskSortStart:    "Newer",
+		taskSortCreated:  "Newer",
+		taskSortChanged:  "Older",
+		taskSortTime:     "Older",
+		taskSortPriority: "Newer",
+	} {
+		for _, pair := range [][]todo.Todo{{older, newer}, {newer, older}} {
+			rows := append([]todo.Todo(nil), pair...)
+			sortTodosByMode(rows, mode, nil)
+			if rows[0].Title != first {
+				t.Errorf("sort %v put %q first, want %q", mode, rows[0].Title, first)
+			}
+		}
 	}
 }
 

@@ -708,6 +708,10 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   columns read off the task alone are `extraColumns`: a key, a header, a
   width and a value, drawn after the fixed ones and dropped first when the
   pane is narrow. A new one is an entry there and in `listColumnKeys`.
+  The Tasks tab's `s` steps through Sequence and the sort of each column
+  shown (`taskSorts`, `taskSortsShown`); switching off the sorted column puts
+  the list back on Sequence (`settleTaskSort`). A sort mode is stored by
+  number, so a new one is appended.
 - **The title takes width first; tags degrade.** `taskListCols` reserves at
   most `tagsReservePct` for tags (floored at `tagsOverflowMinW`). The tags cell
   is sized per row at render time (`renderRowTags` → `renderTaskTagsClipped`),
