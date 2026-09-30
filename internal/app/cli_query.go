@@ -33,8 +33,11 @@ func cliList(args []string) int {
 	unblocked := fs.String("unblocked-since", "", "only tasks freed within this window: every dependency done, the last one recently")
 	sortBy := fs.String("sort", "", "order rows: "+strings.Join(cliSortNames(), "|")+" (default seq)")
 	wide := fs.Bool("wide", false, "add AGE and IDLE columns (days since creation / last change)")
-	flagArgs, _ := splitFlagsAndPositionals(fs, args)
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
+		return 2
+	}
+	if !noPositionals("list", positionals, `to filter by a word, use tjek search "word"`) {
 		return 2
 	}
 	opts, code := listOptsFromFlags(*all, *focus, *tag, *project, *search, *searchWord, *searchRe, *stale, *unblocked)
@@ -208,6 +211,9 @@ func cliTags(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if !noPositionals("tags", fs.Args(), "") {
+		return 2
+	}
 	_, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
@@ -245,6 +251,9 @@ func cliProjects(args []string) int {
 	fs.SetOutput(os.Stderr)
 	asJSON := fs.Bool("json", false, "emit JSON instead of a table")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if !noPositionals("projects", fs.Args(), "") {
 		return 2
 	}
 	_, todos, err := loadForCLI()
@@ -288,8 +297,11 @@ func cliTop(args []string) int {
 	n := fs.Int("n", 10, "rows to show")
 	asJSON := fs.Bool("json", false, "emit JSON instead of a table")
 	wide := fs.Bool("wide", false, "include priority, due date, and tags columns")
-	flagArgs, _ := splitFlagsAndPositionals(fs, args)
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {
+		return 2
+	}
+	if !noPositionals("top", positionals, "") {
 		return 2
 	}
 	if *n < 1 {

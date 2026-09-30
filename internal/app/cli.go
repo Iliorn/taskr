@@ -216,6 +216,9 @@ func cliUpdate(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if !noPositionals("update", fs.Args(), "") {
+		return 2
+	}
 
 	latest, err := latestRelease()
 	if err != nil {
@@ -326,7 +329,7 @@ var cliHelpBlocks = []helpBlock{
 	}},
 	{"Reporting / backup:", []helpRow{
 		{"tjek stats [--format=text|json|waybar]", "one-line health summary (default text). --tag/--project/--search scope the stats to matching tasks; --seq appends the sequence miss analysis: which score dimension buried the tasks you finished anyway, and a bias hint"},
-		{"tjek export [--include-done]", "JSON snapshot (versioned envelope) to stdout"},
+		{"tjek export [file] [--include-done]", "JSON snapshot (versioned envelope) to the file, or stdout"},
 		{"tjek import <file>|-", "merge an export file into the local store (- = stdin)"},
 	}},
 	{"Sync (cross-device):", []helpRow{
@@ -536,6 +539,22 @@ func parseSizeFlag(s string) todo.Size {
 	default:
 		return todo.SizeMedium
 	}
+}
+
+// noPositionals refuses the words a verb that takes none was given, with hint
+// (if any) saying what was probably meant. Ignoring them made `tjek list
+// kitchen` list everything and `tjek tags --json` after a stray word print a
+// table, with nothing said.
+func noPositionals(verb string, words []string, hint string) bool {
+	if len(words) == 0 {
+		return true
+	}
+	fmt.Fprintf(os.Stderr, "tjek %s: unexpected argument %q", verb, words[0])
+	if hint != "" {
+		fmt.Fprintf(os.Stderr, "; %s", hint)
+	}
+	fmt.Fprintln(os.Stderr)
+	return false
 }
 
 func emitJSON(v any) int {

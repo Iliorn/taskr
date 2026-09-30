@@ -55,7 +55,7 @@ var cliCommandSpecs = []cliCommandSpec{
 	{name: "tags", summary: "pending tags with counts", flags: []string{"json"}},
 	{name: "projects", summary: "pending projects with counts", flags: []string{"json"}},
 	{name: "stats", summary: "productivity summary", flags: []string{"format", "project", "search", "seq", "tag"}},
-	{name: "export", summary: "write a JSON snapshot to stdout", flags: []string{"include-done"}},
+	{name: "export", summary: "write a JSON snapshot to a file or stdout", flags: []string{"include-done"}},
 	{name: "import", summary: "merge an export file into the store"},
 	{name: "sync", summary: "sync with the configured server", flags: []string{
 		"accept-stale", "adopt-local", "adopt-remote", "quiet", "recover", "save", "status", "token", "url"}},

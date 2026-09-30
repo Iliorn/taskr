@@ -473,6 +473,9 @@ func cliUndo(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if !noPositionals("undo", fs.Args(), "") {
+		return 2
+	}
 	entries, err := loadPersistedUndoEntries()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tjek undo: %v\n", err)

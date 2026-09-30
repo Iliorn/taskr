@@ -61,6 +61,9 @@ func cliSuggest(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if !noPositionals("suggest", fs.Args(), "") {
+		return 2
+	}
 	repo, todos, err := loadForCLI()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)

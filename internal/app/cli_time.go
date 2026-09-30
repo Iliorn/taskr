@@ -185,7 +185,13 @@ func cliExport(args []string) int {
 	fs := flag.NewFlagSet("export", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	includeDone := fs.Bool("include-done", false, "include completed tasks (default: only pending live tasks)")
-	if err := fs.Parse(args); err != nil {
+	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
+	if err := fs.Parse(flagArgs); err != nil {
+		return 2
+	}
+	// A file named writes the export there; with none it goes to stdout.
+	if len(positionals) > 1 {
+		fmt.Fprintln(os.Stderr, "usage: tjek export [file] [--include-done]")
 		return 2
 	}
 	_, todos, err := loadForCLI()
@@ -199,6 +205,15 @@ func cliExport(args []string) int {
 			continue
 		}
 		out = append(out, t)
+	}
+	if len(positionals) == 1 {
+		path := expandHome(positionals[0])
+		if err := writeExport(path, out); err != nil {
+			fmt.Fprintf(os.Stderr, "tjek export: %v\n", err)
+			return 1
+		}
+		fmt.Printf("exported %d tasks to %s\n", len(out), path)
+		return 0
 	}
 	return emitJSON(exportEnvelope{
 		Version:    1,

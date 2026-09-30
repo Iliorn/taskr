@@ -461,3 +461,50 @@ func TestCliExportEmitsEnvelope(t *testing.T) {
 		t.Error("envelope.tasks is empty, expected at least one task")
 	}
 }
+
+// `tjek export file` writes the export there, and the file imports back; a
+// path was once taken for nothing and the export printed instead, so the
+// backup a user thought they had made did not exist.
+func TestCliExportWritesTheFileNamed(t *testing.T) {
+	if code := cliAdd([]string{"export-to-file-guard"}); code != 0 {
+		t.Fatalf("add: exit %d", code)
+	}
+	path := filepath.Join(t.TempDir(), "backup.json")
+	out := captureStdout(t, func() {
+		if code := cliExport([]string{path, "--include-done"}); code != 0 {
+			t.Fatalf("export: exit %d", code)
+		}
+	})
+	if strings.Contains(out, "{") {
+		t.Errorf("export to a file also printed the document:\n%s", out)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the export file was not written: %v", err)
+	}
+	tasks, err := parseExportData(data)
+	if err != nil || len(tasks) == 0 {
+		t.Fatalf("the file does not read back as an export: %v (%d tasks)", err, len(tasks))
+	}
+	if code := cliExport([]string{"one.json", "two.json"}); code != 2 {
+		t.Errorf("two paths should be a usage error, got exit %d", code)
+	}
+}
+
+// A verb that takes no words refuses one, rather than acting as if it had not
+// been given: `tjek list kitchen` listed everything.
+func TestCLIVerbsRefuseStrayArguments(t *testing.T) {
+	for name, run := range map[string]func([]string) int{
+		"list": cliList, "tags": cliTags, "projects": cliProjects, "top": cliTop,
+		"stats": cliStats, "undo": cliUndo, "suggest": cliSuggest,
+	} {
+		msg := captureStderr(t, func() {
+			if code := run([]string{"kitchen"}); code != 2 {
+				t.Errorf("tjek %s kitchen: exit %d, want 2", name, code)
+			}
+		})
+		if !strings.Contains(msg, `unexpected argument "kitchen"`) {
+			t.Errorf("tjek %s kitchen said %q", name, msg)
+		}
+	}
+}

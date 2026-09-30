@@ -35,8 +35,8 @@ tjek stats --tag=work           # same, scoped to tasks carrying a tag (also --p
 tjek stats --seq                # sequence miss analysis: which score dimension buried the
                                  # tasks you finished anyway, plus a bias-tuning hint
 tjek stats --format=waybar      # Waybar-shaped JSON for a status-bar widget
-tjek export > backup.json       # versioned JSON snapshot of every live task
-tjek export --include-done > full.json  # include completed tasks
+tjek export tasks.json          # versioned JSON snapshot of the open tasks
+tjek export --include-done full.json  # every task, completed ones too (a backup)
 tjek import backup.json         # merge an export file into the local store
 tjek import - < backup.json     # same, reading from stdin
 tjek doctor                     # this installation's health, for bug reports
@@ -116,7 +116,8 @@ joins its file. See [Shared projects](guide.md#shared-projects).
 
 ## Export and import
 
-`tjek export` writes a versioned JSON envelope to stdout:
+`tjek export` writes a versioned JSON envelope to the file it is given, or to
+stdout:
 
 ```json
 {

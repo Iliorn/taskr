@@ -90,6 +90,9 @@ func cliServe(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if !noPositionals("serve", fs.Args(), "") {
+		return 2
+	}
 	if *newToken {
 		return cliNewServerToken()
 	}

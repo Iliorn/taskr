@@ -344,6 +344,9 @@ func cliStats(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if !noPositionals("stats", fs.Args(), "") {
+		return 2
+	}
 	switch strings.ToLower(*format) {
 	case "text", "json", "waybar":
 	default:

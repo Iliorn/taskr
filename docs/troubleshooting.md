@@ -28,7 +28,8 @@ so on), and a binary still called `taskr` to `tjek`; nothing else moves.
 An `XDG_*` variable you have set wins on every platform, macOS and Windows
 included.
 
-To back up, copy the tasks directory, or run `tjek export > backup.json`.
+To back up, copy the tasks directory, or run `tjek export --include-done backup.json`
+(without `--include-done` the export leaves out completed tasks).
 
 ## "This database is from a newer tjek"
 

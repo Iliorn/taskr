@@ -47,6 +47,9 @@ func cliDoctor(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
+	if !noPositionals("doctor", fs.Args(), "") {
+		return 2
+	}
 
 	report := collectDiagnostics()
 
