@@ -11,7 +11,13 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
-## [Unreleased]
+## [1.48.0] - 2026-09-30
+
+### Added
+
+- Projects and Tags list a group's tasks in steps, with a Waits on column and the linked rows lit.
+- Settings → Columns picks the task lists' columns, among them Start, Created and Last comment.
+- `s` on the Tasks tab sorts by each column shown, from Start and Created to Priority.
 
 ### Changed
 
@@ -19,9 +25,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - In the detail pane ←/→ always change section; enter / backspace step priority, size and stage.
 - New installs open with the detail pane at the bottom.
 - A board column's icon is set off from its name with a dot (`R · Review`).
-- Projects and Tags list a group's tasks in steps, with a Waits on column and the linked rows lit.
-- Settings → Columns picks the task lists' columns, among them Start, Created and Last comment.
-- `s` on the Tasks tab sorts by each column shown, from Start and Created to Priority.
+- The detail pane's Stage row names the column without its icon.
 
 ### Fixed
 
