@@ -78,16 +78,15 @@ type groupRows struct {
 }
 
 // renderGroupRows draws a Tags or Projects list: the group, how much is open
-// in it (and late, when anything anywhere is), when it last moved, and the task
-// to do next in it. The next-up title takes whatever width is left, which is
-// most of it, and drops out whole on a window too narrow to say anything with.
+// in it (and late, when anything anywhere is) and when it last moved. What to
+// do first in a group is its task list's first row, by score, under it.
 // A finished group — shown only after h — is drawn dim throughout.
 func (m model) renderGroupRows(g groupRows) string {
 	b := getBuilder()
 	defer putBuilder(b)
 
 	gap := strings.Repeat(" ", listColGap)
-	openHdr, lateHdr, lastHdr, nextHdr := tr("Open"), tr("Overdue"), tr("Last"), tr("Next up")
+	openHdr, lateHdr, lastHdr := tr("Open"), tr("Overdue"), tr("Last")
 	labelMax, openW, lateW, lastW := 0, runeLen(openHdr), runeLen(lateHdr), runeLen(lastHdr)
 	anyLate := false
 	for _, key := range g.keys {
@@ -99,21 +98,12 @@ func (m model) renderGroupRows(g groupRows) string {
 	}
 	nameW := contentFitWidth(m.termWidth, labelMax, listColGap, runeLen(g.nameHdr)+listColGap)
 	avail := m.termWidth - 8
-	used := len(cursorGap) + nameW + openW + listColGap + lastW + listColGap
-	if anyLate {
-		used += lateW + listColGap
-	}
-	nextW := avail - used
-	showNext := nextW >= runeLen(nextHdr)
 
 	header := cursorGap + padRight(g.nameHdr, nameW) + padLeft(openHdr, openW) + gap
 	if anyLate {
 		header += padLeft(lateHdr, lateW) + gap
 	}
 	header += padLeft(lastHdr, lastW) + gap
-	if showNext {
-		header += nextHdr
-	}
 	b.WriteString(headerStyle.Render(padRight(header, avail)) + "\n")
 
 	end := min(g.start+g.count, len(g.keys))
@@ -130,12 +120,12 @@ func (m model) renderGroupRows(g groupRows) string {
 			continue
 		}
 		name := padRight(truncate(label, nameW-1), nameW)
-		open, late, next := strconv.Itoa(s.open), "─", s.nextTitle
+		open, late := strconv.Itoa(s.open), "─"
 		if s.overdue > 0 {
 			late = strconv.Itoa(s.overdue)
 		}
 		if s.finished() {
-			open, next = "─", ""
+			open = "─"
 		}
 		openCell := padLeft(open, openW) + gap
 		lateCell := ""
@@ -143,14 +133,10 @@ func (m model) renderGroupRows(g groupRows) string {
 			lateCell = padLeft(late, lateW) + gap
 		}
 		lastCell := padLeft(formatSince(s.last, m.frameTime), lastW) + gap
-		nextCell := ""
-		if showNext {
-			nextCell = truncate(next, nextW)
-		}
 
 		switch {
 		case i == g.cursor:
-			b.WriteString(selectedStyle.Render(padRight(lead+name+openCell+lateCell+lastCell+nextCell, avail)) + "\n")
+			b.WriteString(selectedStyle.Render(padRight(lead+name+openCell+lateCell+lastCell, avail)) + "\n")
 		case s.finished():
 			b.WriteString(doneCountStyle.Render(lead+name+openCell+lateCell+lastCell) + "\n")
 		default:
@@ -161,8 +147,7 @@ func (m model) renderGroupRows(g groupRows) string {
 			b.WriteString(g.labelStyle.Render(lead+name) +
 				activeCountStyle.Render(openCell) +
 				lateStyle.Render(lateCell) +
-				dimStyle.Render(lastCell) +
-				normalStyle.Render(nextCell) + "\n")
+				dimStyle.Render(lastCell) + "\n")
 		}
 	}
 	return b.String()

@@ -11,6 +11,12 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Removed
+
+- The Next up column on the Projects and Tags lists; a group's task list shows what comes first.
+
 ## [1.48.0] - 2026-09-30
 
 ### Added

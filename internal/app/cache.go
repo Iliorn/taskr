@@ -228,13 +228,10 @@ func (m *model) refreshFilteredCaches() {
 	m.cache.filterDirty = false
 }
 
-// refreshGroups rebuilds the Tags and Projects summaries. Next-up is ranked by
-// the score the Tasks list shows, lift included, against one frozen instant.
+// refreshGroups rebuilds the Tags and Projects summaries.
 func (m *model) refreshGroups(all []*todo.Todo) {
-	frozen := m.rank.ScoreNow()
-	score := func(t *todo.Todo) float64 { return rank.ScoreOf(t, m.cache.rankScore, frozen) }
-	m.cache.tagGroups = summarizeGroups(all, tagGroupKeys, score)
-	m.cache.projectGroups = summarizeGroups(all, projectGroupKeys, score)
+	m.cache.tagGroups = summarizeGroups(all, tagGroupKeys)
+	m.cache.projectGroups = summarizeGroups(all, projectGroupKeys)
 	m.cache.tagNames = sortedGroupNames(m.cache.tagGroups)
 	m.cache.projectNames = sortedGroupNames(m.cache.projectGroups)
 }

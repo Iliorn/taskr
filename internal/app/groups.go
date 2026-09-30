@@ -57,10 +57,6 @@ type groupSummary struct {
 	// last is the newest ModifiedAt among the group's tasks: an edit, a
 	// completion or a time entry all move it.
 	last time.Time
-	// next is the open task the sequencer ranks highest in the group.
-	nextID    string
-	nextTitle string
-	nextScore float64
 }
 
 func (s *groupSummary) finished() bool { return s.open == 0 }
@@ -104,13 +100,10 @@ func inTagGroup(t *todo.Todo, key string) bool {
 func inProjectGroup(t *todo.Todo, key string) bool { return t.Project == key }
 
 // summarizeGroups builds one summary per group in a single pass over the task
-// set. score ranks the open tasks for "next up"; pass a frozen one
-// (rank.Ranker.ScoreNow) so equal tasks tie and the ID decides.
-func summarizeGroups(all []*todo.Todo, keys func(*todo.Todo, func(string)), score func(*todo.Todo) float64) map[string]*groupSummary {
+// set.
+func summarizeGroups(all []*todo.Todo, keys func(*todo.Todo, func(string))) map[string]*groupSummary {
 	out := make(map[string]*groupSummary)
 	for _, t := range all {
-		var s float64
-		scored := false
 		keys(t, func(key string) {
 			g := out[key]
 			if g == nil {
@@ -127,12 +120,6 @@ func summarizeGroups(all []*todo.Todo, keys func(*todo.Todo, func(string)), scor
 			g.open++
 			if t.IsOverdue() {
 				g.overdue++
-			}
-			if !scored {
-				s, scored = score(t), true
-			}
-			if g.nextID == "" || s > g.nextScore || (s == g.nextScore && t.ID < g.nextID) {
-				g.nextID, g.nextTitle, g.nextScore = t.ID, t.Title, s
 			}
 		})
 	}

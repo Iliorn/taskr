@@ -180,7 +180,7 @@ func TestTagRowSaysWhatIsOpen(t *testing.T) {
 	m.refreshCaches()
 
 	out := ansi.Strip(m.renderTagList())
-	for _, want := range []string{"Open", "Next up", "#home", "Fix the boiler"} {
+	for _, want := range []string{"Open", "#home"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in tag list, got:\n%s", want, out)
 		}
@@ -198,17 +198,17 @@ func TestTagRowSaysWhatIsOpen(t *testing.T) {
 	}
 }
 
-// TestTagListDropsNextUpWhenNarrow asserts the next-up column disappears whole
-// on a narrow terminal instead of leaving a clipped stub of a title.
-func TestTagListDropsNextUpWhenNarrow(t *testing.T) {
+// The group lists name no task: what to do first in a group is its task
+// list's first row, by score.
+func TestTagListNamesNoTask(t *testing.T) {
 	a := todo.New("open task with a title")
 	a.Tags = []string{"work"}
 	m := newTagModel(a)
-	m.termWidth = 30
+	m.termWidth = 120
 	m.tab = tabTags
 	m.refreshCaches()
-	if out := ansi.Strip(m.renderTagList()); strings.Contains(out, "Next") || strings.Contains(out, "Open task") {
-		t.Errorf("narrow tag list should drop Next up whole, got:\n%s", out)
+	if out := ansi.Strip(m.renderTagList()); strings.Contains(out, "Open task") {
+		t.Errorf("the tag list should not name a task:\n%s", out)
 	}
 }
 

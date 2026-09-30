@@ -272,7 +272,7 @@ func TestProjectDrillTimelineIsAStripNotASecondList(t *testing.T) {
 	}
 
 	out := m.buildProjectListContent(m.termWidth-6, m.termHeight-4)
-	// Task rows read "] Title"; the project list above names one in Next up.
+	// Task rows read "] Title".
 	for _, title := range titles {
 		if n := strings.Count(out, "] "+title); n != 1 {
 			t.Errorf("%q has %d task rows in the drilled-in view, want 1 (the timeline must not repeat the list):\n%s", title, n, out)

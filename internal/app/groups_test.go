@@ -34,7 +34,7 @@ func TestFormatSince(t *testing.T) {
 }
 
 // One pass builds every group's counts. An untagged subtask belongs to its
-// parent and so to no tag group, and next-up is the best-scored open task.
+// parent and so to no tag group.
 func TestSummarizeGroups(t *testing.T) {
 	now := time.Now()
 	parent := mkTodo("p", "parent", todo.Pending)
@@ -49,17 +49,13 @@ func TestSummarizeGroups(t *testing.T) {
 	bare := mkTodo("b", "bare", todo.Pending)
 	all := todoPtrs([]todo.Todo{parent, child, late, done, bare})
 
-	score := map[string]float64{"p": 1, "l": 5, "c": 9, "b": 2}
-	sums := summarizeGroups(all, tagGroupKeys, func(t *todo.Todo) float64 { return score[t.ID] })
+	sums := summarizeGroups(all, tagGroupKeys)
 
 	home := sums["home"]
 	if home.open != 2 || home.overdue != 1 || home.done != 1 {
 		t.Errorf("home = %d open, %d overdue, %d done; want 2, 1, 1", home.open, home.overdue, home.done)
 	}
-	if home.nextID != "l" {
-		t.Errorf("home next = %q, want the best-scored open task l", home.nextID)
-	}
-	if u := sums[untaggedKey]; u == nil || u.open != 1 || u.nextID != "b" {
+	if u := sums[untaggedKey]; u == nil || u.open != 1 {
 		t.Errorf("untagged = %+v, want only the top-level bare task", u)
 	}
 }
