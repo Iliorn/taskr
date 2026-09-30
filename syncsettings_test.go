@@ -9,6 +9,7 @@ func TestSyncSettingsRenderUnconfigured(t *testing.T) {
 	m := initialModel(&fakeRepo{})
 	m.syncCfg = syncConfig{}
 	m.autoSync = autoSyncEnabled(m.syncCfg)
+	m.settingsCursor = settingSyncServer
 
 	out := m.renderSettingsList()
 	for _, want := range []string{"Sync", "Sync server", "Sync token", "Sync now", "needs server", "not set"} {
@@ -22,6 +23,7 @@ func TestSyncSettingsRenderConfiguredMasksToken(t *testing.T) {
 	m := initialModel(&fakeRepo{})
 	m.syncCfg = syncConfig{URL: "http://100.122.178.43:8765", Token: "supersecret-token-value"}
 	m.autoSync = autoSyncEnabled(m.syncCfg)
+	m.settingsCursor = settingSyncServer
 
 	out := m.renderSettingsList()
 	if !strings.Contains(out, "http://100.122.178.43:8765") {

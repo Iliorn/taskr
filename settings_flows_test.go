@@ -481,14 +481,16 @@ func TestSettingsOpensWithAppearance(t *testing.T) {
 	m := settingsModel(t)
 	m.settingsCursor = settingTheme
 	content, selected := m.renderSettingsSection(60)
-	if selected != 1 {
-		t.Errorf("Theme renders on pane line %d, want 1 (the line under the first heading)", selected)
+	if selected != 0 {
+		t.Errorf("Theme renders on pane line %d, want 0 (the page's first row)", selected)
 	}
-	// And the pane's first heading is the one the cursor starts under, not a
-	// group the reader has to scroll past.
 	lines := strings.Split(ansi.Strip(content), "\n")
-	if !strings.Contains(lines[0], tr("Appearance")) {
-		t.Errorf("first pane line is %q, want the Appearance heading", lines[0])
+	if !strings.Contains(lines[0], tr("Theme")) {
+		t.Errorf("first pane line is %q, want Theme", lines[0])
+	}
+	// And the bar lights the page it opens on.
+	if bar := m.settingsSectionBar(200); !strings.Contains(bar, sectionCurrentStyle.Render(tr("Appearance"))) {
+		t.Errorf("the section bar does not light Appearance: %q", bar)
 	}
 }
 

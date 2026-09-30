@@ -1387,20 +1387,6 @@ var settingsGroups = []settingsGroup{
 	}},
 }
 
-// The pane is drawn as two columns of groups: the first settingsColumnSplit
-// groups on the left, the rest on the right. The split is a group boundary, so
-// the column-major reading order is exactly settingsNavOrder's order — up/down
-// walks the left column, then continues at the top of the right one, and no
-// navigation code has to know about columns at all.
-//
-// Below settingsTwoColMinWidth a column would be too narrow for a label and
-// its value, so the pane falls back to the single column.
-const (
-	settingsColumnSplit    = 3
-	settingsTwoColMinWidth = 96
-	settingsColGap         = 3
-)
-
 // settingsSelectable reports whether the cursor may land on a row. Version is
 // a fact, not a control: enter on it did nothing, so stopping there was a dead
 // step in the middle of the list.
@@ -1701,55 +1687,27 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		return cursor + labelStyle.Render(padRight(labels[id], labelW)) + helpStyle.Render(value)
 	}
 
-	// renderColumn draws one column's worth of groups and reports the line the
-	// cursor row landed on (-1 when the cursor is not in this column). colW is
-	// the column's own width, so the bias preview sizes its titles to the
-	// column it sits in rather than to the whole pane. wide holds the same
-	// lines with the rows clipped to wideW instead, for a row with nothing
-	// beside it (joinSettingsColumns).
-	renderColumn := func(groups []settingsGroup, colW, wideW int) (lines, wide []string, selected int) {
-		selected = -1
-		for _, g := range groups {
-			rows := m.visibleGroupRows(g)
-			if len(rows) == 0 {
-				continue
-			}
-			if len(lines) > 0 {
-				lines = append(lines, "")
-				wide = append(wide, "")
-			}
-			lines = append(lines, cursorGap+headerStyle.Render(tr(g.title)))
-			wide = append(wide, lines[len(lines)-1])
-			for _, id := range rows {
-				if id == m.settingsCursor {
-					selected = len(lines)
-				}
-				lines = append(lines, renderRow(id, colW))
-				wide = append(wide, renderRow(id, wideW))
-			}
-			// Live preview: the top-N tasks ranked with the current knob values is
-			// the whole account the pane gives of a bias change — a prose tagline
-			// for the mix said less than the five rows that actually move.
-			if g.preview {
-				if preview := m.renderSettingsTopPreview(m.rank.Biases, m.rank.Heat, m.frameTime, colW); preview != "" {
-					previewLines := strings.Split(strings.TrimRight(preview, "\n"), "\n")
-					lines = append(lines, previewLines...)
-					wide = append(wide, previewLines...)
-				}
-			}
-		}
-		return lines, wide, selected
-	}
-
+	// The pane is a page per group: the cursor's group, under the section bar
+	// that names them all. A group has at most a screenful of rows, so a page
+	// needs no scrolling on any ordinary terminal, and the bar says exactly
+	// what [ and ] will show. The bar lights the group's name, so the page
+	// carries no heading of its own.
+	g := settingsGroups[settingsGroupOf(m.settingsCursor)]
 	var lines []string
-	var selected int
-	if w >= settingsTwoColMinWidth {
-		colW := (w - settingsColGap) / 2
-		left, leftWide, leftSel := renderColumn(settingsGroups[:settingsColumnSplit], colW, w)
-		right, _, rightSel := renderColumn(settingsGroups[settingsColumnSplit:], colW, colW)
-		lines, selected = joinSettingsColumns(left, leftWide, leftSel, right, rightSel, colW)
-	} else {
-		lines, _, selected = renderColumn(settingsGroups, w, w)
+	selected := -1
+	for _, id := range m.visibleGroupRows(g) {
+		if id == m.settingsCursor {
+			selected = len(lines)
+		}
+		lines = append(lines, renderRow(id, w))
+	}
+	// Live preview: the top-N tasks ranked with the current knob values is
+	// the whole account the pane gives of a bias change — a prose tagline
+	// for the mix said less than the five rows that actually move.
+	if g.preview {
+		if preview := m.renderSettingsTopPreview(m.rank.Biases, m.rank.Heat, m.frameTime, w); preview != "" {
+			lines = append(lines, strings.Split(strings.TrimRight(preview, "\n"), "\n")...)
+		}
 	}
 
 	if m.updateStatus != "" {
@@ -1767,58 +1725,6 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		}
 	}
 	return strings.Join(lines, "\n") + "\n", selected
-}
-
-// joinSettingsColumns lays the two columns of groups side by side inside the
-// one pane. The columns are top-aligned, so a row's line number in the joined
-// block is its index in its own column — which is exactly what the pane's
-// scroll (fitSettingsPane) is given, with no second coordinate system to keep
-// in step. Lines are padded to the column width with ansi.StringWidth, not
-// len(): every row carries styling, and byte length would indent the right
-// column by the width of the escape sequences.
-//
-// leftWide is left with its rows clipped to the whole pane rather than to
-// colW; it is used where the right column has nothing.
-func joinSettingsColumns(left, leftWide []string, leftSel int, right []string, rightSel, colW int) ([]string, int) {
-	n := len(left)
-	if len(right) > n {
-		n = len(right)
-	}
-	out := make([]string, 0, n)
-	for i := 0; i < n; i++ {
-		var l, r string
-		if i < len(left) {
-			l = left[i]
-		}
-		if i < len(right) {
-			r = right[i]
-		}
-		if r == "" {
-			// Nothing to the right of this line, so a value wider than its
-			// column share may run on into the empty lane — which is how
-			// "Board columns" keeps showing its whole list of columns.
-			if i < len(leftWide) {
-				l = leftWide[i]
-			}
-			out = append(out, l)
-			continue
-		}
-		// With a row to the right, the left line is clipped to its share
-		// instead: the right column has to start at the same x on every line
-		// or it stops reading as a column, and a long value shoving its
-		// neighbour sideways is worse than an ellipsis.
-		l = ansi.Truncate(l, colW, ellipsis)
-		pad := colW + settingsColGap - ansi.StringWidth(l)
-		if pad < settingsColGap {
-			pad = settingsColGap
-		}
-		out = append(out, l+strings.Repeat(" ", pad)+r)
-	}
-	selected := leftSel
-	if selected < 0 {
-		selected = rightSel
-	}
-	return out, selected
 }
 
 // renderSettingsList preserves a plain, unboxed rendering for focused unit
@@ -1866,9 +1772,10 @@ func (m model) buildSettingsContent(w, outerH int) string {
 	// pane one row taller than it drew, so the last row — and, when the cursor
 	// was on it, the row the scroll had just been asked to reveal — fell off
 	// the bottom.
-	// The section bar takes the pane's first row, as in the detail pane.
-	lines := append([]string{m.settingsSectionBar(w - 2)},
-		fitSettingsPane(content, max(panelContentHeight(outerH)-detailSectionBarLines, 1), w-2, selected)...)
+	// The section bar takes the pane's first row, as in the detail pane, with
+	// a blank row between it and the page.
+	lines := append([]string{m.settingsSectionBar(w - 2), ""},
+		fitSettingsPane(content, max(panelContentHeight(outerH)-detailSectionBarLines-1, 1), w-2, selected)...)
 	truncateLines(lines[:1], max(w-2, 0))
 	panel := listPanelFocusedStyle.Width(w).Render(strings.Join(lines, "\n"))
 	return withBorderTitle(panel, m.listPanelTitle(), w, true)

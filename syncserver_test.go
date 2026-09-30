@@ -9,6 +9,7 @@ import (
 
 func TestServerSettingsRender(t *testing.T) {
 	m := initialModel(&fakeRepo{})
+	m.settingsCursor = settingServerOn
 
 	// Server off: one row, reading Off. The bind address and the token
 	// configure an endpoint that is not running, so on a client — which is

@@ -11,6 +11,13 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Changed
+
+- Settings shows one section at a time; `[` and `]` turn the page.
+- A board column's icon is set off from its name with a dot (`R · Review`).
+
 ## [1.47.0] - 2026-09-29
 
 ### Changed

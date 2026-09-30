@@ -65,13 +65,14 @@ func (m model) boardColumns() [][]todo.Todo {
 // boardColTitles returns the column headers — the configured names verbatim,
 // the last of which heads the Done column. They are user text, so they are not
 // translated: a board whose columns you named is shown the way you named them.
-// A column's icon leads its name, the mark its cards carry in the task list.
+// A column's icon leads its name, the mark its cards carry in the task list,
+// set off by a dot so a letter icon does not read as part of the name.
 func (m model) boardColTitles() []string {
 	titles := make([]string, len(m.boardCfg.stages))
 	for i, name := range m.boardCfg.stages {
 		titles[i] = name
 		if icon := m.boardCfg.columnIcon(i); icon != "" {
-			titles[i] = icon + " " + name
+			titles[i] = icon + " · " + name
 		}
 	}
 	return titles

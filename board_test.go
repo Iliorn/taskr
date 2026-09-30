@@ -92,7 +92,7 @@ func TestLastColumnIsDoneWhateverItIsCalled(t *testing.T) {
 		if len(cols) != 4 {
 			t.Fatalf("columns = %d, want the 4 configured ones", len(cols))
 		}
-		if titles := m.boardColTitles(); titles[len(titles)-1] != "✓ Shipped" {
+		if titles := m.boardColTitles(); titles[len(titles)-1] != "✓ · Shipped" {
 			t.Errorf("last column heading = %q, want the configured name behind its ✓", titles[len(titles)-1])
 		}
 		if got := cols[m.boardCfg.doneColumn()]; len(got) != 1 || got[0].Title != "Shipped" {

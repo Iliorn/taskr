@@ -177,6 +177,7 @@ func TestSettingsTopPreviewAppearsInView(t *testing.T) {
 	m := modelWithTasks(t, tasks...)
 	m.tab = tabSettings
 	m.taskSort = taskSortSequence
+	m.settingsCursor = settingBiasDeadline
 	m.ensureCache()
 
 	out := m.renderSettingsList()
@@ -198,24 +199,18 @@ func TestSettingsTopPreviewEmptyWhenNoTasks(t *testing.T) {
 	}
 }
 
-// Settings is one pane. It was two, and the four ranking knobs did not earn a
-// second border, a second scroll position and half the width of the tab.
+// Settings is one pane: the section bar names every group, and the page
+// below it is the cursor's group, the Sequencer's under its own name.
 func TestSettingsRendersOneGroupedPane(t *testing.T) {
 	m := modelWithTasks(t, todo.New("Ranked task"))
 	m.tab = tabSettings
 	m.termHeight = 40
+	m.settingsCursor = settingBiasDeadline
 	m.ensureCache()
 	content, _ := m.renderSettingsSection(50)
 	content = ansi.Strip(content)
-	for _, want := range []string{tr("Appearance"), "Theme", tr("Sequencer"), "Deadline pressure", tr("Sync")} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("the settings pane is missing %q:\n%s", want, content)
-		}
-	}
-	// The Sequencer rows are a group inside the pane, under their heading —
-	// not a separate document beside it.
-	if strings.Index(content, tr("Sequencer")) > strings.Index(content, "Deadline pressure") {
-		t.Errorf("the Sequencer heading should lead its rows:\n%s", content)
+	if !strings.Contains(content, "Deadline pressure") {
+		t.Fatalf("the Sequencer page is missing its rows:\n%s", content)
 	}
 
 	for _, width := range []int{60, 120} {
@@ -227,8 +222,15 @@ func TestSettingsRendersOneGroupedPane(t *testing.T) {
 		if !strings.Contains(out, "╭─ "+tr("Preferences")+" ") {
 			t.Errorf("width=%d: Settings should draw its single pane:\n%s", width, out)
 		}
-		if !strings.Contains(out, "Deadline pressure") || !strings.Contains(out, "Theme") {
-			t.Errorf("width=%d: both groups belong in the one pane:\n%s", width, out)
+		// A narrow bar keeps the current name and as many neighbours as fit.
+		wants := []string{tr("Sequencer"), "Deadline pressure"}
+		if width >= 120 {
+			wants = append(wants, tr("Appearance"), tr("Sync"), tr("About"))
+		}
+		for _, want := range wants {
+			if !strings.Contains(out, want) {
+				t.Errorf("width=%d: the pane should show %q:\n%s", width, want, out)
+			}
 		}
 	}
 }
@@ -415,62 +417,34 @@ func TestClampLinesMarksTheCut(t *testing.T) {
 	}
 }
 
-// The pane is one border with two columns of groups inside it — not one tall
-// column that runs off the bottom of a laptop screen, which is what collapsing
-// the old second pane into the first one first produced.
-func TestSettingsPaneSplitsIntoTwoColumns(t *testing.T) {
-	m := modelWithTasks(t, todo.New("Ranked task"))
-	m.tab = tabSettings
-	m.termHeight = 40
-	m.ensureCache()
-
-	wide, _ := m.renderSettingsSection(settingsTwoColMinWidth + 20)
-	paired := false
-	for _, line := range strings.Split(ansi.Strip(wide), "\n") {
-		if strings.Contains(line, "Theme") && strings.Contains(line, tr("Automatic")) {
-			paired = true
-		}
-	}
-	if !paired {
-		t.Errorf("a wide pane should put Appearance and Sync side by side:\n%s", ansi.Strip(wide))
-	}
-
-	// Too narrow for two columns: the groups stack instead of being clipped
-	// into each other.
-	narrow, _ := m.renderSettingsSection(settingsTwoColMinWidth - 1)
-	for _, line := range strings.Split(ansi.Strip(narrow), "\n") {
-		if strings.Contains(line, "Theme") && strings.Contains(line, tr("Automatic")) {
-			t.Errorf("a narrow pane should stack the groups:\n%s", ansi.Strip(narrow))
-		}
-	}
-}
-
-// The scroll is driven by the line number the renderer reports, so it has to
-// hold for a cursor in the right-hand column too — there the row is drawn
-// after the left column's text, not at the start of the line.
-func TestSettingsTwoColumnPaneReportsTheCursorLine(t *testing.T) {
+// The pane is a page per group: the cursor's group and nothing else, so the
+// section bar above it names what is on screen, and [ / ] turn the page.
+func TestSettingsPaneShowsTheCursorsGroup(t *testing.T) {
 	m := settingsModel(t)
-	const w = settingsTwoColMinWidth + 20
-	for _, g := range settingsGroups {
-		for _, row := range g.rows {
-			if !settingsSelectable(row) || !m.settingsRowVisible(row) {
-				continue
-			}
-			m.settingsCursor = row
-			content, selected := m.renderSettingsSection(w)
-			lines := strings.Split(strings.TrimRight(ansi.Strip(content), "\n"), "\n")
-			drawn := -1
-			for i, line := range lines {
-				if strings.Contains(line, strings.TrimSpace(cursorMark)) {
-					drawn = i
-					break
+	// One row label only its own group has, for each group.
+	marker := map[string]string{
+		"Appearance":      "Theme",
+		"General":         "Your name",
+		"Sequencer":       "Deadline pressure",
+		"Sync":            "Sync server",
+		"Shared projects": "Join a project",
+		"Server":          "Enabled",
+		"Export":          "Auto-export folder",
+		"About":           "Check for updates",
+	}
+	for gi, g := range settingsGroups {
+		if marker[g.title] == "" {
+			t.Fatalf("group %q has no marker row in this test", g.title)
+		}
+		rows := m.visibleGroupRows(g)
+		m.settingsCursor = rows[len(rows)-1]
+		for _, w := range []int{50, 140} {
+			content, _ := m.renderSettingsSection(w)
+			content = ansi.Strip(content)
+			for oi, other := range settingsGroups {
+				if got := strings.Contains(content, tr(marker[other.title])); got != (oi == gi) {
+					t.Errorf("width %d, page %q: %q shown = %v:\n%s", w, g.title, marker[other.title], got, content)
 				}
-			}
-			if drawn < 0 {
-				t.Fatalf("row %d: no cursor mark in the rendered pane:\n%s", row, ansi.Strip(content))
-			}
-			if selected != drawn {
-				t.Errorf("row %d: selected line = %d, drawn on line %d:\n%s", row, selected, drawn, ansi.Strip(content))
 			}
 		}
 	}
@@ -484,8 +458,9 @@ func TestSettingsEditMarkSurvivesAClippedValue(t *testing.T) {
 	m.tab = tabSettings
 	m.termHeight = 40
 	m.boardCfg.setStages([]string{"Backlog", "Waiting on someone else", "In progress", "In review with the team", "Done"})
+	m.settingsCursor = settingStages
 	m.ensureCache()
-	for _, w := range []int{50, settingsTwoColMinWidth + 20} {
+	for _, w := range []int{50, 80} {
 		content, _ := m.renderSettingsSection(w)
 		found := false
 		for _, line := range strings.Split(content, "\n") {
