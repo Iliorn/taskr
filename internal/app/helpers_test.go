@@ -1011,6 +1011,23 @@ func TestParseManualEntry(t *testing.T) {
 	if _, _, err := parseManualEntry("banana", now); err == nil {
 		t.Error("expected error for junk input")
 	}
+
+	// Backfilled time is past time: a range today's clock has not reached,
+	// or one crossing midnight, is the most recent one that has ended.
+	at := func(day, h, m int) time.Time { return time.Date(2026, 7, day, h, m, 0, 0, time.Local) }
+	for in, want := range map[string][2]time.Time{
+		"15:00-16:00": {at(2, 15, 0), at(2, 16, 0)}, // not reached yet at 14:00
+		"22:00-02:00": {at(2, 22, 0), at(3, 2, 0)},  // last night
+		"13:00-14:00": {at(3, 13, 0), at(3, 14, 0)}, // ends right now
+	} {
+		start, stop, err := parseManualEntry(in, now)
+		if err != nil || !start.Equal(want[0]) || !stop.Equal(want[1]) {
+			t.Errorf("%s at 14:00 → [%v, %v] (%v), want [%v, %v]", in, start, stop, err, want[0], want[1])
+		}
+		if stop.After(now) {
+			t.Errorf("%s ends after now", in)
+		}
+	}
 }
 
 // ── Release lookup over the API ───────────────────────────────────────────────

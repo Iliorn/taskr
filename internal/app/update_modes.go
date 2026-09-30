@@ -224,7 +224,8 @@ func (m model) updateAddSubtask(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateAddTimeEntry parses a duration ("45m", "1h30m") or a clock range
 // ("10:00-10:30") and appends a TimeEntry to pendingEntryTaskID. Duration
-// form anchors the entry at "now"; range form anchors it on today. Letting
+// form anchors the entry at "now"; range form is the latest that has ended
+// (parseManualEntry). Letting
 // a user log time after the fact is useful for tracking work that wasn't
 // captured by the live timer — and for back-dating, the entry can later be
 // retimed via the existing modeEditTimeEntry flow.

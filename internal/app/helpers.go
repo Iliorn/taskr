@@ -1128,8 +1128,10 @@ func parseEntryEdit(input string, oldStart time.Time, running bool) (time.Time, 
 // parseManualEntry resolves user input for a backfilled time entry: a bare
 // duration ("45m") becomes [now-d, now] — "I just spent 45m on this" almost
 // always means it ends now, not starts now — while a clock range
-// ("10:00-11:30") is taken literally on today. Shared by the TUI's
-// modeAddTimeEntry and `tjek log` so the two surfaces can't drift.
+// ("10:00-11:30") is taken on today, or on yesterday when today's would not
+// have ended yet: backfilled time is past time, so "22:00-02:00" in the
+// morning is last night, not tonight. Shared by the TUI's modeAddTimeEntry
+// and `tjek log` so the two surfaces can't drift.
 func parseManualEntry(input string, now time.Time) (start, stop time.Time, err error) {
 	start, stop, err = parseEntryEdit(input, now, false)
 	if err != nil {
@@ -1139,6 +1141,8 @@ func parseManualEntry(input string, now time.Time) (start, stop time.Time, err e
 		d := stop.Sub(start)
 		start = now.Add(-d)
 		stop = now
+	} else if stop.After(now) {
+		start, stop = start.AddDate(0, 0, -1), stop.AddDate(0, 0, -1)
 	}
 	return start, stop, nil
 }

@@ -19,6 +19,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ### Fixed
 
+- Logged time is never in the future: a range today has not reached yet is yesterday's.
 - `tjek export file.json` writes the file; it printed the export and ignored the path.
 - `tjek list`, `tags`, `stats` and the other verbs without words say so when given one.
 - Low priority in German fits the Priority column instead of reading "niedr…".

@@ -137,14 +137,16 @@ func cliStop(args []string) int {
 // cliLog backfills a closed time entry on a task — work the live timer didn't
 // capture (forgot to start it, or the stale-timer recovery under-logged a
 // session). Same input semantics as the TUI's 'T' shortcut via
-// parseManualEntry: a bare duration ends now, a clock range is literal today.
+// parseManualEntry: a bare duration ends now, a clock range is the latest one
+// that has ended.
 func cliLog(args []string) int {
 	fs := flag.NewFlagSet("log", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, `usage: tjek log <ref> <45m|1h30m|HH:MM-HH:MM>
   duration form ends now ("I just spent 45m on this")
-  range form is taken literally on today (crosses midnight if end < start)`)
+  range form is the latest one that has ended: today's, or yesterday's if
+  today's has not (so 22:00-02:00 in the morning is last night)`)
 	}
 	flagArgs, positionals := splitFlagsAndPositionals(fs, args)
 	if err := fs.Parse(flagArgs); err != nil {

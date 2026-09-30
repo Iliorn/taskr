@@ -315,7 +315,7 @@ var cliHelpBlocks = []helpBlock{
 	{"Tracking:", []helpRow{
 		{"tjek start <ref>", "start the time tracker, stopping any other task's timer first (no-op if already tracking ref)"},
 		{"tjek stop [<ref>]", "stop the tracker (no ref = whichever's running)"},
-		{"tjek log <ref> <45m|10:00-11:30>", "backfill a time entry (duration ends now; range is today)"},
+		{"tjek log <ref> <45m|10:00-11:30>", "backfill a time entry (duration ends now; range is the latest that has ended)"},
 	}},
 	{"Comments:", []helpRow{
 		{`tjek comment <ref> "text"`, "append a comment"},
