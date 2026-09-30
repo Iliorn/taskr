@@ -196,3 +196,31 @@ func TestCursorSurvivesUndoOfACreate(t *testing.T) {
 		t.Fatalf("cursor %d selects nothing after undo removed the last task", m.cursor)
 	}
 }
+
+// A tab switch restores that tab's search, and the cursor is clamped against
+// the list that search gives, not the one the tab left behind: close a card on
+// the unfiltered Board while the Tasks list is filtered and sits on its last
+// row, and back on Tasks the cursor must still be on a row.
+func TestTasksCursorSurvivesACloseOnAnotherTab(t *testing.T) {
+	var tasks []todo.Todo
+	for _, title := range []string{"Alpha", "Bravo", "Charlie", "Delta"} {
+		x := todo.New(title)
+		x.Project = "Kitchen"
+		x.SetPriority(todo.PriorityHigh) // so the Board's first card is one of these
+		tasks = append(tasks, x)
+	}
+	elsewhere := todo.New("Elsewhere")
+	elsewhere.SetPriority(todo.PriorityLow)
+	m := modelWithTasks(t, append(tasks, elsewhere)...)
+	m.termWidth, m.termHeight = 120, 30
+	m = script(t, m, "/", "@Kitchen", "enter", "end")
+	m = script(t, m, "5", "d")
+	if closed := m.get(tasks[0].ID); closed == nil {
+		t.Fatal("setup: the task store lost a task")
+	}
+	m = script(t, m, "1")
+	_ = m.View() // the frame is what refreshes the filtered list
+	if n := m.currentTaskListLen(); m.cursor >= n {
+		t.Errorf("back on Tasks the cursor is %d on a %d-row list", m.cursor, n)
+	}
+}

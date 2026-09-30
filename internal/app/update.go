@@ -1042,6 +1042,10 @@ func (m model) stageDeleteTask() (tea.Model, tea.Cmd) {
 // to remember to clamp. Cursors that cannot go stale (the Settings rows are
 // stable IDs; the board clamps at selection time) are not listed.
 func (m *model) clampCursors() {
+	// Against the lists as the next frame draws them: a tab switch restores
+	// that tab's search and leaves the filtered lists stale, and a cursor
+	// clamped to the previous tab's filter can sit past the end of its own.
+	m.ensureCache()
 	clamp := func(cursor *int, n int) {
 		if *cursor >= n {
 			*cursor = n - 1
