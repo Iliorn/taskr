@@ -639,15 +639,17 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   A row in no group is never drawn, so a new setting needs a group entry.
   The pane's first row names the groups (`settingsSectionBar`, the detail
   pane's `sectionBar`), and below it the pane shows only the cursor's group,
-  a page per group, so the bar says what is on screen. `[`/`]` or pgup/pgdn
-  turn the page (`settingsGroupJump`), since ←/→ change values here; ↑/↓
-  past a group's last row continue onto the next page.
+  a page per group, so the bar says what is on screen. ←/→ or pgup/pgdn
+  turn the page (`settingsGroupJump`), as ←/→ step the detail pane's
+  sections; ↑/↓ past a group's last row continue onto the next page.
   `settingsNavOrder` skips rows that `settingsSelectable` rejects (Version) or
   `settingsRowVisible` hides (Listen and Server token while no server runs).
   `renderSettingsSection` returns the content *and* the cursor row's line,
   which the pane scrolls by. `settingsEditsText` marks rows whose enter opens
-  an editor. All value changes go through `settingsAdjust(dir)`, which ←, →
-  and enter share.
+  an editor. All value changes go through `settingsAdjust(dir)`: enter steps
+  forward, backspace back. The detail pane's stepped fields (recurrence,
+  priority, size, stage) answer the same two keys (`detailStepValue`), so
+  ←/→ mean section in both panes and never change a value.
 - **Modes drive input.** `m.mode` (an `appMode`) picks the `update*`/`render*`
   path. A feature with text entry or a confirm prompt adds an `appMode`, a
   handler (usually `update_modes.go`) and a render branch.
@@ -665,7 +667,9 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
 - **Detail placement is one predicate.** `detailPos` (settings
   `detail_position`: `right`/`left`/`bottom`) feeds `sideBySide()`; bottom
   makes it false at every width, and left swaps the two sized panels at the end
-  of `buildSideBySide`. Unknown values read as `right`. It holds on every tab:
+  of `buildSideBySide`. Absent or unknown values read as `bottom`, the
+  default; every settings save writes the word, so an install that has run
+  keeps its placement. It holds on every tab:
   a task opened from a tag's or project's list (`drillDetailOpen`) is laid out
   as the Tasks tab is, with that list (`drillListLines`) in the list's place,
   so no tab places its detail by a rule of its own. A stacked task detail

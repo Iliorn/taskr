@@ -602,7 +602,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.tab == tabCalendar {
 				m.moveCalendarDay(1)
 			} else if m.tab == tabSettings {
-				return m, m.settingsAdjust(+1)
+				m.settingsGroupJump(1)
 			} else if m.foldsSubtasks() {
 				m.unfoldCurrent()
 			}
@@ -612,7 +612,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.tab == tabCalendar {
 				m.moveCalendarDay(-1)
 			} else if m.tab == tabSettings {
-				return m, m.settingsAdjust(-1)
+				m.settingsGroupJump(-1)
 			} else if m.foldsSubtasks() {
 				m.foldCurrent()
 			}
@@ -633,9 +633,6 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "[", "]":
-			if m.tab == tabSettings {
-				m.settingsGroupJump(map[string]int{"[": -1, "]": 1}[key.String()])
-			}
 			if m.tab == tabCalendar {
 				months := 1
 				if key.String() == "[" {
@@ -712,6 +709,13 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m.handleListEnter()
 
+		case "backspace":
+			// enter steps a setting's value forward, backspace back, since
+			// ←/→ turn the pages here.
+			if m.tab == tabSettings {
+				return m, m.settingsAdjust(-1)
+			}
+
 		case "r":
 			return m.handleListRename()
 
@@ -755,7 +759,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "p":
 			if (m.tab == tabTasks && !m.showHistory) || m.drilledIntoTasks() {
-				if t := m.currentTodo(); t != nil && m.cyclePriority(t) {
+				if t := m.currentTodo(); t != nil && m.cyclePriority(t, 1) {
 					m.flashInfo(tr("A subtask can't outrank its parent"))
 					cmd = clearErrAfter()
 				}
@@ -1858,15 +1862,14 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 		m.updateStatus = tr("Checking…")
 		return m, checkForUpdate()
 	default:
-		// Every remaining row is a toggle or a picker, and enter means the
-		// same on it as →. One table, so a row cannot answer one key and not
-		// the other — which is exactly what the two hand-kept chains did.
+		// Every remaining row is a toggle or a picker: enter steps it
+		// forward, backspace back, through the one table.
 		return m, m.settingsAdjust(+1)
 	}
 }
 
 // settingsAdjust applies a value change to the selected Settings row: dir is
-// +1 for →/enter and -1 for ←. Toggles ignore dir; the pickers cycle by it.
+// +1 for enter and -1 for backspace. Toggles ignore dir; the pickers cycle by it.
 // It returns a command because one row can open a modal: switching the server
 // on without a token asks for the token rather than refusing.
 func (m *model) settingsAdjust(dir int) tea.Cmd {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/Iliorn/tjek/todo"
@@ -67,21 +68,16 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "left", "right":
-		// On the Stage row the arrows change the value, as they do on a
-		// Settings row; everywhere else in the pane they jump section. The
-		// cost is that Stage is the one field you cannot section-jump *from* —
-		// one press of ↑ or ↓ and the arrows mean what they always did.
 		dir := 1
 		if key.String() == "left" {
 			dir = -1
 		}
-		if t := m.currentTodo(); m.detail.field == fieldStage && m.boardCfg.stageFieldVisible(t) {
-			m.pushUndo("move stage", t.ID)
-			t.SetStage(m.boardCfg.cycleStage(t.Stage, dir))
-			m.markModified(t.ID)
-			return m, nil
-		}
 		m.detailSectionJump(dir)
+
+	case "backspace":
+		// enter steps a stepped field forward, backspace back, as on a
+		// Settings row.
+		return m.detailStepValue(-1)
 
 	case "up":
 		m.detailCursorUp()
@@ -592,50 +588,8 @@ func (m model) startEditing() (tea.Model, tea.Cmd) {
 		m.textInput.SetValue(t.CompletedAt.Format("02-01-06 15:04"))
 		m.textInput.Placeholder = tr("Completed (dd-mm-yy hh:mm, 'today', 'yesterday')...")
 		m.textInput.Focus()
-	case fieldRecurrence:
-		// Cycle through canonical rules. Custom "every:Nd|w|m|y" rules are
-		// returned to "none" by the next press; users can re-enter the
-		// custom form via quick-add (r:Nd).
-		m.pushUndo("cycle recurrence", t.ID)
-		switch t.Recurrence {
-		case "":
-			t.SetRecurrence("daily")
-		case "daily":
-			t.SetRecurrence("weekdays")
-		case "weekdays":
-			t.SetRecurrence("weekly")
-		case "weekly":
-			t.SetRecurrence("monthly")
-		case "monthly":
-			t.SetRecurrence("yearly")
-		default:
-			t.ClearRecurrence()
-		}
-		m.markModified(t.ID)
-		return m, nil
-	case fieldPriority:
-		if m.cyclePriority(t) {
-			// Without this the keypress looks dead: the cycle ran, the cap put
-			// the value straight back, and nothing on screen moved.
-			m.flashInfo(tr("A subtask can't outrank its parent"))
-			return m, clearErrAfter()
-		}
-		return m, nil
-	case fieldSize:
-		// Cycle Medium → Small → Large → Medium. Starts at Medium so the first
-		// press moves toward "Small" (the small-task floor) — the direction
-		// users will most often want.
-		m.pushUndo("cycle size", t.ID)
-		switch t.Size {
-		case todo.SizeMedium:
-			t.SetSize(todo.SizeSmall)
-		case todo.SizeSmall:
-			t.SetSize(todo.SizeLarge)
-		default:
-			t.SetSize(todo.SizeMedium)
-		}
-		m.markModified(t.ID)
-		return m, nil
+	case fieldRecurrence, fieldPriority, fieldSize, fieldStage:
+		return m.detailStepValue(+1)
 	case fieldProject:
 		m.mode = modeSearchProject
 		m.projSearchInput.SetValue(t.Project)
@@ -755,4 +709,62 @@ func (m model) startRenamingSelectedSubtask() (tea.Model, tea.Cmd) {
 // list: outbound ↧ edges first, then inbound ↥ dependents.
 func (m model) detailDepTotal(t *todo.Todo) int {
 	return len(t.Dependencies) + len(dependentsOf(m.allTodos(), t.ID))
+}
+
+// recurrenceSteps, sizeSteps and prioritySteps are the orders enter walks the
+// stepped detail fields in, backspace the other way. Size starts at Medium so
+// the first press moves toward Small, the direction most often wanted.
+var (
+	recurrenceSteps = []string{"", "daily", "weekdays", "weekly", "monthly", "yearly"}
+	sizeSteps       = []todo.Size{todo.SizeMedium, todo.SizeSmall, todo.SizeLarge}
+	prioritySteps   = []todo.Priority{todo.PriorityLow, todo.PriorityMedium, todo.PriorityHigh}
+)
+
+// stepIn is the value dir steps away from cur in steps, wrapping at the ends;
+// a value not in steps goes to the first.
+func stepIn[T comparable](steps []T, cur T, dir int) T {
+	i := slices.Index(steps, cur)
+	if i < 0 {
+		return steps[0]
+	}
+	return steps[(i+dir+len(steps))%len(steps)]
+}
+
+// detailStepValue steps the selected detail field's value by dir, for the
+// fields that pick from a short list (recurrence, priority, size, stage);
+// elsewhere it does nothing. A custom "every:Nd" rule steps to none; quick-add
+// (r:Nd) is where one is written.
+func (m model) detailStepValue(dir int) (tea.Model, tea.Cmd) {
+	t := m.currentTodo()
+	if t == nil {
+		return m, nil
+	}
+	switch m.detail.field {
+	case fieldRecurrence:
+		m.pushUndo("cycle recurrence", t.ID)
+		if r := stepIn(recurrenceSteps, t.Recurrence, dir); r == "" {
+			t.ClearRecurrence()
+		} else {
+			t.SetRecurrence(r)
+		}
+		m.markModified(t.ID)
+	case fieldPriority:
+		if m.cyclePriority(t, dir) {
+			// Without this the keypress looks dead: the cycle ran, the cap put
+			// the value straight back, and nothing on screen moved.
+			m.flashInfo(tr("A subtask can't outrank its parent"))
+			return m, clearErrAfter()
+		}
+	case fieldSize:
+		m.pushUndo("cycle size", t.ID)
+		t.SetSize(stepIn(sizeSteps, t.Size, dir))
+		m.markModified(t.ID)
+	case fieldStage:
+		if m.boardCfg.stageFieldVisible(t) {
+			m.pushUndo("move stage", t.ID)
+			t.SetStage(m.boardCfg.cycleStage(t.Stage, dir))
+			m.markModified(t.ID)
+		}
+	}
+	return m, nil
 }

@@ -111,8 +111,9 @@ var keymap = []binding{
 	{ctxTasksList, "/", "search", "filter", secTasks, true, true},
 
 	// ── Tasks detail pane ────────────────────────────────────────────────
-	{ctxTasksDetail, "←/→", "detailsection", "jump section", secDetail, true, false},
+	{ctxTasksDetail, "←/→", "detailsection", "previous / next section", secDetail, true, false},
 	{ctxTasksDetail, "enter", "editfield", "edit field / open subtask", secDetail, true, false},
+	{ctxTasksDetail, "backspace", "prevvalue", "previous value", secDetail, false, false},
 	{ctxTasksDetail, "a", "add", "add tag / dep / comment / subtask", secDetail, true, false},
 	{ctxTasksDetail, "#", "quicktag", "quick add tag", secDetail, false, false},
 	{ctxTasksDetail, "@", "quickproject", "quick add / change project", secDetail, false, false},
@@ -176,9 +177,9 @@ var keymap = []binding{
 
 	// ── Settings ─────────────────────────────────────────────────────────
 	{ctxSettings, "↑/↓ · j/k", "navigate", "select setting", secSettings, true, false},
-	{ctxSettings, "←/→", "setchange", "change value / theme", secSettings, true, false},
-	{ctxSettings, "[ / ]", "setsection", "previous / next section", secSettings, true, false},
-	{ctxSettings, "enter", "setapply", "activate / edit the selected setting", secSettings, true, false},
+	{ctxSettings, "←/→", "setsection", "previous / next section", secSettings, true, false},
+	{ctxSettings, "enter", "setapply", "change value", secSettings, true, false},
+	{ctxSettings, "backspace", "prevvalue", "previous value", secSettings, true, false},
 	{ctxSettings, "y / n", "confirmupdate", "confirm update when one is offered", secSettings, false, false},
 
 	// ── App (global) ─────────────────────────────────────────────────────

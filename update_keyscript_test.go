@@ -1568,3 +1568,38 @@ func TestDetailSectionBarFitsANarrowPane(t *testing.T) {
 		}
 	}
 }
+
+// On the stepped detail fields enter steps the value forward and backspace
+// back, and ←/→ leave it alone: they change section in every row.
+func TestScriptDetailEnterAndBackspaceStepAValue(t *testing.T) {
+	m := modelWithTasks(t, todo.New("Stepped task"))
+	m.termWidth, m.termHeight = 160, 40
+	m = script(t, m, "enter")
+	m.detail.field = fieldSize
+	id := m.currentTodo().ID
+	start := m.get(id).Size
+
+	m = script(t, m, "enter")
+	if got := m.get(id).Size; got != stepIn(sizeSteps, start, 1) {
+		t.Fatalf("enter on Size gave %v, want %v", got, stepIn(sizeSteps, start, 1))
+	}
+	m = script(t, m, "backspace")
+	if got := m.get(id).Size; got != start {
+		t.Fatalf("backspace did not undo enter: %v, want %v", got, start)
+	}
+
+	m.detail.field = fieldPriority
+	p := m.get(id).Priority
+	m = script(t, m, "backspace")
+	if got := m.get(id).Priority; got != stepIn(prioritySteps, p, -1) {
+		t.Errorf("backspace on Priority gave %v, want %v", got, stepIn(prioritySteps, p, -1))
+	}
+
+	m.detail.field = fieldSize
+	before := m.get(id).Size
+	m = script(t, m, "right")
+	if m.get(id).Size != before || detailSectionOf(m.detail.field) != 1 {
+		t.Errorf("→ on Size should change section and leave the value, got size %v, section %d",
+			m.get(id).Size, detailSectionOf(m.detail.field))
+	}
+}

@@ -133,7 +133,7 @@ func TestParentDowngradeTakesTheSubtreeDown(t *testing.T) {
 	unrelated.Priority = todo.PriorityHigh
 
 	m := modelWithTasks(t, parent, child, grandchild, unrelated)
-	m.cyclePriority(m.get("p")) // High → Low
+	m.cyclePriority(m.get("p"), 1) // High → Low
 
 	if got := m.get("p").Priority; got != todo.PriorityLow {
 		t.Fatalf("parent priority = %v, want low", got)
@@ -156,7 +156,7 @@ func TestSubtaskCannotOutrankItsParent(t *testing.T) {
 	child.Priority = todo.PriorityLow
 
 	m := modelWithTasks(t, parent, child)
-	if !m.cyclePriority(m.get("c")) { // Low → Medium, capped back to Low
+	if !m.cyclePriority(m.get("c"), 1) { // Low → Medium, capped back to Low
 		t.Fatal("cycling a subtask past its parent should report the cap")
 	}
 	if got := m.get("c").Priority; got != todo.PriorityLow {
@@ -174,7 +174,7 @@ func TestPriorityCycleIsUncappedBelowTheParent(t *testing.T) {
 	child.Priority = todo.PriorityLow
 
 	m := modelWithTasks(t, parent, child)
-	if m.cyclePriority(m.get("c")) { // Low → Medium, under the cap
+	if m.cyclePriority(m.get("c"), 1) { // Low → Medium, under the cap
 		t.Error("a step that stays below the parent should not report a cap")
 	}
 	if got := m.get("c").Priority; got != todo.PriorityMedium {
@@ -189,7 +189,7 @@ func TestAnOrphanedSubtaskHasNoCap(t *testing.T) {
 	orphan.Priority = todo.PriorityMedium
 
 	m := modelWithTasks(t, orphan)
-	if m.cyclePriority(m.get("o")) {
+	if m.cyclePriority(m.get("o"), 1) {
 		t.Error("orphan reported a cap it has no parent for")
 	}
 	if got := m.get("o").Priority; got != todo.PriorityHigh {

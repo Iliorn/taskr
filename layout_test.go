@@ -116,6 +116,7 @@ func TestComputeLayoutHeaderFixed(t *testing.T) {
 func TestListHeightFillsWhenDetailHidden(t *testing.T) {
 	m := modelWithTasks(t, todo.New("a"), todo.New("b"))
 	m.termHeight = 40
+	m.detailPos = detailRight
 	// Stacked mode: below the side-by-side threshold the open detail pane
 	// steals list rows, so hiding it must grow the list.
 	m.termWidth = sideBySideMinWidth - 10

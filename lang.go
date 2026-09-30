@@ -365,7 +365,6 @@ var daTranslations = map[string]string{
 	"expand/collapse subtasks":                            "fold delopgaver ud/ind",
 	"search":                                              "søg",
 	"Detail view":                                         "Detaljevisning",
-	"jump section":                                        "hop til sektion",
 	"edit field / open subtask":                           "rediger felt / åbn delopgave",
 	"add tag / dep / comment / subtask":                   "tilføj mærke / afh. / kommentar / delopgave",
 	"quick add tag":                                       "tilføj hurtigt mærke",
@@ -396,7 +395,6 @@ var daTranslations = map[string]string{
 	"Settings (tab 7)":                                    "Indstillinger (fane 7)",
 	"select setting":                                      "vælg indstilling",
 	"change theme":                                        "skift tema",
-	"activate / edit the selected setting":                "aktivér / redigér den valgte indstilling",
 	"confirm update when one is offered":                  "bekræft opdatering når en tilbydes",
 	"App":                                                 "App",
 	"undo last change":                                    "fortryd sidste ændring",
@@ -968,7 +966,8 @@ var daTranslations = map[string]string{
 	"back":                                      "tilbage",
 	"cycle activity range":                      "skift aktivitetsperiode",
 	"scroll the summary":                        "rul i overblikket",
-	"change value / theme":                      "skift værdi / tema",
+	"change value":                              "skift værdi",
+	"previous value":                            "forrige værdi",
 	"set / clear due date":                      "sæt / ryd forfaldsdato",
 
 	// ── Help section titles ──
@@ -1068,7 +1067,6 @@ var deTranslations = map[string]string{
 	"expand/collapse subtasks":                            "Teilaufgaben auf/zu",
 	"search":                                              "suchen",
 	"Detail view":                                         "Detailansicht",
-	"jump section":                                        "Abschnitt wechseln",
 	"edit field / open subtask":                           "Feld bearbeiten / Teilaufgabe",
 	"add tag / dep / comment / subtask":                   "Schlagwort / Abhäng. / Kommentar / Teilaufgabe",
 	"quick add tag":                                       "Schlagwort schnell hinzufügen",
@@ -1099,7 +1097,6 @@ var deTranslations = map[string]string{
 	"Settings (tab 7)":                                    "Einstellungen (Reiter 7)",
 	"select setting":                                      "Einstellung wählen",
 	"change theme":                                        "Farbschema ändern",
-	"activate / edit the selected setting":                "gewählte Einstellung aktivieren/bearbeiten",
 	"confirm update when one is offered":                  "Aktualisierung bestätigen",
 	"App":                                                 "App",
 	"undo last change":                                    "letzte Änderung rückgängig",
@@ -1671,7 +1668,8 @@ var deTranslations = map[string]string{
 	"back":                                      "zurück",
 	"cycle activity range":                      "Zeitraum wechseln",
 	"scroll the summary":                        "Übersicht blättern",
-	"change value / theme":                      "Wert / Farbschema ändern",
+	"change value":                              "Wert ändern",
+	"previous value":                            "vorheriger Wert",
 	"set / clear due date":                      "Fälligkeit setzen / löschen",
 
 	// ── Help section titles ──

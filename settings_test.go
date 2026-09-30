@@ -418,7 +418,7 @@ func TestClampLinesMarksTheCut(t *testing.T) {
 }
 
 // The pane is a page per group: the cursor's group and nothing else, so the
-// section bar above it names what is on screen, and [ / ] turn the page.
+// section bar above it names what is on screen, and ←/→ turn the page.
 func TestSettingsPaneShowsTheCursorsGroup(t *testing.T) {
 	m := settingsModel(t)
 	// One row label only its own group has, for each group.

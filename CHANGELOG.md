@@ -15,7 +15,9 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ### Changed
 
-- Settings shows one section at a time; `[` and `]` turn the page.
+- Settings shows one section at a time; ←/→ turn the page, and enter / backspace change a value.
+- In the detail pane ←/→ always change section; enter / backspace step priority, size and stage.
+- New installs open with the detail pane at the bottom.
 - A board column's icon is set off from its name with a dot (`R · Review`).
 
 ## [1.47.0] - 2026-09-29

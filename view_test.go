@@ -176,6 +176,7 @@ func TestOverdueShowsExclamationInStatusColumn(t *testing.T) {
 func TestSideBySideDetailPreview(t *testing.T) {
 	m := modelWithTasks(t, todo.New("pay rent"), todo.New("water plants"))
 	m.termHeight = 40
+	m.detailPos = detailRight
 
 	m.termWidth = sideBySideMinWidth + 10
 	if !strings.Contains(m.View(), tr("Priority")) {
@@ -806,6 +807,7 @@ func TestDetailShowsInboundDependents(t *testing.T) {
 	dependent.Dependencies = []string{"blk1"}
 	m := modelWithTasks(t, blocker, dependent)
 	m.termWidth, m.termHeight = 120, 40 // side-by-side: detail previews the cursor task
+	m.detailPos = detailRight
 
 	setCursorOn := func(id string) {
 		for i := range m.cache.active {

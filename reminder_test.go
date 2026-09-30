@@ -211,9 +211,9 @@ func TestReminderLaunchAfterTheTimeCountsAsReminded(t *testing.T) {
 func TestScriptReminderSettingPersists(t *testing.T) {
 	m := settingsModel(t)
 	m.settingsCursor = settingReminderTime
-	m = sendKey(t, m, "right")
+	m = sendKey(t, m, "enter")
 	if m.reminderAt != 10*60 {
-		t.Fatalf("reminderAt = %s after →, want 10:00", formatReminder(m.reminderAt))
+		t.Fatalf("reminderAt = %s after enter, want 10:00", formatReminder(m.reminderAt))
 	}
 	if s, _ := loadSettings(); s.Reminder != "10:00" {
 		t.Errorf("settings.json reminder = %q, want 10:00", s.Reminder)

@@ -575,13 +575,13 @@ func TestBiasCycleOnSettingsTab(t *testing.T) {
 	m.tab = tabSettings
 	m.settingsCursor = settingBiasDeadline
 
-	m = sendKey(t, m, "right")
+	m = sendKey(t, m, "enter")
 	if m.rank.Biases.Deadline != rank.Intense {
-		t.Errorf("after right on Deadline row: %v, want Intense (Balanced → next)", m.rank.Biases.Deadline)
+		t.Errorf("after enter on Deadline row: %v, want Intense (Balanced → next)", m.rank.Biases.Deadline)
 	}
-	m = sendKey(t, m, "left")
+	m = sendKey(t, m, "backspace")
 	if m.rank.Biases.Deadline != rank.Balanced {
-		t.Errorf("after left: %v, want Balanced", m.rank.Biases.Deadline)
+		t.Errorf("after backspace: %v, want Balanced", m.rank.Biases.Deadline)
 	}
 
 	// Other rows are not touched by this row's cycle.
@@ -592,9 +592,9 @@ func TestBiasCycleOnSettingsTab(t *testing.T) {
 
 	// Move cursor to the Momentum row and confirm the cycle hits that one.
 	m.settingsCursor = settingBiasMomentum
-	m = sendKey(t, m, "right")
+	m = sendKey(t, m, "enter")
 	if m.rank.Biases.Momentum != rank.Intense {
-		t.Errorf("after right on Momentum row: %v, want Intense", m.rank.Biases.Momentum)
+		t.Errorf("after enter on Momentum row: %v, want Intense", m.rank.Biases.Momentum)
 	}
 }
 

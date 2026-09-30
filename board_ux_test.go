@@ -122,8 +122,9 @@ func stageFieldModel(t *testing.T) model {
 	return m
 }
 
-// ←/→ change the value on the Stage row, the way they do on a Settings row.
-func TestStageFieldCyclesWithTheArrows(t *testing.T) {
+// enter and backspace step the value on the Stage row, the way they do on a
+// Settings row.
+func TestStageFieldStepsWithEnterAndBackspace(t *testing.T) {
 	m := stageFieldModel(t)
 	task := m.currentTodo()
 	if !m.boardCfg.stageFieldVisible(task) {
@@ -131,18 +132,18 @@ func TestStageFieldCyclesWithTheArrows(t *testing.T) {
 	}
 	start := m.boardCfg.stageIndex(task.Stage)
 
-	m = sendKey(t, m, "right")
+	m = sendKey(t, m, "enter")
 	if got := m.boardCfg.stageIndex(m.get(task.ID).Stage); got != (start+1)%len(m.boardCfg.pending()) {
-		t.Errorf("→ moved to stage %d, want %d", got, (start+1)%len(m.boardCfg.pending()))
+		t.Errorf("enter moved to stage %d, want %d", got, (start+1)%len(m.boardCfg.pending()))
 	}
-	m = sendKey(t, m, "left")
+	m = sendKey(t, m, "backspace")
 	if got := m.boardCfg.stageIndex(m.get(task.ID).Stage); got != start {
-		t.Errorf("← did not undo →: stage %d, want %d", got, start)
+		t.Errorf("backspace did not undo enter: stage %d, want %d", got, start)
 	}
 	// It wraps rather than stopping at the ends, and never reaches the last
 	// column — completing a task has one path, and it is not this one.
 	for i := 0; i < len(m.boardCfg.stages)+2; i++ {
-		m = sendKey(t, m, "right")
+		m = sendKey(t, m, "enter")
 		if m.get(task.ID).Status != todo.Pending {
 			t.Fatal("cycling the stage completed the task")
 		}

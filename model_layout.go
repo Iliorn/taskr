@@ -252,12 +252,12 @@ func (p detailPos) String() string {
 
 func detailPosFromSettings(s string) detailPos {
 	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "right":
+		return detailRight
 	case "left":
 		return detailLeft
-	case "bottom":
-		return detailBottom
 	}
-	return detailRight
+	return detailBottom
 }
 
 // nextDetailPos cycles the placement by dir (+1 →, -1 ←), wrapping.

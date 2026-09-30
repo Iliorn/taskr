@@ -110,7 +110,7 @@ type appSettings struct {
 	SyncBoardDisabled bool `json:"sync_board_disabled,omitempty"`
 
 	// DetailPosition is where the detail pane sits on the tabs that have one:
-	// "right" (default), "left", or "bottom". Stored as the word rather than
+	// "bottom" (default), "right", or "left". Stored as the word rather than
 	// the enum's number because settings.json is hand-edited, and a number
 	// there would mean nothing without this file open beside it.
 	DetailPosition string `json:"detail_position,omitempty"`

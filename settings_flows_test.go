@@ -435,9 +435,10 @@ func TestSettingsMarksTheRowsThatOpenAnEditor(t *testing.T) {
 	}
 }
 
-// → and enter are one table now. They were two hand-kept chains, and a toggle
-// that answered one key but not the other is what that cost.
-func TestSettingsEnterAndRightAgreeOnEveryToggleRow(t *testing.T) {
+// enter steps a row's value forward and backspace back, through one table, so
+// backspace undoes enter on every toggle and picker row; ←/→ leave the value
+// alone, since they turn the page.
+func TestSettingsBackspaceUndoesEnterOnEveryToggleRow(t *testing.T) {
 	// A few of these rows write package-level globals; put them back so the
 	// rest of the suite sees the state it started with.
 	base := settingsModel(t)
@@ -449,22 +450,26 @@ func TestSettingsEnterAndRightAgreeOnEveryToggleRow(t *testing.T) {
 
 	for _, row := range []int{
 		settingAutoCloseParent, settingAutoCloseSubtasks, settingShowBoard,
-		settingTheme, settingLanguage, settingAging,
+		settingTheme, settingLanguage, settingDetailPos, settingAging,
 		settingBiasDeadline, settingBiasPriority, settingBiasMomentum,
 	} {
-		byEnter := settingsModel(t)
-		byEnter.settingsCursor = row
-		byEnter = sendKey(t, byEnter, "enter")
-
-		byArrow := settingsModel(t)
-		byArrow.settingsCursor = row
-		byArrow = sendKey(t, byArrow, "right")
-
-		enterPane, _ := byEnter.renderSettingsSection(60)
-		arrowPane, _ := byArrow.renderSettingsSection(60)
-		if enterPane != arrowPane {
-			t.Errorf("row %d: enter and → left different values:\nenter:\n%s\nright:\n%s",
-				row, enterPane, arrowPane)
+		m := settingsModel(t)
+		m.settingsCursor = row
+		before, _ := m.renderSettingsSection(60)
+		// One model throughout: Language and Theme live in globals, so a
+		// copy left behind would render with the other's value.
+		m = sendKey(t, m, "enter")
+		if changed, _ := m.renderSettingsSection(60); changed == before {
+			t.Errorf("row %d: enter changed nothing", row)
+		}
+		m = sendKey(t, m, "backspace")
+		if back, _ := m.renderSettingsSection(60); back != before {
+			t.Errorf("row %d: backspace did not undo enter:\nbefore:\n%s\nafter:\n%s", row, before, back)
+		}
+		m = sendKey(t, m, "right")
+		m.settingsCursor = row
+		if pane, _ := m.renderSettingsSection(60); pane != before {
+			t.Errorf("row %d: → changed the value", row)
 		}
 	}
 }
@@ -557,20 +562,20 @@ func TestPersistedSearchIsTheTasksTabQuery(t *testing.T) {
 
 // ── The detail pane placement ───────────────────────────────────────────────
 
-// The row cycles right → left → bottom and back, and the choice has to be on
+// The row cycles bottom → right → left and back, and the choice has to be on
 // disk before the next start reads it: a layout that resets every launch is
 // the setting not working at all.
 func TestDetailPositionCyclesAndPersists(t *testing.T) {
 	m := settingsModel(t)
-	if m.detailPos != detailRight {
-		t.Fatalf("default detailPos = %v, want right", m.detailPos)
+	if m.detailPos != detailBottom {
+		t.Fatalf("default detailPos = %v, want bottom", m.detailPos)
 	}
 
 	m.settingsCursor = settingDetailPos
-	for _, want := range []detailPos{detailLeft, detailBottom, detailRight} {
-		m = sendKey(t, m, "right")
+	for _, want := range []detailPos{detailRight, detailLeft, detailBottom} {
+		m = sendKey(t, m, "enter")
 		if m.detailPos != want {
-			t.Fatalf("→ gave %v, want %v", m.detailPos, want)
+			t.Fatalf("enter gave %v, want %v", m.detailPos, want)
 		}
 		if got, err := loadSettings(); err != nil {
 			t.Fatal(err)
@@ -579,21 +584,21 @@ func TestDetailPositionCyclesAndPersists(t *testing.T) {
 		}
 	}
 
-	// ← walks back the other way, and enter means the same as → (settingsAdjust).
-	m = sendKey(t, m, "left")
-	if m.detailPos != detailBottom {
-		t.Fatalf("← gave %v, want bottom", m.detailPos)
+	// backspace walks back the other way.
+	m = sendKey(t, m, "backspace")
+	if m.detailPos != detailLeft {
+		t.Fatalf("backspace gave %v, want left", m.detailPos)
 	}
 	m = sendKey(t, m, "enter")
-	if m.detailPos != detailRight {
-		t.Fatalf("enter gave %v, want right", m.detailPos)
+	if m.detailPos != detailBottom {
+		t.Fatalf("enter gave %v, want bottom", m.detailPos)
 	}
 
 	// The restart: same HOME, the placement read back off the file.
-	m = sendKey(t, m, "left")
+	m = sendKey(t, m, "backspace")
 	restarted := initialModel(&fakeRepo{})
-	if restarted.detailPos != detailBottom {
-		t.Errorf("restored detailPos = %v, want bottom", restarted.detailPos)
+	if restarted.detailPos != detailLeft {
+		t.Errorf("restored detailPos = %v, want left", restarted.detailPos)
 	}
 }
 
@@ -603,7 +608,7 @@ func TestDetailPositionReadsTheSettingsWord(t *testing.T) {
 	for word, want := range map[string]detailPos{
 		"right": detailRight, "left": detailLeft, "bottom": detailBottom,
 		"Bottom": detailBottom, " left ": detailLeft,
-		"": detailRight, "sideways": detailRight,
+		"": detailBottom, "sideways": detailBottom,
 	} {
 		if got := detailPosFromSettings(word); got != want {
 			t.Errorf("detailPosFromSettings(%q) = %v, want %v", word, got, want)
@@ -644,32 +649,32 @@ func TestScriptEditName(t *testing.T) {
 	}
 }
 
-// [ and ] (and pgup/pgdn) step the cursor to the first row of the previous
+// ←/→ (and pgup/pgdn) step the cursor to the first row of the previous
 // or next group, skipping rows it cannot land on, and stop at the ends.
-func TestSettingsBracketsJumpBetweenGroups(t *testing.T) {
+func TestSettingsArrowsJumpBetweenGroups(t *testing.T) {
 	m := settingsModel(t)
 	m.settingsCursor = settingsGroups[0].rows[0]
 	for g := 1; g < len(settingsGroups); g++ {
-		m = sendKey(t, m, "]")
+		m = sendKey(t, m, "right")
 		if got := settingsGroupOf(m.settingsCursor); got != g {
-			t.Fatalf("after %d × ]: in group %q, want %q", g, settingsGroups[got].title, settingsGroups[g].title)
+			t.Fatalf("after %d × →: in group %q, want %q", g, settingsGroups[got].title, settingsGroups[g].title)
 		}
 		if !settingsSelectable(m.settingsCursor) {
-			t.Fatalf("] landed on a row the cursor cannot stop on (%d)", m.settingsCursor)
+			t.Fatalf("→ landed on a row the cursor cannot stop on (%d)", m.settingsCursor)
 		}
 	}
 	last := m.settingsCursor
-	if m = sendKey(t, m, "]"); m.settingsCursor != last {
-		t.Error("] past the last group moved the cursor")
+	if m = sendKey(t, m, "right"); m.settingsCursor != last {
+		t.Error("→ past the last group moved the cursor")
 	}
 	m = sendKey(t, m, "pgup")
 	if got := settingsGroupOf(m.settingsCursor); got != len(settingsGroups)-2 {
 		t.Errorf("pgup: in group %d, want %d", got, len(settingsGroups)-2)
 	}
 	for i := 0; i < len(settingsGroups); i++ {
-		m = sendKey(t, m, "[")
+		m = sendKey(t, m, "left")
 	}
 	if m.settingsCursor != settingsGroups[0].rows[0] {
-		t.Errorf("[ to the start: cursor %d, want the first row", m.settingsCursor)
+		t.Errorf("← to the start: cursor %d, want the first row", m.settingsCursor)
 	}
 }

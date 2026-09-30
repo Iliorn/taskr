@@ -1476,8 +1476,7 @@ func settingsGroupOf(id int) int {
 
 // settingsGroupJump moves the cursor to the first row of the group dir away
 // from the cursor's, skipping a group with no row it can land on, and stays
-// put past either end: [ and ], as ←/→ step through the detail pane's
-// sections, since ←/→ change values here.
+// put past either end: ←/→, as in the detail pane.
 func (m *model) settingsGroupJump(dir int) {
 	for g := settingsGroupOf(m.settingsCursor) + dir; g >= 0 && g < len(settingsGroups); g += dir {
 		for _, id := range settingsGroups[g].rows {
@@ -1490,7 +1489,7 @@ func (m *model) settingsGroupJump(dir int) {
 }
 
 // settingsSectionBar names the Settings groups above the pane, the cursor's
-// lit, so [ and ] say where they go.
+// lit, so ←/→ say where they go.
 func (m model) settingsSectionBar(width int) string {
 	labels := make([]string, len(settingsGroups))
 	for i, g := range settingsGroups {
@@ -1690,7 +1689,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 	// The pane is a page per group: the cursor's group, under the section bar
 	// that names them all. A group has at most a screenful of rows, so a page
 	// needs no scrolling on any ordinary terminal, and the bar says exactly
-	// what [ and ] will show. The bar lights the group's name, so the page
+	// what ←/→ will show. The bar lights the group's name, so the page
 	// carries no heading of its own.
 	g := settingsGroups[settingsGroupOf(m.settingsCursor)]
 	var lines []string
