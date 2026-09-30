@@ -156,15 +156,6 @@ func (c boardConfig) columnIcon(i int) string {
 	return c.icons[strings.ToLower(c.stages[i])]
 }
 
-// stageIcon is the mark of the working column a stored stage name falls in.
-func (c boardConfig) stageIcon(stage string) string {
-	p := c.pending()
-	if len(p) == 0 {
-		return ""
-	}
-	return c.icons[strings.ToLower(p[c.stageIndex(stage)])]
-}
-
 // taskStatusIcon is what a pending top-level task's status box holds when the
 // board's columns carry icons: its column's mark, or a blank for a column
 // without one. ok is false when no column has an icon, or the board is hidden,

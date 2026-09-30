@@ -579,3 +579,20 @@ func TestBoardCardBangMeansOverdue(t *testing.T) {
 		t.Error("high priority alone should not carry !")
 	}
 }
+
+// The Stage picker names the column without its icon: the icon marks cards on
+// the board, and in front of a name in a picker it reads as part of it.
+func TestStageFieldLeavesOutTheColumnIcon(t *testing.T) {
+	m := stageFieldModel(t)
+	m.termWidth, m.termHeight = 160, 40
+	m.boardCfg.icons = map[string]string{strings.ToLower(m.boardCfg.stages[0]): "R"}
+	for _, line := range strings.Split(ansi.Strip(m.View()), "\n") {
+		if strings.Contains(line, tr("Stage")) && strings.Contains(line, m.boardCfg.stages[0]) {
+			if strings.Contains(line, "R "+m.boardCfg.stages[0]) {
+				t.Errorf("the Stage row carries the column icon: %q", line)
+			}
+			return
+		}
+	}
+	t.Fatal("no Stage row in the detail pane")
+}
