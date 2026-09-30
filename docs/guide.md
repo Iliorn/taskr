@@ -22,7 +22,7 @@ version; the [CLI reference](cli.md) covers the `tjek <command>` side.
 - **Stats**: a productivity overview with an activity heatmap. It follows
   the active search, so `#tag` scopes every number to that tag.
 - **Settings**: the sequencing knobs, theme, language (English, Dansk,
-  Deutsch), the daily reminder, board columns, sync, and in-app update.
+  Deutsch), board columns, sync, and in-app update.
 
 On Tags and Projects, `enter` walks in one level at a time (row, then its
 tasks, then the selected task's detail) and `esc` walks back out the same way. Inside,
@@ -223,69 +223,9 @@ red. Icons sync with the columns.
 With more columns than fit, the board scrolls sideways and its title says
 which slice you are on (`Workflow ‹ 3–8/11 ›`); below three visible columns
 it shows the stages as one stacked list instead. A task's stage can also be
-changed on the detail pane's **Stage** row with `←/→`, or with
+changed on the detail pane's **Stage** row with `enter` / `backspace`, or with
 `tjek edit <ref> --stage <name>`. Not using kanban? Settings → "Kanban
 board" hides the tab and the Stage row.
-
-## The daily reminder
-
-Once a day, at the time set in Settings → "Reminder time" (09:00 unless you
-change it), tjek shows a desktop notification listing what is overdue and
-what is due today. Settings → "Daily reminder" turns it off and on again,
-keeping the time. Opening tjek after the reminder time counts as that day's
-reminder, since the list on screen already says the same thing.
-
-When the desktop can't show the pop-up (no notification service on a Linux
-session over ssh, for example), the app still shows the reminder in its
-status line, and `tjek remind --now` prints it with a line saying why the
-pop-up was unavailable.
-
-The app sends it while it is running. To be reminded when it isn't, have
-your system run `tjek remind` every few minutes; it does nothing until the
-time comes, and reminds only once a day however many times it runs.
-`tjek remind --now` sends one straight away, which is a quick way to check
-notifications work.
-
-**Linux**: notifications need `notify-send` (Debian/Ubuntu:
-`apt install libnotify-bin`). A systemd user timer keeps the reminder
-running:
-
-```ini
-# ~/.config/systemd/user/tjek-remind.service
-[Service]
-Type=oneshot
-ExecStart=%h/.local/bin/tjek remind
-
-# ~/.config/systemd/user/tjek-remind.timer
-[Timer]
-OnCalendar=*:0/15
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-```sh
-systemctl --user enable --now tjek-remind.timer
-```
-
-**macOS**: notifications use the built-in `osascript`; a launchd agent with
-`StartInterval` 900 running `tjek remind` does the scheduling.
-
-**Windows**: notifications appear under "tjek" in the notification
-centre. tjek calls the Windows notification API itself rather than going
-through PowerShell, so it works on work PCs where PowerShell is locked down.
-The first one registers tjek for notifications under your own user
-(`HKCU\Software\Classes\AppUserModelId\tjek`); no administrator rights are
-needed. To schedule it:
-
-```bat
-schtasks /create /sc minute /mo 15 /tn "tjek remind" /tr "\"%LOCALAPPDATA%\Programs\tjek\tjek.exe\" remind"
-```
-
-(adjust the path to wherever `tjek.exe` lives). Each run opens a console
-window for a moment; if that is a bother, leaving the app running does the
-same job.
 
 ## Export and import
 

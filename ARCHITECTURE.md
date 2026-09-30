@@ -129,7 +129,8 @@ everything.
   `drilledIntoTasks()`, so the Tasks tab and both drill-in lists behave as one.
 - **`update_msgs.go`**: the messages that arrive from ticks, commands and
   watchers rather than keys (`handleBackgroundMsg`): timers, saves, sync,
-  reminders, exports, external reloads. `dispatch` answers these in any mode,
+  exports, external reloads, and a minute tick that rolls the derived views
+  over at midnight (`dayTick`). `dispatch` answers these in any mode,
   and routes everything else by mode (`updateForMode`).
 - **`update_detail.go`**: the detail pane's input side (`updateDetail`,
   `detailAdd`/`detailDelete`, `startEditing`); mirrors `view_detail.go`.
@@ -264,24 +265,6 @@ everything.
   `flushPendingWrites`. The import runs `importTasks`, the core `tjek
   import` shares, after saving pending edits, as one undo step naming every
   task in the file. Path prompts complete with `completePath`.
-- **`reminder.go` / `notify.go`**: the daily reminder. At the Settings time
-  (`reminder` in settings.json, default 09:00) a desktop notification lists
-  the overdue tasks and those due today. Due dates are calendar days, so it is
-  one reminder a day rather than a per-task alarm. The TUI checks on a minute
-  tick against the wall clock, so a machine waking from sleep catches up;
-  `tjek remind` runs the same check for cron or a timer. Both record the day
-  in a state-dir sidecar (`remindedPath`), and a launch after the time counts
-  as the reminder (`settleReminderAtLaunch`). `notify.go` uses what each
-  platform has: notify-send or osascript, with the texts as arguments, never
-  inside a script, and on Windows the toast API over COM, written against
-  golang.org/x/sys alone in `notify_windows.go` (`newToastNotification`,
-  `newToastNotifier`; `toastXML` escapes the texts). Not PowerShell, whose
-  Constrained Language Mode an organisation can use to block the WinRT calls
-  a script makes, and not a toast library, whose COM layer a corporate module
-  proxy may refuse to serve. `TestWindowsToastUpToShow` runs every interface
-  and method slot short of Show on the Windows CI runner. A failure is one
-  line (`notifyFailureReason`), and the TUI keeps the reminder on screen when
-  the pop-up cannot be shown.
 - **`layout.go` / `styles.go` / `constants.go`**: width/height math, theming,
   magic numbers.
 

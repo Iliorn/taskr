@@ -30,8 +30,6 @@ tjek stop                       # stop the running tracker (no ref needed)
 tjek comment milk "blocked on review"
 tjek comment milk --edit=1 "still blocked, asked Sam"
 tjek comment milk --delete=2
-tjek remind                     # the daily reminder, for a scheduler (see the guide)
-tjek remind --now               # send the reminder straight away
 tjek stats                      # one-line summary
 tjek stats --tag=work           # same, scoped to tasks carrying a tag (also --project / --search)
 tjek stats --seq                # sequence miss analysis: which score dimension buried the

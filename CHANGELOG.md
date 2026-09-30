@@ -20,6 +20,10 @@ belongs in the commit message, where it is kept next to the code it explains.
 - New installs open with the detail pane at the bottom.
 - A board column's icon is set off from its name with a dot (`R · Review`).
 
+### Removed
+
+- The daily reminder and `tjek remind`.
+
 ## [1.47.0] - 2026-09-29
 
 ### Changed

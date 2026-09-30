@@ -1555,11 +1555,9 @@ func (m *model) persistSettings() {
 		SyncBoardDisabled: !m.boardCfg.sync,
 		Search:            m.persistedSearch(),
 		DetailPosition:    m.detailPos.String(),
-		Reminder:          formatReminder(m.reminderAt),
 		Keys:              activeKeys,
 
 		SubtaskTagsDisabled: !m.subtaskTags,
-		ReminderOff:         !m.reminderOn,
 		ExportFolder:        m.exportFolder,
 		Name:                m.userName,
 	}); err != nil {
@@ -1892,10 +1890,6 @@ func (m *model) settingsAdjust(dir int) tea.Cmd {
 		m.cycleLang(dir)
 	case settingDetailPos:
 		m.cycleDetailPos(dir)
-	case settingReminder:
-		m.toggleReminder()
-	case settingReminderTime:
-		m.cycleReminder(dir)
 	case settingSubtaskTags:
 		m.subtaskTags = !m.subtaskTags
 		m.persistSettings()

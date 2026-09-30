@@ -57,9 +57,7 @@ const (
 	settingServerToken
 	settingVersion
 	settingCheckUpdate
-	settingReminder
 	settingSubtaskTags
-	settingReminderTime
 	settingExportFolder
 	settingImportFile
 	settingName
@@ -418,11 +416,6 @@ type model struct {
 	autoCloseSubtasks bool
 	// subtaskTags: a new subtask copies its parent's tags.
 	subtaskTags bool
-	// reminderAt is the daily reminder's time in minutes after midnight, kept
-	// while reminderOn is off; remindedOn is the day this device last reminded.
-	reminderAt int
-	reminderOn bool
-	remindedOn string
 	// exportFolder is where tjek-export.json is kept current ("" = off);
 	// exportDirty/exportScheduled/lastExport pace the writes (exportSoon).
 	exportFolder    string
@@ -591,7 +584,6 @@ func initialModel(repo Repository) model {
 		subtaskTags:       !settings.SubtaskTagsDisabled,
 		themeName:         th.name,
 		detailPos:         detailPosFromSettings(settings.DetailPosition),
-		remindedOn:        loadRemindedOn(),
 		// The top of the one settings pane. The zero value is a row ID, not a
 		// position, and it happens to be the first bias knob — which opened
 		// the tab with the cursor parked in the middle of the list.
@@ -655,12 +647,10 @@ func initialModel(repo Repository) model {
 		}
 	}
 	m.calendar.selected = startOfDay(time.Now())
-	m.reminderAt, m.reminderOn = storedReminder(settings)
 	// A launch refreshes the export: the store may have changed since the last
 	// session wrote it (a sync, a CLI edit). Init schedules the write.
 	m.exportFolder = settings.ExportFolder
 	m.exportDirty = m.exportFolder != ""
-	m.settleReminderAtLaunch(time.Now())
 	if t := m.runningTask(); t != nil {
 		m.timerTickOn = true
 		if e := t.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
@@ -686,7 +676,7 @@ func (m model) Init() tea.Cmd {
 	// Keep a periodic sync tick running for the whole session so enabling sync
 	// from Settings mid-session takes effect; only sync immediately on launch
 	// when it's already configured.
-	cmds = append(cmds, syncTick(), reminderTick(), sharedPoll())
+	cmds = append(cmds, syncTick(), dayTick(), sharedPoll())
 	if len(m.shared.Projects) > 0 {
 		cmds = append(cmds, func() tea.Msg { return sharedSoonMsg{} })
 	}

@@ -369,63 +369,6 @@ func cliTop(args []string) int {
 	return 0
 }
 
-// ── remind ───────────────────────────────────────────────────────────────────
-
-// remindClock is the CLI reminder's clock, injectable for tests.
-var remindClock = time.Now
-
-// cliRemind is the daily reminder for a scheduler to run: it does what the
-// TUI's minute tick does, so running it every few minutes from cron or a
-// systemd timer reminds once, at the time set in Settings, whether or not the
-// TUI is open. --now shows the reminder immediately and leaves the daily one
-// alone, which is also how to check notifications work on a machine.
-func cliRemind(args []string) int {
-	fs := flag.NewFlagSet("remind", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	immediate := fs.Bool("now", false, "remind now, whatever the time, the Settings switch or today's reminder")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() > 0 {
-		fmt.Fprintln(os.Stderr, "usage: tjek remind [--now]")
-		return 2
-	}
-	now := remindClock()
-	if !*immediate {
-		settings, _ := loadSettings()
-		at, on := storedReminder(settings)
-		if !on {
-			at = reminderOff
-		}
-		if !reminderDue(now, at, loadRemindedOn()) {
-			return 0
-		}
-	}
-	_, todos, err := loadForCLI()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "load: %v\n", err)
-		return 1
-	}
-	if !*immediate {
-		saveRemindedOn(now.Format(reminderDayLayout))
-	}
-	overdue, today := reminderTasks(todoPtrs(todos), now)
-	if len(overdue)+len(today) == 0 {
-		if *immediate {
-			fmt.Println("Nothing is due today or overdue.")
-		}
-		return 0
-	}
-	title, body := reminderMessage(overdue, today)
-	fmt.Println(title)
-	fmt.Println(body)
-	if err := sendDesktopNotification(title, body); err != nil {
-		fmt.Fprintf(os.Stderr, "tjek: desktop notification unavailable: %v\n", err)
-		return 1
-	}
-	return 0
-}
-
 // cliScoreCell is a task's percentage in tjek top, or the day it starts when
 // that is a later day, as the TUI's Score column shows it.
 func cliScoreCell(rk rank.Ranker, t *todo.Todo, now time.Time) string {

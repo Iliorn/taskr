@@ -45,8 +45,8 @@ func (m model) handleBackgroundMsg(msg tea.Msg) (next tea.Model, cmd tea.Cmd, ok
 		next, cmd = m.handleSyncEvent()
 	case syncDoneMsg:
 		next, cmd = m.handleSyncDone(msg)
-	case reminderTickMsg:
-		next, cmd = m.handleReminderTick(msg)
+	case dayTickMsg:
+		next, cmd = m.handleDayTick(msg)
 	case exportTickMsg:
 		cmd = m.exportTick()
 		next = m
@@ -59,15 +59,6 @@ func (m model) handleBackgroundMsg(msg tea.Msg) (next tea.Model, cmd tea.Cmd, ok
 		next = m
 	case importDoneMsg:
 		next, cmd = m.handleImportDone(msg)
-	case reminderSentMsg:
-		if msg.err != nil {
-			// The reminder is the news, not the pop-up: keep it on screen and
-			// say only that the desktop could not show it. The reason is
-			// `tjek remind --now`'s to print, where there is room for it.
-			m.flashInfo(msg.title + " · " + tr("desktop pop-up unavailable"))
-			cmd = clearErrAfter()
-		}
-		next = m
 	case serverProbeMsg:
 		// Only flag "external" when we aren't the one serving in-process.
 		m.serverExternal = msg.reachable && m.inprocServer == nil
@@ -180,19 +171,21 @@ func (m model) handleSyncEvent() (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m model) handleReminderTick(msg reminderTickMsg) (tea.Model, tea.Cmd) {
-	cmds := []tea.Cmd{reminderTick()}
+// dayTickMsg arrives once a minute so the derived views roll over at
+// midnight (overdue, due today, a start date reaching today) without waiting
+// for a key. The wall clock is read on every tick, so a machine waking from
+// sleep catches up on its next one.
+type dayTickMsg struct{ at time.Time }
+
+func dayTick() tea.Cmd {
+	return tea.Tick(time.Minute, func(t time.Time) tea.Msg { return dayTickMsg{at: t} })
+}
+
+func (m model) handleDayTick(msg dayTickMsg) (tea.Model, tea.Cmd) {
 	if !startOfDay(m.cache.builtAt).Equal(startOfDay(msg.at)) {
 		m.markCacheDirty()
 	}
-	send, flashed := m.checkReminder(msg.at)
-	if send != nil {
-		cmds = append(cmds, send)
-	}
-	if flashed {
-		cmds = append(cmds, clearErrAfter())
-	}
-	return m, tea.Batch(cmds...)
+	return m, dayTick()
 }
 
 func (m model) handleSaveTick() (tea.Model, tea.Cmd) {

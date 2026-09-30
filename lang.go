@@ -755,8 +755,6 @@ var daTranslations = map[string]string{
 	"Aging increases score":     "Alder øger scoren",
 	"Auto-close parent":         "Luk forælder automatisk",
 	"Auto-close subtasks":       "Luk delopgaver automatisk",
-	"Daily reminder":            "Daglig påmindelse",
-	"Reminder time":             "Påmindelse kl.",
 	"Subtasks copy tags":        "Delopgaver arver mærker",
 	"Kanban board":              "Kanban-tavle",
 	"Detail pane":               "Detaljerude",
@@ -792,10 +790,6 @@ var daTranslations = map[string]string{
 	// ── Calendar: coming up ──
 	"Coming up":   "Kommende",
 	"nothing due": "intet forfalder",
-
-	// ── Reminders ──
-	"%d due today":               "%d forfalder i dag",
-	"desktop pop-up unavailable": "skrivebords-pop-up utilgængelig",
 
 	// ── List header / panel titles ──
 	"Active tasks":        "Aktive opgaver",
@@ -1457,8 +1451,6 @@ var deTranslations = map[string]string{
 	"Aging increases score":     "Alter erhöht Punktzahl",
 	"Auto-close parent":         "Eltern autom. schließen",
 	"Auto-close subtasks":       "Teilaufg. autom. schließen",
-	"Daily reminder":            "Tägliche Erinnerung",
-	"Reminder time":             "Erinnerungszeit",
 	"Subtasks copy tags":        "Teilaufg. erben Schlagw.",
 	"Kanban board":              "Kanban-Tafel",
 	"Detail pane":               "Detailbereich",
@@ -1494,10 +1486,6 @@ var deTranslations = map[string]string{
 	// ── Calendar: coming up ──
 	"Coming up":   "Demnächst",
 	"nothing due": "nichts fällig",
-
-	// ── Reminders ──
-	"%d due today":               "%d heute fällig",
-	"desktop pop-up unavailable": "Desktop-Pop-up nicht verfügbar",
 
 	// ── List header / panel titles ──
 	"Active tasks":        "Aktive Aufgaben",

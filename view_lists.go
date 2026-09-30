@@ -1353,8 +1353,6 @@ var settingsGroups = []settingsGroup{
 		settingSubtaskTags,
 		settingShowBoard,
 		settingStages,
-		settingReminder,
-		settingReminderTime,
 	}},
 	{title: "Sequencer", preview: true, rows: []int{
 		settingBiasDeadline,
@@ -1404,8 +1402,6 @@ func (m model) settingsRowVisible(id int) bool {
 	switch id {
 	case settingServerListen, settingServerToken:
 		return m.inprocServer != nil || m.serverExternal
-	case settingReminderTime:
-		return m.reminderOn
 	}
 	return true
 }
@@ -1552,8 +1548,6 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingServerToken:       tr("Server token"),
 		settingVersion:           tr("Version"),
 		settingCheckUpdate:       tr("Check for updates"),
-		settingReminder:          tr("Daily reminder"),
-		settingReminderTime:      tr("Reminder time"),
 		settingExportFolder:      tr("Auto-export folder"),
 		settingImportFile:        tr("Import from file"),
 		settingSubtaskTags:       tr("Subtasks copy tags"),
@@ -1575,10 +1569,6 @@ func (m model) renderSettingsSection(w int) (string, int) {
 	autoCloseSubsVal := tr("Off")
 	if m.autoCloseSubtasks {
 		autoCloseSubsVal = tr("On")
-	}
-	reminderVal := tr("Off")
-	if m.reminderOn {
-		reminderVal = tr("On")
 	}
 	subtaskTagsVal := tr("Off")
 	if m.subtaskTags {
@@ -1645,8 +1635,6 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingServerToken:       serverTokenVal,
 		settingVersion:           appVersion,
 		settingCheckUpdate:       tr("press enter to check"),
-		settingReminder:          "‹ " + reminderVal + " ›",
-		settingReminderTime:      "‹ " + formatReminder(m.reminderAt) + " ›",
 		settingExportFolder:      exportFolderDisplay(m.exportFolder),
 		settingImportFile:        tr("choose a file"),
 		settingSubtaskTags:       "‹ " + subtaskTagsVal + " ›",

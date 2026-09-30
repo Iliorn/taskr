@@ -25,7 +25,6 @@ No account, no cloud service.
 - **Shows the same tasks five ways:** a list, a calendar with tracked time,
   projects with a timeline, tags, and a kanban board. Plus a stats page.
 - **Tracks time.** Start and stop a timer on a task with `t`.
-- **Reminds you daily** with a desktop notification of what's due and overdue.
 - **Shares a project** with other people through one file in a shared
   folder, a OneDrive for instance, with no server.
 - **Syncs** between computers, **undoes** every change, and has a **command
@@ -54,7 +53,7 @@ No account, no cloud service.
 
 ![The Stats tab: summary numbers above a chart of completed tasks](docs/img/stats.png)
 
-**Settings**: theme, language, sync, reminders and export.
+**Settings**: theme, language, sync and export.
 
 ![The Settings tab: grouped preferences](docs/img/settings.png)
 
@@ -95,7 +94,7 @@ Dates can be `today`, `tomorrow`, `monday`, `+3d`, `-2d`, `15-06-25` and more.
 
 ## Learn more
 
-- [Using tjek](docs/guide.md): every tab, search, the board, reminders and custom keys
+- [Using tjek](docs/guide.md): every tab, search, the board and custom keys
 - [Command line](docs/cli.md): `tjek add`, `list`, `done`, JSON output, export and import
 - [Sync between devices](docs/sync.md): running a server and connecting your machines
 - [Files and troubleshooting](docs/troubleshooting.md): where data lives, backups, crashes
