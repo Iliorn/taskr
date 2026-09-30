@@ -700,6 +700,14 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   title text and badges (`!`, `↥`, `↧`, `↻`, `(1/2)`); `fitTaskRowLabel` clips
   only the text. `refreshTaskColMetrics` sizes the column from the same
   function, so a new badge is one edit.
+- **Columns are a setting.** `listColumns` (settings `columns`, the Settings
+  page Columns) switches the optional columns, and `taskListColsWaits` leaves
+  out the ones switched off, so every list that sizes through it follows.
+  A column the file does not name keeps its default
+  (`listColumnsFromSettings`), so one added later arrives as its default. The
+  columns read off the task alone are `extraColumns`: a key, a header, a
+  width and a value, drawn after the fixed ones and dropped first when the
+  pane is narrow. A new one is an entry there and in `listColumnKeys`.
 - **The title takes width first; tags degrade.** `taskListCols` reserves at
   most `tagsReservePct` for tags (floored at `tagsOverflowMinW`). The tags cell
   is sized per row at render time (`renderRowTags` → `renderTaskTagsClipped`),

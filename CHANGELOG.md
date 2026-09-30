@@ -20,6 +20,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 - New installs open with the detail pane at the bottom.
 - A board column's icon is set off from its name with a dot (`R · Review`).
 - Projects and Tags list a group's tasks in steps, with a Waits on column and the linked rows lit.
+- Settings → Columns picks the task lists' columns, among them Start, Created and Last comment.
 
 ### Fixed
 

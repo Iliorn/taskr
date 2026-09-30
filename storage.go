@@ -115,6 +115,11 @@ type appSettings struct {
 	// there would mean nothing without this file open beside it.
 	DetailPosition string `json:"detail_position,omitempty"`
 
+	// Columns switches the task lists' optional columns ("score", "due",
+	// "size", "project", "tags", "waits") on and off. A column it does not
+	// name keeps its default (listColumnsFromSettings).
+	Columns map[string]bool `json:"columns,omitempty"`
+
 	// Search is the committed `/` filter on the Tasks tab, restored at startup
 	// so a filter you were working under survives a restart like every other
 	// view preference. Only the Tasks tab's query is kept: it is the tab the

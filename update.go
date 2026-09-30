@@ -1555,6 +1555,7 @@ func (m *model) persistSettings() {
 		SyncBoardDisabled: !m.boardCfg.sync,
 		Search:            m.persistedSearch(),
 		DetailPosition:    m.detailPos.String(),
+		Columns:           m.columns.settings(),
 		Keys:              activeKeys,
 
 		SubtaskTagsDisabled: !m.subtaskTags,
@@ -1873,6 +1874,11 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 func (m *model) settingsAdjust(dir int) tea.Cmd {
 	if m.isBiasSettingRow(m.settingsCursor) {
 		m.cycleBias(m.settingsCursor, dir)
+		return nil
+	}
+	if key, ok := settingColumnKey(m.settingsCursor); ok {
+		m.columns[key] = !m.columns[key]
+		m.persistSettings()
 		return nil
 	}
 	switch m.settingsCursor {

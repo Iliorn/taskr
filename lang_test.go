@@ -97,6 +97,13 @@ func dynamicUIStrings() []string {
 	for _, g := range settingsGroups {
 		out = append(out, g.title)
 	}
+	// The list columns' names on the Columns page and in the list headers.
+	for _, l := range listColumnLabels {
+		out = append(out, l)
+	}
+	for _, x := range extraColumns {
+		out = append(out, x.header)
+	}
 	out = append(out, secDrill)
 	for _, d := range []rank.Level{rank.Relaxed, rank.Balanced, rank.Intense} {
 		out = append(out, d.String())

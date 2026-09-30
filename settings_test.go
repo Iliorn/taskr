@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -431,6 +432,7 @@ func TestSettingsPaneShowsTheCursorsGroup(t *testing.T) {
 		"Server":          "Enabled",
 		"Export":          "Auto-export folder",
 		"About":           "Check for updates",
+		"Columns":         "Last comment",
 	}
 	for gi, g := range settingsGroups {
 		if marker[g.title] == "" {
@@ -478,6 +480,74 @@ func TestSettingsEditMarkSurvivesAClippedValue(t *testing.T) {
 		}
 		if !found {
 			t.Fatalf("width %d: no Board columns row in:\n%s", w, ansi.Strip(content))
+		}
+	}
+}
+
+// The Columns page has a row per column, and its rows run to the end of the
+// settings IDs.
+func TestColumnsPageCoversEveryColumn(t *testing.T) {
+	if n := numSettingsRows - settingColFirst; n != len(listColumnKeys) {
+		t.Fatalf("the Columns page has %d row IDs for %d columns", n, len(listColumnKeys))
+	}
+	for _, k := range listColumnKeys {
+		if listColumnLabels[k] == "" {
+			t.Errorf("column %q has no label on the Columns page", k)
+		}
+	}
+	for i, x := range extraColumns {
+		if listColumnKeys[len(listColumnKeys)-len(extraColumns)+i] != x.key {
+			t.Errorf("extra column %q is out of listColumnKeys order", x.key)
+		}
+	}
+}
+
+// enter on a Columns row switches the column in the Tasks list and keeps the
+// choice in settings.json; a column the file does not name keeps its default.
+func TestColumnsSwitchOnAndOff(t *testing.T) {
+	task := todo.New("Paint the hall")
+	task.AddComment("bought the paint")
+	m := modelWithTasks(t, task)
+	m.termWidth, m.termHeight = 160, 30
+	m.tab = tabSettings
+	m.ensureCache()
+	if !m.columns["score"] || m.columns["comment"] {
+		t.Fatalf("defaults = %v, want Score on and Last comment off", m.columns)
+	}
+	row := func(key string) int { return settingColFirst + slices.Index(listColumnKeys, key) }
+
+	m.settingsCursor = row("comment")
+	m = sendKey(t, m, "enter")
+	m.settingsCursor = row("score")
+	m = sendKey(t, m, "enter")
+	m = sendKey(t, m, "1")
+	plain := ansi.Strip(m.View())
+	if !strings.Contains(plain, tr("Last comment")) || !strings.Contains(plain, "bought the paint") {
+		t.Errorf("Last comment switched on but not drawn:\n%s", plain)
+	}
+	if strings.Contains(plain, listHeader("Score")) {
+		t.Errorf("Score switched off but still drawn:\n%s", plain)
+	}
+
+	s, err := loadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.Columns["comment"] || s.Columns["score"] {
+		t.Errorf("settings.json columns = %v", s.Columns)
+	}
+	if got := listColumnsFromSettings(map[string]bool{"due": false}); got["due"] || !got["score"] {
+		t.Errorf("an absent column should keep its default: %v", got)
+	}
+
+	// Every column on: they drop out rather than run past the pane.
+	m.columns = allListColumns()
+	for _, w := range []int{160, 120, 90, 60, 40} {
+		m.termWidth = w
+		for _, line := range strings.Split(m.View(), "\n") {
+			if ansi.StringWidth(line) > w {
+				t.Errorf("width %d: a line is %d wide: %q", w, ansi.StringWidth(line), ansi.Strip(line))
+			}
 		}
 	}
 }

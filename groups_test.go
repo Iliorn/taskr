@@ -209,6 +209,7 @@ func TestGroupTaskListPutsWaitingWorkAfterWhatItWaitsOn(t *testing.T) {
 // rows tied to the selected one: what it waits on, and what waits on it.
 func TestGroupPaneShowsTheDependencies(t *testing.T) {
 	m := kitchenProject(t)
+	m.columns["waits"] = true // off by default
 	m.termWidth, m.termHeight = 140, 40
 	m = script(t, m, "4")
 	m.projectCursor = slices.Index(m.allProjectsForList(), "Kitchen")

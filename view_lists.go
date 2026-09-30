@@ -242,7 +242,7 @@ func (m model) groupTaskCols(tasks []todo.Todo, showProject bool, sel int) (list
 			projectMax = max(projectMax, runeLen(tasks[i].Project))
 		}
 	}
-	cols := taskListColsWaits(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax, waitsMax)
+	cols := taskListColsWaits(m.termWidth, false, contentMax, tagsMax, hasDue, dueColMax(tasks, m.frameTime), projectMax, waitsMax, m.columns)
 	cols.deps = deps
 	return cols, nested
 }
@@ -848,7 +848,7 @@ func (m model) renderTaskList() string {
 	// Column widths (widest row content + widest tag cell) are derived from the
 	// active set and cached by refreshTaskColMetrics, so the frame doesn't
 	// rescan every task — see cache.go.
-	cols := taskListCols(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax, m.cache.activeColHasDue, dueColMax(m.cache.active, m.frameTime), m.cache.activeColProjectMax)
+	cols := taskListColsWaits(m.termWidth, false, m.cache.activeColContentMax, m.cache.activeColTagsMax, m.cache.activeColHasDue, dueColMax(m.cache.active, m.frameTime), m.cache.activeColProjectMax, 0, m.columns)
 	total := m.visibleActiveLen()
 	// Cursor/total and sort status are shown in the Overview border title.
 	renderListHeader(b, m.termWidth, false, cols, "")
@@ -952,7 +952,7 @@ func (m model) renderHistoryList() string {
 		}
 	}
 	// dueMax (0) is ignored for history — it forces its fixed 12-wide date column.
-	cols := taskListCols(m.termWidth, true, contentMax, tagsMax, hasDue, 0, 0)
+	cols := taskListColsWaits(m.termWidth, true, contentMax, tagsMax, hasDue, 0, 0, 0, m.columns)
 	// Cursor/total and sort status are shown in the History border title.
 	renderListHeader(b, m.termWidth, true, cols, "")
 
@@ -1004,7 +1004,10 @@ func (m model) renderHistoryLine(t todo.Todo, index, cursor int, active bool, co
 	}
 
 	contentW := m.termWidth - 8
-	tagsStr, tagsDrawnW := m.renderRowTags(&t, contentW-r.w, selected)
+	tagsStr, tagsDrawnW := "", 0
+	if cols.showTags {
+		tagsStr, tagsDrawnW = m.renderRowTags(&t, contentW-r.w, selected)
+	}
 	line := r.String()
 	if selected {
 		return line + tagsStr + selectedRowTail(fastSelectedRow, r.w+tagsDrawnW, contentW) + "\n"
@@ -1292,9 +1295,17 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	if cols.showWaits {
 		r.add(pal.meta, padRight(truncate(cols.deps.waits[t.ID], cols.waitsW-listColGap), cols.waitsW))
 	}
+	for _, x := range cols.extras {
+		if x.show {
+			r.add(pal.meta, padRight(truncate(x.col.value(m, t), x.w-listColGap), x.w))
+		}
+	}
 
 	contentW := m.termWidth - 8
-	tagsStr, tagsDrawnW := m.renderRowTags(t, contentW-r.w, selected)
+	tagsStr, tagsDrawnW := "", 0
+	if cols.showTags {
+		tagsStr, tagsDrawnW = m.renderRowTags(t, contentW-r.w, selected)
+	}
 	line := r.String()
 	if selected {
 		return line + tagsStr + selectedRowTail(pal.status, r.w+tagsDrawnW, contentW) + "\n"
@@ -1384,6 +1395,7 @@ var settingsGroups = []settingsGroup{
 		settingLanguage,
 		settingDetailPos,
 	}},
+	{title: "Columns", rows: settingColumnRows()},
 	{title: "General", rows: []int{
 		settingName,
 		settingAutoCloseParent,
@@ -1421,6 +1433,22 @@ var settingsGroups = []settingsGroup{
 		settingVersion,
 		settingCheckUpdate,
 	}},
+}
+
+// settingColumnRows are the Columns page's rows, one per listColumnKeys entry.
+func settingColumnRows() []int {
+	rows := make([]int, len(listColumnKeys))
+	for i := range rows {
+		rows[i] = settingColFirst + i
+	}
+	return rows
+}
+
+// listColumnLabels names each column on the Columns page, in English.
+var listColumnLabels = map[string]string{
+	"score": "Score", "due": "Due", "size": "Size", "project": "Project",
+	"tags": "Tags", "waits": "Waits on", "start": "Start", "created": "Created",
+	"changed": "Changed", "time": "Time", "priority": "Priority", "comment": "Last comment",
 }
 
 // settingsSelectable reports whether the cursor may land on a row. Version is
@@ -1592,6 +1620,9 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingName:              tr("Your name"),
 		settingShareJoin:         tr("Join a project"),
 	}
+	for i, key := range listColumnKeys {
+		labels[settingColFirst+i] = tr(listColumnLabels[key])
+	}
 	agingVal := tr("Off")
 	if m.rank.Biases.Aging {
 		agingVal = tr("On")
@@ -1678,6 +1709,13 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingSubtaskTags:       "‹ " + subtaskTagsVal + " ›",
 		settingName:              authorName(appSettings{Name: m.userName}),
 		settingShareJoin:         m.sharedJoinDisplay(),
+	}
+	for i, key := range listColumnKeys {
+		v := tr("Off")
+		if m.columns[key] {
+			v = tr("On")
+		}
+		values[settingColFirst+i] = "‹ " + v + " ›"
 	}
 
 	// One label column across every group, so the values line up down the

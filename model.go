@@ -62,7 +62,10 @@ const (
 	settingImportFile
 	settingName
 	settingShareJoin
-	numSettingsRows
+	// settingColFirst is the first of the Columns page's rows, one per
+	// listColumnKeys entry (settingColumnKey); they run to numSettingsRows.
+	settingColFirst
+	numSettingsRows = settingColFirst + 12
 )
 
 type pane int
@@ -416,6 +419,8 @@ type model struct {
 	autoCloseSubtasks bool
 	// subtaskTags: a new subtask copies its parent's tags.
 	subtaskTags bool
+	// columns is which optional columns the task lists show.
+	columns listColumns
 	// exportFolder is where tjek-export.json is kept current ("" = off);
 	// exportDirty/exportScheduled/lastExport pace the writes (exportSoon).
 	exportFolder    string
@@ -584,6 +589,7 @@ func initialModel(repo Repository) model {
 		subtaskTags:       !settings.SubtaskTagsDisabled,
 		themeName:         th.name,
 		detailPos:         detailPosFromSettings(settings.DetailPosition),
+		columns:           listColumnsFromSettings(settings.Columns),
 		// The top of the one settings pane. The zero value is a row ID, not a
 		// position, and it happens to be the first bias knob — which opened
 		// the tab with the cursor parked in the middle of the list.

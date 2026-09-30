@@ -538,8 +538,10 @@ var daTranslations = map[string]string{
 	"  No projects match the filter.":                           "  Ingen projekter matcher filteret.",
 	"  No projects yet. Add a project to a task first.":         "  Ingen projekter endnu. Tilføj et projekt til en opgave først.",
 	"  A project groups its tasks into a timeline on this tab.": "  Et projekt samler dets opgaver i en tidslinje på denne fane.",
-	"Project":  "Projekt",
-	"Waits on": "Venter på",
+	"Project":      "Projekt",
+	"Waits on":     "Venter på",
+	"Changed":      "Ændret",
+	"Last comment": "Seneste kommentar",
 	"step in a project or tag: what can start now, then what waits on it": "trin i et projekt eller tag: det, der kan startes nu, og så det, der venter på det",
 	"Done":                        "Færdige",
 	"  Timeline":                  "  Tidslinje",
@@ -705,6 +707,7 @@ var daTranslations = map[string]string{
 
 	// ── Settings group headings ──
 	"Appearance": "Udseende",
+	"Columns":    "Kolonner",
 	"General":    "Generelt",
 	"About":      "Om",
 
@@ -1236,8 +1239,10 @@ var deTranslations = map[string]string{
 	"  No projects match the filter.":                           "  Keine Projekte passen zum Filter.",
 	"  No projects yet. Add a project to a task first.":         "  Noch keine Projekte. Erst einer Aufgabe eines zuweisen.",
 	"  A project groups its tasks into a timeline on this tab.": "  Ein Projekt bündelt seine Aufgaben hier zu einer Zeitleiste.",
-	"Project":  "Projekt",
-	"Waits on": "Wartet auf",
+	"Project":      "Projekt",
+	"Waits on":     "Wartet auf",
+	"Changed":      "Geändert",
+	"Last comment": "Letzter Kommentar",
 	"step in a project or tag: what can start now, then what waits on it": "Schritt in einem Projekt oder Tag: was jetzt starten kann, dann was darauf wartet",
 	"Done":                        "Fertig",
 	"  Timeline":                  "  Zeitleiste",
@@ -1403,6 +1408,7 @@ var deTranslations = map[string]string{
 
 	// ── Settings group headings ──
 	"Appearance": "Darstellung",
+	"Columns":    "Spalten",
 	"General":    "Allgemein",
 	"About":      "Über",
 

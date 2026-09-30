@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -314,6 +315,115 @@ func tagCellWidth(words []string) int {
 // showTags is true when at least one visible row has tags (tagsMax > 0); when
 // false the "Tags" header label is suppressed so it never appears on a list
 // where every row would show a blank tags cell.
+// listColumns is which optional columns the task lists show, by the
+// settings.json name in listColumnKeys, set on the Settings page Columns. The
+// title and the status box are always there; a column switched on still drops
+// out on a terminal too narrow for it.
+type listColumns map[string]bool
+
+// listColumnKeys are the columns in Settings order: the fixed columns the
+// lists have always had, Waits on, then the extraColumns.
+var listColumnKeys = []string{
+	"score", "due", "size", "project", "tags", "waits",
+	"start", "created", "changed", "time", "priority", "comment",
+}
+
+// defaultListColumns is what a new install shows. The rest are for the user
+// to switch on: Waits on among them, since the steps and the lit rows already
+// say how a group's tasks hang together.
+func defaultListColumns() listColumns {
+	return listColumns{"score": true, "due": true, "size": true, "project": true, "tags": true}
+}
+
+// allListColumns switches every column on, for callers with no preference.
+func allListColumns() listColumns {
+	c := listColumns{}
+	for _, k := range listColumnKeys {
+		c[k] = true
+	}
+	return c
+}
+
+// listColumnsFromSettings reads settings.json "columns". A column the file
+// does not name keeps its default, so a column added later arrives as its
+// default rather than off; unknown names are ignored.
+func listColumnsFromSettings(stored map[string]bool) listColumns {
+	c := defaultListColumns()
+	for k, on := range stored {
+		if slices.Contains(listColumnKeys, k) {
+			c[k] = on
+		}
+	}
+	return c
+}
+
+// settings is the settings.json form: every column named, so a later change
+// of default does not flip a choice the user made.
+func (c listColumns) settings() map[string]bool {
+	out := make(map[string]bool, len(listColumnKeys))
+	for _, k := range listColumnKeys {
+		out[k] = c[k]
+	}
+	return out
+}
+
+// settingColumnKey is the column a Settings row of the Columns page switches.
+func settingColumnKey(id int) (string, bool) {
+	if id < settingColFirst || id >= settingColFirst+len(listColumnKeys) {
+		return "", false
+	}
+	return listColumnKeys[id-settingColFirst], true
+}
+
+// extraColumn is an optional list column read off the task, drawn after the
+// fixed ones in the dim tone: a value per row, clipped to w cells.
+type extraColumn struct {
+	key    string
+	header string // English; through listHeader at render
+	w      int    // value width, before the column gap
+	value  func(m *model, t *todo.Todo) string
+}
+
+// extraColumns are the extra columns in listColumnKeys order.
+var extraColumns = []extraColumn{
+	{"start", "Start", dueValMaxW, func(m *model, t *todo.Todo) string {
+		if t.StartDate.IsZero() {
+			return ""
+		}
+		return formatDueShort(t.StartDate, m.frameTime)
+	}},
+	{"created", "Created", 5, func(m *model, t *todo.Todo) string {
+		return formatSince(t.CreatedAt, m.frameTime)
+	}},
+	{"changed", "Changed", 5, func(m *model, t *todo.Todo) string {
+		return formatSince(t.ModifiedAt, m.frameTime)
+	}},
+	{"time", "Time", 6, func(_ *model, t *todo.Todo) string {
+		if d := t.TotalTimeSpent(); d > 0 {
+			return formatDurationCompact(d)
+		}
+		return ""
+	}},
+	{"priority", "Priority", 6, func(_ *model, t *todo.Todo) string {
+		return trPriority(t.Priority)
+	}},
+	{"comment", "Last comment", 24, func(_ *model, t *todo.Todo) string {
+		for i := len(t.Comments) - 1; i >= 0; i-- {
+			if c := t.Comments[i]; c.DeletedAt.IsZero() {
+				return strings.Join(strings.Fields(c.Text), " ")
+			}
+		}
+		return ""
+	}},
+}
+
+// shownExtra is an extra column a list draws, at its width with the gap.
+type shownExtra struct {
+	col  *extraColumn
+	w    int
+	show bool
+}
+
 type listCols struct {
 	titleW      int
 	projectW    int // actual width of the Project column (0 when showProject=false)
@@ -327,6 +437,7 @@ type listCols struct {
 	showTags    bool // true when at least one visible row has tags
 	waitsW      int  // Waits on column (group panes only; 0 when hidden)
 	showWaits   bool
+	extras      []shownExtra // the extraColumns switched on, in order
 	// deps is the dependency view of a group pane (step numbers, what each
 	// row waits on, the rows tied to the selected one); nil elsewhere.
 	deps *groupDeps
@@ -374,22 +485,43 @@ func dueColMax(tasks []todo.Todo, now time.Time) int {
 // visible project name; when it is 0 the Project column collapses entirely (no
 // header label, no reserved space).
 func taskListCols(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool, dueMax, widestProject int) listCols {
-	return taskListColsWaits(termWidth, isHistory, contentMax, tagsMax, hasDue, dueMax, widestProject, 0)
+	return taskListColsWaits(termWidth, isHistory, contentMax, tagsMax, hasDue, dueMax, widestProject, 0, allListColumns())
 }
 
 // taskListColsWaits is taskListCols with a Waits on column as wide as
-// widestWaits (capped at waitsColMaxW), for a group pane's dependency view.
-func taskListColsWaits(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool, dueMax, widestProject, widestWaits int) listCols {
+// widestWaits (capped at waitsColMaxW), for a group pane's dependency view,
+// and with the columns show switches off left out. The history list keeps
+// its dates whatever show says: they are what a finished task is listed by.
+func taskListColsWaits(termWidth int, isHistory bool, contentMax, tagsMax int, hasDue bool, dueMax, widestProject, widestWaits int, show listColumns) listCols {
 	inner := termWidth - 8 // panel content width (margin + border + padding)
 	const fixed = 6        // cursor + checkbox + fold icon
-	c := listCols{showDue: hasDue, showLast: true, showTags: tagsMax > 0}
+	if !show["tags"] {
+		tagsMax = 0
+	}
+	if !isHistory {
+		hasDue = hasDue && show["due"]
+		if !show["project"] {
+			widestProject = 0
+		}
+		if !show["waits"] {
+			widestWaits = 0
+		}
+	}
+	c := listCols{showDue: hasDue, showLast: isHistory || show["score"], showTags: tagsMax > 0}
+	if !isHistory {
+		for i := range extraColumns {
+			if x := &extraColumns[i]; show[x.key] {
+				c.extras = append(c.extras, shownExtra{col: x, w: hugColW(x.w, listHeader(x.header)), show: true})
+			}
+		}
+	}
 	if widestWaits > 0 && !isHistory {
 		c.showWaits = true
 		c.waitsW = hugColW(min(widestWaits, waitsColMaxW), listHeader("Waits on"))
 	}
 	projectWant := 0
 	if !isHistory {
-		c.showSize = true
+		c.showSize = show["size"]
 		if widestProject > 0 {
 			c.showProject = true
 			// Start at the compact baseline for ordinary layouts. After the fixed
@@ -453,15 +585,25 @@ func taskListColsWaits(termWidth int, isHistory bool, contentMax, tagsMax int, h
 		if c.showWaits {
 			w += c.waitsW
 		}
+		for _, x := range c.extras {
+			if x.show {
+				w += x.w
+			}
+		}
 		return w
 	}
 
 	// Drop order on narrow terminals:
-	//   active:  Project → Waits on → Size → Score → Due  (Project drops
+	//   active:  extras → Project → Waits on → Size → Score → Due  (Project drops
 	//            first since it shows on most rows as a single short word;
 	//            keep Due longest — it's the hard fact)
 	//   history: Due  → Completed     (Size and Project never shown)
-	drop := []*bool{&c.showProject, &c.showWaits, &c.showSize, &c.showLast, &c.showDue}
+	// The extra columns go before any of these, the last switched on first.
+	var drop []*bool
+	for i := len(c.extras) - 1; i >= 0; i-- {
+		drop = append(drop, &c.extras[i].show)
+	}
+	drop = append(drop, &c.showProject, &c.showWaits, &c.showSize, &c.showLast, &c.showDue)
 	if isHistory {
 		drop = []*bool{&c.showDue, &c.showLast}
 	}
@@ -612,6 +754,11 @@ func renderListHeaderTitled(b *strings.Builder, termWidth int, isHistory bool, c
 	}
 	if c.showWaits {
 		headerLeft += padRight(listHeader("Waits on"), c.waitsW)
+	}
+	for _, x := range c.extras {
+		if x.show {
+			headerLeft += padRight(truncate(listHeader(x.col.header), x.w-listColGap), x.w)
+		}
 	}
 	// Row tags are rendered with a leading space (see renderTaskLineWithSet), so
 	// the header label needs the same lead-in to line up with the tag content.
