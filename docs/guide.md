@@ -57,7 +57,8 @@ to set up.
   back, comments and history included.
 - **Rename**: `r` on the shared project. tjek asks, then renames it for
   everyone; the others get the new name the next time their tjek looks at the
-  file, which keeps its name. `x` (remove the project from all its tasks) is
+  file, which keeps its name. Someone who already has a project of their
+  own by the new name keeps it, renamed to "Name (2)". `x` (remove the project from all its tasks) is
   refused on a shared project, since it would take every task out of it for
   everyone.
 

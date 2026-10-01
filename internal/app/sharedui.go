@@ -84,8 +84,13 @@ func (m model) handleSharedDone(msg sharedDoneMsg) (tea.Model, tea.Cmd) {
 	if len(msg.renames) > 0 {
 		m.shared = m.freshShared()
 		for old, name := range msg.renames {
+			if aside := msg.aside[name]; aside != "" {
+				m.followSharedRename(name, aside)
+				m.flashInfo(fmt.Sprintf(tr("'%s' is now called '%s'; your own '%s' is now '%s'"), old, name, name, aside))
+			} else {
+				m.flashInfo(fmt.Sprintf(tr("'%s' is now called '%s'"), old, name))
+			}
 			m.followSharedRename(old, name)
-			m.flashInfo(fmt.Sprintf(tr("'%s' is now called '%s'"), old, name))
 		}
 		m.refreshTimerScope()
 	}

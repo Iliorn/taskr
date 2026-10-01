@@ -511,7 +511,7 @@ func TestASharedProjectRenameReachesEveryone(t *testing.T) {
 	p, _ = mark.cfg.find("Summer")
 	p.Former, p.Name, p.Renamed = []string{"Summer", "Trip"}, "Vacation", time.Now()
 	mark.cfg.set(p)
-	if err := renameProjectTasks(mark.h, "Summer", "Vacation", rank.Biases{}, mark.by); err != nil {
+	if err := renameProjectTasks(mark.h, "Summer", "Vacation", nil, rank.Biases{}, mark.by); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
@@ -580,6 +580,71 @@ func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 	}
 	if still, _ := anna.task(t, task.ID); still.Deleted {
 		t.Fatal("Mark's leave and rejoin deleted the task for Anna")
+	}
+}
+
+// A rename made elsewhere onto a name Mark uses for a project of his own
+// moves his project aside rather than into the shared one: taking the name
+// as it is would hand his tasks to everyone.
+func TestARenameOntoAnOwnProjectMovesItAside(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	ferry := tripTask("Book the ferry")
+	anna.save(t, s0, ferry)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+	diary, taken := todo.New("Mark's private diary"), todo.New("Fix the gutter")
+	diary.Project, taken.Project = "Home", "Home (2)"
+	mark.save(t, s0, diary, taken)
+
+	save := func(sharedConfig) error { return nil }
+	if _, err := renameShared(anna.h, &anna.cfg, "Trip", "Home", rank.Biases{}, anna.by, save); err != nil {
+		t.Fatal(err)
+	}
+	if res := mark.sync(t, "Trip"); res.movedAside != "Home (3)" || res.project.Name != "Home" {
+		t.Errorf("Mark's pass: %+v, want the rename taken up and his Home moved to Home (3)", res)
+	}
+	if data, _ := os.ReadFile(p.File); strings.Contains(string(data), "diary") {
+		t.Fatal("Mark's own Home task went into the shared file")
+	}
+	if got, _ := mark.task(t, diary.ID); got.Project != "Home (3)" {
+		t.Errorf("Mark's own task is in %q, want Home (3)", got.Project)
+	}
+	if got, _ := mark.task(t, ferry.ID); got.Project != "Home" {
+		t.Errorf("the shared task is in %q, want Home", got.Project)
+	}
+	if mark.sync(t, "Home").wrote || anna.sync(t, "Home").wrote {
+		t.Error("the devices still rewrite the file after the rename")
+	}
+}
+
+// The app follows a pass that moved its own project aside for a rename: the
+// own tasks first, so the shared ones then take the name alone.
+func TestTheAppFollowsAProjectMovedAside(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	m := newTestModel()
+	ferry, diary := tripTask("Book the ferry"), todo.New("Mark's private diary")
+	diary.Project = "Home"
+	m.Store.add(ferry)
+	m.Store.add(diary)
+	m.refreshCaches()
+	next, _ := m.handleSharedDone(sharedDoneMsg{sharedPass: sharedPass{
+		changed: true,
+		renames: map[string]string{"Trip": "Home"},
+		aside:   map[string]string{"Home": "Home (2)"},
+	}})
+	m = next.(model)
+	if got := m.get(ferry.ID).Project; got != "Home" {
+		t.Errorf("the shared task is in %q, want Home", got)
+	}
+	if got := m.get(diary.ID).Project; got != "Home (2)" {
+		t.Errorf("the own task is in %q, want Home (2)", got)
+	}
+	if !strings.Contains(m.err, "Home (2)") {
+		t.Errorf("message %q does not say where the own project went", m.err)
 	}
 }
 

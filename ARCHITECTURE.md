@@ -257,7 +257,8 @@ everything.
   the tasks, then the file's `Name`, `Renamed` and `Former`), and every other
   device's pass takes it up (`resolveSharedName`: the later rename wins),
   moving its own tasks over and rewriting its undo history to match
-  (`followSharedRename`). A former name stays off the sync server
+  (`followSharedRename`); a project of its own by the new name moves aside
+  first (`moveOwnProjectAside`), or it would join the shared one. A former name stays off the sync server
   (`keepsOutOfSync`). x on the row refuses (`refuseSharedProjectRemoval`), as
   does renaming another project onto a shared one. A task moved out of the project is
   recorded in the file by ID and project stamp (`Departed`, `departures`),

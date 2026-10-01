@@ -488,6 +488,9 @@ type sharedResult struct {
 	// it had here before, when the pass took up a rename made elsewhere.
 	project     sharedProject
 	renamedFrom string
+	// movedAside is the name this device's own project of the new name
+	// moved to, when the rename took its name (moveOwnProjectAside).
+	movedAside string
 	// removed is the tasks taken out of the store because they left the
 	// project on another device.
 	removed []string
@@ -498,10 +501,11 @@ type sharedResult struct {
 // does not already say what the store holds, and remove the copies it took.
 //
 // When the file names the project differently, the later rename wins
-// (resolveSharedName). A rename made elsewhere is taken up here: adopt
-// records the project under its new name (in shared.json), and then this
-// device's tasks move to it, in that order, so no moment has them under a
-// name shared.json does not know. adopt may be nil.
+// (resolveSharedName). A rename made elsewhere is taken up here: this
+// device's own tasks already under the new name move aside first
+// (moveOwnProjectAside), adopt records the project under its new name (in
+// shared.json), and then the project's tasks move to it, in that order, so no
+// moment has them under a name shared.json does not know. adopt may be nil.
 func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func(sharedProject) error) (sharedResult, error) {
 	res := sharedResult{project: p}
 	f, err := readSharedFile(p.File)
@@ -527,6 +531,19 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func
 	}
 	name := resolveSharedName(names)
 	was := p.Name
+	if name.Name != was {
+		held := make(map[string]bool, len(incoming))
+		for i := range incoming {
+			held[incoming[i].ID] = true
+		}
+		if res.movedAside, err = moveOwnProjectAside(h, name.Name, held, b, by); err != nil {
+			return res, err
+		}
+		if res.movedAside != "" {
+			renameUndoProject(name.Name, res.movedAside)
+			res.changed = true
+		}
+	}
 	p.Name, p.Renamed, p.Former = name.Name, name.Renamed, name.Former
 	if !slices.Equal(p.Former, res.project.Former) || p.Name != was || !p.Renamed.Equal(res.project.Renamed) {
 		if adopt != nil {
@@ -537,7 +554,7 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func
 		res.project = p
 	}
 	if p.Name != was {
-		if err := renameProjectTasks(h, was, p.Name, b, by); err != nil {
+		if err := renameProjectTasks(h, was, p.Name, nil, b, by); err != nil {
 			return res, err
 		}
 		renameUndoProject(was, p.Name)
@@ -674,7 +691,7 @@ func renameShared(h *sql.DB, c *sharedConfig, old, name string, b rank.Biases, b
 	if err := save(*c); err != nil {
 		return p, err
 	}
-	if err := renameProjectTasks(h, old, name, b, by); err != nil {
+	if err := renameProjectTasks(h, old, name, nil, b, by); err != nil {
 		return p, err
 	}
 	renameUndoProject(old, name)
@@ -687,9 +704,36 @@ func renameShared(h *sql.DB, c *sharedConfig, old, name string, b rank.Biases, b
 	return p, nil
 }
 
+// moveOwnProjectAside clears the way for a shared project renamed elsewhere
+// to name: this device's own tasks in a project of that name, the ones the
+// file does not hold, move to the first free "name (2)", "name (3)", …, which
+// it returns ("" when there were none). Taking the name as it is would put
+// them in the shared project, and hand them to everyone.
+func moveOwnProjectAside(h *sql.DB, name string, held map[string]bool, b rank.Biases, by editor) (string, error) {
+	all, err := loadTodosForSync(h)
+	if err != nil {
+		return "", err
+	}
+	taken := map[string]bool{}
+	own := false
+	for i := range all {
+		taken[all[i].Project] = true
+		own = own || (all[i].Project == name && !held[all[i].ID])
+	}
+	if !own {
+		return "", nil
+	}
+	aside := name
+	for n := 2; taken[aside]; n++ {
+		aside = fmt.Sprintf("%s (%d)", name, n)
+	}
+	return aside, renameProjectTasks(h, name, aside, held, b, by)
+}
+
 // renameProjectTasks moves every task of the project from to the project to,
-// as a change of tjek's own signed by by (todo.Todo.Auto).
-func renameProjectTasks(h *sql.DB, from, to string, b rank.Biases, by editor) error {
+// but the ones skip names, as a change of tjek's own signed by by
+// (todo.Todo.Auto).
+func renameProjectTasks(h *sql.DB, from, to string, skip map[string]bool, b rank.Biases, by editor) error {
 	all, err := loadTodosForSync(h)
 	if err != nil {
 		return err
@@ -697,7 +741,7 @@ func renameProjectTasks(h *sql.DB, from, to string, b rank.Biases, by editor) er
 	var moved, live []*todo.Todo
 	for i := range all {
 		t := &all[i]
-		if t.Project == from {
+		if t.Project == from && !skip[t.ID] {
 			t.Project, t.Auto = to, true
 			moved = append(moved, t)
 		}
@@ -889,10 +933,13 @@ func encodeSharedFile(f sharedFile) ([]byte, error) {
 }
 
 // sharedPass is what syncAllShared did: whether it changed the store, the
-// renames it took up (old name to new), and the tasks it removed outright.
+// renames it took up (old name to new), the projects of this device's own
+// those renames moved aside (name to where it went), and the tasks it
+// removed outright.
 type sharedPass struct {
 	changed bool
 	renames map[string]string
+	aside   map[string]string
 	removed []string
 }
 
@@ -918,9 +965,12 @@ func syncAllShared(h *sql.DB, b rank.Biases, by editor) (pass sharedPass, err er
 		pass.removed = append(pass.removed, res.removed...)
 		if res.renamedFrom != "" {
 			if pass.renames == nil {
-				pass.renames = map[string]string{}
+				pass.renames, pass.aside = map[string]string{}, map[string]string{}
 			}
 			pass.renames[res.renamedFrom] = res.project.Name
+			if res.movedAside != "" {
+				pass.aside[res.project.Name] = res.movedAside
+			}
 		}
 	}
 	return pass, errors.Join(errs...)

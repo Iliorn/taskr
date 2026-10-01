@@ -72,6 +72,9 @@ func cliShare(args []string) int {
 		pass, err := syncAllShared(db, biases, by)
 		for old, name := range pass.renames {
 			fmt.Printf("%q is now called %q\n", old, name)
+			if aside := pass.aside[name]; aside != "" {
+				fmt.Printf("your own project %q is now %q\n", name, aside)
+			}
 		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "tjek share: %v\n", err)
