@@ -1054,7 +1054,7 @@ func TestTrackedTodayDuration(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := trackedTodayDuration([]todo.Todo{c.t}, now)
+			got := trackedTodayDuration([]todo.Todo{c.t}, now, timerScope{})
 			if got != c.want {
 				t.Errorf("got %v want %v", got, c.want)
 			}
@@ -1071,7 +1071,7 @@ func TestTrackedTodayDuration(t *testing.T) {
 		y.TimeEntries = []todo.TimeEntry{
 			{StartedAt: today.Add(11 * time.Hour), StoppedAt: today.Add(11*time.Hour + 30*time.Minute)},
 		}
-		got := trackedTodayDuration([]todo.Todo{x, y}, now)
+		got := trackedTodayDuration([]todo.Todo{x, y}, now, timerScope{})
 		want := 1*time.Hour + 1*time.Hour + 30*time.Minute
 		if got != want {
 			t.Errorf("got %v want %v", got, want)

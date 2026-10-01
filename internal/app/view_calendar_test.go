@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -235,5 +236,41 @@ func TestComingUpNamesUseAWideWindow(t *testing.T) {
 		if got := calPanelWidthFor(w); got < calPanelWidth || got > calPanelMaxWidth || w-got-4 < minInnerWidth {
 			t.Errorf("width %d: month panel %d leaves the timeline too little, or is out of bounds", w, got)
 		}
+	}
+}
+
+// The calendar is this person's days: on a task of a shared project, Anna's
+// time stays off Mark's calendar and his day total, and his own shows; on a
+// task of his own, every entry is his.
+func TestCalendarShowsOnlyOwnTimeOnSharedTasks(t *testing.T) {
+	m := newTestModel()
+	day := localMidnight(0)
+	entry := func(id, author string, from time.Duration) todo.TimeEntry {
+		return todo.TimeEntry{ID: id, StartedAt: day.Add(from), StoppedAt: day.Add(from + time.Hour), Author: author}
+	}
+	shared := mkTodo("s", "Book the ferry", todo.Pending)
+	shared.Project = "Trip"
+	shared.TimeEntries = []todo.TimeEntry{entry("anna", "Anna", 9*time.Hour), entry("mark", "Mark", 11*time.Hour)}
+	own := mkTodo("o", "Post office", todo.Pending)
+	own.TimeEntries = []todo.TimeEntry{entry("laptop", "Mark on the laptop", 13*time.Hour)}
+	m.add(shared)
+	m.add(own)
+	m.shared = sharedConfig{Projects: []sharedProject{{ID: "trip", Name: "Trip"}}}
+	m.setTimerScope(m.shared.timerScope("Mark"))
+	m.refreshCaches()
+
+	var ids []string
+	for _, a := range m.activitiesForDay(day) {
+		ids = append(ids, a.entryID)
+	}
+	if !slices.Equal(ids, []string{"mark", "laptop"}) {
+		t.Errorf("the day lists entries %v, want Mark's and his own task's", ids)
+	}
+	if got := m.trackedPerDay(day, day)[dayKey(day)]; got != 2*time.Hour {
+		t.Errorf("the day's total is %v, want 2h", got)
+	}
+	all := []todo.Todo{shared, own}
+	if got := trackedTodayDuration(all, day.Add(20*time.Hour), m.timers); got != 2*time.Hour {
+		t.Errorf("tracked today is %v, want 2h", got)
 	}
 }

@@ -299,7 +299,7 @@ func computeStats(todos []todo.Todo, now time.Time) statsSummary {
 	// time entries are work that happened today regardless of the parent
 	// task's lifecycle. Minutes as an int keeps the JSON shape boring; the
 	// text renderer formats it for humans.
-	s.TrackedTodayMinutes = int(trackedTodayDuration(todos, now).Minutes())
+	s.TrackedTodayMinutes = int(trackedTodayDuration(todos, now, cliTimerScope()).Minutes())
 	return s
 }
 

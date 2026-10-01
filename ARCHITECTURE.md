@@ -262,7 +262,9 @@ everything.
   (`timerScope`, by the entry's author): the store's `runningTimers`, the
   t key, `tjek start`/`stop`, the heartbeat and stale-timer recovery act on
   this device's own only, so starting a timer here never stops someone
-  else's, and two people can time one task at once. A shared project never goes through the sync server
+  else's, and two people can time one task at once. The calendar and the
+  tracked-today count are this person's days and show only their own time;
+  a task's own total counts everyone's. A shared project never goes through the sync server
   (`keepsOutOfSync`, filtered both ways in `runClientSync`), so leaving can
   remove its tasks outright (`removeProjectTasks`, no tombstones, which would
   delete them for everyone on a later join) and remember their IDs until

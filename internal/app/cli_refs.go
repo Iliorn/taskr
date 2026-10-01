@@ -449,15 +449,21 @@ func sortTodosByCLIMode(rows []todo.Todo, mode string, blocked map[string]bool, 
 	return nil
 }
 
-// trackedToday sums the portion of every TimeEntry across all todos that falls
-// within today's local window. Running entries count up to `now`. Used by the
-// stats one-liner.
-func trackedTodayDuration(todos []todo.Todo, now time.Time) time.Duration {
+// trackedToday sums the portion of every TimeEntry of this device's (sc)
+// across all todos that falls within today's local window: another person's
+// time on a shared task is theirs, not this one's day. Running entries count
+// up to `now`. Used by the stats one-liner.
+func trackedTodayDuration(todos []todo.Todo, now time.Time, sc timerScope) time.Duration {
 	today := startOfDay(now)
 	tomorrow := today.AddDate(0, 0, 1)
 	var total time.Duration
-	for _, t := range todos {
+	for i := range todos {
+		t := &todos[i]
+		who := sc.owner(t)
 		for _, e := range t.TimeEntries {
+			if !e.StartedBy(who) {
+				continue
+			}
 			start := e.StartedAt
 			end := e.StoppedAt
 			if end.IsZero() {

@@ -98,8 +98,11 @@ func (m model) buildActivitiesForDay(key calDay) []dayActivity {
 			}
 		}
 		doneToday := t.Status == todo.Done && !t.CompletedAt.IsZero() && dayKey(t.CompletedAt) == key
+		// The calendar is this person's days: someone else's time on a
+		// shared task is theirs (timerScope).
+		who := m.timerOwner(t)
 		for _, e := range t.TimeEntries {
-			if dayKey(e.StartedAt) != key {
+			if dayKey(e.StartedAt) != key || !e.StartedBy(who) {
 				continue
 			}
 			acts = append(acts, dayActivity{
@@ -121,7 +124,7 @@ func (m model) buildActivitiesForDay(key calDay) []dayActivity {
 		if doneToday {
 			hasTracked := false
 			for _, e := range t.TimeEntries {
-				if dayKey(e.StartedAt) == key {
+				if dayKey(e.StartedAt) == key && e.StartedBy(who) {
 					hasTracked = true
 					break
 				}
@@ -180,8 +183,9 @@ func (m model) trackedPerDay(from, to time.Time) map[calDay]time.Duration {
 	end := to.AddDate(0, 0, 1)
 	totals := make(map[calDay]time.Duration)
 	for _, t := range m.tasks {
+		who := m.timerOwner(t)
 		for _, e := range t.TimeEntries {
-			if e.StartedAt.Before(from) || !e.StartedAt.Before(end) {
+			if e.StartedAt.Before(from) || !e.StartedAt.Before(end) || !e.StartedBy(who) {
 				continue
 			}
 			totals[dayKey(e.StartedAt)] += e.Duration()
