@@ -32,6 +32,13 @@ func TestFormatSince(t *testing.T) {
 			t.Errorf("formatSince(%v) = %q, want %q", c.at, got, c.want)
 		}
 	}
+	// Across the spring clock change, yesterday is 23 hours of midnights back.
+	if cph, err := time.LoadLocation("Europe/Copenhagen"); err == nil {
+		now := time.Date(2027, 3, 29, 10, 0, 0, 0, cph)
+		if got := formatSince(time.Date(2027, 3, 28, 12, 0, 0, 0, cph), now); got != "1d" {
+			t.Errorf("a move the day the clocks went forward reads %q the day after, want 1d", got)
+		}
+	}
 }
 
 // One pass builds every group's counts. An untagged subtask belongs to its

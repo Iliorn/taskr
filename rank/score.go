@@ -365,9 +365,7 @@ func urgencyDim(now, due time.Time) float64 {
 	if due.IsZero() {
 		return 0
 	}
-	today := startOfDay(now)
-	dueDay := startOfDay(due)
-	days := int(dueDay.Sub(today).Hours() / 24)
+	days := calendarDays(now, due)
 	switch {
 	case days <= 0:
 		return 10.0 + 0.5*float64(-days)

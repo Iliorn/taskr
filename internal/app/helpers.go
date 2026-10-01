@@ -1005,6 +1005,13 @@ func startOfDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
+// calendarDays is the number of calendar days from from's date to to's,
+// negative when to is earlier. It rounds rather than truncates: local
+// midnights straddling a DST switch are 23 or 25 hours apart.
+func calendarDays(from, to time.Time) int {
+	return int(math.Round(startOfDay(to).Sub(startOfDay(from)).Hours() / 24))
+}
+
 // formatStartDate renders a start date for display: the day, plus the time of
 // day when one is recorded (see todo.SetStartDate — started tasks carry a
 // real time, so cycle-time reads carry that precision). Legacy midnight values
@@ -1024,9 +1031,7 @@ func formatStartDate(t time.Time) string {
 // Detail views keep the full absolute form everywhere: it round-trips through
 // the date editor.
 func formatDueShort(due, now time.Time) string {
-	// Round rather than truncate: local midnights straddling a DST switch are
-	// 23 or 25 hours apart and would otherwise land on the wrong day.
-	days := int(math.Round(startOfDay(due).Sub(startOfDay(now)).Hours() / 24))
+	days := calendarDays(now, due)
 	switch {
 	case days == 0:
 		return tr("today")
@@ -1045,7 +1050,7 @@ func formatDueShort(due, now time.Time) string {
 // dd-mm beyond it. It sorts below the startable work, so a percentage there
 // would contradict its place in the list.
 func startsCell(start, now time.Time) string {
-	days := int(math.Round(startOfDay(start).Sub(startOfDay(now)).Hours() / 24))
+	days := calendarDays(now, start)
 	if days >= 1 && days <= 6 {
 		return localizedWeekdayShort(start.Weekday())
 	}

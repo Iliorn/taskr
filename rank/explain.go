@@ -179,7 +179,7 @@ func deadlineReason(now, due time.Time) (Reason, int) {
 	if due.IsZero() {
 		return ReasonNoDue, 0
 	}
-	days := int(startOfDay(due).Sub(startOfDay(now)).Hours() / 24)
+	days := calendarDays(now, due)
 	switch {
 	case days < 0:
 		return ReasonOverdue, -days

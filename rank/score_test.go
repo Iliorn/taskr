@@ -68,6 +68,37 @@ func TestUrgencyDimBeyondWeek(t *testing.T) {
 	}
 }
 
+// Local midnights are 23 hours apart across the spring clock change, so the
+// days between them must be counted, not truncated from hours: the day after
+// the change, a task due the day before is a day overdue.
+func TestUrgencyDimCountsCalendarDaysAcrossDST(t *testing.T) {
+	cph, err := time.LoadLocation("Europe/Copenhagen")
+	if err != nil {
+		t.Skipf("tzdata unavailable: %v", err)
+	}
+	now := time.Date(2027, 3, 29, 10, 0, 0, 0, cph) // clocks went forward on the 28th
+	for _, c := range []struct {
+		due    time.Time
+		want   float64
+		reason Reason
+		days   int
+	}{
+		{time.Date(2027, 3, 28, 0, 0, 0, 0, cph), 10.5, ReasonOverdue, 1},
+		{time.Date(2027, 3, 27, 0, 0, 0, 0, cph), 11.0, ReasonOverdue, 2},
+	} {
+		if got := urgencyDim(now, c.due); !approxEq(got, c.want) {
+			t.Errorf("due %s: urgency %v, want %v", c.due.Format("02-01"), got, c.want)
+		}
+		if r, d := deadlineReason(now, c.due); r != c.reason || d != c.days {
+			t.Errorf("due %s: reason %v, %d days; want %v, %d", c.due.Format("02-01"), r, d, c.reason, c.days)
+		}
+	}
+	before := time.Date(2027, 3, 27, 10, 0, 0, 0, cph)
+	if r, d := deadlineReason(before, time.Date(2027, 3, 29, 0, 0, 0, 0, cph)); d != 2 {
+		t.Errorf("due two days after a Saturday before the change: %v in %d days, want 2", r, d)
+	}
+}
+
 func TestUrgencyDimNoDate(t *testing.T) {
 	if got := urgencyDim(fixedNow, time.Time{}); got != 0 {
 		t.Errorf("no due date = %v, want 0", got)

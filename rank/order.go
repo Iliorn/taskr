@@ -1,6 +1,7 @@
 package rank
 
 import (
+	"math"
 	"sort"
 	"time"
 
@@ -365,4 +366,11 @@ func todoPtrs(todos []todo.Todo) []*todo.Todo {
 func startOfDay(t time.Time) time.Time {
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+}
+
+// calendarDays is the number of calendar days from from's date to to's,
+// negative when to is earlier. It rounds rather than truncates: local
+// midnights straddling a clock change are 23 or 25 hours apart.
+func calendarDays(from, to time.Time) int {
+	return int(math.Round(startOfDay(to).Sub(startOfDay(from)).Hours() / 24))
 }

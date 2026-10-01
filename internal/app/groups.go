@@ -379,7 +379,7 @@ func formatSince(at, now time.Time) string {
 	if at.IsZero() {
 		return "-"
 	}
-	days := int(startOfDay(now).Sub(startOfDay(at)).Hours() / 24)
+	days := calendarDays(at, now)
 	switch {
 	case days <= 0:
 		return tr("today")
