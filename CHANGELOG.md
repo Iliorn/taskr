@@ -13,6 +13,8 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+## [1.50.0] - 2026-10-01
+
 ### Added
 
 - Settings → "Tags and projects" hides the Tags and Projects tabs and their detail fields.
@@ -23,6 +25,8 @@ belongs in the commit message, where it is kept next to the code it explains.
 - Settings opens on General.
 - Calendar: pgup/pgdn change month and home jumps to today, so t always means time tracking.
 - In a task's Time section, a adds a time entry; T stays as the shortcut on the lists.
+- In a project or tag, ↥ and ↧ before the box mark what the selected task waits on and what waits on it.
+- A shared project's board columns are each person's own; only done is shared.
 
 ## [1.49.1] - 2026-09-30
 
