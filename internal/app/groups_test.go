@@ -202,7 +202,7 @@ func TestGroupTaskListPutsWaitingWorkAfterWhatItWaitsOn(t *testing.T) {
 	}
 }
 
-// The pane numbers the steps, names what each task waits on, and lights the
+// The pane numbers the steps, names what each task waits on, and marks the
 // rows tied to the selected one: what it waits on, and what waits on it.
 func TestGroupPaneShowsTheDependencies(t *testing.T) {
 	m := kitchenProject(t)
@@ -221,7 +221,7 @@ func TestGroupPaneShowsTheDependencies(t *testing.T) {
 			t.Errorf("the pane should show %q:\n%s", want, plain)
 		}
 	}
-	// The lit rows. Tests render without colour, so ask the view the row
+	// The marked rows. Tests render without colour, so ask the view the row
 	// styles are chosen from rather than the escape codes.
 	list := m.groupTaskList(func(x *todo.Todo) bool { return inProjectGroup(x, "Kitchen") })
 	sel := slices.IndexFunc(list, func(x todo.Todo) bool { return x.ID == "order" })
@@ -235,6 +235,24 @@ func TestGroupPaneShowsTheDependencies(t *testing.T) {
 	}
 	if !d.waitsOnSel["fit"] || len(d.waitsOnSel) != 1 {
 		t.Errorf("waiting on the selected task: %v, want only fit", d.waitsOnSel)
+	}
+	// The tied rows carry their mark before the box, and no other row does.
+	for _, line := range strings.Split(plain, "\n") {
+		var want string
+		switch {
+		case strings.Contains(line, "] 2 Choose cabinets") || strings.Contains(line, "]   Choose cabinets"):
+			want = "↥["
+		case strings.Contains(line, "4 Fit cabinets"):
+			want = "↧["
+		default:
+			if strings.Contains(line, "↥[") || strings.Contains(line, "↧[") {
+				t.Errorf("a row not tied to the selected one carries a mark: %q", line)
+			}
+			continue
+		}
+		if !strings.Contains(line, want) {
+			t.Errorf("row %q should carry %q", line, want)
+		}
 	}
 
 	// Nothing runs past the pane at any width.

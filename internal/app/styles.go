@@ -154,7 +154,7 @@ var (
 	depOverdueStyle lipgloss.Style
 	helpStyle       lipgloss.Style
 
-	// A group pane's dependency view lights the rows tied to the selected
+	// A group pane's dependency view marks the rows tied to the selected
 	// one: what it waits on, and what waits on it.
 	depBlockerStyle lipgloss.Style
 	depWaitingStyle lipgloss.Style

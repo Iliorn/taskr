@@ -199,7 +199,7 @@ func (m model) renderGroupTaskRows(tasks []todo.Todo, from, count, sel int, show
 
 // groupTaskCols sizes the columns of a group's task list to the tasks it holds
 // at the model's width, and reports which rows are nested subtasks. sel is the
-// drill cursor (-1 for a preview), whose row the dependency view lights the
+// drill cursor (-1 for a preview), whose row the dependency view marks the
 // neighbours of.
 func (m model) groupTaskCols(tasks []todo.Todo, showProject bool, sel int) (listCols, []bool) {
 	nested := m.groupNestedRows(tasks)
@@ -1232,21 +1232,24 @@ func (m *model) renderTaskLineWithSet(t *todo.Todo, index, cursor int, active bo
 	// butts up against the Score column that follows.
 	label := fitTaskRowLabel(prefix, text, badges, titleW-listColGap)
 
-	// In a dependency view the rows tied to the selected one are lit: what it
-	// waits on in one colour, what waits on it in another.
-	labelStyle := pal.status
+	// In a dependency view the rows tied to the selected one carry a mark in
+	// the cell before the box: ↥ on what it waits on, ↧ on what waits on it,
+	// the same arrows the Tasks tab puts before a blocker's or a waiter's title.
+	depMark, depStyle := " ", pal.status
 	if d := cols.deps; d != nil && !selected {
 		switch {
 		case d.selWaitsOn[t.ID]:
-			labelStyle = fastDepBlocker
+			depMark, depStyle = "↥", fastDepBlocker
 		case d.waitsOnSel[t.ID]:
-			labelStyle = fastDepWaiting
+			depMark, depStyle = "↧", fastDepWaiting
 		}
 	}
 
 	var r rowBuf
-	r.add(pal.status, foldIcon+" "+checkbox+" ")
-	r.add(labelStyle, padRight(label, titleW))
+	r.add(pal.status, foldIcon)
+	r.add(depStyle, depMark)
+	r.add(pal.status, checkbox+" ")
+	r.add(pal.status, padRight(label, titleW))
 	if cols.showLast {
 		// Score reads as a percent of the current field (rank/score.go): "82%"
 		// says how close to the top this is, where a bare "24.4" only said "a

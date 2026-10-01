@@ -217,8 +217,9 @@ everything.
   step (`groupSteps`: step 1 waits on nothing, a task comes one step after
   the latest thing it waits on) and within a step in the sequence order. When
   any task waits, the rows draw the dependency view (`groupDepsFor`, carried
-  on `listCols.deps`): the step number in place of the ↥/↧ arrow, and the
-  rows tied to the selected one lit. What a task waits on and what it blocks
+  on `listCols.deps`): the step number in place of the ↥/↧ arrow, and that
+  arrow before the box of the rows tied to the selected one (↥ what it waits
+  on, ↧ what waits on it). What a task waits on and what it blocks
   are columns every list can show (Waits on, Blocks; `cache.dependents`). Summaries are built in
   `refreshCaches` (`refreshGroups`). Both lists
   draw through `renderGroupRows` and their panes through `groupPane`: the
