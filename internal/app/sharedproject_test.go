@@ -155,6 +155,59 @@ func TestSharedEditsToDifferentFieldsBothSurvive(t *testing.T) {
 	}
 }
 
+// Each person's board columns are their own: the file carries no column, a
+// card stays where each of them put it whoever moves it next, and closing it
+// still reaches everyone.
+func TestSharedProjectColumnsArePersonal(t *testing.T) {
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	task := tripTask("Pack the tent")
+	task.SetStage("Doing")
+	anna.save(t, s0, task)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+	if got, _ := mark.task(t, task.ID); got.Stage != "" {
+		t.Errorf("Mark got the task in %q, want his first column", got.Stage)
+	}
+
+	m, _ := mark.task(t, task.ID)
+	m.SetStage("Review")
+	mark.save(t, s0.Add(time.Minute), m)
+	mark.sync(t, "Trip")
+	anna.sync(t, "Trip")
+	mark.sync(t, "Trip")
+	for s, want := range map[*sharer]string{anna: "Doing", mark: "Review"} {
+		if got, _ := s.task(t, task.ID); got.Stage != want {
+			t.Errorf("%s has the task in %q, want %q", s.by.name, got.Stage, want)
+		}
+	}
+	data, _ := os.ReadFile(p.File)
+	if strings.Contains(string(data), `"stage"`) {
+		t.Errorf("the file carries a column:\n%s", data)
+	}
+	a, _ := anna.task(t, task.ID)
+	for _, e := range a.History {
+		if e.Author == "Mark" && e.Action == todo.ActionEdited {
+			t.Errorf("Anna's history shows Mark's move between his columns: %+v", e)
+		}
+	}
+	if res := anna.sync(t, "Trip"); res.wrote || res.changed {
+		t.Errorf("devices that agree kept syncing: %+v", res)
+	}
+
+	m, _ = mark.task(t, task.ID)
+	m.Toggle()
+	mark.save(t, s0.Add(2*time.Minute), m)
+	mark.sync(t, "Trip")
+	anna.sync(t, "Trip")
+	if a, _ := anna.task(t, task.ID); a.Status != todo.Done {
+		t.Error("Mark's close did not reach Anna")
+	}
+}
+
 // Two devices that wrote the file at once leave a conflict copy beside it,
 // the way cloud services do; the next pass merges the copy in, writes the
 // result, and removes the copy.

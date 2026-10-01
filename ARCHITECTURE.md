@@ -248,7 +248,10 @@ everything.
   the device that still holds it. The file is written in one canonical form
   (`encodeSharedFile`: `tasksync.CanonicalJSON`, ID order), or two devices
   holding the same project would each see the other's bytes as a change and
-  rewrite the file forever. Which projects are shared lives in the local
+  rewrite the file forever. Board columns are personal: the file carries no
+  stage (`withoutStage`), and a merge keeps the one this device gave a task
+  (`keepLocalStages`), since people sharing a project need not share
+  columns; done is a status and is shared. Which projects are shared lives in the local
   `shared.json`. A shared project never goes through the sync server
   (`keepsOutOfSync`, filtered both ways in `runClientSync`), so leaving can
   remove its tasks outright (`removeProjectTasks`, no tombstones, which would

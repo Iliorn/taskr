@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/Iliorn/tjek/hlc"
 	"github.com/Iliorn/tjek/paths"
 	"github.com/Iliorn/tjek/rank"
 	"github.com/Iliorn/tjek/tasksync"
@@ -420,6 +422,11 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 		copies = append(copies, cp)
 	}
 	if len(incoming) > 0 {
+		local, err := loadTodosForSync(h)
+		if err != nil {
+			return res, err
+		}
+		keepLocalStages(incoming, local)
 		if _, res.changed, err = mergeIntoStore(h, incoming, b); err != nil {
 			return res, err
 		}
@@ -432,7 +439,7 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 	f.Tasks = []todo.Todo{}
 	for i := range all {
 		if all[i].Project == p.Name {
-			f.Tasks = append(f.Tasks, all[i])
+			f.Tasks = append(f.Tasks, withoutStage(all[i]))
 		}
 	}
 	f.Format = sharedFormat
@@ -452,6 +459,66 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 		_ = os.Remove(cp) // merged and written; one left behind is merged again
 	}
 	return res, nil
+}
+
+// stageKey is the merge unit of a task's board column (todo.Fields).
+const stageKey = "stage"
+
+// A shared project's board columns are each person's own: people sharing a
+// project need not have the same columns, and a card one of them moved would
+// land in the other's first column. So the file carries no column
+// (withoutStage), and what comes in keeps the one this device gave it
+// (keepLocalStages). Done is a status, not a column, and is shared.
+
+// withoutStage is t as the file holds it: no column, no stamp for one, and
+// no history of moving between columns.
+func withoutStage(t todo.Todo) todo.Todo {
+	t.Stage = ""
+	if _, ok := t.Stamps[stageKey]; ok {
+		t.Stamps = maps.Clone(t.Stamps)
+		delete(t.Stamps, stageKey)
+	}
+	if slices.ContainsFunc(t.History, func(e todo.Event) bool { return slices.Contains(e.Fields, stageKey) }) {
+		hist := make([]todo.Event, 0, len(t.History))
+		for _, e := range t.History {
+			if slices.Contains(e.Fields, stageKey) {
+				e.Fields = slices.DeleteFunc(slices.Clone(e.Fields), func(f string) bool { return f == stageKey })
+				if e.Action == todo.ActionEdited && len(e.Fields) == 0 {
+					continue
+				}
+			}
+			hist = append(hist, e)
+		}
+		t.History = hist
+	}
+	return t
+}
+
+// keepLocalStages gives each incoming task the column local holds for it, with
+// its stamp, so the merge leaves the column as it is here; a task new to this
+// device starts in the first column. It also covers a file written by a tjek
+// that still shared columns.
+func keepLocalStages(incoming, local []todo.Todo) {
+	own := make(map[string]*todo.Todo, len(local))
+	for i := range local {
+		own[local[i].ID] = &local[i]
+	}
+	for i := range incoming {
+		t := &incoming[i]
+		*t = withoutStage(*t)
+		l := own[t.ID]
+		if l == nil {
+			continue
+		}
+		t.Stage = l.Stage
+		if s, ok := l.Stamps[stageKey]; ok {
+			t.Stamps = maps.Clone(t.Stamps)
+			if t.Stamps == nil {
+				t.Stamps = make(map[string]hlc.Stamp)
+			}
+			t.Stamps[stageKey] = s
+		}
+	}
 }
 
 // encodeSharedFile writes the file in one canonical form: tasks in ID order,
