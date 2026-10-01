@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -557,6 +558,50 @@ func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
 	}
 	if n := len(m.allTodos()); n != 0 {
 		t.Errorf("%d task(s) left after leaving, want the project's removed", n)
+	}
+}
+
+// A shared project's name ties its tasks to the file, so r and x on its row
+// refuse, and no other project can be renamed onto it.
+func TestScriptSharedProjectNameIsFixed(t *testing.T) {
+	folder := t.TempDir()
+	setTestHome(t, t.TempDir())
+	testStore(t)
+	captureStdout(t, func() {
+		cliAdd([]string{"Book the ferry", "--project", "Trip"})
+		cliAdd([]string{"Paint the fence", "--project", "Home"})
+	})
+	m := initialModel(newSQLiteRepo())
+	m.termWidth, m.termHeight = 120, 40
+	m.tab = tabProjects
+	m.refreshCaches()
+	projects := m.allProjectsForList()
+	m.projectCursor = slices.Index(projects, "Trip")
+	m = sendKey(t, m, "S")
+	m = script(t, m, folder, "enter")
+	if _, ok := m.shared.find("Trip"); !ok {
+		t.Fatalf("not shared: %s", m.err)
+	}
+
+	for _, key := range []string{"r", "x"} {
+		m.projectCursor = slices.Index(m.allProjectsForList(), "Trip")
+		m = sendKey(t, m, key)
+		if m.mode != modeNormal || !strings.Contains(m.err, "leave it before") {
+			t.Errorf("%s on the shared project: mode %v, message %q; want it refused", key, m.mode, m.err)
+		}
+	}
+
+	m.projectCursor = slices.Index(m.allProjectsForList(), "Home")
+	m = sendKey(t, m, "r")
+	m.textInput.SetValue("Trip")
+	m = sendKey(t, m, "enter")
+	if !strings.Contains(m.err, "cannot move tasks into it") {
+		t.Errorf("renaming Home onto the shared name: message %q, want it refused", m.err)
+	}
+	for _, x := range m.allTodos() {
+		if x.Title == "Paint the fence" && x.Project != "Home" {
+			t.Errorf("the rename went through: Paint the fence is in %q", x.Project)
+		}
 	}
 }
 

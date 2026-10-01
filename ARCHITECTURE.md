@@ -252,7 +252,9 @@ everything.
   stage (`withoutStage`), and a merge keeps the one this device gave a task
   (`keepLocalStages`), since people sharing a project need not share
   columns; done is a status and is shared. Which projects are shared lives in the local
-  `shared.json`. A shared project never goes through the sync server
+  `shared.json`, by name, so a shared project's name is fixed while it is
+  shared: r and x on its row refuse, as does renaming another project onto
+  it (`refuseSharedProjectEdit`). A shared project never goes through the sync server
   (`keepsOutOfSync`, filtered both ways in `runClientSync`), so leaving can
   remove its tasks outright (`removeProjectTasks`, no tombstones, which would
   delete them for everyone on a later join) and remember their IDs until

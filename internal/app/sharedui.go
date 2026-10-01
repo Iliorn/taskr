@@ -132,6 +132,17 @@ func (m model) startShareOrLeave(name string) (tea.Model, tea.Cmd) {
 	return m, textinput.Blink
 }
 
+// refuseSharedProjectEdit stops a rename or removal of a whole shared project.
+// The name is what ties its tasks to the file on every device, so renaming it
+// here would take every task out of the project for everyone.
+func (m *model) refuseSharedProjectEdit(name string) (bool, tea.Cmd) {
+	if _, ok := m.shared.find(name); !ok {
+		return false, nil
+	}
+	m.flashError(fmt.Sprintf(tr("'%s' is shared; leave it before renaming or removing it"), name))
+	return true, clearErrAfter()
+}
+
 // confirmLeaveShared leaves the project and removes its tasks here. Edits
 // still inside the save debounce are written first, so the file gets them
 // and no later save puts a removed task back; a pass over the files that
