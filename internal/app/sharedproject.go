@@ -545,9 +545,16 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func
 	}
 	f.Departed = departed
 	f.Name, f.Renamed, f.Former = p.Name, p.Renamed, p.Former
+	// A deleted task goes in only when the file already holds it, so the
+	// others hear of the delete. One deleted before the project was shared
+	// here, or before it ever reached the file, is nobody else's business.
+	held := make(map[string]bool, len(incoming))
+	for i := range incoming {
+		held[incoming[i].ID] = true
+	}
 	f.Tasks = []todo.Todo{}
 	for i := range all {
-		if all[i].Project == p.Name {
+		if all[i].Project == p.Name && (!all[i].Deleted || held[all[i].ID]) {
 			f.Tasks = append(f.Tasks, withoutStage(all[i]))
 		}
 	}

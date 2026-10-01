@@ -583,6 +583,30 @@ func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 	}
 }
 
+// A task deleted before its project was shared stays on this device: the
+// file carries a deleted task only once it held the task, so the others hear
+// of deletes in the project, not of what was thrown away before it.
+func TestSharingLeavesEarlierDeletesOut(t *testing.T) {
+	folder := t.TempDir()
+	anna := newSharer(t, "Anna")
+	gone, kept := tripTask("Surprise party for Mark"), tripTask("Book the ferry")
+	anna.save(t, s0, gone, kept)
+	historySave(t, anna.h, s0.Add(time.Minute), anna.by, nil, gone.ID)
+
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	if data, _ := os.ReadFile(p.File); strings.Contains(string(data), "Surprise") {
+		t.Fatal("a task deleted before sharing went into the file")
+	}
+
+	historySave(t, anna.h, s0.Add(2*time.Minute), anna.by, nil, kept.ID)
+	anna.sync(t, "Trip")
+	f, err := readSharedFile(p.File)
+	if err != nil || len(f.Tasks) != 1 || f.Tasks[0].ID != kept.ID || !f.Tasks[0].Deleted {
+		t.Fatalf("after deleting a shared task the file holds %+v (%v), want its tombstone", f.Tasks, err)
+	}
+}
+
 // The sync server neither gets nor gives a shared project's tasks, nor the
 // ones this device removed by leaving: those travel through the file.
 func TestSyncServerSkipsSharedProjects(t *testing.T) {
