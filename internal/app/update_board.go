@@ -23,7 +23,7 @@ func (m *model) closePendingTask(t *todo.Todo) bool {
 	// Closing a task while its timer is running would leave a dangling open
 	// entry — and the runningTimers index would go stale. Stop first, then
 	// toggle. Mirrors the CLI done path.
-	if t.IsTimerRunning() {
+	if m.timerRunning(t) {
 		m.stopTimer(t.ID)
 	}
 	isSub := t.ParentID != ""

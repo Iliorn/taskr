@@ -60,6 +60,7 @@ func cliDone(args []string) int {
 	// the TUI toggle; --cascade forces it regardless.
 	settings, _ := loadSettings()
 	autoCascade := *cascade || settings.AutoCloseSubtasks
+	timers := cliTimerScope()
 	children, get := sliceTaskLookups(todos)
 	var dirty, cascaded, skipped, stopped []*todo.Todo
 	var spawned []todo.Todo
@@ -109,8 +110,8 @@ func cliDone(args []string) int {
 		}
 		// Closing a task while its timer is running would leave a dangling
 		// open entry; the TUI auto-stops, so the CLI matches.
-		if t.IsTimerRunning() {
-			t.StopTimer()
+		if who := timers.owner(t); t.TimerRunningBy(who) {
+			t.StopTimerBy(who)
 			stopped = append(stopped, t)
 		}
 		rank.CaptureRankAtDone(repo.ranker(), todoPtrs(todos), t)
@@ -137,8 +138,8 @@ func cliDone(args []string) int {
 				if s.Status == todo.Done || closed[s.ID] {
 					continue
 				}
-				if s.IsTimerRunning() {
-					s.StopTimer()
+				if who := timers.owner(s); s.TimerRunningBy(who) {
+					s.StopTimerBy(who)
 					stopped = append(stopped, s)
 				}
 				rank.CaptureRankAtDone(repo.ranker(), todoPtrs(todos), s)

@@ -167,18 +167,19 @@ func propagateDescendantsProject(children func(string) []string, get func(string
 	return changed
 }
 
-// stopOtherRunningTimers stops every running timer except exceptID, returning
-// the touched tasks for the save set. This is the single-running-timer
-// invariant the TUI's toggleTimer enforces, shared by the CLI paths
-// (add --start, start) so the rule can't fork between surfaces.
-func stopOtherRunningTimers(todos []todo.Todo, exceptID string) []*todo.Todo {
+// stopOtherRunningTimers stops every running timer of this device's (sc)
+// except exceptID's, returning the touched tasks for the save set. This is
+// the single-running-timer invariant the TUI's toggleTimer enforces, shared
+// by the CLI paths (add --start, start) so the rule can't fork between
+// surfaces.
+func stopOtherRunningTimers(todos []todo.Todo, exceptID string, sc timerScope) []*todo.Todo {
 	var stopped []*todo.Todo
 	for i := range todos {
 		if todos[i].ID == exceptID {
 			continue
 		}
-		if todos[i].IsTimerRunning() {
-			todos[i].StopTimer()
+		if who := sc.owner(&todos[i]); todos[i].TimerRunningBy(who) {
+			todos[i].StopTimerBy(who)
 			stopped = append(stopped, &todos[i])
 		}
 	}

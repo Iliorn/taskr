@@ -195,6 +195,13 @@ func (te TimeEntry) IsRunning() bool {
 	return te.StoppedAt.IsZero()
 }
 
+// StartedBy reports whether who started te. An empty who is anyone, and an
+// entry with no author is this device's own: no save has signed it yet, or it
+// is from before entries carried one.
+func (te TimeEntry) StartedBy(who string) bool {
+	return who == "" || te.Author == "" || te.Author == who
+}
+
 // ── Todo ──────────────────────────────────────────────────────────────────────
 
 type Todo struct {
@@ -488,8 +495,16 @@ func (t *Todo) DeleteComment(index int) {
 
 // ── Time tracking ─────────────────────────────────────────────────────────────
 
-func (t *Todo) StartTimer() {
-	t.StopTimer()
+// A task's timers can be several people's, on a task they share: who names
+// whose a timer method acts on (TimeEntry.StartedBy), and the methods without
+// one act on every timer.
+
+func (t *Todo) StartTimer() { t.StartTimerBy("") }
+
+// StartTimerBy stops who's running timer on t and starts a new one, signed
+// by who.
+func (t *Todo) StartTimerBy(who string) {
+	t.StopTimerBy(who)
 	wall := time.Now()
 	stamp := StampModified(t.ModifiedAt)
 	// The first timer start also marks when work began: if no start date was
@@ -509,6 +524,7 @@ func (t *Todo) StartTimer() {
 		// never writes an empty last_seen over a fresher DB-side heartbeat
 		// before the first tick-driven stamp arrives.
 		LastSeen: wall,
+		Author:   who,
 	})
 	t.ModifiedAt = stamp
 }
@@ -532,11 +548,14 @@ func (t *Todo) AddTimeEntry(start, stop time.Time) string {
 // StopTimer stops every running entry. Stamping the stopped entry's ModifiedAt
 // matters for sync: another device still holds the *running* version of the
 // same entry, and the newer stop must win that merge or the timer resurrects.
-func (t *Todo) StopTimer() {
+func (t *Todo) StopTimer() { t.StopTimerBy("") }
+
+// StopTimerBy stops every running entry who started.
+func (t *Todo) StopTimerBy(who string) {
 	wall := time.Now()
 	stamp := StampModified(t.ModifiedAt)
 	for i := range t.TimeEntries {
-		if t.TimeEntries[i].IsRunning() {
+		if t.TimeEntries[i].IsRunning() && t.TimeEntries[i].StartedBy(who) {
 			t.TimeEntries[i].StoppedAt = wall   // domain: when the clock stopped
 			t.TimeEntries[i].ModifiedAt = stamp // merge ordering: must beat running copy
 		}
@@ -544,18 +563,17 @@ func (t *Todo) StopTimer() {
 	t.ModifiedAt = stamp
 }
 
-func (t *Todo) IsTimerRunning() bool {
-	for i := range t.TimeEntries {
-		if t.TimeEntries[i].IsRunning() {
-			return true
-		}
-	}
-	return false
-}
+func (t *Todo) IsTimerRunning() bool { return t.TimerRunningBy("") }
 
-func (t *Todo) RunningEntry() *TimeEntry {
+// TimerRunningBy reports whether a timer who started runs on t.
+func (t *Todo) TimerRunningBy(who string) bool { return t.RunningEntryBy(who) != nil }
+
+func (t *Todo) RunningEntry() *TimeEntry { return t.RunningEntryBy("") }
+
+// RunningEntryBy is the running entry who started on t, or nil.
+func (t *Todo) RunningEntryBy(who string) *TimeEntry {
 	for i := range t.TimeEntries {
-		if t.TimeEntries[i].IsRunning() {
+		if t.TimeEntries[i].IsRunning() && t.TimeEntries[i].StartedBy(who) {
 			return &t.TimeEntries[i]
 		}
 	}

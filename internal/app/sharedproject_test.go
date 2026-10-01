@@ -383,6 +383,83 @@ func TestATaskMovedOutOfASharedProjectLeavesEveryone(t *testing.T) {
 	}
 }
 
+// Anna's timer on a shared task is hers: on Mark's device it does not count
+// as his running timer, starting or stopping his own leaves it running, and
+// his recovery of abandoned timers neither stops it nor keeps it fresh. On a
+// task of his own nothing changes.
+func TestASharedTaskTimerIsItsStartersOwn(t *testing.T) {
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	ferry := tripTask("Book the ferry")
+	anna.save(t, s0, ferry)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	errand := todo.New("Post office")
+	errand.StartTimer()
+	errand.TimeEntries[0].StartedAt = time.Now().Add(-6 * time.Hour)
+	errand.TimeEntries[0].LastSeen = errand.TimeEntries[0].StartedAt
+	mark.save(t, s0, errand)
+
+	hers, _ := anna.task(t, ferry.ID)
+	hers.StartTimer()
+	hers.TimeEntries[0].StartedAt = time.Now().Add(-6 * time.Hour)
+	hers.TimeEntries[0].LastSeen = hers.TimeEntries[0].StartedAt
+	anna.save(t, s0.Add(time.Minute), hers)
+	anna.sync(t, "Trip")
+	mark.sync(t, "Trip")
+	sc := mark.cfg.timerScope("Mark")
+
+	all, _ := loadTodosForSync(mark.h)
+	s := &Store{}
+	s.setTimerScope(sc)
+	for _, x := range all {
+		s.add(x)
+	}
+	if _, ok := s.runningTimers[ferry.ID]; ok {
+		t.Error("Anna's timer counts as Mark's running timer")
+	}
+	if _, ok := s.runningTimers[errand.ID]; !ok {
+		t.Error("Mark's own timer is not his running timer")
+	}
+	s.startTimer(ferry.ID)
+	if got := s.get(ferry.ID); got.RunningEntryBy("Anna") == nil || !got.TimerRunningBy("Mark") {
+		t.Fatalf("t on the shared task: entries %+v, want Anna's still running beside Mark's", got.TimeEntries)
+	}
+	s.stopTimer(ferry.ID)
+	if got := s.get(ferry.ID); got.RunningEntryBy("Anna") == nil || got.TimerRunningBy("Mark") {
+		t.Fatalf("stopping Mark's timer: entries %+v, want only his stopped", got.TimeEntries)
+	}
+
+	marks := make([]todo.Todo, len(all))
+	copy(marks, all)
+	for i := range marks {
+		marks[i].TimeEntries = slices.Clone(marks[i].TimeEntries)
+	}
+	if stopped := stopOtherRunningTimers(marks, "", sc); len(stopped) != 1 || stopped[0].ID != errand.ID {
+		t.Errorf("starting a timer stops %v, want only Mark's errand", stopped)
+	}
+
+	rec, err := reconcileStaleTimers(mark.h, time.Now(), idleThreshold, sc)
+	if err != nil || len(rec) != 1 || rec[0].Title != "Post office" {
+		t.Errorf("Mark's recovery stopped %+v (%v), want only his own errand", rec, err)
+	}
+	if err := heartbeatRunningTimers(mark.h, time.Now(), sc); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := mark.task(t, ferry.ID); time.Since(got.TimeEntries[0].LastSeen) < time.Hour {
+		t.Error("Mark's heartbeat kept Anna's timer fresh")
+	}
+	mark.sync(t, "Trip")
+	anna.sync(t, "Trip")
+	if got, _ := anna.task(t, ferry.ID); !got.IsTimerRunning() {
+		t.Error("Anna's timer was stopped by Mark's device")
+	}
+	if rec, _ := reconcileStaleTimers(anna.h, time.Now(), idleThreshold, anna.cfg.timerScope("Anna")); len(rec) != 1 {
+		t.Errorf("Anna's own recovery stopped %d timer(s), want her abandoned one", len(rec))
+	}
+}
+
 // Leaving removes the project's tasks from this device outright and leaves
 // the file to the others; joining again brings every task back, history and
 // all, and deletes nothing for anyone.

@@ -258,7 +258,11 @@ everything.
   recorded in the file by ID and project stamp (`Departed`, `departures`),
   and a device that still holds it in the project removes it outright, as
   leaving does; without the record the two devices would rewrite the file
-  against each other forever. A shared project never goes through the sync server
+  against each other forever. A timer on a shared task is its starter's
+  (`timerScope`, by the entry's author): the store's `runningTimers`, the
+  t key, `tjek start`/`stop`, the heartbeat and stale-timer recovery act on
+  this device's own only, so starting a timer here never stops someone
+  else's, and two people can time one task at once. A shared project never goes through the sync server
   (`keepsOutOfSync`, filtered both ways in `runClientSync`), so leaving can
   remove its tasks outright (`removeProjectTasks`, no tombstones, which would
   delete them for everyone on a later join) and remember their IDs until

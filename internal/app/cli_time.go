@@ -36,7 +36,8 @@ func cliStart(args []string) int {
 	// then appends a fresh entry, so a stray repeat would split one session
 	// into two zero-gap entries — silent data drift the user would only
 	// notice on export.
-	if target.IsTimerRunning() {
+	sc := cliTimerScope()
+	if target.TimerRunningBy(sc.owner(target)) {
 		fmt.Fprintf(os.Stderr, "already tracking: %s  %s\n", target.ID[:8], target.Title)
 		return 0
 	}
@@ -44,13 +45,13 @@ func cliStart(args []string) int {
 	// time tracking and the CLI preserves that invariant via the shared
 	// helper. Collect all touched tasks so they're flushed in one Save.
 	dirty := []*todo.Todo{target}
-	for _, t := range stopOtherRunningTimers(todos, target.ID) {
+	for _, t := range stopOtherRunningTimers(todos, target.ID, sc) {
 		dirty = append(dirty, t)
 		// Side-effect notice → stderr, like add --start: stdout carries only
 		// the primary result so scripts can parse it.
 		fmt.Fprintf(os.Stderr, "stopped: %s  %s\n", t.ID[:8], t.Title)
 	}
-	target.StartTimer()
+	target.StartTimerBy(sc.owner(target))
 	if err := repo.Save(dirty, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
 		return 1
@@ -70,6 +71,8 @@ func cliStop(args []string) int {
 		fmt.Fprintf(os.Stderr, "load: %v\n", err)
 		return 1
 	}
+	sc := cliTimerScope()
+	running := func(t *todo.Todo) bool { return t.TimerRunningBy(sc.owner(t)) }
 	var target *todo.Todo
 	if fs.NArg() == 1 {
 		// Explicit ref: stop the named task if it's actually running.
@@ -78,14 +81,14 @@ func cliStop(args []string) int {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
 		}
-		if !t.IsTimerRunning() {
+		if !running(t) {
 			// Distinguish "nothing is tracking anywhere" from "a different
 			// task is tracking" — the first is the common case (user just
 			// typo'd or forgot a timer wasn't running) and deserves the same
 			// message as the no-ref form.
 			anyRunning := false
 			for i := range todos {
-				if todos[i].IsTimerRunning() {
+				if running(&todos[i]) {
 					anyRunning = true
 					break
 				}
@@ -100,18 +103,18 @@ func cliStop(args []string) int {
 		target = t
 	} else {
 		// No ref: stop whichever task is running. Zero or two-plus is an error.
-		var running []*todo.Todo
+		var tracking []*todo.Todo
 		for i := range todos {
-			if todos[i].IsTimerRunning() {
-				running = append(running, &todos[i])
+			if running(&todos[i]) {
+				tracking = append(tracking, &todos[i])
 			}
 		}
-		switch len(running) {
+		switch len(tracking) {
 		case 0:
 			fmt.Fprintln(os.Stderr, "no task is currently tracking")
 			return 0
 		case 1:
-			target = running[0]
+			target = tracking[0]
 		default:
 			fmt.Fprintln(os.Stderr, "multiple tasks tracking; pass a <ref> to disambiguate")
 			return 2
@@ -120,10 +123,10 @@ func cliStop(args []string) int {
 	// Capture the elapsed time before StopTimer wipes the running entry's
 	// in-progress state, so we can report it.
 	var elapsed time.Duration
-	if e := target.RunningEntry(); e != nil {
+	if e := target.RunningEntryBy(sc.owner(target)); e != nil {
 		elapsed = time.Since(e.StartedAt)
 	}
-	target.StopTimer()
+	target.StopTimerBy(sc.owner(target))
 	if err := repo.Save([]*todo.Todo{target}, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "save: %v\n", err)
 		return 1
@@ -222,4 +225,12 @@ func cliExport(args []string) int {
 		ExportedAt: time.Now().UTC(),
 		Tasks:      out,
 	})
+}
+
+// cliTimerScope is whose timers a command runs: the TUI's rule
+// (timerScope), from shared.json and the name edits are signed with.
+func cliTimerScope() timerScope {
+	settings, _ := loadSettings()
+	c, _ := loadSharedConfig()
+	return c.timerScope(authorName(settings))
 }

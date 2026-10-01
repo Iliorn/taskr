@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/Iliorn/tjek/todo"
 )
 
 // timerrecover.go keeps an abandoned timer from accruing forever. A live TUI
@@ -20,12 +22,44 @@ import (
 // a CLI timer that was never the TUI's). That bounds the damage and surfaces it
 // immediately; it does not pretend to know the true duration.
 
-// heartbeatRunningTimers stamps last_seen=now on every running entry. The TUI
-// calls this on a throttled tick so its in-progress timer stays "fresh" and a
-// concurrent CLI invocation won't mistake a live timer for an abandoned one.
-func heartbeatRunningTimers(h *sql.DB, now time.Time) error {
-	_, err := h.Exec(`UPDATE task_time_entries SET last_seen=? WHERE stopped_at='' AND deleted_at=''`, fmtTime(now))
-	return err
+// heartbeatRunningTimers stamps last_seen=now on every running entry of this
+// device's (sc). The TUI calls this on a throttled tick so its in-progress
+// timer stays "fresh" and a concurrent CLI invocation won't mistake a live
+// timer for an abandoned one. Someone else's timer on a shared task is theirs
+// to keep fresh: one stamped here would never look abandoned.
+func heartbeatRunningTimers(h *sql.DB, now time.Time, sc timerScope) error {
+	ids, err := runningEntriesOf(h, sc)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if _, err := h.Exec(`UPDATE task_time_entries SET last_seen=? WHERE id=?`, fmtTime(now), id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// runningEntriesOf is the IDs of the running entries of this device's (sc).
+func runningEntriesOf(h *sql.DB, sc timerScope) ([]string, error) {
+	rows, err := h.Query(`SELECT te.id, te.author, t.project
+		FROM task_time_entries te JOIN todos t ON t.id = te.task_id
+		WHERE te.stopped_at = '' AND te.deleted_at = ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id, author, project string
+		if err := rows.Scan(&id, &author, &project); err != nil {
+			return nil, err
+		}
+		if (todo.TimeEntry{Author: author}).StartedBy(sc.ownerIn(project)) {
+			ids = append(ids, id)
+		}
+	}
+	return ids, rows.Err()
 }
 
 type recoveredTimer struct {
@@ -34,11 +68,13 @@ type recoveredTimer struct {
 	Logged  time.Duration
 }
 
-// reconcileStaleTimers stops every running entry idle longer than threshold,
-// fixing its stop time at the last observed activity, and returns what it
-// recovered so the caller can tell the user.
-func reconcileStaleTimers(h *sql.DB, now time.Time, threshold time.Duration) ([]recoveredTimer, error) {
-	rows, err := h.Query(`SELECT te.id, te.started_at, te.last_seen, t.title
+// reconcileStaleTimers stops every running entry of this device's (sc) idle
+// longer than threshold, fixing its stop time at the last observed activity,
+// and returns what it recovered so the caller can tell the user. Someone
+// else's timer on a shared task is left alone: it is fresh only as of the
+// last time their device wrote the file, and it is theirs to stop.
+func reconcileStaleTimers(h *sql.DB, now time.Time, threshold time.Duration, sc timerScope) ([]recoveredTimer, error) {
+	rows, err := h.Query(`SELECT te.id, te.started_at, te.last_seen, t.title, te.author, t.project
 		FROM task_time_entries te JOIN todos t ON t.id = te.task_id
 		WHERE te.stopped_at = '' AND te.deleted_at = '' AND t.deleted = 0`)
 	if err != nil {
@@ -51,10 +87,13 @@ func reconcileStaleTimers(h *sql.DB, now time.Time, threshold time.Duration) ([]
 	}
 	var stale []cand
 	for rows.Next() {
-		var id, startedAt, lastSeen, title string
-		if err := rows.Scan(&id, &startedAt, &lastSeen, &title); err != nil {
+		var id, startedAt, lastSeen, title, author, project string
+		if err := rows.Scan(&id, &startedAt, &lastSeen, &title, &author, &project); err != nil {
 			rows.Close()
 			return nil, err
+		}
+		if !(todo.TimeEntry{Author: author}).StartedBy(sc.ownerIn(project)) {
+			continue
 		}
 		started := parseTime(startedAt)
 		ref := parseTime(lastSeen)
@@ -108,7 +147,7 @@ func reconcileStaleTimersCLI(cmd string) {
 	if err := openStore(); err != nil {
 		return
 	}
-	recovered, err := reconcileStaleTimers(db, time.Now(), idleThreshold)
+	recovered, err := reconcileStaleTimers(db, time.Now(), idleThreshold, cliTimerScope())
 	if err != nil {
 		return
 	}

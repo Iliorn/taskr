@@ -32,8 +32,28 @@ type Store struct {
 	// Maintained indexes. Update them via Store mutators; never write directly
 	// or they will drift from `tasks`.
 	subtaskOf     map[string][]string // parentID → child IDs in CreatedAt order
-	runningTimers map[string]struct{} // task IDs with an active TimeEntry
+	runningTimers map[string]struct{} // task IDs with a running entry of this device's (timers)
+
+	// timers says which running entries are this device's to run; set with
+	// setTimerScope.
+	timers timerScope
 }
+
+// setTimerScope sets whose timers the store runs and rebuilds runningTimers
+// to match.
+func (s *Store) setTimerScope(sc timerScope) {
+	s.timers = sc
+	s.ensureTasks()
+	clear(s.runningTimers)
+	for id, t := range s.tasks {
+		if t.TimerRunningBy(sc.owner(t)) {
+			s.runningTimers[id] = struct{}{}
+		}
+	}
+}
+
+// timerOwner is the who of t's timer methods on this device.
+func (s *Store) timerOwner(t *todo.Todo) string { return s.timers.owner(t) }
 
 func (s *Store) ensureTasks() {
 	if s.tasks == nil {
@@ -88,15 +108,15 @@ func (s *Store) removeSubtaskOf(parentID, childID string) {
 	}
 }
 
-// startTimer / stopTimer wrap todo.Todo's timer mutators and keep the
-// runningTimers set in sync. Callers should use these instead of poking
-// t.StartTimer() / t.StopTimer() directly.
+// startTimer / stopTimer wrap todo.Todo's timer mutators, on this device's
+// own timers (timers), and keep the runningTimers set in sync. Callers should
+// use these instead of poking t.StartTimer() / t.StopTimer() directly.
 func (s *Store) startTimer(id string) {
 	t := s.get(id)
 	if t == nil {
 		return
 	}
-	t.StartTimer()
+	t.StartTimerBy(s.timerOwner(t))
 	s.ensureTasks()
 	s.runningTimers[id] = struct{}{}
 }
@@ -115,7 +135,7 @@ func (s *Store) stampRunningTimersSeen(now time.Time) {
 		if t == nil {
 			continue
 		}
-		if e := t.RunningEntry(); e != nil {
+		if e := t.RunningEntryBy(s.timerOwner(t)); e != nil {
 			e.LastSeen = now
 		}
 	}
@@ -126,7 +146,7 @@ func (s *Store) stopTimer(id string) {
 	if t == nil {
 		return
 	}
-	t.StopTimer()
+	t.StopTimerBy(s.timerOwner(t))
 	delete(s.runningTimers, id)
 }
 
@@ -148,7 +168,7 @@ func (s *Store) add(t todo.Todo) *todo.Todo {
 	if cp.ParentID != "" {
 		s.addSubtaskOf(cp.ParentID, &cp)
 	}
-	if cp.IsTimerRunning() {
+	if cp.TimerRunningBy(s.timerOwner(&cp)) {
 		s.runningTimers[cp.ID] = struct{}{}
 	}
 	return s.tasks[cp.ID]

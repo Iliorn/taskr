@@ -296,11 +296,12 @@ func cliAdd(args []string) int {
 	// running timer to keep the single-timer invariant, then start + save.
 	started := false
 	if *startNow {
-		for _, x := range stopOtherRunningTimers(existing, created[0].ID) {
+		sc := cliTimerScope()
+		for _, x := range stopOtherRunningTimers(existing, created[0].ID, sc) {
 			dirty = append(dirty, x)
 			fmt.Fprintf(os.Stderr, "stopped: %s  %s\n", x.ID[:8], x.Title)
 		}
-		created[0].StartTimer()
+		created[0].StartTimerBy(sc.owner(&created[0]))
 		started = true
 	}
 

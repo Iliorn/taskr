@@ -170,6 +170,7 @@ func (m *model) confirmLeaveShared() tea.Cmd {
 		return clearErrAfter()
 	}
 	m.shared = c
+	m.refreshTimerScope()
 	m.flashInfo(fmt.Sprintf(tr("Left '%s' and removed its %d task(s) here"), p.Name, n))
 	repo := m.repo
 	return tea.Batch(clearErrAfter(), func() tea.Msg {
@@ -199,6 +200,7 @@ func (m model) updateShareFolder(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, clearErrAfter()
 			}
 			m.shared = c
+			m.refreshTimerScope()
 			m.mode = modeNormal
 			m.markCacheDirty()
 			m.flashSuccess(fmt.Sprintf(tr("Sharing '%s' in %s"), p.Name, exportFolderDisplay(p.File)))
@@ -276,6 +278,7 @@ func (m *model) confirmJoinShared() tea.Cmd {
 		return clearErrAfter()
 	}
 	m.shared = c
+	m.refreshTimerScope()
 	m.markCacheDirty()
 	m.flashSuccess(fmt.Sprintf(tr("Joined '%s'"), p.Name))
 	return tea.Batch(clearErrAfter(), m.runSharedNow())

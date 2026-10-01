@@ -150,7 +150,7 @@ func TestStopOtherRunningTimersEnforcesOneTrackedTask(t *testing.T) {
 	b.StartTimer()
 	todos := []todo.Todo{a, b, c}
 
-	stopped := stopOtherRunningTimers(todos, c.ID)
+	stopped := stopOtherRunningTimers(todos, c.ID, timerScope{})
 
 	if len(stopped) != 2 {
 		t.Fatalf("stopped %d timers, want 2", len(stopped))
@@ -176,7 +176,7 @@ func TestStopOtherRunningTimersSparesTheException(t *testing.T) {
 	b.StartTimer()
 	todos := []todo.Todo{a, b}
 
-	stopped := stopOtherRunningTimers(todos, a.ID)
+	stopped := stopOtherRunningTimers(todos, a.ID, timerScope{})
 
 	if len(stopped) != 1 || stopped[0].ID != b.ID {
 		t.Fatalf("stopped = %v, want just the second task", stopped)

@@ -101,8 +101,9 @@ func (m model) handleTimerTick() (tea.Model, tea.Cmd) {
 	if m.watcher != nil {
 		m.watcher.recordSelfSave()
 	}
+	sc := m.timers
 	return m, tea.Batch(timerTick(), func() tea.Msg {
-		_ = heartbeatRunningTimers(db, time.Now())
+		_ = heartbeatRunningTimers(db, time.Now(), sc)
 		return nil
 	})
 }
@@ -273,7 +274,7 @@ func (m model) handleReloaded(msg reloadedMsg) (tea.Model, tea.Cmd) {
 			dirtyTasks[id] = copyTodo(*t)
 		}
 	}
-	m.Store = Store{}
+	m.Store = Store{timers: m.timers}
 	m.Store.ensureTasks()
 	m.undoStack = undo
 	m.dirtyIDs = dirtyIDs

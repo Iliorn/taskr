@@ -846,17 +846,17 @@ func (m *model) toggleRowTimer() tea.Cmd {
 	// History view: only allow stopping a running timer — a done task
 	// shouldn't accrue new tracked time. Recovery path for tasks marked done
 	// while the timer was still running.
-	if m.showHistory && !t.IsTimerRunning() {
+	if m.showHistory && !m.timerRunning(t) {
 		return nil
 	}
-	if e := t.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
+	if e := m.runningEntry(t); e != nil && time.Since(e.StartedAt) > idleThreshold {
 		m.openIdlePrompt(t)
 		return nil
 	}
 	// Capture t plus any currently-running other task (toggleTimer stops it
 	// when starting a new one) so undo can restore both sides.
 	undoIDs := []string{t.ID}
-	if !t.IsTimerRunning() {
+	if !m.timerRunning(t) {
 		for otherID := range m.runningTimers {
 			if otherID != t.ID {
 				undoIDs = append(undoIDs, otherID)

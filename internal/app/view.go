@@ -658,7 +658,7 @@ func (m model) footerContentFor(w int) string {
 		hints := m.renderKeyHints(w)
 		if t := m.runningTask(); t != nil {
 			elapsed := ""
-			if e := t.RunningEntry(); e != nil {
+			if e := m.runningEntry(t); e != nil {
 				elapsed = formatDurationLive(time.Since(e.StartedAt))
 			}
 			timerLine := timerStyle.Render("    ◉ "+truncate(t.Title, w/2)) +
@@ -933,7 +933,7 @@ func (m model) hintLabelOverrides() map[string]string {
 	if t == nil {
 		return over
 	}
-	if t.IsTimerRunning() {
+	if m.timerRunning(t) {
 		set("track", "stop")
 	}
 	if t.Status == todo.Done {

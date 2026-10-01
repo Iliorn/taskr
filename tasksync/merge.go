@@ -135,10 +135,11 @@ func mergeTask(a, b todo.Todo) todo.Todo {
 // mergeChildren unions two child slices by ID. A tombstone on either side wins
 // and is retained so the deletion keeps propagating; among live versions the
 // later-modified one wins (an edit on one device beats the stale copy on the
-// other), with the higher-hash one as the tiebreak so records written before
-// ModifiedAt existed (both zero) still resolve stably. Order follows first
-// appearance.
-func mergeChildren[T any](a, b []T, id func(T) string, deletedAt func(T) time.Time, modified func(T) time.Time) []T {
+// other), then the one tie prefers (when tie is not nil and says one is
+// later: positive for x, negative for the other), with the higher-hash one as
+// the last tiebreak so records written before ModifiedAt existed (both zero)
+// still resolve stably. Order follows first appearance.
+func mergeChildren[T any](a, b []T, id func(T) string, deletedAt func(T) time.Time, modified func(T) time.Time, tie func(x, y T) int) []T {
 	type slot struct {
 		v        T
 		isDel    bool
@@ -180,6 +181,10 @@ func mergeChildren[T any](a, b []T, id func(T) string, deletedAt func(T) time.Ti
 			s.v = x
 		case modified(x).Before(modified(s.v)):
 			// keep s.v — it is the later edit
+		case tie != nil && tie(x, s.v) != 0:
+			if tie(x, s.v) > 0 {
+				s.v = x
+			}
 		case hashGreater(x, s.v):
 			s.v = x
 		}
@@ -202,6 +207,7 @@ func mergeComments(a, b []todo.Comment) []todo.Comment {
 		func(c todo.Comment) string { return c.ID },
 		func(c todo.Comment) time.Time { return c.DeletedAt },
 		func(c todo.Comment) time.Time { return c.ModifiedAt },
+		nil,
 	)
 	authors := childAuthors(a, b, func(c todo.Comment) (string, string) { return c.ID, c.Author })
 	for i := range out {
@@ -232,6 +238,12 @@ func childAuthors[T any](a, b []T, idAuthor func(T) (string, string)) map[string
 // entries from before the field existed: a stopped entry beats a running copy
 // of itself when neither carries a ModifiedAt, since a stop is always the
 // later event.
+//
+// Two copies with one ModifiedAt are decided by laterEntry before the hash: a
+// heartbeat moves LastSeen and nothing else, so a device that holds a running
+// entry from before the owner's last heartbeat would otherwise win on the hash
+// half the time, hand the owner a stale LastSeen, and make a live timer look
+// abandoned.
 func mergeTimeEntries(a, b []todo.TimeEntry) []todo.TimeEntry {
 	out := mergeChildren(a, b,
 		func(e todo.TimeEntry) string { return e.ID },
@@ -242,6 +254,7 @@ func mergeTimeEntries(a, b []todo.TimeEntry) []todo.TimeEntry {
 			}
 			return e.StoppedAt // zero for a running legacy entry → stop wins
 		},
+		laterEntry,
 	)
 	authors := childAuthors(a, b, func(e todo.TimeEntry) (string, string) { return e.ID, e.Author })
 	for i := range out {
@@ -250,6 +263,20 @@ func mergeTimeEntries(a, b []todo.TimeEntry) []todo.TimeEntry {
 		}
 	}
 	return out
+}
+
+// laterEntry orders two copies of an entry with one ModifiedAt: a stopped copy
+// is later than a running one, and then the later LastSeen is. With
+// ModifiedAt first and the hash last, the order is total, so the merge stays
+// a CRDT.
+func laterEntry(x, y todo.TimeEntry) int {
+	if xs, ys := !x.IsRunning(), !y.IsRunning(); xs != ys {
+		if xs {
+			return 1
+		}
+		return -1
+	}
+	return x.LastSeen.Compare(y.LastSeen)
 }
 
 // Merge folds two task sets into one authoritative set. It is symmetric in its

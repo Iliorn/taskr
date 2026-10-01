@@ -108,15 +108,15 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if sub == nil {
 						return m, nil
 					}
-					if sub.Status == todo.Done && !sub.IsTimerRunning() {
+					if sub.Status == todo.Done && !m.timerRunning(sub) {
 						return m, nil
 					}
-					if e := sub.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
+					if e := m.runningEntry(sub); e != nil && time.Since(e.StartedAt) > idleThreshold {
 						m.openIdlePrompt(sub)
 						return m, nil
 					}
 					undoIDs := []string{sub.ID}
-					if !sub.IsTimerRunning() {
+					if !m.timerRunning(sub) {
 						for otherID := range m.runningTimers {
 							if otherID != sub.ID {
 								undoIDs = append(undoIDs, otherID)

@@ -98,6 +98,7 @@ func (m model) updateEditName(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.userName = strings.TrimSpace(m.textInput.Value())
 			m.repo.SetAuthor(authorName(appSettings{Name: m.userName}))
+			m.refreshTimerScope()
 			m.persistSettings()
 			m.mode = modeNormal
 			return m, nil

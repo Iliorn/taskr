@@ -639,6 +639,7 @@ func initialModel(repo Repository) model {
 	} else {
 		m.shared = shared
 	}
+	m.refreshTimerScope()
 	m.applyLangPlaceholders()
 	m.refreshCaches()
 	// Absorb Age drift since the last open: every task's score creeps daily,
@@ -674,7 +675,7 @@ func initialModel(repo Repository) model {
 	m.exportDirty = m.exportFolder != ""
 	if t := m.runningTask(); t != nil {
 		m.timerTickOn = true
-		if e := t.RunningEntry(); e != nil && time.Since(e.StartedAt) > idleThreshold {
+		if e := m.runningEntry(t); e != nil && time.Since(e.StartedAt) > idleThreshold {
 			m.openIdlePrompt(t)
 		}
 	}
@@ -1105,13 +1106,26 @@ func (m model) anyTimerRunning() bool {
 	return len(m.runningTimers) > 0
 }
 
+// timerRunning reports whether a timer of this device's own runs on t; on a
+// shared task someone else's may run beside it (timerScope).
+func (m model) timerRunning(t *todo.Todo) bool { return t.TimerRunningBy(m.timerOwner(t)) }
+
+// runningEntry is the running entry of this device's own on t, or nil.
+func (m model) runningEntry(t *todo.Todo) *todo.TimeEntry { return t.RunningEntryBy(m.timerOwner(t)) }
+
+// refreshTimerScope tells the store whose timers are this device's. It runs
+// again whenever the shared projects or the name edits are signed with change.
+func (m *model) refreshTimerScope() {
+	m.setTimerScope(m.shared.timerScope(authorName(appSettings{Name: m.userName})))
+}
+
 // openIdlePrompt switches to the runaway-timer prompt for the task's
 // running entry.
 func (m *model) openIdlePrompt(t *todo.Todo) {
 	if t == nil {
 		return
 	}
-	e := t.RunningEntry()
+	e := m.runningEntry(t)
 	if e == nil {
 		return
 	}
@@ -1129,7 +1143,7 @@ func (m *model) toggleTimer(t *todo.Todo) {
 	if t == nil {
 		return
 	}
-	if t.IsTimerRunning() {
+	if m.timerRunning(t) {
 		m.stopTimer(t.ID)
 		return
 	}
@@ -1419,7 +1433,7 @@ func (m *model) autoCloseAncestorsIfAllDone(childID string) []string {
 		if !m.allDescendantsDoneOrEmpty(parent.ID) {
 			break
 		}
-		if parent.IsTimerRunning() {
+		if m.timerRunning(parent) {
 			m.stopTimer(parent.ID)
 		}
 		parent.Toggle()
@@ -1447,7 +1461,7 @@ func (m *model) closePendingSubtree(parentID string) []string {
 		if s == nil || s.Deleted || s.Status != todo.Pending {
 			continue
 		}
-		if s.IsTimerRunning() {
+		if m.timerRunning(s) {
 			m.stopTimer(s.ID)
 		}
 		rank.CaptureRankAtDone(m.rank, m.allTodos(), s)
@@ -1534,7 +1548,7 @@ func (m *model) toggleSubtask(parentID string, subtaskCursor int) []string {
 	}
 	// Don't leave a dangling open time entry when closing a subtask. Mirrors
 	// the top-level `d` handler in update.go.
-	if t.Status == todo.Pending && t.IsTimerRunning() {
+	if t.Status == todo.Pending && m.timerRunning(t) {
 		m.stopTimer(t.ID)
 	}
 	wasPending := t.Status == todo.Pending

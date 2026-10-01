@@ -165,6 +165,36 @@ func (c sharedConfig) withoutShared(tasks []todo.Todo) []todo.Todo {
 	return out
 }
 
+// timerScope says whose timers on a task this device runs. On a task of a
+// project shared here, only the ones me started: the others' timers are
+// theirs, and starting one's own, stopping, or recovering one left running
+// must not end their work for them. On any other task, every timer, since
+// they are one person's on all of that person's devices.
+type timerScope struct {
+	me     string
+	shared map[string]bool
+}
+
+func (c sharedConfig) timerScope(me string) timerScope {
+	s := timerScope{me: me, shared: make(map[string]bool, len(c.Projects))}
+	for _, p := range c.Projects {
+		s.shared[p.Name] = true
+	}
+	return s
+}
+
+// owner is the who of t's timer methods (todo.TimeEntry.StartedBy).
+func (s timerScope) owner(t *todo.Todo) string {
+	return s.ownerIn(t.Project)
+}
+
+func (s timerScope) ownerIn(project string) string {
+	if project != "" && s.shared[project] {
+		return s.me
+	}
+	return ""
+}
+
 // find is the shared project named name, if this device shares one.
 func (c sharedConfig) find(name string) (sharedProject, bool) {
 	for _, p := range c.Projects {

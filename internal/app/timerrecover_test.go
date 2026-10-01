@@ -22,7 +22,7 @@ func TestReconcileStopsAbandonedTimer(t *testing.T) {
 	task := taskWithTimer("deploy thing", todo.TimeEntry{ID: "te1", StartedAt: now.Add(-5 * time.Hour)})
 	saveTodos(t, h, []todo.Todo{task})
 
-	rec, err := reconcileStaleTimers(h, now, 4*time.Hour)
+	rec, err := reconcileStaleTimers(h, now, 4*time.Hour, timerScope{})
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestReconcileKeepsFreshlyHeartbeatedTimer(t *testing.T) {
 	})
 	saveTodos(t, h, []todo.Todo{task})
 
-	rec, err := reconcileStaleTimers(h, now, 4*time.Hour)
+	rec, err := reconcileStaleTimers(h, now, 4*time.Hour, timerScope{})
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestReconcileStopsAtLastSeen(t *testing.T) {
 	})
 	saveTodos(t, h, []todo.Todo{task})
 
-	rec, err := reconcileStaleTimers(h, now, 4*time.Hour)
+	rec, err := reconcileStaleTimers(h, now, 4*time.Hour, timerScope{})
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestHeartbeatTouchesOnlyRunningEntries(t *testing.T) {
 	})
 	saveTodos(t, h, []todo.Todo{running, stopped})
 
-	if err := heartbeatRunningTimers(h, now); err != nil {
+	if err := heartbeatRunningTimers(h, now, timerScope{}); err != nil {
 		t.Fatalf("heartbeat: %v", err)
 	}
 	got, _ := loadTodosFromDB(h)
@@ -139,7 +139,7 @@ func TestSaveDoesNotWipeHeartbeat(t *testing.T) {
 
 	// Minute tick: DB heartbeat + in-memory mirror, exactly as Update does.
 	beat := time.Now().Add(time.Minute)
-	if err := heartbeatRunningTimers(h, beat); err != nil {
+	if err := heartbeatRunningTimers(h, beat, timerScope{}); err != nil {
 		t.Fatalf("heartbeat: %v", err)
 	}
 	s.stampRunningTimersSeen(beat)

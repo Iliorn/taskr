@@ -749,7 +749,7 @@ func (m *model) confirmCloseParent() tea.Cmd {
 			// must remove it plus restore t. Capturing all state is simpler than
 			// tracking the new ID separately.
 			m.pushUndo("close task")
-			if t.IsTimerRunning() {
+			if m.timerRunning(t) {
 				m.stopTimer(t.ID)
 			}
 			rank.CaptureRankAtDone(m.rank, m.allTodos(), t)
@@ -933,9 +933,9 @@ func (m model) updateIdlePrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "k", "esc", "enter":
 			m.mode = modeNormal
 		case "s":
-			if t := m.findTodoByID(m.pendingEntryTaskID); t != nil && t.IsTimerRunning() {
+			if t := m.findTodoByID(m.pendingEntryTaskID); t != nil && m.timerRunning(t) {
 				m.pushUndo("stop timer", t.ID)
-				t.StopTimer()
+				m.stopTimer(t.ID)
 				m.markModified(t.ID)
 			}
 			m.mode = modeNormal

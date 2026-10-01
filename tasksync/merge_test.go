@@ -323,6 +323,34 @@ func TestMergeStoppedTimerBeatsRunningCopy(t *testing.T) {
 	}
 }
 
+// A heartbeat moves only LastSeen, so two copies of a running entry tie on
+// ModifiedAt; the fresher heartbeat must win in either order, and a stop
+// stamped in the same instant still beats both, or a device holding an old
+// copy hands the timer's owner a LastSeen that makes it look abandoned.
+func TestMergeFresherHeartbeatWinsATie(t *testing.T) {
+	base := todo.TimeEntry{ID: "e1", StartedAt: at(0), ModifiedAt: at(0)}
+	stale, fresh, stopped := base, base, base
+	stale.LastSeen = at(time.Minute)
+	fresh.LastSeen = at(5 * time.Hour)
+	stopped.StoppedAt = at(time.Hour)
+	for _, set := range [][]todo.TimeEntry{
+		{stale, fresh}, {fresh, stale},
+		{stale, fresh, stopped}, {stopped, fresh, stale}, {fresh, stopped, stale},
+	} {
+		got := []todo.TimeEntry{set[0]}
+		for _, e := range set[1:] {
+			got = mergeTimeEntries(got, []todo.TimeEntry{e})
+		}
+		want := fresh
+		if len(set) == 3 {
+			want = stopped
+		}
+		if len(got) != 1 || !got[0].LastSeen.Equal(want.LastSeen) || !got[0].StoppedAt.Equal(want.StoppedAt) {
+			t.Errorf("merging %v gave %+v, want %+v", set, got, want)
+		}
+	}
+}
+
 func TestMergeIdempotent(t *testing.T) {
 	a := mkTask("a", "A", at(time.Hour))
 	a.Comments = []todo.Comment{mkComment("c1", "x", at(0))}
