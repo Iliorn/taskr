@@ -353,11 +353,11 @@ func joinShared(c *sharedConfig, typed string) (sharedProject, error) {
 // tasks from this device. It first brings the file up to date, so nothing
 // made here is lost to the others; a file it cannot reach does not stop the
 // leave. The removal is outright, with no tombstones (see the top of the
-// file), and returns how many tasks went.
-func leaveShared(h *sql.DB, c *sharedConfig, name string, b rank.Biases, by editor) (sharedProject, int, error) {
+// file), and returns the tasks that went.
+func leaveShared(h *sql.DB, c *sharedConfig, name string, b rank.Biases, by editor) (sharedProject, []string, error) {
 	p, ok := c.find(name)
 	if !ok {
-		return p, 0, fmt.Errorf("%q is not a shared project", name)
+		return p, nil, fmt.Errorf("%q is not a shared project", name)
 	}
 	// A rename the pass adopts moves the tasks to the new name.
 	if res, err := syncShared(h, p, b, by, nil); err == nil {
@@ -365,11 +365,32 @@ func leaveShared(h *sql.DB, c *sharedConfig, name string, b rank.Biases, by edit
 	}
 	ids, err := removeProjectTasks(h, p.Name)
 	if err != nil {
-		return p, 0, err
+		return p, nil, err
 	}
+	forgetUndoOf(ids)
 	c.Projects = slices.DeleteFunc(c.Projects, func(x sharedProject) bool { return x.ID == p.ID })
 	c.Left = append(c.Left, sharedLeft{ID: p.ID, Name: p.Name, Tasks: ids})
-	return p, len(ids), nil
+	return p, ids, nil
+}
+
+// forgetUndoOf takes the tasks ids, removed outright, out of the undo history
+// `tjek undo` and the next start read (undoWithout). Failing to is no reason
+// to fail what removed them, so an error is dropped, as a delete drops one.
+func forgetUndoOf(ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+	gone := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		gone[id] = true
+	}
+	_ = editPersistedUndo(func(e []undoEntry) []undoEntry { return undoWithout(e, gone) })
+}
+
+// renameUndoProject moves the undo history `tjek undo` and the next start
+// read from project old to name (undoRenamingProject).
+func renameUndoProject(old, name string) {
+	_ = editPersistedUndo(func(e []undoEntry) []undoEntry { return undoRenamingProject(e, old, name) })
 }
 
 // removeProjectTasks deletes every row of the project's tasks, tombstones
@@ -467,6 +488,9 @@ type sharedResult struct {
 	// it had here before, when the pass took up a rename made elsewhere.
 	project     sharedProject
 	renamedFrom string
+	// removed is the tasks taken out of the store because they left the
+	// project on another device.
+	removed []string
 }
 
 // syncShared runs one pass over p's file: fold the file and any conflict
@@ -516,6 +540,7 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func
 		if err := renameProjectTasks(h, was, p.Name, b, by); err != nil {
 			return res, err
 		}
+		renameUndoProject(was, p.Name)
 		res.renamedFrom, res.changed = was, true
 	}
 	if len(incoming) > 0 {
@@ -538,7 +563,8 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func
 		if err := removeTasks(h, gone); err != nil {
 			return res, err
 		}
-		res.changed = true
+		forgetUndoOf(gone)
+		res.changed, res.removed = true, gone
 		if all, err = loadTodosForSync(h); err != nil {
 			return res, err
 		}
@@ -651,6 +677,7 @@ func renameShared(h *sql.DB, c *sharedConfig, old, name string, b rank.Biases, b
 	if err := renameProjectTasks(h, old, name, b, by); err != nil {
 		return p, err
 	}
+	renameUndoProject(old, name)
 	if _, err := syncShared(h, p, b, by, func(q sharedProject) error {
 		c.set(q)
 		return save(*c)
@@ -861,14 +888,21 @@ func encodeSharedFile(f sharedFile) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
+// sharedPass is what syncAllShared did: whether it changed the store, the
+// renames it took up (old name to new), and the tasks it removed outright.
+type sharedPass struct {
+	changed bool
+	renames map[string]string
+	removed []string
+}
+
 // syncAllShared runs syncShared for every project this device shares. A
 // project that fails does not stop the others; the errors come back together.
-// A rename one of them takes up is saved to shared.json, and comes back in
-// renames, old name to new.
-func syncAllShared(h *sql.DB, b rank.Biases, by editor) (changed bool, renames map[string]string, err error) {
+// A rename one of them takes up is saved to shared.json.
+func syncAllShared(h *sql.DB, b rank.Biases, by editor) (pass sharedPass, err error) {
 	c, err := loadSharedConfig()
 	if err != nil || len(c.Projects) == 0 {
-		return false, nil, err
+		return pass, err
 	}
 	var errs []error
 	for _, p := range slices.Clone(c.Projects) {
@@ -880,13 +914,14 @@ func syncAllShared(h *sql.DB, b rank.Biases, by editor) (changed bool, renames m
 			errs = append(errs, fmt.Errorf("%s: %w", p.Name, err))
 			continue
 		}
-		changed = changed || res.changed
+		pass.changed = pass.changed || res.changed
+		pass.removed = append(pass.removed, res.removed...)
 		if res.renamedFrom != "" {
-			if renames == nil {
-				renames = map[string]string{}
+			if pass.renames == nil {
+				pass.renames = map[string]string{}
 			}
-			renames[res.renamedFrom] = res.project.Name
+			pass.renames[res.renamedFrom] = res.project.Name
 		}
 	}
-	return changed, renames, errors.Join(errs...)
+	return pass, errors.Join(errs...)
 }

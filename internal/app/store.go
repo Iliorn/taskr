@@ -351,6 +351,22 @@ func (s *Store) popUndo() (undoEntry, bool) {
 	return entry, true
 }
 
+// forget drops the tasks ids from the store, the change set and the undo
+// history, for tasks removed from the database outright (undoWithout).
+func (s *Store) forget(ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+	gone := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		gone[id] = true
+		s.remove(id)
+		delete(s.dirtyIDs, id)
+		delete(s.tombstones, id)
+	}
+	s.undoStack = undoWithout(s.undoStack, gone)
+}
+
 // restoreFromUndo applies an entry. For a full snapshot the entire task map
 // is rebuilt. For a partial snapshot only the named IDs are touched: each
 // captured task is restored to its prior value, and any ID in entry.ids that

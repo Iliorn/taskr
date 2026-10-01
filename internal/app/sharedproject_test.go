@@ -544,9 +544,9 @@ func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 	mark.join(t, p.File)
 	mark.sync(t, "Trip")
 
-	_, n, err := leaveShared(mark.h, &mark.cfg, "Trip", rank.Biases{}, mark.by)
-	if err != nil || n != 1 {
-		t.Fatalf("leave: removed %d, %v; want the one task", n, err)
+	_, ids, err := leaveShared(mark.h, &mark.cfg, "Trip", rank.Biases{}, mark.by)
+	if err != nil || len(ids) != 1 {
+		t.Fatalf("leave: removed %d, %v; want the one task", len(ids), err)
 	}
 	if len(mark.cfg.Projects) != 0 || len(mark.cfg.Left) != 1 {
 		t.Fatalf("after leaving: shared %+v, left %+v", mark.cfg.Projects, mark.cfg.Left)
@@ -580,6 +580,66 @@ func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 	}
 	if still, _ := anna.task(t, task.ID); still.Deleted {
 		t.Fatal("Mark's leave and rejoin deleted the task for Anna")
+	}
+}
+
+// The deletes `tjek undo` can restore follow a shared project: a rename taken
+// up from the file moves them to the new name, and leaving forgets them. A
+// restore of a task the leave removed would save it as new, every field
+// stamped now, and on a later join that stale copy would win over everyone.
+func TestSharedProjectUndoFollowsRenameAndLeave(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	ferry, bags := tripTask("Book the ferry"), tripTask("Pack the bags")
+	anna.save(t, s0, ferry, bags)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+
+	save := func(sharedConfig) error { return nil }
+	if _, err := renameShared(anna.h, &anna.cfg, "Trip", "Summer", rank.Biases{}, anna.by, save); err != nil {
+		t.Fatal(err)
+	}
+	gone, _ := mark.task(t, ferry.ID)
+	historySave(t, mark.h, s0.Add(time.Minute), mark.by, nil, ferry.ID)
+	recordDeleteUndo(undoEntry{desc: undoDescDeleteTask, ids: []string{ferry.ID}, partial: []todo.Todo{gone}})
+
+	mark.sync(t, "Trip")
+	entries, err := loadPersistedUndoEntries()
+	if err != nil || len(entries) != 1 || entries[0].partial[0].Project != "Summer" {
+		t.Fatalf("after the rename the undo history holds %+v (%v), want the delete under Summer", entries, err)
+	}
+
+	if _, _, err := leaveShared(mark.h, &mark.cfg, "Summer", rank.Biases{}, mark.by); err != nil {
+		t.Fatal(err)
+	}
+	if entries, err := loadPersistedUndoEntries(); err != nil || len(entries) != 0 {
+		t.Errorf("after leaving the undo history holds %+v (%v), want nothing of the project", entries, err)
+	}
+}
+
+// A task the pass removed because it left the project elsewhere leaves the
+// app too, undo history included: an edit or an undo would save it back as
+// new, and put it in the shared project again for everyone.
+func TestTheAppForgetsATaskThatLeftASharedProject(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	m := newTestModel()
+	gift, ferry := tripTask("Mark's birthday present"), tripTask("Book the ferry")
+	m.Store.add(gift)
+	m.Store.add(ferry)
+	m.pushUndo("edit", gift.ID)
+	m.pushUndo("edit", gift.ID, ferry.ID)
+	m.refreshCaches()
+
+	next, _ := m.handleSharedDone(sharedDoneMsg{sharedPass: sharedPass{changed: true, removed: []string{gift.ID}}})
+	m = next.(model)
+	if m.get(gift.ID) != nil {
+		t.Fatal("the removed task is still in the app")
+	}
+	if len(m.undoStack) != 1 || !slices.Equal(m.undoStack[0].ids, []string{ferry.ID}) || len(m.undoStack[0].partial) != 1 {
+		t.Fatalf("undo stack %+v, want only the ferry's part of the second entry", m.undoStack)
 	}
 }
 
@@ -751,7 +811,8 @@ func TestCLIJoinAsksBeforeMergingALocalProject(t *testing.T) {
 }
 
 // S on a Projects row shares it in a file; S on a shared one asks, and y
-// leaves it and removes its tasks. The row carries the shared mark between.
+// leaves it and removes its tasks, which no undo brings back. The row carries
+// the shared mark between.
 func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
 	folder := t.TempDir()
 	setTestHome(t, t.TempDir())
@@ -783,6 +844,8 @@ func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
 		t.Error("the Projects row does not show the shared mark")
 	}
 
+	m.pushUndo("edit", m.allTodos()[0].ID)
+
 	m = sendKey(t, m, "S")
 	if m.mode != modeConfirm {
 		t.Fatalf("S on a shared project: mode = %v, want the leave prompt", m.mode)
@@ -798,6 +861,10 @@ func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
 	}
 	if n := len(m.allTodos()); n != 0 {
 		t.Errorf("%d task(s) left after leaving, want the project's removed", n)
+	}
+	m = sendKey(t, m, "u")
+	if n := len(m.allTodos()); n != 0 {
+		t.Errorf("u after leaving brought back %d task(s)", n)
 	}
 }
 

@@ -8,8 +8,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/Iliorn/tjek/todo"
 )
 
 // sharedui.go is the app's side of shared projects (sharedproject.go): S on a
@@ -35,9 +33,8 @@ type sharedPollMsg struct{}
 type sharedSoonMsg struct{}
 
 type sharedDoneMsg struct {
-	changed bool
-	renames map[string]string // a rename made elsewhere: old name → new
-	err     error
+	sharedPass
+	err error
 }
 
 func sharedPoll() tea.Cmd {
@@ -67,8 +64,8 @@ func (m model) handleSharedTick(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sharedRunning = true
 		b, by := m.rank.Biases, m.editor()
 		cmds = append(cmds, func() tea.Msg {
-			changed, renames, err := syncAllShared(db, b, by)
-			return sharedDoneMsg{changed: changed, renames: renames, err: err}
+			pass, err := syncAllShared(db, b, by)
+			return sharedDoneMsg{sharedPass: pass, err: err}
 		})
 	}
 	return m, tea.Batch(cmds...)
@@ -79,6 +76,11 @@ func (m model) handleSharedTick(msg tea.Msg) (tea.Model, tea.Cmd) {
 // the store reloads it here only when no watcher will.
 func (m model) handleSharedDone(msg sharedDoneMsg) (tea.Model, tea.Cmd) {
 	m.sharedRunning = false
+	if len(msg.removed) > 0 {
+		// Gone from the store; held here, an edit would save one back as new.
+		m.Store.forget(msg.removed)
+		m.markCacheDirty()
+	}
 	if len(msg.renames) > 0 {
 		m.shared = m.freshShared()
 		for old, name := range msg.renames {
@@ -113,7 +115,7 @@ func (m *model) flushShared() {
 	if len(m.shared.Projects) == 0 || db == nil {
 		return
 	}
-	if _, _, err := syncAllShared(db, m.rank.Biases, m.editor()); err != nil {
+	if _, err := syncAllShared(db, m.rank.Biases, m.editor()); err != nil {
 		fmt.Fprintf(os.Stderr, "Shared project sync on quit failed: %v\n", err)
 	}
 }
@@ -219,15 +221,7 @@ func (m *model) followSharedRename(old, name string) {
 			ids = append(ids, id)
 		}
 	}
-	for i := range m.undoStack {
-		for _, list := range [][]todo.Todo{m.undoStack[i].partial, m.undoStack[i].full} {
-			for j := range list {
-				if list[j].Project == old {
-					list[j].Project = name
-				}
-			}
-		}
-	}
+	m.undoStack = undoRenamingProject(m.undoStack, old, name)
 	if m.projectPinned == old {
 		m.projectPinned = name
 	}
@@ -256,7 +250,7 @@ func (m *model) confirmLeaveShared() tea.Cmd {
 		}
 	}
 	c := m.freshShared()
-	p, n, err := leaveShared(db, &c, m.pendingProjectName, m.rank.Biases, m.editor())
+	p, ids, err := leaveShared(db, &c, m.pendingProjectName, m.rank.Biases, m.editor())
 	if err == nil {
 		err = saveSharedConfig(c)
 	}
@@ -265,8 +259,10 @@ func (m *model) confirmLeaveShared() tea.Cmd {
 		return clearErrAfter()
 	}
 	m.shared = c
+	m.Store.forget(ids)
+	m.markCacheDirty()
 	m.refreshTimerScope()
-	m.flashInfo(fmt.Sprintf(tr("Left '%s' and removed its %d task(s) here"), p.Name, n))
+	m.flashInfo(fmt.Sprintf(tr("Left '%s' and removed its %d task(s) here"), p.Name, len(ids)))
 	repo := m.repo
 	return tea.Batch(clearErrAfter(), func() tea.Msg {
 		todos, err := repo.Load()

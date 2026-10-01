@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/Iliorn/tjek/paths"
 	"github.com/Iliorn/tjek/todo"
@@ -134,4 +135,53 @@ func savePersistedUndoEntries(stack []undoEntry) error {
 	}
 	// 0600 like settings/sync state — the file holds full task content.
 	return writeFileAtomic(path, data, 0600)
+}
+
+// editPersistedUndo rewrites the sidecar's entries through edit, for tasks
+// changed behind the undo history's back: removed outright or moved to a
+// renamed shared project (sharedproject.go). A missing file is left missing.
+func editPersistedUndo(edit func([]undoEntry) []undoEntry) error {
+	entries, err := loadPersistedUndoEntries()
+	if err != nil || len(entries) == 0 {
+		return err
+	}
+	return savePersistedUndoEntries(edit(entries))
+}
+
+// undoWithout is stack less every trace of the tasks gone, which were
+// removed from the store outright rather than deleted. Undo would save one
+// back as a task never seen before, every field stamped now, and in a shared
+// project that copy would win over everyone's later edits. An entry left
+// with nothing to undo is dropped.
+func undoWithout(stack []undoEntry, gone map[string]bool) []undoEntry {
+	out := make([]undoEntry, 0, len(stack))
+	isGone := func(t todo.Todo) bool { return gone[t.ID] }
+	for _, e := range stack {
+		if e.partial != nil || e.ids != nil {
+			e.ids = slices.DeleteFunc(slices.Clone(e.ids), func(id string) bool { return gone[id] })
+			e.partial = slices.DeleteFunc(slices.Clone(e.partial), isGone)
+			if len(e.ids) == 0 {
+				continue
+			}
+		} else {
+			e.full = slices.DeleteFunc(slices.Clone(e.full), isGone)
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// undoRenamingProject moves the tasks stack holds in project old to name, in
+// place, so an undo cannot put one back under a name its project left.
+func undoRenamingProject(stack []undoEntry, old, name string) []undoEntry {
+	for i := range stack {
+		for _, list := range [][]todo.Todo{stack[i].partial, stack[i].full} {
+			for j := range list {
+				if list[j].Project == old {
+					list[j].Project = name
+				}
+			}
+		}
+	}
+	return stack
 }

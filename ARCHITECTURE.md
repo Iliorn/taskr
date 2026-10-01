@@ -273,7 +273,9 @@ everything.
   (`keepsOutOfSync`, filtered both ways in `runClientSync`), so leaving can
   remove its tasks outright (`removeProjectTasks`, no tombstones, which would
   delete them for everyone on a later join) and remember their IDs until
-  then. The app runs `syncAllShared` off the loop after saves
+  then. A task removed outright, by a leave or a move out, leaves the undo
+  history too (`Store.forget`, `forgetUndoOf`): an undo would save it as a
+  new task, every field stamped now, over everyone's later edits. The app runs `syncAllShared` off the loop after saves
   (`sharedSoon`) and on a poll (`sharedPollMsg`), the watcher reloads what it
   merged, and `flushShared` runs on quit; the CLI runs it after every
   mutating command.

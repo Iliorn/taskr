@@ -69,8 +69,8 @@ func cliShare(args []string) int {
 		return 0
 
 	case "sync":
-		_, renames, err := syncAllShared(db, biases, by)
-		for old, name := range renames {
+		pass, err := syncAllShared(db, biases, by)
+		for old, name := range pass.renames {
 			fmt.Printf("%q is now called %q\n", old, name)
 		}
 		if err != nil {
@@ -81,7 +81,7 @@ func cliShare(args []string) int {
 		return 0
 
 	case "leave":
-		p, n, err := leaveShared(db, &c, positionals[0], biases, by)
+		p, ids, err := leaveShared(db, &c, positionals[0], biases, by)
 		if err == nil {
 			err = saveSharedConfig(c)
 		}
@@ -89,7 +89,7 @@ func cliShare(args []string) int {
 			fmt.Fprintf(os.Stderr, "tjek share: %v\n", err)
 			return 1
 		}
-		fmt.Printf("left %q and removed its %d task(s) from this device; joining again brings them back\n", p.Name, n)
+		fmt.Printf("left %q and removed its %d task(s) from this device; joining again brings them back\n", p.Name, len(ids))
 		return 0
 
 	case "rename":
@@ -157,7 +157,7 @@ func maybeSharedSyncCLI() {
 		return
 	}
 	settings, _ := loadSettings()
-	if _, _, err := syncAllShared(db, biasesFromSettings(settings), editor{name: authorName(settings), source: todo.SourceCLI}); err != nil {
+	if _, err := syncAllShared(db, biasesFromSettings(settings), editor{name: authorName(settings), source: todo.SourceCLI}); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: shared project sync: %v\n", err)
 	}
 }
