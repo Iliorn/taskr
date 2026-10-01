@@ -69,7 +69,7 @@ const (
 	// settingKeyFirst is the first of the Keys page's rows, one per
 	// keyPageActions entry (settingKeyAction); they run to numSettingsRows.
 	settingKeyFirst = settingColFirst + 13
-	numSettingsRows = settingKeyFirst + 23
+	numSettingsRows = settingKeyFirst + 22
 )
 
 type pane int

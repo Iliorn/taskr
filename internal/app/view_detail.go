@@ -451,7 +451,7 @@ func (m model) renderDetailPage3(t *todo.Todo) string {
 	}
 	b.WriteString(entryCur + detailLabelStyle.Render(tr("Time entries:")) + "\n")
 	if len(t.TimeEntries) == 0 {
-		b.WriteString("  " + emptySection(isDetailFocused && m.detail.field == fieldTimeEntries, tr("No time entries. Press 'T' to add one.")) + "\n")
+		b.WriteString("  " + emptySection(isDetailFocused && m.detail.field == fieldTimeEntries, tr("No time entries. Press 'a' to add one.")) + "\n")
 	} else {
 		// Per-entry format: "HH:MM–HH:MM (duration)" mirroring the calendar
 		// timeline's range style so the two surfaces look consistent.

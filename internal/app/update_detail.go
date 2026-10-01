@@ -35,17 +35,6 @@ func (m model) updateDetail(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.openEditorForNotes()
 		}
 		return m, nil
-	case "T":
-		// Manual time entry (mirror of the list-view shortcut).
-		if t := m.currentTodo(); t != nil {
-			m.pendingEntryTaskID = t.ID
-			m.mode = modeAddTimeEntry
-			m.textInput.SetValue("")
-			m.textInput.Placeholder = tr("Time spent (45m, 1h30m) or HH:MM-HH:MM…")
-			m.textInput.Focus()
-			return m, textinput.Blink
-		}
-		return m, nil
 	case "esc":
 		if len(m.detailStack) > 0 {
 			return m.popSubtaskDetail()
@@ -472,6 +461,10 @@ func (m model) detailAdd() (tea.Model, tea.Cmd) {
 		return m.openTagSearch()
 	case fieldProject:
 		return m.openProjectSearch()
+	case fieldTimeEntries:
+		if t := m.currentTodo(); t != nil {
+			return m, m.startAddTimeEntry(t.ID)
+		}
 	case fieldSubtasks:
 		m.mode = modeAddSubtask
 		m.textInput.SetValue("")

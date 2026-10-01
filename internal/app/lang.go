@@ -366,7 +366,7 @@ var daTranslations = map[string]string{
 	"search":                                              "søg",
 	"Detail view":                                         "Detaljevisning",
 	"edit field / open subtask":                           "rediger felt / åbn delopgave",
-	"add tag / dep / comment / subtask":                   "tilføj mærke / afh. / kommentar / delopgave",
+	"add to section: tag, subtask, dep, time, comment":    "tilføj i sektion: mærke, delopgave, afh., tid, kommentar",
 	"quick add tag":                                       "tilføj hurtigt mærke",
 	"quick add / change project":                          "tilføj / skift projekt hurtigt",
 	"toggle subtask done":                                 "skift delopgave færdig",
@@ -589,7 +589,7 @@ var daTranslations = map[string]string{
 	"Comments:":                                         "Kommentarer:",
 	"No comments yet. Press 'a' to add one.":            "Ingen kommentarer endnu. Tryk 'a' for at tilføje en.",
 	"Time entries:":                                     "Tidsregistreringer:",
-	"No time entries. Press 'T' to add one.":            "Ingen tidsregistreringer. Tryk 'T' for at tilføje en.",
+	"No time entries. Press 'a' to add one.":            "Ingen tidsregistreringer. Tryk 'a' for at tilføje en.",
 
 	// Task history (view_history.go)
 	"History:":              "Historik:",
@@ -1091,7 +1091,7 @@ var deTranslations = map[string]string{
 	"search":                                              "suchen",
 	"Detail view":                                         "Detailansicht",
 	"edit field / open subtask":                           "Feld bearbeiten / Teilaufgabe",
-	"add tag / dep / comment / subtask":                   "Schlagwort / Abhäng. / Kommentar / Teilaufgabe",
+	"add to section: tag, subtask, dep, time, comment":    "zum Abschnitt: Schlagwort, Teilaufg., Abhäng., Zeit, Kommentar",
 	"quick add tag":                                       "Schlagwort schnell hinzufügen",
 	"quick add / change project":                          "Projekt schnell setzen/ändern",
 	"toggle subtask done":                                 "Teilaufgabe fertig",
@@ -1314,7 +1314,7 @@ var deTranslations = map[string]string{
 	"Comments:":                                         "Kommentare:",
 	"No comments yet. Press 'a' to add one.":            "Noch keine Kommentare. 'a' fügt einen hinzu.",
 	"Time entries:":                                     "Zeiteinträge:",
-	"No time entries. Press 'T' to add one.":            "Keine Zeiteinträge. 'T' fügt einen hinzu.",
+	"No time entries. Press 'a' to add one.":            "Keine Zeiteinträge. 'a' fügt einen hinzu.",
 
 	// Task history (view_history.go)
 	"History:":              "Verlauf:",

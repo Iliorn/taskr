@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Iliorn/tjek/todo"
 )
@@ -106,5 +107,38 @@ func TestScriptRebindFromTheKeysPage(t *testing.T) {
 	}
 	if s, _ := loadSettings(); len(s.Keys) != 0 {
 		t.Errorf("settings.json still holds %v after the reset", s.Keys)
+	}
+}
+
+// Script: the Calendar pages by month on pgup/pgdn and goes back to today on
+// home, the keys that mean "page" and "start" on every list.
+func TestScriptCalendarPagesAndGoesHome(t *testing.T) {
+	m := modelWithTasks(t)
+	m.switchTab(tabCalendar)
+	start := m.calendar.selected
+	m = sendKey(t, m, "pgdown")
+	if got, want := m.calendar.selected.Month(), start.AddDate(0, 1, 0).Month(); got != want {
+		t.Fatalf("pgdn: month %v, want %v", got, want)
+	}
+	m = script(t, m, "pgup", "pgup")
+	if got, want := m.calendar.selected.Month(), start.AddDate(0, -1, 0).Month(); got != want {
+		t.Fatalf("pgup ×2: month %v, want %v", got, want)
+	}
+	m = sendKey(t, m, "home")
+	if y, mo, d := m.calendar.selected.Date(); y != time.Now().Year() || mo != time.Now().Month() || d != time.Now().Day() {
+		t.Errorf("home: selected %v, want today", m.calendar.selected)
+	}
+}
+
+// Script: a in the detail pane's Time section adds a time entry, as a adds a
+// row in every other section.
+func TestScriptAddInTheTimeSectionAddsAnEntry(t *testing.T) {
+	task := todo.New("Tracked work")
+	m := modelWithTasks(t, task)
+	m = sendKey(t, m, "enter")
+	m.detail = detailState{field: fieldTimeEntries}
+	m = script(t, m, "a", "45m", "enter")
+	if got := len(m.get(task.ID).TimeEntries); got != 1 {
+		t.Fatalf("time entries = %d, want 1", got)
 	}
 }

@@ -62,8 +62,9 @@ var paletteExtras = []paletteCmd{
 	// The two board entries are dropped with the board — see paletteCommands.
 	{label: "move card to the next stage", key: "L", tab: tabBoard},
 	{label: "move card to the previous stage", key: "H", tab: tabBoard},
-	{label: "next month", key: "]", tab: tabCalendar},
-	{label: "previous month", key: "[", tab: tabCalendar},
+	{label: "next month", key: "pgdown", tab: tabCalendar},
+	{label: "previous month", key: "pgup", tab: tabCalendar},
+	{label: "jump to today", key: "home", tab: tabCalendar},
 }
 
 // paletteSendable reports whether a registry key can be pressed as one key.
@@ -211,6 +212,12 @@ func keyMsgFor(key string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeyTab}
 	case "delete":
 		return tea.KeyMsg{Type: tea.KeyDelete}
+	case "home":
+		return tea.KeyMsg{Type: tea.KeyHome}
+	case "pgup":
+		return tea.KeyMsg{Type: tea.KeyPgUp}
+	case "pgdown":
+		return tea.KeyMsg{Type: tea.KeyPgDown}
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
 }

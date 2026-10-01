@@ -21,6 +21,8 @@ belongs in the commit message, where it is kept next to the code it explains.
 ### Changed
 
 - Settings opens on General.
+- Calendar: pgup/pgdn change month and home jumps to today, so t always means time tracking.
+- In a task's Time section, a adds a time entry; T stays as the shortcut on the lists.
 
 ## [1.49.1] - 2026-09-30
 

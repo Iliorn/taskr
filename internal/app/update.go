@@ -634,19 +634,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.boardMoveCard(1)
 			}
 
-		case "[", "]":
-			if m.tab == tabCalendar {
-				months := 1
-				if key.String() == "[" {
-					months = -1
-				}
-				m.selectCalendarDay(m.calendar.selected.AddDate(0, months, 0))
-			}
-
 		case "t":
-			if m.tab == tabCalendar {
-				m.selectCalendarDay(time.Now())
-			} else if m.tab == tabTasks || m.drilledIntoTasks() {
+			if m.tab == tabTasks || m.drilledIntoTasks() {
 				cmd = m.toggleRowTimer()
 			}
 
@@ -692,19 +681,30 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down":
 			m.moveCursorDown()
 		case "home":
-			m.listJumpTop()
+			// The calendar's start is today, as a list's is its first row.
+			if m.tab == tabCalendar {
+				m.selectCalendarDay(time.Now())
+			} else {
+				m.listJumpTop()
+			}
 		case "end":
 			m.listJumpBottom()
 		case "pgup":
-			if m.tab == tabSettings {
+			switch m.tab {
+			case tabSettings:
 				m.settingsGroupJump(-1)
-			} else {
+			case tabCalendar:
+				m.selectCalendarDay(m.calendar.selected.AddDate(0, -1, 0))
+			default:
 				m.listPage(-1)
 			}
 		case "pgdown":
-			if m.tab == tabSettings {
+			switch m.tab {
+			case tabSettings:
 				m.settingsGroupJump(1)
-			} else {
+			case tabCalendar:
+				m.selectCalendarDay(m.calendar.selected.AddDate(0, 1, 0))
+			default:
 				m.listPage(1)
 			}
 

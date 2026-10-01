@@ -60,6 +60,11 @@ func sendKey(t *testing.T, m model, k string) model {
 		msg = tea.KeyMsg{Type: tea.KeyLeft}
 	case "right":
 		msg = tea.KeyMsg{Type: tea.KeyRight}
+	case "home", "end", "pgup", "pgdown":
+		msg = keyMsgFor(k)
+		if k == "end" {
+			msg = tea.KeyMsg{Type: tea.KeyEnd}
+		}
 	default:
 		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 	}
