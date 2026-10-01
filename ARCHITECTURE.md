@@ -271,7 +271,8 @@ everything.
   else's, and two people can time one task at once. The calendar and the
   tracked-today count are this person's days and show only their own time;
   a task's own total counts everyone's. A shared project never goes through the sync server
-  (`keepsOutOfSync`, filtered both ways in `runClientSync`), so leaving can
+  (`keepsOutOfSync`, filtered both ways in `runClientSync`, and in
+  `dbStore.MergeIn` when this device is the server), so leaving can
   remove its tasks outright (`removeProjectTasks`, no tombstones, which would
   delete them for everyone on a later join) and remember their IDs until
   then. A task removed outright, by a leave or a move out, leaves the undo

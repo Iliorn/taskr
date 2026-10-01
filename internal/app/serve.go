@@ -215,8 +215,16 @@ type dbStore struct {
 	biases rank.Biases
 }
 
+// MergeIn keeps a shared project out of the sync both ways, as
+// runClientSync does on a client: a device that serves and shares a project
+// neither hands its tasks to the clients nor takes theirs (sharedproject.go).
 func (d dbStore) MergeIn(incoming []todo.Todo) ([]todo.Todo, bool, error) {
-	return mergeIntoStore(d.h, incoming, d.biases)
+	shared, err := loadSharedConfig()
+	if err != nil {
+		return nil, false, err
+	}
+	merged, changed, err := mergeIntoStore(d.h, shared.withoutShared(incoming), d.biases)
+	return shared.withoutShared(merged), changed, err
 }
 
 // newAppSyncServer wires a tasksync.Server to this app: the shared SQLite

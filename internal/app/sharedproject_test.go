@@ -13,6 +13,7 @@ import (
 
 	"github.com/Iliorn/tjek/hlc"
 	"github.com/Iliorn/tjek/rank"
+	"github.com/Iliorn/tjek/tasksync"
 	"github.com/Iliorn/tjek/todo"
 )
 
@@ -810,6 +811,37 @@ func TestSyncServerSkipsSharedProjects(t *testing.T) {
 	got := c.withoutShared([]todo.Todo{shared, left, mine})
 	if len(got) != 1 || got[0].ID != mine.ID {
 		t.Fatalf("kept %d task(s), want only the private one", len(got))
+	}
+}
+
+// A device that serves sync to its others and shares a project keeps the
+// project out of the sync from its side too: a client neither receives its
+// tasks nor gets to change them through the server.
+func TestASyncServerThatSharesKeepsTheProjectOut(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	h := openTestDB(t)
+	shared, mine := tripTask("Book the ferry"), todo.New("Post office")
+	historySave(t, h, s0, editor{name: "Mark"}, []todo.Todo{shared, mine})
+	if err := saveSharedConfig(sharedConfig{Projects: []sharedProject{{ID: "trip", Name: "Trip"}}}); err != nil {
+		t.Fatal(err)
+	}
+	srv := &tasksync.Server{Token: "tok", Store: dbStore{h: h}}
+
+	sneaky := shared
+	sneaky.Title = "Changed through the server"
+	sneaky.ModifiedAt, sneaky.Stamps = s0.Add(time.Hour), nil
+	got, err := srv.Sync([]todo.Todo{sneaky})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != mine.ID {
+		t.Errorf("the server answered with %d task(s), want only the one outside the shared project", len(got))
+	}
+	all, _ := loadTodosForSync(h)
+	for _, x := range all {
+		if x.ID == shared.ID && x.Title != "Book the ferry" {
+			t.Errorf("a client changed the shared task through the server: %q", x.Title)
+		}
 	}
 }
 
