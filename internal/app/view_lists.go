@@ -1409,6 +1409,7 @@ var settingsGroups = []settingsGroup{
 		settingExportFolder,
 		settingImportFile,
 	}},
+	{title: "Keys", rows: settingKeyRows()},
 	{title: "About", rows: []int{
 		settingVersion,
 		settingCheckUpdate,
@@ -1456,6 +1457,9 @@ func (m model) settingsRowVisible(id int) bool {
 // with a trailing mark so an editable value can be told apart from a ‹ cycled ›
 // one without pressing anything.
 func settingsEditsText(id int) bool {
+	if _, ok := settingKeyAction(id); ok {
+		return true
+	}
 	switch id {
 	case settingStages, settingSyncServer, settingSyncToken, settingServerListen, settingServerToken,
 		settingExportFolder, settingImportFile, settingName, settingShareJoin:
@@ -1604,6 +1608,9 @@ func (m model) renderSettingsSection(w int) (string, int) {
 	for i, key := range listColumnKeys {
 		labels[settingColFirst+i] = tr(listColumnLabels[key])
 	}
+	for i, action := range keyPageActions {
+		labels[settingKeyFirst+i] = tr(keyActionLabels[action])
+	}
 	agingVal := tr("Off")
 	if m.rank.Biases.Aging {
 		agingVal = tr("On")
@@ -1702,6 +1709,9 @@ func (m model) renderSettingsSection(w int) (string, int) {
 			v = tr("On")
 		}
 		values[settingColFirst+i] = "‹ " + v + " ›"
+	}
+	for i, action := range keyPageActions {
+		values[settingKeyFirst+i] = keyRowValue(action)
 	}
 
 	// One label column across every group, so the values line up down the

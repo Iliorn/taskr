@@ -16,6 +16,7 @@ belongs in the commit message, where it is kept next to the code it explains.
 ### Added
 
 - Settings → "Tags and projects" hides the Tags and Projects tabs and their detail fields.
+- Settings → Keys moves any single-key action to another key, and backspace puts the default back.
 
 ### Changed
 

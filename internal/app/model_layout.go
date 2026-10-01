@@ -653,7 +653,7 @@ func (m model) extraOverheadLines() int {
 		return 3 + maxPaletteResults
 	case modeSearchTagTab:
 		return 3
-	case modeConfirm, modeConfirmUpdate, modeIdlePrompt:
+	case modeConfirm, modeConfirmUpdate, modeIdlePrompt, modeCaptureKey:
 		return 1
 	}
 	return 0

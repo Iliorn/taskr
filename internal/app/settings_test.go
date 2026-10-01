@@ -433,6 +433,7 @@ func TestSettingsPaneShowsTheCursorsGroup(t *testing.T) {
 		"Export":          "Auto-export folder",
 		"About":           "Check for updates",
 		"Columns":         "Last comment",
+		"Keys":            "Merge tags",
 	}
 	for gi, g := range settingsGroups {
 		if marker[g.title] == "" {
@@ -487,7 +488,7 @@ func TestSettingsEditMarkSurvivesAClippedValue(t *testing.T) {
 // The Columns page has a row per column, and its rows run to the end of the
 // settings IDs.
 func TestColumnsPageCoversEveryColumn(t *testing.T) {
-	if n := numSettingsRows - settingColFirst; n != len(listColumnKeys) {
+	if n := settingKeyFirst - settingColFirst; n != len(listColumnKeys) {
 		t.Fatalf("the Columns page has %d row IDs for %d columns", n, len(listColumnKeys))
 	}
 	for _, k := range listColumnKeys {

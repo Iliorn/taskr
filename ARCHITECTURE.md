@@ -183,6 +183,11 @@ everything.
   `update*` switches expect, so dispatch never learns about rebinding; a key
   that a rebind freed is swallowed. Everything user-facing renders through
   `effectiveKey`, so hints, help and palette move together.
+  Settings → Keys (`keys_settings.go`) edits the same overrides: a row per
+  `keyPageActions` entry (every single-key action but those on enter/esc),
+  enter captures the next key (`modeCaptureKey`), `keyRebindProblem` refuses
+  a key already live in any of the action's contexts, backspace restores the
+  default.
 - **`palette.go`**: the command palette (`ctrl+k`, `modePalette`). Entries
   come from the keymap registry and **press their key** rather than call the
   action, so the palette cannot grow a second code path. Multi-key bindings

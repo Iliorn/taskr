@@ -97,6 +97,9 @@ func dynamicUIStrings() []string {
 	for _, g := range settingsGroups {
 		out = append(out, g.title)
 	}
+	for _, l := range keyActionLabels {
+		out = append(out, l)
+	}
 	// The list columns' names on the Columns page and in the list headers.
 	for _, l := range listColumnLabels {
 		out = append(out, l)

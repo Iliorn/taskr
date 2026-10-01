@@ -110,6 +110,8 @@ func (m model) updateForMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateConfirm(msg)
 	case modeConfirmUpdate:
 		return m.updateConfirmUpdate(msg)
+	case modeCaptureKey:
+		return m.updateCaptureKey(msg)
 	case modeEditTimeEntry:
 		return m.updateEditTimeEntry(msg)
 	case modeIdlePrompt:
@@ -1919,6 +1921,14 @@ func (m model) handleSettingsEnter() (tea.Model, tea.Cmd) {
 func (m *model) settingsAdjust(dir int) tea.Cmd {
 	if m.isBiasSettingRow(m.settingsCursor) {
 		m.cycleBias(m.settingsCursor, dir)
+		return nil
+	}
+	if action, ok := settingKeyAction(m.settingsCursor); ok {
+		if dir > 0 {
+			m.startKeyCapture(action)
+		} else {
+			m.setKeyOverride(action, rebindableActions()[action])
+		}
 		return nil
 	}
 	if key, ok := settingColumnKey(m.settingsCursor); ok {

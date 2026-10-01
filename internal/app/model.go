@@ -66,7 +66,10 @@ const (
 	// settingColFirst is the first of the Columns page's rows, one per
 	// listColumnKeys entry (settingColumnKey); they run to numSettingsRows.
 	settingColFirst
-	numSettingsRows = settingColFirst + 13
+	// settingKeyFirst is the first of the Keys page's rows, one per
+	// keyPageActions entry (settingKeyAction); they run to numSettingsRows.
+	settingKeyFirst = settingColFirst + 13
+	numSettingsRows = settingKeyFirst + 23
 )
 
 type pane int
@@ -158,6 +161,9 @@ const (
 	// modeBoardCard is the read-only card view: the selected card's fields in
 	// place of the columns, until esc (update_board.go).
 	modeBoardCard
+	// modeCaptureKey waits for the key a Settings → Keys row is to move to
+	// (keys_settings.go); captureAction is the action being rebound.
+	modeCaptureKey
 )
 
 // untaggedKey is a sentinel used both as the Tags-tab virtual row for tasks
@@ -368,6 +374,7 @@ type model struct {
 	projectCursor        int
 	tagTabCursor         int
 	settingsCursor       int
+	captureAction        string
 	// Set when the Server toggle opened the token editor because there was
 	// no token yet: saving one then completes the action the user asked for
 	// (start the server) instead of leaving them in a settings row.
