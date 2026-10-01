@@ -419,6 +419,11 @@ func (m model) updateEditProjectInline(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.flashError(fmt.Sprintf(tr("'%s' is a shared project; a rename cannot move tasks into it"), newName))
 					return m, clearErrAfter()
 				}
+				if _, ok := m.shared.find(m.editingProjectName); ok {
+					old := m.editingProjectName
+					m.editingProjectName = ""
+					return m.askRenameShared(old, newName)
+				}
 				m.pushUndo("rename project")
 				touched := m.renameProjectGlobally(m.editingProjectName, newName)
 				m.markModified(touched...)

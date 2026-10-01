@@ -105,13 +105,15 @@ tjek share                               # the projects this device shares, and 
 tjek share start Trip ~/OneDrive         # share Trip in ~/OneDrive/Trip.tjek
 tjek share join ~/OneDrive/Trip.tjek     # join the project a file holds
 tjek share leave Trip                    # leave it and remove its tasks here
+tjek share rename Trip Summer            # rename it for everyone sharing it
 tjek share sync                          # sync every shared project now
 ```
 
 `join` refuses when this device already has tasks in a project of the same
 name, since joining hands them to everyone sharing it; `--merge` goes ahead.
-Every command that changes tasks brings the shared projects up to date
-afterwards. A shared project never goes through `tjek sync`: each machine
+A rename reaches the others on their next sync of the project; the file keeps
+its name. Every command that changes tasks brings the shared projects up to
+date afterwards. A shared project never goes through `tjek sync`: each machine
 joins its file. See [Shared projects](guide.md#shared-projects).
 
 ## Export and import

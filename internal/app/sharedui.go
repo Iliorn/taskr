@@ -8,6 +8,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/Iliorn/tjek/todo"
 )
 
 // sharedui.go is the app's side of shared projects (sharedproject.go): S on a
@@ -34,6 +36,7 @@ type sharedSoonMsg struct{}
 
 type sharedDoneMsg struct {
 	changed bool
+	renames map[string]string // a rename made elsewhere: old name → new
 	err     error
 }
 
@@ -62,10 +65,10 @@ func (m model) handleSharedTick(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if len(m.shared.Projects) > 0 && !m.sharedRunning && db != nil {
 		m.sharedRunning = true
-		b := m.rank.Biases
+		b, by := m.rank.Biases, m.editor()
 		cmds = append(cmds, func() tea.Msg {
-			changed, err := syncAllShared(db, b)
-			return sharedDoneMsg{changed: changed, err: err}
+			changed, renames, err := syncAllShared(db, b, by)
+			return sharedDoneMsg{changed: changed, renames: renames, err: err}
 		})
 	}
 	return m, tea.Batch(cmds...)
@@ -76,6 +79,14 @@ func (m model) handleSharedTick(msg tea.Msg) (tea.Model, tea.Cmd) {
 // the store reloads it here only when no watcher will.
 func (m model) handleSharedDone(msg sharedDoneMsg) (tea.Model, tea.Cmd) {
 	m.sharedRunning = false
+	if len(msg.renames) > 0 {
+		m.shared = m.freshShared()
+		for old, name := range msg.renames {
+			m.followSharedRename(old, name)
+			m.flashInfo(fmt.Sprintf(tr("'%s' is now called '%s'"), old, name))
+		}
+		m.refreshTimerScope()
+	}
 	if msg.err != nil {
 		m.sharedStatus = msg.err.Error()
 		if !m.sharedFailed {
@@ -102,7 +113,7 @@ func (m *model) flushShared() {
 	if len(m.shared.Projects) == 0 || db == nil {
 		return
 	}
-	if _, err := syncAllShared(db, m.rank.Biases); err != nil {
+	if _, _, err := syncAllShared(db, m.rank.Biases, m.editor()); err != nil {
 		fmt.Fprintf(os.Stderr, "Shared project sync on quit failed: %v\n", err)
 	}
 }
@@ -132,15 +143,99 @@ func (m model) startShareOrLeave(name string) (tea.Model, tea.Cmd) {
 	return m, textinput.Blink
 }
 
-// refuseSharedProjectEdit stops a rename or removal of a whole shared project.
-// The name is what ties its tasks to the file on every device, so renaming it
-// here would take every task out of the project for everyone.
-func (m *model) refuseSharedProjectEdit(name string) (bool, tea.Cmd) {
+// refuseSharedProjectRemoval stops x from taking a shared project off all its
+// tasks, which would move every task out of the project for everyone.
+func (m *model) refuseSharedProjectRemoval(name string) (bool, tea.Cmd) {
 	if _, ok := m.shared.find(name); !ok {
 		return false, nil
 	}
-	m.flashError(fmt.Sprintf(tr("'%s' is shared; leave it before renaming or removing it"), name))
+	m.flashError(fmt.Sprintf(tr("'%s' is shared; leave it before removing it"), name))
 	return true, clearErrAfter()
+}
+
+// freshShared is shared.json as it is on disk, which a pass may have changed
+// since m.shared was read (a rename made elsewhere), or m.shared when it
+// cannot be read.
+func (m model) freshShared() sharedConfig {
+	if c, err := loadSharedConfig(); err == nil {
+		return c
+	}
+	return m.shared.clone()
+}
+
+// editor is who this device's changes are signed by.
+func (m model) editor() editor { return editor{name: authorName(appSettings{Name: m.userName})} }
+
+// askRenameShared is enter on the rename of a shared project: renaming it
+// renames it for everyone, so it asks first.
+func (m model) askRenameShared(old, name string) (tea.Model, tea.Cmd) {
+	m.pendingProjectName, m.pendingProjectRename = old, name
+	m.mode = modeConfirm
+	m.confirmOnYes = (*model).confirmRenameShared
+	m.confirmMsg = fmt.Sprintf(tr("Rename '%s' to '%s' for everyone sharing it? (y/n)"), old, name)
+	return m, nil
+}
+
+// confirmRenameShared renames the shared project for everyone. Like leaving,
+// it saves the edits inside the save debounce first and waits for a pass that
+// is running, so the rename covers every task.
+func (m *model) confirmRenameShared() tea.Cmd {
+	if m.sharedRunning {
+		m.flashInfo(tr("A shared project is syncing; try again in a moment"))
+		return clearErrAfter()
+	}
+	if dirty, tombstones := m.Store.drainDirty(); len(dirty) > 0 || len(tombstones) > 0 {
+		m.savePending = false
+		if err := m.repo.Save(dirty, tombstones); err != nil {
+			m.flashError(fmt.Sprintf(tr("Shared project: %v"), err))
+			return clearErrAfter()
+		}
+	}
+	old, name := m.pendingProjectName, m.pendingProjectRename
+	c := m.freshShared()
+	_, err := renameShared(db, &c, old, name, m.rank.Biases, m.editor(), saveSharedConfig)
+	if _, ok := c.find(name); ok {
+		m.shared = c
+		m.followSharedRename(old, name)
+		m.refreshTimerScope()
+	}
+	if err != nil {
+		m.flashError(fmt.Sprintf(tr("Shared project: %v"), err))
+		return clearErrAfter()
+	}
+	m.flashSuccess(fmt.Sprintf(tr("Renamed '%s' to '%s' for everyone sharing it"), old, name))
+	return clearErrAfter()
+}
+
+// followSharedRename moves the tasks in memory from the project's old name to
+// its new one, as the store already has them, and the undo history with
+// them: an undo that put a task back under the old name would take it out of
+// the shared project, for everyone.
+func (m *model) followSharedRename(old, name string) {
+	var ids []string
+	for id, t := range m.tasks {
+		if t.Project == old {
+			t.Project = name
+			ids = append(ids, id)
+		}
+	}
+	for i := range m.undoStack {
+		for _, list := range [][]todo.Todo{m.undoStack[i].partial, m.undoStack[i].full} {
+			for j := range list {
+				if list[j].Project == old {
+					list[j].Project = name
+				}
+			}
+		}
+	}
+	if m.projectPinned == old {
+		m.projectPinned = name
+	}
+	if len(ids) > 0 {
+		m.markModified(ids...)
+	} else {
+		m.markCacheDirty()
+	}
 }
 
 // confirmLeaveShared leaves the project and removes its tasks here. Edits
@@ -160,8 +255,8 @@ func (m *model) confirmLeaveShared() tea.Cmd {
 			return clearErrAfter()
 		}
 	}
-	c := m.shared.clone()
-	p, n, err := leaveShared(db, &c, m.pendingProjectName, m.rank.Biases)
+	c := m.freshShared()
+	p, n, err := leaveShared(db, &c, m.pendingProjectName, m.rank.Biases, m.editor())
 	if err == nil {
 		err = saveSharedConfig(c)
 	}
@@ -190,7 +285,7 @@ func (m model) updateShareFolder(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textInput.CursorEnd()
 			return m, nil
 		case "enter":
-			c := m.shared.clone()
+			c := m.freshShared()
 			p, err := startSharing(&c, m.pendingProjectName, m.textInput.Value())
 			if err == nil {
 				err = saveSharedConfig(c)
@@ -237,7 +332,7 @@ func (m model) updateShareJoin(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textInput.CursorEnd()
 			return m, nil
 		case "enter":
-			c := m.shared.clone()
+			c := m.freshShared()
 			p, err := joinShared(&c, m.textInput.Value())
 			if err != nil {
 				m.flashError(fmt.Sprintf(tr("Shared project: %v"), err))
@@ -268,7 +363,7 @@ func (m model) updateShareJoin(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) confirmJoinShared() tea.Cmd {
-	c := m.shared.clone()
+	c := m.freshShared()
 	p, err := joinShared(&c, m.pendingShareFile)
 	if err == nil {
 		err = saveSharedConfig(c)

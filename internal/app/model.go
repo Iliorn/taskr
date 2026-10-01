@@ -409,8 +409,11 @@ type model struct {
 	// pendingProjectName is the project the x confirm on the Projects tab is
 	// about to clear off its tasks.
 	pendingProjectName string
-	tagOrder           groupSort
-	projectOrder       groupSort
+	// pendingProjectRename is the new name a shared project's rename asks
+	// about (askRenameShared).
+	pendingProjectRename string
+	tagOrder             groupSort
+	projectOrder         groupSort
 	// showFinishedGroups brings back what the Tags and Projects tabs hide by
 	// default: groups with nothing open, and the done tasks inside a group.
 	showFinishedGroups bool
@@ -1116,7 +1119,7 @@ func (m model) runningEntry(t *todo.Todo) *todo.TimeEntry { return t.RunningEntr
 // refreshTimerScope tells the store whose timers are this device's. It runs
 // again whenever the shared projects or the name edits are signed with change.
 func (m *model) refreshTimerScope() {
-	m.setTimerScope(m.shared.timerScope(authorName(appSettings{Name: m.userName})))
+	m.setTimerScope(m.shared.timerScope(m.editor().name))
 }
 
 // openIdlePrompt switches to the runaway-timer prompt for the task's

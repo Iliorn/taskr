@@ -73,6 +73,10 @@ type sharedFile struct {
 	// Departed is the tasks moved out of the project, each with the stamp of
 	// the move (see departures).
 	Departed map[string]hlc.Stamp `json:"departed,omitempty"`
+	// Renamed is when Name was set by a rename, and Former the names the
+	// project had before (see resolveSharedName).
+	Renamed time.Time `json:"renamed,omitzero"`
+	Former  []string  `json:"former,omitempty"`
 }
 
 // sharedProject is one project this device shares.
@@ -80,6 +84,10 @@ type sharedProject struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	File string `json:"file"`
+	// Renamed and Former are this device's view of the project's name, as
+	// the file's (sharedFile).
+	Renamed time.Time `json:"renamed,omitzero"`
+	Former  []string  `json:"former,omitempty"`
 }
 
 // sharedLeft is a project this device left: the tasks it removed, which a
@@ -135,11 +143,15 @@ func (c sharedConfig) clone() sharedConfig {
 
 // keepsOutOfSync reports whether the sync server must neither get t nor
 // give it: a task of a project shared here, which travels through its file,
-// or one this device removed by leaving a project.
+// or one this device removed by leaving a project. A name the project had
+// before a rename counts too, as a task can carry it for the moment between
+// the rename reaching shared.json and reaching the task.
 func (c sharedConfig) keepsOutOfSync(t *todo.Todo) bool {
 	if t.Project != "" {
-		if _, ok := c.find(t.Project); ok {
-			return true
+		for _, p := range c.Projects {
+			if p.Name == t.Project || slices.Contains(p.Former, t.Project) {
+				return true
+			}
 		}
 	}
 	for _, l := range c.Left {
@@ -193,6 +205,15 @@ func (s timerScope) ownerIn(project string) string {
 		return s.me
 	}
 	return ""
+}
+
+// set replaces the project with p's ID by p.
+func (c *sharedConfig) set(p sharedProject) {
+	for i := range c.Projects {
+		if c.Projects[i].ID == p.ID {
+			c.Projects[i] = p
+		}
+	}
 }
 
 // find is the shared project named name, if this device shares one.
@@ -321,7 +342,7 @@ func joinShared(c *sharedConfig, typed string) (sharedProject, error) {
 	if p, ok := c.find(f.Name); ok {
 		return p, fmt.Errorf("a shared project named %q is already joined from %s", p.Name, p.File)
 	}
-	p := sharedProject{ID: f.ID, Name: f.Name, File: path}
+	p := sharedProject{ID: f.ID, Name: f.Name, File: path, Renamed: f.Renamed, Former: f.Former}
 	c.Projects = append(c.Projects, p)
 	// Joining again lets the file bring back what leaving removed.
 	c.Left = slices.DeleteFunc(c.Left, func(l sharedLeft) bool { return l.ID == f.ID })
@@ -333,12 +354,15 @@ func joinShared(c *sharedConfig, typed string) (sharedProject, error) {
 // made here is lost to the others; a file it cannot reach does not stop the
 // leave. The removal is outright, with no tombstones (see the top of the
 // file), and returns how many tasks went.
-func leaveShared(h *sql.DB, c *sharedConfig, name string, b rank.Biases) (sharedProject, int, error) {
+func leaveShared(h *sql.DB, c *sharedConfig, name string, b rank.Biases, by editor) (sharedProject, int, error) {
 	p, ok := c.find(name)
 	if !ok {
 		return p, 0, fmt.Errorf("%q is not a shared project", name)
 	}
-	_, _ = syncShared(h, p, b)
+	// A rename the pass adopts moves the tasks to the new name.
+	if res, err := syncShared(h, p, b, by, nil); err == nil {
+		p = res.project
+	}
 	ids, err := removeProjectTasks(h, p.Name)
 	if err != nil {
 		return p, 0, err
@@ -439,13 +463,23 @@ func sharedConflictCopies(file string) []string {
 type sharedResult struct {
 	changed bool // the merge changed the store
 	wrote   bool // the file was rewritten
+	// project is the project as the pass left it; renamedFrom is the name
+	// it had here before, when the pass took up a rename made elsewhere.
+	project     sharedProject
+	renamedFrom string
 }
 
 // syncShared runs one pass over p's file: fold the file and any conflict
 // copies of it into the store, then write the project back when the file
 // does not already say what the store holds, and remove the copies it took.
-func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error) {
-	var res sharedResult
+//
+// When the file names the project differently, the later rename wins
+// (resolveSharedName). A rename made elsewhere is taken up here: adopt
+// records the project under its new name (in shared.json), and then this
+// device's tasks move to it, in that order, so no moment has them under a
+// name shared.json does not know. adopt may be nil.
+func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func(sharedProject) error) (sharedResult, error) {
+	res := sharedResult{project: p}
 	f, err := readSharedFile(p.File)
 	if err != nil {
 		return res, err
@@ -455,6 +489,7 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 	}
 	incoming := f.Tasks
 	departed := maps.Clone(f.Departed)
+	names := []sharedName{p.sharedName(), f.sharedName()}
 	var copies []string
 	for _, cp := range sharedConflictCopies(p.File) {
 		cf, err := readSharedFile(cp)
@@ -463,7 +498,25 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 		}
 		incoming = append(incoming, cf.Tasks...)
 		departed = joinDepartures(departed, cf.Departed)
+		names = append(names, cf.sharedName())
 		copies = append(copies, cp)
+	}
+	name := resolveSharedName(names)
+	was := p.Name
+	p.Name, p.Renamed, p.Former = name.Name, name.Renamed, name.Former
+	if !slices.Equal(p.Former, res.project.Former) || p.Name != was || !p.Renamed.Equal(res.project.Renamed) {
+		if adopt != nil {
+			if err := adopt(p); err != nil {
+				return res, err
+			}
+		}
+		res.project = p
+	}
+	if p.Name != was {
+		if err := renameProjectTasks(h, was, p.Name, b, by); err != nil {
+			return res, err
+		}
+		res.renamedFrom, res.changed = was, true
 	}
 	if len(incoming) > 0 {
 		local, err := loadTodosForSync(h)
@@ -491,6 +544,7 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 		}
 	}
 	f.Departed = departed
+	f.Name, f.Renamed, f.Former = p.Name, p.Renamed, p.Former
 	f.Tasks = []todo.Todo{}
 	for i := range all {
 		if all[i].Project == p.Name {
@@ -514,6 +568,115 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 		_ = os.Remove(cp) // merged and written; one left behind is merged again
 	}
 	return res, nil
+}
+
+// A shared project's name ties its tasks to it on every device, so a rename
+// travels through the file: the device that renames writes the new name with
+// when it was set and the names before it, and every other device, on its
+// next pass, moves its own tasks over (renameProjectTasks). Two renames made
+// at once settle on the later one, the greater name breaking a tie, so every
+// device ends on the same name whichever copy it read first.
+
+// sharedName is a project's name as one holder has it.
+type sharedName struct {
+	Name    string
+	Renamed time.Time
+	Former  []string
+}
+
+func (p sharedProject) sharedName() sharedName { return sharedName{p.Name, p.Renamed, p.Former} }
+func (f sharedFile) sharedName() sharedName    { return sharedName{f.Name, f.Renamed, f.Former} }
+
+// resolveSharedName is the name the holders settle on, with every other name
+// any of them had as its former names.
+func resolveSharedName(names []sharedName) sharedName {
+	win := names[0]
+	former := map[string]bool{}
+	for _, n := range names {
+		former[n.Name] = true
+		for _, f := range n.Former {
+			former[f] = true
+		}
+		if n.Renamed.After(win.Renamed) || (n.Renamed.Equal(win.Renamed) && n.Name > win.Name) {
+			win = n
+		}
+	}
+	delete(former, win.Name)
+	out := sharedName{Name: win.Name, Renamed: win.Renamed}
+	for f := range former {
+		out.Former = append(out.Former, f)
+	}
+	sort.Strings(out.Former)
+	return out
+}
+
+// renameShared renames the shared project old to name for everyone sharing
+// it: shared.json first (save), then this device's tasks, then the file. A
+// file that cannot be reached now takes the name on a later pass. A project
+// of the new name already here would be handed to everyone, so it is refused.
+func renameShared(h *sql.DB, c *sharedConfig, old, name string, b rank.Biases, by editor, save func(sharedConfig) error) (sharedProject, error) {
+	name = strings.TrimSpace(name)
+	p, ok := c.find(old)
+	switch {
+	case !ok:
+		return p, fmt.Errorf("%q is not a shared project", old)
+	case name == "" || name == old:
+		return p, errors.New("no new name")
+	}
+	if _, taken := c.find(name); taken {
+		return p, fmt.Errorf("%q is already shared", name)
+	}
+	todos, err := loadTodosForSync(h)
+	if err != nil {
+		return p, err
+	}
+	if localProjectTasks(todos, name) > 0 {
+		return p, fmt.Errorf("there is already a project named %q here", name)
+	}
+	p.Former = slices.DeleteFunc(append(slices.Clone(p.Former), old), func(f string) bool { return f == name })
+	slices.Sort(p.Former)
+	p.Former = slices.Compact(p.Former)
+	p.Name, p.Renamed = name, time.Now()
+	c.set(p)
+	if err := save(*c); err != nil {
+		return p, err
+	}
+	if err := renameProjectTasks(h, old, name, b, by); err != nil {
+		return p, err
+	}
+	if _, err := syncShared(h, p, b, by, func(q sharedProject) error {
+		c.set(q)
+		return save(*c)
+	}); err != nil {
+		return p, fmt.Errorf("renamed here; the others get the name once %s can be reached: %w", filepath.Base(p.File), err)
+	}
+	return p, nil
+}
+
+// renameProjectTasks moves every task of the project from to the project to,
+// as a change of tjek's own signed by by (todo.Todo.Auto).
+func renameProjectTasks(h *sql.DB, from, to string, b rank.Biases, by editor) error {
+	all, err := loadTodosForSync(h)
+	if err != nil {
+		return err
+	}
+	var moved, live []*todo.Todo
+	for i := range all {
+		t := &all[i]
+		if t.Project == from {
+			t.Project, t.Auto = to, true
+			moved = append(moved, t)
+		}
+		if !t.Deleted {
+			live = append(live, t)
+		}
+	}
+	if len(moved) == 0 {
+		return nil
+	}
+	now := time.Now()
+	rk := rank.Ranker{Biases: b}.Refreshed(now, live)
+	return saveStamped(h, moved, nil, rk.ScoreNow(), now, by)
 }
 
 // A task moved out of a shared project leaves the file, and the others must
@@ -682,7 +845,9 @@ func encodeSharedFile(f sharedFile) ([]byte, error) {
 		Created  time.Time            `json:"created"`
 		Tasks    []json.RawMessage    `json:"tasks"`
 		Departed map[string]hlc.Stamp `json:"departed,omitempty"`
-	}{f.Format, f.ID, f.Name, f.Created.UTC(), tasks, f.Departed}, "", "  ")
+		Renamed  time.Time            `json:"renamed,omitzero"`
+		Former   []string             `json:"former,omitempty"`
+	}{f.Format, f.ID, f.Name, f.Created.UTC(), tasks, f.Departed, f.Renamed.UTC(), f.Former}, "", "  ")
 	if err != nil {
 		return nil, err
 	}
@@ -691,19 +856,30 @@ func encodeSharedFile(f sharedFile) ([]byte, error) {
 
 // syncAllShared runs syncShared for every project this device shares. A
 // project that fails does not stop the others; the errors come back together.
-func syncAllShared(h *sql.DB, b rank.Biases) (changed bool, err error) {
+// A rename one of them takes up is saved to shared.json, and comes back in
+// renames, old name to new.
+func syncAllShared(h *sql.DB, b rank.Biases, by editor) (changed bool, renames map[string]string, err error) {
 	c, err := loadSharedConfig()
 	if err != nil || len(c.Projects) == 0 {
-		return false, err
+		return false, nil, err
 	}
 	var errs []error
-	for _, p := range c.Projects {
-		res, err := syncShared(h, p, b)
+	for _, p := range slices.Clone(c.Projects) {
+		res, err := syncShared(h, p, b, by, func(q sharedProject) error {
+			c.set(q)
+			return saveSharedConfig(c)
+		})
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", p.Name, err))
 			continue
 		}
 		changed = changed || res.changed
+		if res.renamedFrom != "" {
+			if renames == nil {
+				renames = map[string]string{}
+			}
+			renames[res.renamedFrom] = res.project.Name
+		}
 	}
-	return changed, errors.Join(errs...)
+	return changed, renames, errors.Join(errs...)
 }

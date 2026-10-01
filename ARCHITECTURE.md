@@ -252,9 +252,14 @@ everything.
   stage (`withoutStage`), and a merge keeps the one this device gave a task
   (`keepLocalStages`), since people sharing a project need not share
   columns; done is a status and is shared. Which projects are shared lives in the local
-  `shared.json`, by name, so a shared project's name is fixed while it is
-  shared: r and x on its row refuse, as does renaming another project onto
-  it (`refuseSharedProjectEdit`). A task moved out of the project is
+  `shared.json`, by name, so a rename travels through the file: r on the
+  row asks and renames it for everyone (`renameShared`: shared.json, then
+  the tasks, then the file's `Name`, `Renamed` and `Former`), and every other
+  device's pass takes it up (`resolveSharedName`: the later rename wins),
+  moving its own tasks over and rewriting its undo history to match
+  (`followSharedRename`). A former name stays off the sync server
+  (`keepsOutOfSync`). x on the row refuses (`refuseSharedProjectRemoval`), as
+  does renaming another project onto a shared one. A task moved out of the project is
   recorded in the file by ID and project stamp (`Departed`, `departures`),
   and a device that still holds it in the project removes it outright, as
   leaving does; without the record the two devices would rewrite the file

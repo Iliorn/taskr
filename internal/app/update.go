@@ -2100,9 +2100,6 @@ func (m model) handleListRename() (tea.Model, tea.Cmd) {
 		}
 		{
 			if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
-				if refused, cmd := m.refuseSharedProjectEdit(projects[m.projectCursor]); refused {
-					return m, cmd
-				}
 				m.editingProjectName = projects[m.projectCursor]
 				m.mode = modeEditProjectInline
 				m.textInput.SetValue(projects[m.projectCursor])
@@ -2146,7 +2143,7 @@ func (m model) handleListDelete() (tea.Model, tea.Cmd) {
 		// nothing was wired to it. Clearing the project off its tasks is the
 		// mirror of the r rename, and leaves the tasks themselves alone.
 		if projects := m.allProjectsForList(); m.projectCursor < len(projects) {
-			if refused, cmd := m.refuseSharedProjectEdit(projects[m.projectCursor]); refused {
+			if refused, cmd := m.refuseSharedProjectRemoval(projects[m.projectCursor]); refused {
 				return m, cmd
 			}
 			m.pendingProjectName = projects[m.projectCursor]

@@ -55,12 +55,25 @@ to set up.
 - **Leave**: `S` on the shared project again. Its tasks are removed from
   this device, and the others keep theirs. Joining again brings everything
   back, comments and history included.
+- **Rename**: `r` on the shared project. tjek asks, then renames it for
+  everyone; the others get the new name the next time their tjek looks at the
+  file, which keeps its name. `x` (remove the project from all its tasks) is
+  refused on a shared project, since it would take every task out of it for
+  everyone.
 
 Everything about the project's tasks is shared: fields, subtasks, comments,
 tracked time and history, each signed with the name of whoever made it (see
 [History](#history)). Changes made at the same time to different fields of
 one task both survive, as they do with [sync](sync.md). Your other tasks
 stay private.
+
+A few things stay each person's own. Board columns: a card you move on your
+board does not move on theirs, and a task they add starts in your first
+column; done is shared. Timers: a timer is the person's who started it, so
+starting yours never stops theirs and two of you can time one task at once;
+your calendar shows only your own time, while the task's total counts
+everyone's. A task moved out of the shared project leaves the others'
+devices, with nothing of it left in the file.
 
 tjek writes the file a few seconds after a change and looks for the others'
 changes every 30 seconds while it runs; the command line does both after

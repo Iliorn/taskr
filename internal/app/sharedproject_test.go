@@ -56,7 +56,10 @@ func (s *sharer) sync(t *testing.T, name string) sharedResult {
 	if !ok {
 		t.Fatalf("%s does not share %q", s.by.name, name)
 	}
-	res, err := syncShared(s.h, p, rank.Biases{})
+	res, err := syncShared(s.h, p, rank.Biases{}, s.by, func(q sharedProject) error {
+		s.cfg.set(q)
+		return nil
+	})
 	if err != nil {
 		t.Fatalf("%s syncing %q: %v", s.by.name, name, err)
 	}
@@ -460,6 +463,73 @@ func TestASharedTaskTimerIsItsStartersOwn(t *testing.T) {
 	}
 }
 
+// Anna renames the shared project; on Mark's next pass his shared.json and
+// every task of his take the new name, a task he made since his last pass
+// included, and nothing leaves the project. Two renames at once settle on
+// the later one on both devices.
+func TestASharedProjectRenameReachesEveryone(t *testing.T) {
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	ferry := tripTask("Book the ferry")
+	anna.save(t, s0, ferry)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+	bags := tripTask("Pack the bags")
+	mark.save(t, s0.Add(time.Minute), bags)
+
+	save := func(sharedConfig) error { return nil }
+	if _, err := renameShared(anna.h, &anna.cfg, "Trip", "Summer", rank.Biases{}, anna.by, save); err != nil {
+		t.Fatal(err)
+	}
+	res := mark.sync(t, "Trip")
+	if res.renamedFrom != "Trip" || res.project.Name != "Summer" {
+		t.Errorf("Mark's pass: %+v, want the rename taken up", res)
+	}
+	if _, ok := mark.cfg.find("Summer"); !ok {
+		t.Fatalf("Mark's shared.json: %+v", mark.cfg.Projects)
+	}
+	for _, id := range []string{ferry.ID, bags.ID} {
+		if got, _ := mark.task(t, id); got.Project != "Summer" {
+			t.Errorf("Mark's %q is in %q, want Summer", got.Title, got.Project)
+		}
+	}
+	anna.sync(t, "Summer")
+	if got, ok := anna.task(t, bags.ID); !ok || got.Project != "Summer" {
+		t.Errorf("the task Mark made before the rename reached Anna as %+v", got)
+	}
+	if mark.sync(t, "Summer").wrote || anna.sync(t, "Summer").wrote {
+		t.Error("the devices still rewrite the file after the rename")
+	}
+
+	// Both rename before either syncs; Mark's is the later.
+	if _, err := renameShared(anna.h, &anna.cfg, "Summer", "Holiday", rank.Biases{}, anna.by, save); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2 * time.Millisecond)
+	p, _ = mark.cfg.find("Summer")
+	p.Former, p.Name, p.Renamed = []string{"Summer", "Trip"}, "Vacation", time.Now()
+	mark.cfg.set(p)
+	if err := renameProjectTasks(mark.h, "Summer", "Vacation", rank.Biases{}, mark.by); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		mark.sync(t, mark.cfg.Projects[0].Name)
+		anna.sync(t, anna.cfg.Projects[0].Name)
+	}
+	for _, s := range []*sharer{anna, mark} {
+		if got := s.cfg.Projects[0].Name; got != "Vacation" {
+			t.Errorf("%s's project is called %q, want the later rename", s.by.name, got)
+		}
+		for _, id := range []string{ferry.ID, bags.ID} {
+			if got, _ := s.task(t, id); got.Project != "Vacation" {
+				t.Errorf("%s's %q is in %q", s.by.name, got.Title, got.Project)
+			}
+		}
+	}
+}
+
 // Leaving removes the project's tasks from this device outright and leaves
 // the file to the others; joining again brings every task back, history and
 // all, and deletes nothing for anyone.
@@ -474,7 +544,7 @@ func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 	mark.join(t, p.File)
 	mark.sync(t, "Trip")
 
-	_, n, err := leaveShared(mark.h, &mark.cfg, "Trip", rank.Biases{})
+	_, n, err := leaveShared(mark.h, &mark.cfg, "Trip", rank.Biases{}, mark.by)
 	if err != nil || n != 1 {
 		t.Fatalf("leave: removed %d, %v; want the one task", n, err)
 	}
@@ -490,7 +560,7 @@ func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 	if _, err := os.Stat(p.File); err != nil {
 		t.Errorf("leaving took the file away from the others: %v", err)
 	}
-	if _, _, err := leaveShared(mark.h, &mark.cfg, "Trip", rank.Biases{}); err == nil {
+	if _, _, err := leaveShared(mark.h, &mark.cfg, "Trip", rank.Biases{}, mark.by); err == nil {
 		t.Error("leaving a project that is not shared should say so")
 	}
 
@@ -557,7 +627,7 @@ func TestSharedFileGuards(t *testing.T) {
 	if err := os.WriteFile(p.File, []byte(newer), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := syncShared(anna.h, p, rank.Biases{}); err == nil || !strings.Contains(err.Error(), "newer tjek") {
+	if _, err := syncShared(anna.h, p, rank.Biases{}, anna.by, nil); err == nil || !strings.Contains(err.Error(), "newer tjek") {
 		t.Errorf("a file from a newer format: %v, want it refused", err)
 	}
 }
@@ -707,9 +777,12 @@ func TestScriptShareAndLeaveFromTheProjectsTab(t *testing.T) {
 	}
 }
 
-// A shared project's name ties its tasks to the file, so r and x on its row
-// refuse, and no other project can be renamed onto it.
-func TestScriptSharedProjectNameIsFixed(t *testing.T) {
+// r on a shared project renames it for everyone after asking: the tasks, the
+// file and shared.json take the new name, and the undo history follows, so an
+// undo cannot put a task back under the old name. x refuses, as taking the
+// project off every task would move them all out for everyone, and no other
+// project can be renamed onto a shared one.
+func TestScriptRenameASharedProject(t *testing.T) {
 	folder := t.TempDir()
 	setTestHome(t, t.TempDir())
 	testStore(t)
@@ -721,33 +794,57 @@ func TestScriptSharedProjectNameIsFixed(t *testing.T) {
 	m.termWidth, m.termHeight = 120, 40
 	m.tab = tabProjects
 	m.refreshCaches()
-	projects := m.allProjectsForList()
-	m.projectCursor = slices.Index(projects, "Trip")
+	m.projectCursor = slices.Index(m.allProjectsForList(), "Trip")
 	m = sendKey(t, m, "S")
 	m = script(t, m, folder, "enter")
 	if _, ok := m.shared.find("Trip"); !ok {
 		t.Fatalf("not shared: %s", m.err)
 	}
-
-	for _, key := range []string{"r", "x"} {
-		m.projectCursor = slices.Index(m.allProjectsForList(), "Trip")
-		m = sendKey(t, m, key)
-		if m.mode != modeNormal || !strings.Contains(m.err, "leave it before") {
-			t.Errorf("%s on the shared project: mode %v, message %q; want it refused", key, m.mode, m.err)
+	var ferry string
+	for _, x := range m.allTodos() {
+		if x.Title == "Book the ferry" {
+			ferry = x.ID
 		}
+	}
+	m.pushUndo("edit", ferry)
+
+	m.projectCursor = slices.Index(m.allProjectsForList(), "Trip")
+	m = sendKey(t, m, "x")
+	if m.mode != modeNormal || !strings.Contains(m.err, "leave it before removing it") {
+		t.Errorf("x on the shared project: mode %v, message %q; want it refused", m.mode, m.err)
+	}
+
+	m = sendKey(t, m, "r")
+	m.textInput.SetValue("Summer")
+	m = sendKey(t, m, "enter")
+	if m.mode != modeConfirm || !strings.Contains(m.confirmMsg, "for everyone") {
+		t.Fatalf("enter on the new name: mode %v, prompt %q; want the question", m.mode, m.confirmMsg)
+	}
+	m = sendKey(t, m, "y")
+	if _, ok := m.shared.find("Summer"); !ok {
+		t.Fatalf("shared.json in memory still says %+v (%s)", m.shared.Projects, m.err)
+	}
+	if c, _ := loadSharedConfig(); len(c.Projects) != 1 || c.Projects[0].Name != "Summer" || !slices.Equal(c.Projects[0].Former, []string{"Trip"}) {
+		t.Errorf("shared.json on disk: %+v", c.Projects)
+	}
+	if got := m.get(ferry); got.Project != "Summer" {
+		t.Errorf("the task is in %q, want Summer", got.Project)
+	}
+	f, err := readSharedFile(filepath.Join(folder, "Trip.tjek"))
+	if err != nil || f.Name != "Summer" || len(f.Tasks) != 1 || f.Tasks[0].Project != "Summer" {
+		t.Errorf("the file: %+v (%v)", f, err)
+	}
+	m = sendKey(t, m, "u")
+	if got := m.get(ferry); got == nil || got.Project != "Summer" {
+		t.Errorf("an undo from before the rename put the task in %+v", got)
 	}
 
 	m.projectCursor = slices.Index(m.allProjectsForList(), "Home")
 	m = sendKey(t, m, "r")
-	m.textInput.SetValue("Trip")
+	m.textInput.SetValue("Summer")
 	m = sendKey(t, m, "enter")
 	if !strings.Contains(m.err, "cannot move tasks into it") {
 		t.Errorf("renaming Home onto the shared name: message %q, want it refused", m.err)
-	}
-	for _, x := range m.allTodos() {
-		if x.Title == "Paint the fence" && x.Project != "Home" {
-			t.Errorf("the rename went through: Paint the fence is in %q", x.Project)
-		}
 	}
 }
 
