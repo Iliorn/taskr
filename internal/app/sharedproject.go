@@ -329,7 +329,7 @@ func joinShared(c *sharedConfig, typed string) (sharedProject, error) {
 		return sharedProject{}, err
 	}
 	if isDir {
-		files, _ := filepath.Glob(filepath.Join(path, "*"+sharedExt))
+		files := sharedFilesIn(path)
 		if len(files) != 1 {
 			return sharedProject{}, fmt.Errorf("%s holds %d shared project files; name the one to join", typed, len(files))
 		}
@@ -373,6 +373,9 @@ func leaveShared(h *sql.DB, c *sharedConfig, name string, b rank.Biases, by edit
 		return p, nil, err
 	}
 	forgetUndoOf(ids)
+	if _, err := detachOrphans(h, ids, b, by); err != nil {
+		return p, nil, err
+	}
 	c.Projects = slices.DeleteFunc(c.Projects, func(x sharedProject) bool { return x.ID == p.ID })
 	c.Left = append(c.Left, sharedLeft{ID: p.ID, Name: p.Name, Tasks: ids})
 	return p, ids, nil
@@ -471,15 +474,28 @@ func localProjectTasks(todos []todo.Todo, name string) int {
 func sharedConflictCopies(file string) []string {
 	dir, base := filepath.Split(file)
 	stem := strings.TrimSuffix(base, sharedExt)
-	matches, _ := filepath.Glob(filepath.Join(dir, "*"+sharedExt))
 	var out []string
-	for _, m := range matches {
+	for _, m := range sharedFilesIn(dir) {
 		name := strings.TrimSuffix(filepath.Base(m), sharedExt)
 		if name == stem || !strings.HasPrefix(name, stem) {
 			continue
 		}
 		if next := name[len(stem)]; next == ' ' || next == '-' || next == '_' || next == '(' {
 			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// sharedFilesIn is the shared project files in dir, in name order. It lists
+// the folder rather than globbing it, since a folder's name may hold "[" or
+// "*", which a glob would read as a pattern.
+func sharedFilesIn(dir string) []string {
+	entries, _ := os.ReadDir(dir)
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), sharedExt) {
+			out = append(out, filepath.Join(dir, e.Name()))
 		}
 	}
 	return out
@@ -643,6 +659,9 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func
 		}
 		forgetUndoOf(gone)
 		res.changed, res.removed = true, gone
+		if _, err := detachOrphans(h, gone, b, by); err != nil {
+			return res, err
+		}
 		if all, err = loadTodosForSync(h); err != nil {
 			return res, err
 		}
@@ -835,6 +854,27 @@ func detachStraySubtasks(h *sql.DB, project string, b rank.Biases, by editor) (i
 			return false
 		}
 		if parent := byID(t.ParentID); parent != nil && parent.Project == project {
+			return false
+		}
+		t.ParentID = ""
+		return true
+	})
+}
+
+// detachOrphans makes each live task whose parent is among the tasks removed
+// outright a task of its own, and returns how many it made. A subtask filed
+// in another project stays when its shared parent goes, and under a parent
+// the store no longer holds, no list would show it.
+func detachOrphans(h *sql.DB, removed []string, b rank.Biases, by editor) (int, error) {
+	if len(removed) == 0 {
+		return 0, nil
+	}
+	gone := make(map[string]bool, len(removed))
+	for _, id := range removed {
+		gone[id] = true
+	}
+	return autoEdit(h, b, by, func(t *todo.Todo, _ func(string) *todo.Todo) bool {
+		if t.Deleted || !gone[t.ParentID] {
 			return false
 		}
 		t.ParentID = ""

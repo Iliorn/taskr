@@ -730,6 +730,67 @@ func TestASubtaskSharedWithoutItsParentStandsAlone(t *testing.T) {
 	}
 }
 
+// A subtask Mark filed in a project of his own stays when its shared parent
+// leaves his device, by a move out or by his leaving, as a task of its own:
+// under a parent the store no longer holds, no list would show it.
+func TestASubtaskOutsideTheProjectOutlivesItsSharedParent(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	ferry, gift := tripTask("Book the ferry"), tripTask("Mark's birthday present")
+	anna.save(t, s0, ferry, gift)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+
+	tickets, wrap := todo.New("Print the tickets"), todo.New("Buy wrapping paper")
+	tickets.ParentID, tickets.Project = ferry.ID, "Home"
+	wrap.ParentID, wrap.Project = gift.ID, "Home"
+	mark.save(t, s0.Add(time.Minute), tickets, wrap)
+
+	moved, _ := anna.task(t, gift.ID)
+	moved.Project = "Private"
+	anna.save(t, s0.Add(2*time.Minute), moved)
+	anna.sync(t, "Trip")
+	mark.sync(t, "Trip")
+	if _, ok := mark.task(t, gift.ID); ok {
+		t.Fatal("the task moved out is still on Mark's device")
+	}
+	if got, ok := mark.task(t, wrap.ID); !ok || got.ParentID != "" || got.Project != "Home" {
+		t.Errorf("after the move out Mark's subtask is %+v, want it on its own in Home", got)
+	}
+
+	if _, _, err := leaveShared(mark.h, &mark.cfg, "Trip", rank.Biases{}, mark.by); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := mark.task(t, tickets.ID); !ok || got.ParentID != "" || got.Project != "Home" {
+		t.Errorf("after the leave Mark's subtask is %+v, want it on its own in Home", got)
+	}
+}
+
+// A folder whose name holds a pattern character is a name like any other:
+// the project in it can be joined, and its conflict copies are found.
+func TestASharedFolderNameIsNotAPattern(t *testing.T) {
+	folder := filepath.Join(t.TempDir(), "Family [shared]")
+	if err := os.Mkdir(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	p := anna.share(t, "Trip", folder)
+	if q := mark.join(t, folder); q.ID != p.ID {
+		t.Errorf("joining the folder joined %+v, want %q", q, p.Name)
+	}
+	copied := filepath.Join(folder, "Trip (1).tjek")
+	data, _ := os.ReadFile(p.File)
+	if err := os.WriteFile(copied, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := sharedConflictCopies(p.File); !slices.Equal(got, []string{copied}) {
+		t.Errorf("copies %q, want %q", got, copied)
+	}
+}
+
 // A rename made elsewhere onto a name Mark uses for a project of his own
 // moves his project aside rather than into the shared one: taking the name
 // as it is would hand his tasks to everyone.
