@@ -575,7 +575,7 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func
 	if err != nil {
 		return res, err
 	}
-	departed, gone := departures(p.Name, incoming, all, departed)
+	departed, gone := departures(p.Name, incoming, all, departed, time.Now())
 	if len(gone) > 0 {
 		if err := removeTasks(h, gone); err != nil {
 			return res, err
@@ -770,14 +770,17 @@ func renameProjectTasks(h *sql.DB, from, to string, skip map[string]bool, b rank
 // A task moved back in after its move out is the project's again.
 
 // departures is the file's record of the tasks moved out of the project,
-// with the moves this device made, and the tasks this device must remove
-// because they left. incoming is what the file and its copies hold, local
-// the store after the merge.
-func departures(project string, incoming, local []todo.Todo, known map[string]hlc.Stamp) (map[string]hlc.Stamp, []string) {
+// with the moves this device made, less the ones older than a tombstone is
+// kept (tombstoneRetention), and the tasks this device must remove because
+// they left. incoming is what the file and its copies hold, local the store
+// after the merge.
+func departures(project string, incoming, local []todo.Todo, known map[string]hlc.Stamp, now time.Time) (map[string]hlc.Stamp, []string) {
 	out := maps.Clone(known)
 	if out == nil {
 		out = make(map[string]hlc.Stamp)
 	}
+	cutoff := now.Add(-tombstoneRetention)
+	maps.DeleteFunc(out, func(_ string, s hlc.Stamp) bool { return s.Time().Before(cutoff) })
 	byID := make(map[string]*todo.Todo, len(local))
 	for i := range local {
 		byID[local[i].ID] = &local[i]

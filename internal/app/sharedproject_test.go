@@ -11,6 +11,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/Iliorn/tjek/hlc"
 	"github.com/Iliorn/tjek/rank"
 	"github.com/Iliorn/tjek/todo"
 )
@@ -383,6 +384,20 @@ func TestATaskMovedOutOfASharedProjectLeavesEveryone(t *testing.T) {
 	}
 	if mark.sync(t, "Trip").wrote || anna.sync(t, "Trip").wrote {
 		t.Error("the devices still rewrite the file after the move back")
+	}
+}
+
+// The record of a move out is kept as long as a tombstone, then dropped, so
+// the file does not grow with every task that ever left the project.
+func TestOldDeparturesAreDropped(t *testing.T) {
+	now := s0.Add(tombstoneRetention + 24*time.Hour)
+	known := map[string]hlc.Stamp{"old": hlc.At(s0), "recent": hlc.At(now.Add(-time.Hour))}
+	got, gone := departures("Trip", nil, nil, known, now)
+	if len(got) != 1 || got["recent"] == "" || len(gone) != 0 {
+		t.Errorf("departures kept %v (gone %v), want only the recent move", got, gone)
+	}
+	if len(known) != 2 {
+		t.Error("departures changed the record it was handed")
 	}
 }
 
