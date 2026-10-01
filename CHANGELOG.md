@@ -13,6 +13,17 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+## [1.51.1] - 2026-10-01
+
+### Fixed
+
+- Sharing a project no longer puts the tasks you had deleted from it in the shared file.
+- Undo no longer brings back tasks removed by leaving a shared project.
+- A shared project renamed to a name you already use moves your own project to "Name (2)".
+- The open app picks up `tjek share` join, leave and rename from a terminal within 30 seconds.
+- A device that is a sync server no longer hands its shared projects to its sync clients.
+- A shared file no longer keeps its record of moved-out tasks forever.
+
 ## [1.51.0] - 2026-10-01
 
 ### Added
