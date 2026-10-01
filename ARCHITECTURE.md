@@ -254,7 +254,11 @@ everything.
   columns; done is a status and is shared. Which projects are shared lives in the local
   `shared.json`, by name, so a shared project's name is fixed while it is
   shared: r and x on its row refuse, as does renaming another project onto
-  it (`refuseSharedProjectEdit`). A shared project never goes through the sync server
+  it (`refuseSharedProjectEdit`). A task moved out of the project is
+  recorded in the file by ID and project stamp (`Departed`, `departures`),
+  and a device that still holds it in the project removes it outright, as
+  leaving does; without the record the two devices would rewrite the file
+  against each other forever. A shared project never goes through the sync server
   (`keepsOutOfSync`, filtered both ways in `runClientSync`), so leaving can
   remove its tasks outright (`removeProjectTasks`, no tombstones, which would
   delete them for everyone on a later join) and remember their IDs until

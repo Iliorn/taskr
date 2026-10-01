@@ -70,6 +70,9 @@ type sharedFile struct {
 	Name    string      `json:"name"`
 	Created time.Time   `json:"created"`
 	Tasks   []todo.Todo `json:"tasks"`
+	// Departed is the tasks moved out of the project, each with the stamp of
+	// the move (see departures).
+	Departed map[string]hlc.Stamp `json:"departed,omitempty"`
 }
 
 // sharedProject is one project this device shares.
@@ -341,6 +344,15 @@ func removeProjectTasks(h *sql.DB, name string) ([]string, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if err := removeTaskRows(tx, ids); err != nil {
+		return nil, err
+	}
+	return ids, tx.Commit()
+}
+
+// removeTaskRows deletes every row of the tasks ids, as removeProjectTasks
+// describes.
+func removeTaskRows(tx *sql.Tx, ids []string) error {
 	for _, id := range ids {
 		for _, q := range []string{
 			`DELETE FROM task_tags WHERE task_id = ?1`,
@@ -351,11 +363,11 @@ func removeProjectTasks(h *sql.DB, name string) ([]string, error) {
 			`DELETE FROM todos WHERE id = ?1`,
 		} {
 			if _, err := tx.Exec(q, id); err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
-	return ids, tx.Commit()
+	return nil
 }
 
 // localProjectTasks counts the live tasks this device already files under
@@ -412,6 +424,7 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 		return res, fmt.Errorf("%s now holds another project (%q)", p.File, f.Name)
 	}
 	incoming := f.Tasks
+	departed := maps.Clone(f.Departed)
 	var copies []string
 	for _, cp := range sharedConflictCopies(p.File) {
 		cf, err := readSharedFile(cp)
@@ -419,6 +432,7 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 			continue // not a copy of this project, or not one tjek can read
 		}
 		incoming = append(incoming, cf.Tasks...)
+		departed = joinDepartures(departed, cf.Departed)
 		copies = append(copies, cp)
 	}
 	if len(incoming) > 0 {
@@ -436,6 +450,17 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 	if err != nil {
 		return res, err
 	}
+	departed, gone := departures(p.Name, incoming, all, departed)
+	if len(gone) > 0 {
+		if err := removeTasks(h, gone); err != nil {
+			return res, err
+		}
+		res.changed = true
+		if all, err = loadTodosForSync(h); err != nil {
+			return res, err
+		}
+	}
+	f.Departed = departed
 	f.Tasks = []todo.Todo{}
 	for i := range all {
 		if all[i].Project == p.Name {
@@ -460,6 +485,91 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases) (sharedResult, error)
 	}
 	return res, nil
 }
+
+// A task moved out of a shared project leaves the file, and the others must
+// hear of it: a device that still held it in the project would write it back
+// on every pass, the device that moved it would take it out again, and the
+// two would rewrite the file against each other for good. So the file
+// remembers each move out (Departed: the task's ID and the stamp of its
+// project), and a device holding the task in the project from before the
+// move removes it outright, as leaving does: the task is still someone's, so
+// it must not be deleted for them. The record holds nothing of the task, so
+// a task moved out to be kept private stays private, and it stays as long as
+// tombstones do, so a device that was away when the task left still hears.
+// A task moved back in after its move out is the project's again.
+
+// departures is the file's record of the tasks moved out of the project,
+// with the moves this device made, and the tasks this device must remove
+// because they left. incoming is what the file and its copies hold, local
+// the store after the merge.
+func departures(project string, incoming, local []todo.Todo, known map[string]hlc.Stamp) (map[string]hlc.Stamp, []string) {
+	out := maps.Clone(known)
+	if out == nil {
+		out = make(map[string]hlc.Stamp)
+	}
+	byID := make(map[string]*todo.Todo, len(local))
+	for i := range local {
+		byID[local[i].ID] = &local[i]
+	}
+	// The merge kept the later project, so a task the file holds in the
+	// project and the store holds out of it was moved out here.
+	for i := range incoming {
+		if incoming[i].Project != project {
+			continue
+		}
+		if t := byID[incoming[i].ID]; t != nil && t.Project != project {
+			out = joinDepartures(out, map[string]hlc.Stamp{t.ID: t.Stamp(projectKey)})
+		}
+	}
+	var gone []string
+	for id, s := range out {
+		t := byID[id]
+		if t == nil || t.Project != project {
+			continue
+		}
+		if t.Stamp(projectKey).After(s) {
+			delete(out, id) // moved back in since
+			continue
+		}
+		gone = append(gone, id)
+	}
+	sort.Strings(gone)
+	if len(out) == 0 {
+		out = nil
+	}
+	return out, gone
+}
+
+// joinDepartures is the union of two records of moves out, keeping the later
+// move of a task in both.
+func joinDepartures(a, b map[string]hlc.Stamp) map[string]hlc.Stamp {
+	if len(b) == 0 {
+		return a
+	}
+	if a == nil {
+		a = make(map[string]hlc.Stamp, len(b))
+	}
+	for id, s := range b {
+		a[id] = hlc.Max(a[id], s)
+	}
+	return a
+}
+
+// removeTasks deletes the tasks ids outright, as removeProjectTasks does.
+func removeTasks(h *sql.DB, ids []string) error {
+	tx, err := h.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := removeTaskRows(tx, ids); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// projectKey is the merge unit of a task's project (todo.Fields).
+const projectKey = "project"
 
 // stageKey is the merge unit of a task's board column (todo.Fields).
 const stageKey = "stage"
@@ -536,12 +646,13 @@ func encodeSharedFile(f sharedFile) ([]byte, error) {
 		tasks[i] = tasksync.CanonicalJSON(f.Tasks[i])
 	}
 	data, err := json.MarshalIndent(struct {
-		Format  int               `json:"format"`
-		ID      string            `json:"id"`
-		Name    string            `json:"name"`
-		Created time.Time         `json:"created"`
-		Tasks   []json.RawMessage `json:"tasks"`
-	}{f.Format, f.ID, f.Name, f.Created.UTC(), tasks}, "", "  ")
+		Format   int                  `json:"format"`
+		ID       string               `json:"id"`
+		Name     string               `json:"name"`
+		Created  time.Time            `json:"created"`
+		Tasks    []json.RawMessage    `json:"tasks"`
+		Departed map[string]hlc.Stamp `json:"departed,omitempty"`
+	}{f.Format, f.ID, f.Name, f.Created.UTC(), tasks, f.Departed}, "", "  ")
 	if err != nil {
 		return nil, err
 	}

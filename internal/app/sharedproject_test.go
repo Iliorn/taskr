@@ -314,6 +314,75 @@ func TestAgreeingDevicesStopWriting(t *testing.T) {
 	}
 }
 
+// A task Anna moves out of the shared project leaves Mark's device too, with
+// nothing of it left in the file, and the two stop rewriting the file; moved
+// back in, it returns to him.
+func TestATaskMovedOutOfASharedProjectLeavesEveryone(t *testing.T) {
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	ferry, gift := tripTask("Book the ferry"), tripTask("Mark's birthday present")
+	anna.save(t, s0, ferry, gift)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+
+	moved, _ := anna.task(t, gift.ID)
+	moved.Project = "Private"
+	anna.save(t, s0.Add(time.Minute), moved)
+	anna.sync(t, "Trip")
+	if res := mark.sync(t, "Trip"); !res.changed {
+		t.Error("Mark's pass did not report the removal")
+	}
+	if _, ok := mark.task(t, gift.ID); ok {
+		t.Fatal("the task moved out is still on Mark's device")
+	}
+	if got, _ := anna.task(t, gift.ID); got.Project != "Private" || got.Deleted {
+		t.Fatalf("Anna's task is %+v, want it kept in Private", got)
+	}
+	if _, ok := mark.task(t, ferry.ID); !ok {
+		t.Fatal("the task still in the project left Mark's device too")
+	}
+	data, _ := os.ReadFile(p.File)
+	if strings.Contains(string(data), "birthday") || strings.Contains(string(data), "Private") {
+		t.Errorf("the file still tells of the task moved out:\n%s", data)
+	}
+	anna.sync(t, "Trip")
+	if mark.sync(t, "Trip").wrote || anna.sync(t, "Trip").wrote {
+		t.Error("the devices still rewrite the file after the move out")
+	}
+
+	// A tjek without the record writes the task back as it last knew it.
+	stale := moved
+	stale.Project = "Trip"
+	stale.Stamps = nil
+	stale.ModifiedAt = s0
+	f, _ := readSharedFile(p.File)
+	f.Tasks, f.Departed = append(f.Tasks, stale), nil
+	data, _ = encodeSharedFile(f)
+	if err := os.WriteFile(p.File, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mark.sync(t, "Trip")
+	anna.sync(t, "Trip")
+	mark.sync(t, "Trip")
+	if _, ok := mark.task(t, gift.ID); ok {
+		t.Error("an older tjek's copy brought the task back to Mark for good")
+	}
+
+	back, _ := anna.task(t, gift.ID)
+	back.Project = "Trip"
+	anna.save(t, s0.Add(2*time.Minute), back)
+	anna.sync(t, "Trip")
+	mark.sync(t, "Trip")
+	if got, ok := mark.task(t, gift.ID); !ok || got.Project != "Trip" {
+		t.Errorf("moved back in, the task did not return to Mark: %+v", got)
+	}
+	if mark.sync(t, "Trip").wrote || anna.sync(t, "Trip").wrote {
+		t.Error("the devices still rewrite the file after the move back")
+	}
+}
+
 // Leaving removes the project's tasks from this device outright and leaves
 // the file to the others; joining again brings every task back, history and
 // all, and deletes nothing for anyone.
