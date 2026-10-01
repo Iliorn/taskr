@@ -258,8 +258,14 @@ everything.
   device's pass takes it up (`resolveSharedName`: the later rename wins),
   moving its own tasks over and rewriting its undo history to match
   (`followSharedRename`); a project of its own by the new name moves aside
-  first (`moveOwnProjectAside`), or it would join the shared one. A former name stays off the sync server
-  (`keepsOutOfSync`). x on the row refuses (`refuseSharedProjectRemoval`), as
+  first (`moveOwnProjectAside`), or it would join the shared one. While a pass moves the
+  tasks, the old name is recorded as `Moving` in shared.json and kept off the
+  sync server (`keepsOutOfSync`); after it the name is free for a project of
+  one's own, and a move cut short is finished by the next pass
+  (`finishMoving`). A task the file holds under a former name, from a device
+  that had not heard of the rename, moves to the new one (`strays`). A
+  subtask in a shared project whose parent is not in it is detached
+  (`detachStraySubtasks`), or the others would hold a subtask of nothing. x on the row refuses (`refuseSharedProjectRemoval`), as
   does renaming another project onto a shared one. A task moved out of the project is
   recorded in the file by ID and project stamp (`Departed`, `departures`),
   and a device that still holds it in the project removes it outright, as

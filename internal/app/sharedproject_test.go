@@ -599,6 +599,137 @@ func TestLeavingRemovesTheTasksAndRejoiningBringsThemBack(t *testing.T) {
 	}
 }
 
+// Once a rename has moved the tasks, the old name is free: a project of
+// one's own by that name syncs like any other. While the move runs it is
+// kept out (Moving), and a move cut short is finished by the next pass.
+func TestARenamedProjectsOldNameIsFreeAgain(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	ferry := tripTask("Book the ferry")
+	anna.save(t, s0, ferry)
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+
+	save := func(sharedConfig) error { return nil }
+	if _, err := renameShared(anna.h, &anna.cfg, "Trip", "Summer", rank.Biases{}, anna.by, save); err != nil {
+		t.Fatal(err)
+	}
+	mine := tripTask("A new Trip of Anna's own")
+	for _, c := range []sharedConfig{anna.cfg, mark.cfg} {
+		if c.Projects[0].Moving != nil {
+			t.Errorf("a finished rename left Moving %v", c.Projects[0].Moving)
+		}
+	}
+	if anna.cfg.keepsOutOfSync(&mine) {
+		t.Error("the old name is still kept from the sync server after the rename")
+	}
+	inTransit := anna.cfg
+	inTransit.Projects = []sharedProject{anna.cfg.Projects[0]}
+	inTransit.Projects[0].Moving = []string{"Trip"}
+	if !inTransit.keepsOutOfSync(&mine) {
+		t.Error("a name the tasks are being moved off is not kept from the sync server")
+	}
+
+	// Mark's pass took the rename up; cut it short after shared.json.
+	mark.sync(t, "Trip")
+	cut := mark.cfg.Projects[0]
+	cut.Moving = []string{"Trip"}
+	mark.cfg.set(cut)
+	if err := renameProjectTasks(mark.h, "Summer", "Trip", nil, rank.Biases{}, mark.by); err != nil {
+		t.Fatal(err)
+	}
+	mark.sync(t, "Summer")
+	if got, _ := mark.task(t, ferry.ID); got.Project != "Summer" || mark.cfg.Projects[0].Moving != nil {
+		t.Errorf("after the pass: task in %q, Moving %v; want the move finished", got.Project, mark.cfg.Projects[0].Moving)
+	}
+}
+
+// A task a device files under the old name before it hears of a rename
+// reaches the others under the new one; a project of their own that took
+// the old name in the meantime keeps its tasks.
+func TestATaskFiledUnderAFormerNameMovesToTheNewOne(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	anna.save(t, s0, tripTask("Book the ferry"))
+	p := anna.share(t, "Trip", folder)
+	anna.sync(t, "Trip")
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+	before, _ := os.ReadFile(p.File)
+
+	save := func(sharedConfig) error { return nil }
+	if _, err := renameShared(anna.h, &anna.cfg, "Trip", "Summer", rank.Biases{}, anna.by, save); err != nil {
+		t.Fatal(err)
+	}
+	private := tripTask("Anna's own new Trip")
+	anna.save(t, s0.Add(time.Hour), private)
+
+	// Mark, not yet aware, adds a task and writes the file at the same time
+	// as Anna: his write lands as a conflict copy of the file he had.
+	late := tripTask("Pack the bags")
+	mark.save(t, s0.Add(time.Hour), late)
+	if err := os.WriteFile(strings.TrimSuffix(p.File, ".tjek")+" (1).tjek", before, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := readSharedFile(strings.TrimSuffix(p.File, ".tjek") + " (1).tjek")
+	got, _ := mark.task(t, late.ID)
+	f.Tasks = append(f.Tasks, got)
+	data, _ := encodeSharedFile(f)
+	if err := os.WriteFile(strings.TrimSuffix(p.File, ".tjek")+" (1).tjek", data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	anna.sync(t, "Summer")
+	if got, _ := anna.task(t, late.ID); got.Project != "Summer" {
+		t.Errorf("Mark's late task is in %q on Anna's device, want Summer", got.Project)
+	}
+	if got, _ := anna.task(t, private.ID); got.Project != "Trip" {
+		t.Errorf("Anna's own Trip task moved to %q", got.Project)
+	}
+	if anna.cfg.keepsOutOfSync(&private) {
+		t.Error("Anna's own Trip is kept from the sync server")
+	}
+	mark.sync(t, "Trip")
+	if got, _ := mark.task(t, late.ID); got.Project != "Summer" {
+		t.Errorf("Mark's task is in %q after his pass, want Summer", got.Project)
+	}
+}
+
+// A subtask put in a shared project while its parent stays out becomes a
+// task of its own: to the others it would be a subtask of nothing.
+func TestASubtaskSharedWithoutItsParentStandsAlone(t *testing.T) {
+	folder := t.TempDir()
+	anna, mark := newSharer(t, "Anna"), newSharer(t, "Mark")
+	parent := todo.New("Plan the holiday")
+	child, kept := tripTask("Book the ferry"), tripTask("Pick seats")
+	child.ParentID = parent.ID
+	trip := tripTask("Rent a car")
+	kept.ParentID = trip.ID
+	anna.save(t, s0, parent, child, trip, kept)
+	p := anna.share(t, "Trip", folder)
+	if res := anna.sync(t, "Trip"); !res.changed {
+		t.Error("the pass did not report the detached subtask")
+	}
+	if got, _ := anna.task(t, child.ID); got.ParentID != "" {
+		t.Errorf("the shared subtask still hangs under %q", got.ParentID)
+	}
+	if got, _ := anna.task(t, kept.ID); got.ParentID != trip.ID {
+		t.Error("a subtask whose parent is in the project was detached")
+	}
+	if data, _ := os.ReadFile(p.File); strings.Contains(string(data), parent.ID) {
+		t.Error("the file still names the private parent")
+	}
+	mark.join(t, p.File)
+	mark.sync(t, "Trip")
+	if got, ok := mark.task(t, child.ID); !ok || got.ParentID != "" {
+		t.Errorf("Mark got %+v, want the task on its own", got)
+	}
+}
+
 // A rename made elsewhere onto a name Mark uses for a project of his own
 // moves his project aside rather than into the shared one: taking the name
 // as it is would hand his tasks to everyone.

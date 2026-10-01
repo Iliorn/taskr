@@ -13,6 +13,11 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+### Fixed
+
+- A shared project's old name is free for a project of your own once a rename is done.
+- A subtask shared without its parent becomes a task of its own instead of vanishing for the others.
+
 ## [1.51.1] - 2026-10-01
 
 ### Fixed

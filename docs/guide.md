@@ -66,7 +66,9 @@ Everything about the project's tasks is shared: fields, subtasks, comments,
 tracked time and history, each signed with the name of whoever made it (see
 [History](#history)). Changes made at the same time to different fields of
 one task both survive, as they do with [sync](sync.md). Your other tasks
-stay private.
+stay private. A subtask you put in a shared project while its parent stays
+out of it becomes a task of its own, since the others do not have the
+parent.
 
 A few things stay each person's own. Board columns: a card you move on your
 board does not move on theirs, and a task they add starts in your first

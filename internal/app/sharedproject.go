@@ -88,6 +88,11 @@ type sharedProject struct {
 	// the file's (sharedFile).
 	Renamed time.Time `json:"renamed,omitzero"`
 	Former  []string  `json:"former,omitempty"`
+	// Moving is the names this device is moving the project's tasks off, to
+	// Name, while it does: set before the move and cleared after, so a task
+	// is never under a name shared.json does not tie to the project, and a
+	// move cut short is finished by the next pass (finishMoving).
+	Moving []string `json:"moving,omitempty"`
 }
 
 // sharedLeft is a project this device left: the tasks it removed, which a
@@ -143,13 +148,13 @@ func (c sharedConfig) clone() sharedConfig {
 
 // keepsOutOfSync reports whether the sync server must neither get t nor
 // give it: a task of a project shared here, which travels through its file,
-// or one this device removed by leaving a project. A name the project had
-// before a rename counts too, as a task can carry it for the moment between
-// the rename reaching shared.json and reaching the task.
+// or one this device removed by leaving a project. A name the project's
+// tasks are being moved off counts too (Moving). A name it had before a
+// rename does not once they are moved, so a project of one's own can take it.
 func (c sharedConfig) keepsOutOfSync(t *todo.Todo) bool {
 	if t.Project != "" {
 		for _, p := range c.Projects {
-			if p.Name == t.Project || slices.Contains(p.Former, t.Project) {
+			if p.Name == t.Project || slices.Contains(p.Moving, t.Project) {
 				return true
 			}
 		}
@@ -503,11 +508,27 @@ type sharedResult struct {
 // When the file names the project differently, the later rename wins
 // (resolveSharedName). A rename made elsewhere is taken up here: this
 // device's own tasks already under the new name move aside first
-// (moveOwnProjectAside), adopt records the project under its new name (in
-// shared.json), and then the project's tasks move to it, in that order, so no
-// moment has them under a name shared.json does not know. adopt may be nil.
+// (moveOwnProjectAside), adopt records the project under its new name with
+// the old one as Moving (in shared.json), the project's tasks move to it, and
+// adopt clears Moving. A task the file holds under a former name, from a
+// device that had not yet heard of a rename, moves to the name the same way.
+// adopt may be nil.
+//
+// A subtask whose parent is not in the project leaves the parent here
+// (detachStraySubtasks): the others would get a subtask of a task they do not
+// have.
 func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func(sharedProject) error) (sharedResult, error) {
+	if adopt == nil {
+		adopt = func(sharedProject) error { return nil }
+	}
 	res := sharedResult{project: p}
+	if len(p.Moving) > 0 {
+		var err error
+		if p, err = finishMoving(h, p, b, by, adopt); err != nil {
+			return res, err
+		}
+		res.project = p
+	}
 	f, err := readSharedFile(p.File)
 	if err != nil {
 		return res, err
@@ -545,11 +566,24 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func
 		}
 	}
 	p.Name, p.Renamed, p.Former = name.Name, name.Renamed, name.Former
-	if !slices.Equal(p.Former, res.project.Former) || p.Name != was || !p.Renamed.Equal(res.project.Renamed) {
-		if adopt != nil {
-			if err := adopt(p); err != nil {
-				return res, err
-			}
+	// The tasks the file holds under a former name, and those names.
+	strays := map[string]string{}
+	for i := range incoming {
+		if t := &incoming[i]; t.Project != p.Name && slices.Contains(p.Former, t.Project) {
+			strays[t.ID] = t.Project
+		}
+	}
+	if p.Name != was {
+		p.Moving = append(p.Moving, was)
+	}
+	for _, f := range strays {
+		p.Moving = append(p.Moving, f)
+	}
+	slices.Sort(p.Moving)
+	p.Moving = slices.Compact(p.Moving)
+	if !slices.Equal(p.Former, res.project.Former) || p.Name != was || !p.Renamed.Equal(res.project.Renamed) || len(p.Moving) > 0 {
+		if err := adopt(p); err != nil {
+			return res, err
 		}
 		res.project = p
 	}
@@ -566,9 +600,36 @@ func syncShared(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func
 			return res, err
 		}
 		keepLocalStages(incoming, local)
-		if _, res.changed, err = mergeIntoStore(h, incoming, b); err != nil {
+		_, changed, err := mergeIntoStore(h, incoming, b)
+		if err != nil {
 			return res, err
 		}
+		res.changed = res.changed || changed
+	}
+	if len(strays) > 0 {
+		n, err := autoEdit(h, b, by, func(t *todo.Todo, _ func(string) *todo.Todo) bool {
+			if from, ok := strays[t.ID]; !ok || t.Project != from {
+				return false
+			}
+			t.Project = p.Name
+			return true
+		})
+		if err != nil {
+			return res, err
+		}
+		res.changed = res.changed || n > 0
+	}
+	if len(p.Moving) > 0 {
+		p.Moving = nil
+		if err := adopt(p); err != nil {
+			return res, err
+		}
+		res.project = p
+	}
+	if n, err := detachStraySubtasks(h, p.Name, b, by); err != nil {
+		return res, err
+	} else if n > 0 {
+		res.changed = true
 	}
 
 	all, err := loadTodosForSync(h)
@@ -661,7 +722,8 @@ func resolveSharedName(names []sharedName) sharedName {
 }
 
 // renameShared renames the shared project old to name for everyone sharing
-// it: shared.json first (save), then this device's tasks, then the file. A
+// it: shared.json first (save, with old as Moving), then this device's tasks
+// (finishMoving), then the file. A
 // file that cannot be reached now takes the name on a later pass. A project
 // of the new name already here would be handed to everyone, so it is refused.
 func renameShared(h *sql.DB, c *sharedConfig, old, name string, b rank.Biases, by editor, save func(sharedConfig) error) (sharedProject, error) {
@@ -686,15 +748,18 @@ func renameShared(h *sql.DB, c *sharedConfig, old, name string, b rank.Biases, b
 	p.Former = slices.DeleteFunc(append(slices.Clone(p.Former), old), func(f string) bool { return f == name })
 	slices.Sort(p.Former)
 	p.Former = slices.Compact(p.Former)
-	p.Name, p.Renamed = name, time.Now()
+	p.Name, p.Renamed, p.Moving = name, time.Now(), []string{old}
 	c.set(p)
 	if err := save(*c); err != nil {
 		return p, err
 	}
-	if err := renameProjectTasks(h, old, name, nil, b, by); err != nil {
+	p, err = finishMoving(h, p, b, by, func(q sharedProject) error {
+		c.set(q)
+		return save(*c)
+	})
+	if err != nil {
 		return p, err
 	}
-	renameUndoProject(old, name)
 	if _, err := syncShared(h, p, b, by, func(q sharedProject) error {
 		c.set(q)
 		return save(*c)
@@ -731,30 +796,88 @@ func moveOwnProjectAside(h *sql.DB, name string, held map[string]bool, b rank.Bi
 }
 
 // renameProjectTasks moves every task of the project from to the project to,
-// but the ones skip names, as a change of tjek's own signed by by
-// (todo.Todo.Auto).
+// but the ones skip names.
 func renameProjectTasks(h *sql.DB, from, to string, skip map[string]bool, b rank.Biases, by editor) error {
+	_, err := autoEdit(h, b, by, func(t *todo.Todo, _ func(string) *todo.Todo) bool {
+		if t.Project != from || skip[t.ID] {
+			return false
+		}
+		t.Project = to
+		return true
+	})
+	return err
+}
+
+// finishMoving moves the project's tasks off the names p.Moving holds, onto
+// p.Name, and clears Moving (adopt): the end of a move a pass or a rename was
+// cut short in.
+func finishMoving(h *sql.DB, p sharedProject, b rank.Biases, by editor, adopt func(sharedProject) error) (sharedProject, error) {
+	for _, from := range p.Moving {
+		if from == p.Name {
+			continue
+		}
+		if err := renameProjectTasks(h, from, p.Name, nil, b, by); err != nil {
+			return p, err
+		}
+		renameUndoProject(from, p.Name)
+	}
+	p.Moving = nil
+	return p, adopt(p)
+}
+
+// detachStraySubtasks makes each live subtask in the project whose parent is
+// not in it a task of its own, and returns how many it made. The others
+// sharing the project do not have that parent, so to them it would be a
+// subtask of nothing, and no list would show it.
+func detachStraySubtasks(h *sql.DB, project string, b rank.Biases, by editor) (int, error) {
+	return autoEdit(h, b, by, func(t *todo.Todo, byID func(string) *todo.Todo) bool {
+		if t.Project != project || t.Deleted || t.ParentID == "" {
+			return false
+		}
+		if parent := byID(t.ParentID); parent != nil && parent.Project == project {
+			return false
+		}
+		t.ParentID = ""
+		return true
+	})
+}
+
+// autoEdit saves the tasks edit changes, as a change of tjek's own signed by
+// by (todo.Todo.Auto), and returns how many it saved. edit is handed each
+// stored task, tombstones included, with a lookup of the others by ID, and
+// reports whether it changed it.
+func autoEdit(h *sql.DB, b rank.Biases, by editor, edit func(t *todo.Todo, byID func(string) *todo.Todo) bool) (int, error) {
 	all, err := loadTodosForSync(h)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	var moved, live []*todo.Todo
+	index := make(map[string]int, len(all))
+	for i := range all {
+		index[all[i].ID] = i
+	}
+	byID := func(id string) *todo.Todo {
+		if i, ok := index[id]; ok {
+			return &all[i]
+		}
+		return nil
+	}
+	var changed, live []*todo.Todo
 	for i := range all {
 		t := &all[i]
-		if t.Project == from && !skip[t.ID] {
-			t.Project, t.Auto = to, true
-			moved = append(moved, t)
+		if edit(t, byID) {
+			t.Auto = true
+			changed = append(changed, t)
 		}
 		if !t.Deleted {
 			live = append(live, t)
 		}
 	}
-	if len(moved) == 0 {
-		return nil
+	if len(changed) == 0 {
+		return 0, nil
 	}
 	now := time.Now()
 	rk := rank.Ranker{Biases: b}.Refreshed(now, live)
-	return saveStamped(h, moved, nil, rk.ScoreNow(), now, by)
+	return len(changed), saveStamped(h, changed, nil, rk.ScoreNow(), now, by)
 }
 
 // A task moved out of a shared project leaves the file, and the others must
