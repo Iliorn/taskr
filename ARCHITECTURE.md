@@ -277,7 +277,8 @@ everything.
   then. A task removed outright, by a leave or a move out, leaves the undo
   history too (`Store.forget`, `forgetUndoOf`): an undo would save it as a
   new task, every field stamped now, over everyone's later edits. The app runs `syncAllShared` off the loop after saves
-  (`sharedSoon`) and on a poll (`sharedPollMsg`), the watcher reloads what it
+  (`sharedSoon`) and on a poll (`sharedPollMsg`), which also re-reads
+  shared.json for what `tjek share` changed meanwhile (`followSharedConfig`), the watcher reloads what it
   merged, and `flushShared` runs on quit; the CLI runs it after every
   mutating command.
 - **`trace.go`**: opt-in latency tracing (`TJEK_TRACE=1` →

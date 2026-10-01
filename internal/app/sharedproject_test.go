@@ -703,6 +703,58 @@ func TestSharedProjectUndoFollowsRenameAndLeave(t *testing.T) {
 // A task the pass removed because it left the project elsewhere leaves the
 // app too, undo history included: an edit or an undo would save it back as
 // new, and put it in the shared project again for everyone.
+// What `tjek share` changes in shared.json reaches the running app on its
+// next poll: a project joined in a terminal has its timers scoped at once, so
+// t on its task cannot stop someone else's, and a rename or a leave made there
+// carries the tasks and undo history with it.
+func TestTheAppFollowsTjekShareWhileItRuns(t *testing.T) {
+	setTestHome(t, t.TempDir())
+	m := newTestModel()
+	ferry, bags := tripTask("Book the ferry"), tripTask("Pack the bags")
+	ferry.StartTimerBy("Anna")
+	m.Store.add(ferry)
+	m.Store.add(bags)
+	m.userName = "Mark"
+	m.pushUndo("edit", bags.ID)
+	m.refreshCaches()
+
+	// tjek share join in a terminal.
+	trip := sharedProject{ID: "trip-id", Name: "Trip", File: "Trip.tjek"}
+	if err := saveSharedConfig(sharedConfig{Projects: []sharedProject{trip}}); err != nil {
+		t.Fatal(err)
+	}
+	next, _ := m.handleSharedTick(sharedPollMsg{})
+	m = next.(model)
+	if _, ok := m.shared.find("Trip"); !ok {
+		t.Fatal("the app did not take up the project joined from the shell")
+	}
+	if m.timerRunning(m.get(ferry.ID)) {
+		t.Error("Anna's timer still counts as Mark's")
+	}
+
+	// tjek share rename.
+	trip.Name, trip.Former = "Summer", []string{"Trip"}
+	if err := saveSharedConfig(sharedConfig{Projects: []sharedProject{trip}}); err != nil {
+		t.Fatal(err)
+	}
+	next, _ = m.handleSharedTick(sharedPollMsg{})
+	m = next.(model)
+	if m.get(bags.ID).Project != "Summer" || m.undoStack[len(m.undoStack)-1].partial[0].Project != "Summer" {
+		t.Error("the tasks and undo history did not follow the rename made from the shell")
+	}
+
+	// tjek share leave.
+	left := sharedConfig{Left: []sharedLeft{{ID: trip.ID, Name: "Summer", Tasks: []string{ferry.ID, bags.ID}}}}
+	if err := saveSharedConfig(left); err != nil {
+		t.Fatal(err)
+	}
+	next, _ = m.handleSharedTick(sharedPollMsg{})
+	m = next.(model)
+	if len(m.shared.Projects) != 0 || len(m.undoStack) != 0 || m.get(bags.ID) != nil {
+		t.Errorf("after a leave from the shell: shared %+v, undo %d, task kept %v", m.shared.Projects, len(m.undoStack), m.get(bags.ID) != nil)
+	}
+}
+
 func TestTheAppForgetsATaskThatLeftASharedProject(t *testing.T) {
 	setTestHome(t, t.TempDir())
 	m := newTestModel()

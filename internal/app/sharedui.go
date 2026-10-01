@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -57,6 +58,7 @@ func (m model) handleSharedTick(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	if _, poll := msg.(sharedPollMsg); poll {
 		cmds = append(cmds, sharedPoll())
+		m.followSharedConfig()
 	} else {
 		m.sharedScheduled = false
 	}
@@ -168,6 +170,38 @@ func (m model) freshShared() sharedConfig {
 		return c
 	}
 	return m.shared.clone()
+}
+
+// followSharedConfig takes up what `tjek share` changed in shared.json while
+// the app runs: a project joined there is synced and its timers scoped from
+// now on, a rename moves the tasks and undo history here, and the tasks a
+// leave removed leave the undo history.
+func (m *model) followSharedConfig() {
+	c, err := loadSharedConfig()
+	if err != nil || reflect.DeepEqual(c, m.shared) {
+		return
+	}
+	was := make(map[string]string, len(m.shared.Projects))
+	for _, p := range m.shared.Projects {
+		was[p.ID] = p.Name
+	}
+	for _, p := range c.Projects {
+		if old, ok := was[p.ID]; ok && old != p.Name {
+			m.followSharedRename(old, p.Name)
+		}
+	}
+	left := make(map[string]bool, len(m.shared.Left))
+	for _, l := range m.shared.Left {
+		left[l.ID] = true
+	}
+	for _, l := range c.Left {
+		if !left[l.ID] {
+			m.Store.forget(l.Tasks)
+		}
+	}
+	m.shared = c
+	m.refreshTimerScope()
+	m.markCacheDirty()
 }
 
 // editor is who this device's changes are signed by.
