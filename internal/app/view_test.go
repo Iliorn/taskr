@@ -1426,11 +1426,18 @@ func TestTaskRowDrawsMetadataDimmerThanTheTitle(t *testing.T) {
 // screen as blanks. What the user closed today is the one read-out that belongs
 // in that space: it needs no cursor and no keys, and it closes the loop the
 // active list opens.
+// earlierToday is a moment before now on today's date, whatever the hour:
+// "a few hours ago" is yesterday shortly after midnight.
+func earlierToday() time.Time {
+	now := time.Now()
+	return now.Add(-now.Sub(startOfDay(now)) / 2)
+}
+
 func TestListPaneFillsSpareRowsWithTodaysCompletions(t *testing.T) {
 	open := todo.New("Still open")
 	done := todo.New("Finished this morning")
 	done.Status = todo.Done
-	done.CompletedAt = time.Now().Add(-2 * time.Hour)
+	done.CompletedAt = earlierToday()
 	m := modelWithTasks(t, open, done)
 	m.termWidth = 100
 	m.termHeight = 40
@@ -1456,7 +1463,7 @@ func TestClosedTodayBlockDoesNotDependOnTheHistorySort(t *testing.T) {
 	old.CompletedAt = time.Now().Add(-7 * 24 * time.Hour)
 	recent := todo.New("Zebra closed today")
 	recent.Status = todo.Done
-	recent.CompletedAt = time.Now().Add(-time.Hour)
+	recent.CompletedAt = earlierToday()
 
 	m := modelWithTasks(t, open, old, recent)
 	m.historySort = historySortAlpha
@@ -1498,7 +1505,7 @@ func TestClosedTodayBlockStaysOutOfAFullList(t *testing.T) {
 	}
 	done := todo.New("Finished this morning")
 	done.Status = todo.Done
-	done.CompletedAt = time.Now().Add(-2 * time.Hour)
+	done.CompletedAt = earlierToday()
 	tasks = append(tasks, done)
 	m := modelWithTasks(t, tasks...)
 	m.termWidth = 100
