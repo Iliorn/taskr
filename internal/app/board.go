@@ -61,6 +61,9 @@ type boardConfig struct {
 	// permanent wrong turn and the field a row to skip past. Defaults on: a
 	// fresh install should show what the README describes.
 	shown bool
+	// groups shows the Tags and Projects tabs. Defaults on; it lives here
+	// because tabVisible reads one config for every hideable tab.
+	groups bool
 	// sync shares the column list with the fleet. Negative in settings.json
 	// (`sync_board_disabled`) like the other opt-outs, so the zero value
 	// shares: a device that has never edited its columns cannot overwrite
@@ -70,7 +73,7 @@ type boardConfig struct {
 
 // defaultBoardConfig is the board before settings.json is read.
 func defaultBoardConfig() boardConfig {
-	return boardConfig{stages: defaultStages(), shown: true, sync: true}
+	return boardConfig{stages: defaultStages(), shown: true, groups: true, sync: true}
 }
 
 // boardConfigFromSettings reads the board preferences out of settings.json,
@@ -79,6 +82,7 @@ func boardConfigFromSettings(s appSettings) boardConfig {
 	c := boardConfig{
 		modifiedAt: s.StagesModifiedAt,
 		shown:      !s.BoardDisabled,
+		groups:     !s.GroupsDisabled,
 		sync:       !s.SyncBoardDisabled,
 	}
 	c.setColumns(stagesFromSettings(s), s.StageIcons)

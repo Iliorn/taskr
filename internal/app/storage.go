@@ -82,6 +82,10 @@ type appSettings struct {
 	// leaves the board on and no existing settings.json needs migrating.
 	BoardDisabled bool `json:"board_disabled"`
 
+	// GroupsDisabled hides the Tags and Projects tabs. Negative like
+	// BoardDisabled, so the zero value keeps them.
+	GroupsDisabled bool `json:"groups_disabled,omitempty"`
+
 	// Stages is the ordered kanban column list for the Board tab (edited by
 	// hand — everyone has their own naming scheme). Empty means the defaults
 	// (Backlog / In progress / Review / Done); persistSettings writes the

@@ -11,6 +11,16 @@ reader is deciding whether to upgrade, not reviewing the change. The reasoning
 belongs in the commit message, where it is kept next to the code it explains.
 `TestChangelogEntriesAreOneLine` enforces it.
 
+## [Unreleased]
+
+### Added
+
+- Settings → "Tags and projects" hides the Tags and Projects tabs and their detail fields.
+
+### Changed
+
+- Settings opens on General.
+
 ## [1.49.1] - 2026-09-30
 
 ### Changed

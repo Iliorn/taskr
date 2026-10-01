@@ -717,3 +717,61 @@ func TestOpenedTaskStaysInViewInALongList(t *testing.T) {
 		}
 	}
 }
+
+// With Tags and Projects switched off the pane has no Project row and no Tags
+// section, and the estimate, the section bar and the cursor chain follow.
+func TestDetailWithoutTagsAndProjects(t *testing.T) {
+	task := todo.New("a task")
+	task.AddTag("home")
+	task.AddComment("a comment")
+	sub := todo.New("a subtask")
+	sub.ParentID = task.ID
+	m := modelWithTasks(t, task, sub)
+	m.termWidth, m.termHeight = 120, 40
+	m.pane = paneDetail
+	m.detailTaskID = task.ID
+	m.boardCfg.groups = false
+
+	m.detail = detailState{field: fieldStartDate}
+	body := ansi.Strip(m.buildDetailContent())
+	for _, s := range []string{"Project", "Tags:", "home"} {
+		if strings.Contains(body, s) {
+			t.Errorf("detail still shows %q", s)
+		}
+	}
+	if bar := ansi.Strip(m.detailSectionBar(120)); strings.Contains(bar, "Tags") {
+		t.Errorf("section bar still names Tags: %q", bar)
+	}
+
+	m.detail = detailState{field: fieldNotes}
+	m.detailCursorDown()
+	if m.detail.field != fieldSubtasks {
+		t.Errorf("down from Description lands on %v, want Subtasks", m.detail.field)
+	}
+	m.detailCursorUp()
+	if m.detail.field != fieldNotes {
+		t.Errorf("up from Subtasks lands on %v, want Description", m.detail.field)
+	}
+	m.detail = detailState{field: fieldStartDate}
+	m.detailSectionJump(1)
+	if m.detail.field != fieldSubtasks {
+		t.Errorf("→ from Fields lands on %v, want Subtasks", m.detail.field)
+	}
+
+	for _, f := range []detailField{fieldNotes, fieldSubtasks, fieldComments} {
+		mm := m
+		mm.detail = detailState{field: f}
+		mm.invalidateDetailCache()
+		lines := strings.Split(strings.TrimRight(mm.buildDetailContent(), "\n"), "\n")
+		marked := -1
+		for i, line := range lines {
+			if strings.HasPrefix(strings.TrimLeft(ansi.Strip(line), " "), "▶") {
+				marked = i
+				break
+			}
+		}
+		if got := mm.estimateDetailCursorLine(); got != marked {
+			t.Errorf("field %v: estimate = %d, rendered on line %d", f, got, marked)
+		}
+	}
+}

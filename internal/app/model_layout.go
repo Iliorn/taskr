@@ -32,7 +32,10 @@ func (m model) estimateDetailCursorLine() int {
 	if m.boardCfg.stageFieldVisible(t) {
 		rows = append(rows, fieldStage)
 	}
-	rows = append(rows, fieldProject, fieldNotes)
+	if m.boardCfg.groups {
+		rows = append(rows, fieldProject)
+	}
+	rows = append(rows, fieldNotes)
 	for i, f := range rows {
 		if m.detail.field == f {
 			return i
@@ -530,7 +533,10 @@ func (m model) detailTagsRows(t *todo.Todo) int {
 // on the panel's top border and is not counted.
 func (m model) detailMainHeight(t *todo.Todo) int {
 	h := 0 // title is on the border now; content starts at the first field
-	h += 9 // start, due, recurrence, priority, size, project, notes, created, id
+	h += 8 // start, due, recurrence, priority, size, notes, created, id
+	if m.boardCfg.groups {
+		h++ // project
+	}
 	if m.boardCfg.stageFieldVisible(t) {
 		h++
 	}
@@ -547,6 +553,9 @@ func (m model) detailMainHeight(t *todo.Todo) int {
 	}
 	if t.Status == todo.Pending {
 		h++ // score
+	}
+	if !m.boardCfg.groups {
+		return h + 1 // the blank before the next section
 	}
 	h += 2 // blank + tags label
 	return h + m.detailTagsRows(t)

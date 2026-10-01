@@ -1240,12 +1240,19 @@ func tabForNumberKeyRaw(key string) (tab, bool) {
 
 // nextTab steps delta tabs from cur, wrapping in both directions — tab walks
 // forward, shift+tab back.
-// tabVisible reports whether a tab is reachable. Only the Board is hideable
-// (Settings → "Kanban board"), and hiding it takes it out of the bar, out of
+// tabVisible reports whether a tab is reachable. The Board (Settings →
+// "Kanban board") and the Tags and Projects pair (Settings → "Tags and
+// projects") are hideable, and hiding one takes it out of the bar, out of
 // tab/shift+tab, and off its digit — a tab you cannot see must not be one you
 // can land on by accident.
 func (c boardConfig) tabVisible(t tab) bool {
-	return t != tabBoard || c.shown
+	switch t {
+	case tabBoard:
+		return c.shown
+	case tabTags, tabProjects:
+		return c.groups
+	}
+	return true
 }
 
 func (c boardConfig) visibleTabCount() int {
@@ -1541,6 +1548,22 @@ func (m *model) toggleShowBoard() {
 	m.markCacheDirty()
 }
 
+// toggleShowGroups turns the Tags and Projects tabs on and off together. As
+// with the board, the move off a tab that is going away happens here.
+func (m *model) toggleShowGroups() {
+	m.boardCfg.groups = !m.boardCfg.groups
+	if !m.boardCfg.groups && (m.tab == tabTags || m.tab == tabProjects) {
+		m.switchTab(tabTasks)
+	}
+	if !m.boardCfg.groups && (m.detail.field == fieldProject || m.detail.field == fieldTags) {
+		m.detail.field = fieldStartDate
+		m.detail.tagCursor = 0
+	}
+	m.invalidateDetailCache()
+	m.persistSettings()
+	m.markCacheDirty()
+}
+
 // persistedSearch is the search query settings.json keeps: the Tasks tab's,
 // wherever the cursor happens to be. The query is shared by Tasks, Board and
 // Stats but stored per tab in tabViews, and only the leaving tab's copy is
@@ -1570,6 +1593,7 @@ func (m *model) persistSettings() {
 		AutoCloseParent:   m.autoCloseParent,
 		AutoCloseSubtasks: m.autoCloseSubtasks,
 		BoardDisabled:     !m.boardCfg.shown,
+		GroupsDisabled:    !m.boardCfg.groups,
 		Stages:            m.boardCfg.stages,
 		StageIcons:        m.boardCfg.icons,
 		StagesModifiedAt:  m.boardCfg.modifiedAt,
@@ -1914,6 +1938,8 @@ func (m *model) settingsAdjust(dir int) tea.Cmd {
 		m.toggleAutoCloseSubtasks()
 	case settingShowBoard:
 		m.toggleShowBoard()
+	case settingShowGroups:
+		m.toggleShowGroups()
 	case settingTheme:
 		m.cycleTheme(dir)
 	case settingLanguage:

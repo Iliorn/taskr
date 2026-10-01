@@ -62,6 +62,7 @@ const (
 	settingImportFile
 	settingName
 	settingShareJoin
+	settingShowGroups
 	// settingColFirst is the first of the Columns page's rows, one per
 	// listColumnKeys entry (settingColumnKey); they run to numSettingsRows.
 	settingColFirst

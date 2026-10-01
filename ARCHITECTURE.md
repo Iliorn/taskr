@@ -609,6 +609,9 @@ The kanban tab (tab 5). Its configuration is a `boardConfig` on the model.
   bar, tab cycling, the digit keys and the palette (`tabVisible`), and the
   detail pane's Stage row (`stageFieldVisible`). Tab numbers never renumber;
   they are part of the translated labels (`tr("6 Stats")`).
+  Settings `groups_disabled` does the same for the Tags and Projects tabs
+  together, plus the detail pane's Project row and Tags section
+  (`detailSectionShown`).
 
 ## Terminals
 

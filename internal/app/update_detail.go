@@ -197,6 +197,9 @@ func completedFieldVisible(t *todo.Todo) bool {
 // head.
 func (m *model) detailSectionJump(dir int) {
 	next := detailSectionOf(m.detail.field) + dir
+	for next >= 0 && next < len(detailSections) && !m.detailSectionShown(next) {
+		next += dir
+	}
 	if next < 0 || next >= len(detailSections) {
 		return
 	}
@@ -230,6 +233,12 @@ var detailSections = []detailSection{
 	{fieldTimeEntries, "Time"},
 	{fieldComments, "Comments"},
 	{fieldHistory, "History"},
+}
+
+// detailSectionShown reports whether section i of detailSections is drawn:
+// Tags goes with the Tags and Projects tabs when those are switched off.
+func (m model) detailSectionShown(i int) bool {
+	return m.boardCfg.groups || detailSections[i].first != fieldTags
 }
 
 // detailSectionOf is the index in detailSections of the section a field is
@@ -289,6 +298,12 @@ func (m *model) detailCursorUp() {
 		}
 	case fieldNotes:
 		m.detail.field = fieldProject
+		if !m.boardCfg.groups {
+			m.detail.field = fieldSize
+			if m.boardCfg.stageFieldVisible(t) {
+				m.detail.field = fieldStage
+			}
+		}
 	case fieldTags:
 		if m.detail.tagCursor > 0 {
 			m.detail.tagCursor--
@@ -298,6 +313,8 @@ func (m *model) detailCursorUp() {
 	case fieldSubtasks:
 		if m.detail.subtaskCursor > 0 {
 			m.detail.subtaskCursor--
+		} else if !m.boardCfg.groups {
+			m.detail.field = fieldNotes
 		} else {
 			m.detail.field = fieldTags
 			m.detail.tagCursor = 0
@@ -348,6 +365,15 @@ func (m *model) detailCursorUp() {
 	}
 }
 
+// fieldAfterSize is the row below Size (or Stage) once the Stage row is
+// accounted for: Project, or Description when Tags and Projects are off.
+func (m model) fieldAfterSize() detailField {
+	if m.boardCfg.groups {
+		return fieldProject
+	}
+	return fieldNotes
+}
+
 func (m *model) detailCursorDown() {
 	m.invalidateDetailCache()
 	t := m.currentTodo()
@@ -366,17 +392,21 @@ func (m *model) detailCursorDown() {
 	case fieldPriority:
 		m.detail.field = fieldSize
 	case fieldSize:
-		m.detail.field = fieldProject
+		m.detail.field = m.fieldAfterSize()
 		if m.boardCfg.stageFieldVisible(t) {
 			m.detail.field = fieldStage
 		}
 	case fieldStage:
-		m.detail.field = fieldProject
+		m.detail.field = m.fieldAfterSize()
 	case fieldProject:
 		m.detail.field = fieldNotes
 	case fieldNotes:
 		m.detail.field = fieldTags
 		m.detail.tagCursor = 0
+		if !m.boardCfg.groups {
+			m.detail.field = fieldSubtasks
+			m.detail.subtaskCursor = 0
+		}
 	case fieldTags:
 		if t != nil && m.detail.tagCursor < len(t.Tags)-1 {
 			m.detail.tagCursor++

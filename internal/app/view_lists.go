@@ -1369,20 +1369,21 @@ type settingsGroup struct {
 }
 
 var settingsGroups = []settingsGroup{
-	{title: "Appearance", rows: []int{
-		settingTheme,
-		settingLanguage,
-		settingDetailPos,
-	}},
-	{title: "Columns", rows: settingColumnRows()},
 	{title: "General", rows: []int{
 		settingName,
 		settingAutoCloseParent,
 		settingAutoCloseSubtasks,
 		settingSubtaskTags,
 		settingShowBoard,
+		settingShowGroups,
 		settingStages,
 	}},
+	{title: "Appearance", rows: []int{
+		settingTheme,
+		settingLanguage,
+		settingDetailPos,
+	}},
+	{title: "Columns", rows: settingColumnRows()},
 	{title: "Sequencer", preview: true, rows: []int{
 		settingBiasDeadline,
 		settingBiasPriority,
@@ -1579,6 +1580,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingAutoCloseParent:   tr("Auto-close parent"),
 		settingAutoCloseSubtasks: tr("Auto-close subtasks"),
 		settingShowBoard:         tr("Kanban board"),
+		settingShowGroups:        tr("Tags and projects"),
 		settingTheme:             tr("Theme"),
 		settingLanguage:          tr("Language"),
 		settingDetailPos:         tr("Detail pane"),
@@ -1613,6 +1615,10 @@ func (m model) renderSettingsSection(w int) (string, int) {
 	showBoardVal := tr("Off")
 	if m.boardCfg.shown {
 		showBoardVal = tr("On")
+	}
+	showGroupsVal := tr("Off")
+	if m.boardCfg.groups {
+		showGroupsVal = tr("On")
 	}
 	autoCloseSubsVal := tr("Off")
 	if m.autoCloseSubtasks {
@@ -1669,6 +1675,7 @@ func (m model) renderSettingsSection(w int) (string, int) {
 		settingAutoCloseParent:   "‹ " + autoCloseVal + " ›",
 		settingAutoCloseSubtasks: "‹ " + autoCloseSubsVal + " ›",
 		settingShowBoard:         "‹ " + showBoardVal + " ›",
+		settingShowGroups:        "‹ " + showGroupsVal + " ›",
 		settingTheme:             "‹ " + m.themeName + " ›",
 		settingLanguage:          "‹ " + activeLang.displayName() + " ›",
 		settingDetailPos:         "‹ " + trDetailPos(m.detailPos) + " ›",

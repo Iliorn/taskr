@@ -19,11 +19,18 @@ import (
 // it keeps the current section and as many neighbours as fit, with … where
 // the rest are.
 func (m model) detailSectionBar(width int) string {
-	labels := make([]string, len(detailSections))
+	labels := make([]string, 0, len(detailSections))
+	cur := 0
 	for i, s := range detailSections {
-		labels[i] = tr(s.label)
+		if !m.detailSectionShown(i) {
+			continue
+		}
+		if i == detailSectionOf(m.detail.field) {
+			cur = len(labels)
+		}
+		labels = append(labels, tr(s.label))
 	}
-	return sectionBar(labels, detailSectionOf(m.detail.field), m.pane == paneDetail, width)
+	return sectionBar(labels, cur, m.pane == paneDetail, width)
 }
 
 // sectionBar is a row naming a pane's sections, cur lit while the pane has
@@ -189,7 +196,9 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 		}
 		left.WriteString(renderField(tr("Stage"), stageVal, fieldStage) + "\n")
 	}
-	left.WriteString(renderField(tr("Project"), projectVal, fieldProject) + "\n")
+	if m.boardCfg.groups {
+		left.WriteString(renderField(tr("Project"), projectVal, fieldProject) + "\n")
+	}
 	left.WriteString(renderField(tr("Description"), notesVal, fieldNotes) + "\n")
 
 	// Right column (or continuation in single-col mode): read-only metadata.
@@ -272,6 +281,9 @@ func (m model) renderDetailPage1(t *todo.Todo) string {
 	b.WriteString(right.String())
 	b.WriteString("\n")
 
+	if !m.boardCfg.groups {
+		return b.String()
+	}
 	tagCur := cursorGap
 	if isDetailFocused && m.detail.field == fieldTags && len(t.Tags) == 0 {
 		tagCur = cursorMark

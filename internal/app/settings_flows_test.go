@@ -474,14 +474,14 @@ func TestSettingsBackspaceUndoesEnterOnEveryToggleRow(t *testing.T) {
 	}
 }
 
-// Theme and Language open the pane. They are the settings someone changes on
-// day one, and they sat six rows down behind the auto-close toggles.
+// General leads the pane, with Appearance (Theme, Language) right after it.
 func TestSettingsOpensWithAppearance(t *testing.T) {
-	first := settingsGroups[0]
-	// Appearance may grow more rows; what is pinned is that it leads the pane
-	// and opens on Theme, which is where the cursor starts.
+	if settingsGroups[0].title != "General" {
+		t.Fatalf("the first settings group is %q, want General", settingsGroups[0].title)
+	}
+	first := settingsGroups[1]
 	if len(first.rows) < 2 || first.rows[0] != settingTheme || first.rows[1] != settingLanguage {
-		t.Fatalf("the first settings group is %q %v, want Theme then Language", first.title, first.rows)
+		t.Fatalf("the second settings group is %q %v, want Theme then Language", first.title, first.rows)
 	}
 	m := settingsModel(t)
 	m.settingsCursor = settingTheme
