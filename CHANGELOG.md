@@ -13,6 +13,8 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+## [1.51.2] - 2026-10-01
+
 ### Fixed
 
 - A shared project's old name is free for a project of your own once a rename is done.
