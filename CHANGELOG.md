@@ -13,6 +13,19 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+## [1.51.0] - 2026-10-01
+
+### Added
+
+- r on a shared project renames it for everyone sharing it, as does `tjek share rename`.
+
+### Fixed
+
+- A timer on a shared task is its starter's: starting yours no longer stops theirs.
+- Your calendar and tracked-today time count only your own time on shared tasks.
+- A task moved out of a shared project now leaves the others' devices too.
+- x on a shared project is refused, since it would take every task out for everyone.
+
 ## [1.50.0] - 2026-10-01
 
 ### Added
