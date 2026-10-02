@@ -1113,6 +1113,37 @@ func TestStatusLineSpeaksOnlyWhenSyncFails(t *testing.T) {
 	}
 }
 
+// The focus filter is marked on the list it filters, beside the list's title,
+// and not again in the status line; a tab whose list it does not filter keeps
+// the mark in the status line.
+func TestFocusChipSitsInTheListTitle(t *testing.T) {
+	applyLang(string(langEN))
+	m := modelWithTasks(t, todo.New("alpha"))
+	m.termWidth, m.termHeight = 100, 30
+	m.focusFilter = true
+	m.refreshCaches()
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, "╭─ Overview [sort: score]  FOCUS  ─") {
+		t.Errorf("FOCUS is not beside the list title:\n%s", view)
+	}
+	if strings.Contains(ansi.Strip(m.renderStatusLine()), "FOCUS") {
+		t.Error("FOCUS is in the status line as well as the title")
+	}
+	for _, w := range []int{20, 30, 40} {
+		m.termWidth = w
+		for _, line := range strings.Split(m.View(), "\n") {
+			if ansi.StringWidth(line) > w {
+				t.Errorf("width %d: line is %d wide: %q", w, ansi.StringWidth(line), ansi.Strip(line))
+			}
+		}
+	}
+	m.termWidth = 100
+	m.tab = tabCalendar
+	if !strings.Contains(ansi.Strip(m.renderStatusLine()), "FOCUS") {
+		t.Error("off the Tasks and Board tabs FOCUS left the status line")
+	}
+}
+
 // The tab bar renders through styles with Padding(0, 1), so every tab is two
 // cells wider than its label. tabsWidthMixed used to leave that out, which let
 // renderTabs pick a level that measured inside its budget and rendered fourteen

@@ -118,6 +118,13 @@ func panelContentHeight(outerH int) int {
 // If the box is too narrow to embed any title the function returns rendered
 // unchanged.
 func withBorderTitle(rendered, title string, boxW int, focused bool) string {
+	return withBorderTitleChip(rendered, title, "", boxW, focused)
+}
+
+// withBorderTitleChip is withBorderTitle with a styled chip after the title
+// (the list's FOCUS mark). The title clips first to keep the chip whole; a
+// box too narrow for the chip and a character of title leaves it out.
+func withBorderTitleChip(rendered, title, chip string, boxW int, focused bool) string {
 	if rendered == "" {
 		return rendered
 	}
@@ -135,8 +142,15 @@ func withBorderTitle(rendered, title string, boxW int, focused bool) string {
 	if maxTitle <= 0 {
 		return rendered // box too narrow for any title
 	}
-	title = ansi.Truncate(title, maxTitle, "…")
-	titleW := ansi.StringWidth(title)
+	chipW := 0
+	if chip != "" {
+		chipW = ansi.StringWidth(chip) + 1 // the space before it
+		if chipW >= maxTitle {
+			chip, chipW = "", 0
+		}
+	}
+	title = ansi.Truncate(title, maxTitle-chipW, "…")
+	titleW := ansi.StringWidth(title) + chipW
 	fillW := boxW - titleW - 3
 	if fillW < 1 {
 		fillW = 1
@@ -152,8 +166,11 @@ func withBorderTitle(rendered, title string, boxW int, focused bool) string {
 	margin := "  " // MarginLeft(2) from detailPanelStyle / listPanelStyle
 	topLine := margin +
 		borderSty.Render("╭─ ") +
-		titleSty.Render(title) +
-		borderSty.Render(" "+strings.Repeat("─", fillW)+"╮")
+		titleSty.Render(title)
+	if chip != "" {
+		topLine += " " + chip
+	}
+	topLine += borderSty.Render(" " + strings.Repeat("─", fillW) + "╮")
 
 	// Replace only the first line of rendered (everything up to the first \n).
 	idx := strings.IndexByte(rendered, '\n')
@@ -243,6 +260,16 @@ func (m model) listPanelTitle() string {
 		return tr("Preferences")
 	}
 	return tr("Overview")
+}
+
+// listFocusChip is the FOCUS mark the list's border title carries while the
+// focus filter is on, on the tabs whose list it filters (Tasks, and the Board
+// that projects it). Other tabs show it in the status line instead.
+func (m model) listFocusChip() string {
+	if !m.focusFilter || (m.tab != tabTasks && m.tab != tabBoard) {
+		return ""
+	}
+	return focusChipStyle.Render(tr("FOCUS"))
 }
 
 // projectListTitle is groupListTitle for the Projects list.
@@ -483,7 +510,7 @@ func (m model) renderStatusLine() string {
 	}
 
 	var chips []string
-	if m.focusFilter {
+	if m.focusFilter && m.listFocusChip() == "" {
 		chips = append(chips, focusChipStyle.Render(tr("FOCUS")))
 	}
 	if m.searchQuery != "" {
@@ -1075,7 +1102,7 @@ func (m model) buildListContent(w, outerH int) string {
 	}
 	truncateLines(rawList, w-2)
 	panel := listPanelStyle.Width(w).Render(strings.Join(rawList, "\n"))
-	return withBorderTitle(panel, m.listPanelTitle(), w, false)
+	return withBorderTitleChip(panel, m.listPanelTitle(), m.listFocusChip(), w, false)
 }
 
 // scrollWindowLines is the h lines of lines from offset on, with the first
@@ -1191,7 +1218,7 @@ func (m model) buildSideBySide(w, outerH int) string {
 	}
 	listPanel := listStyle.Width(listW).Render(strings.Join(listLines, "\n"))
 	detailPanel := detailStyle.Width(detailW).Render(strings.Join(detailLines, "\n"))
-	listPanel = withBorderTitle(listPanel, listTitle, listW, !detailFocused)
+	listPanel = withBorderTitleChip(listPanel, listTitle, m.listFocusChip(), listW, !detailFocused)
 	detailPanel = withBorderTitle(detailPanel, m.detailPanelTitle(), detailW, detailFocused)
 	// Only the order changes with the placement: both columns are already
 	// sized and clipped, so mirroring the layout is one swap rather than a
