@@ -13,6 +13,14 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+## [1.51.3] - 2026-10-02
+
+### Fixed
+
+- A subtask of your own no longer disappears when its shared parent leaves your device.
+- Shared projects work in folders whose names contain brackets.
+- Deadline scores and the "last moved" column count days correctly after the spring clock change.
+
 ## [1.51.2] - 2026-10-01
 
 ### Fixed
