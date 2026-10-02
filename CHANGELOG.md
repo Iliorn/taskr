@@ -13,6 +13,12 @@ belongs in the commit message, where it is kept next to the code it explains.
 
 ## [Unreleased]
 
+## [1.51.4] - 2026-10-02
+
+### Changed
+
+- The FOCUS mark sits beside the list's title on the Tasks and Board tabs.
+
 ## [1.51.3] - 2026-10-02
 
 ### Fixed
